@@ -4,14 +4,8 @@ import fs from "fs";
 
 const dbPath = path.join(process.cwd(), "data", "the-fox-says.db");
 
-export function getDb() {
-  const dir = path.dirname(dbPath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  return new Database(dbPath);
-}
-
-export function initDb() {
-  const db = getDb();
+/** Ensures base schema exists (so fresh deploys / new volumes have members table). */
+function ensureBaseSchema(db: Database.Database) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS members (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,6 +23,18 @@ export function initDb() {
     );
     CREATE INDEX IF NOT EXISTS idx_members_search ON members(first_name, last_name, email, role);
   `);
+}
+
+export function getDb() {
+  const dir = path.dirname(dbPath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const db = new Database(dbPath);
+  ensureBaseSchema(db);
+  return db;
+}
+
+export function initDb() {
+  const db = getDb();
   return db;
 }
 
