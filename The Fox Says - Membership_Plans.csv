@@ -1,0 +1,4 @@
+Product_ID,Plan_Name,Price,Length,Unit,Access_Level,Stripe_Link,Category,Description
+1,Monthly Membership,$89.00,1,Month,,,Plans,"Full access to the gym anytime you want, every day you need."
+2,Day-Pass,$20.00,1,Day,,,Plans,24 Hour Access to the gym between 6 a.m. and 10 p.m.
+3,Week-Pass,$50.00,7,Day,,,Plans,7-Day access to the gym anytime you need.

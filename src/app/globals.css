@@ -1,0 +1,65 @@
+/* minimal - Tailwind restored after page loads */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Brand colors – primary from brand-colors.json; these sync for any non-Tailwind use */
+:root {
+  --brand: #a2f4b1;
+  --brand-hover: #7dd994;
+  --brand-light: #f0fdf4;
+  --brand-link: #5abd78; /* darker for link readability (brand-800) */
+}
+
+/* Primary buttons: gray background, mint text + pineapple icon */
+[data-dumbbell-btn] {
+  background-color: #7e817e;
+  background-image: url("/pineapple.svg");
+  background-repeat: no-repeat;
+  background-position: left 0.6rem center;
+  background-size: 1.25rem 1.25rem;
+  padding-left: 2rem;
+  color: #a2f4b1;
+}
+[data-dumbbell-btn]:hover:not(:disabled) {
+  background-color: #6d6f6d;
+}
+[data-dumbbell-btn]:disabled {
+  opacity: 0.5;
+}
+
+/* Use app icon (rounded square + pineapple) on specific buttons – e.g. Unlock Door */
+button[data-dumbbell-btn][data-button-icon="app"],
+[data-dumbbell-btn][data-button-icon="app"] {
+  background-image: url("/app-icon.png") !important;
+  background-size: 2rem 2rem !important;
+  padding-left: 3rem !important;
+}
+
+/* Secondary buttons (mint bg): dark text for readability – Browse Classes, Add to cart, Save, Create, etc. */
+.bg-brand-600.text-white,
+a.bg-brand-600.text-white,
+button.bg-brand-600.text-white,
+[class*="bg-brand-600"][class*="text-white"] {
+  color: #292524 !important;
+}
+
+/* Free-floating links on light backgrounds (Edit, Add to cart, nav links, etc.) – #5abd78 */
+a.text-brand-600,
+button.text-brand-600,
+.text-brand-600 {
+  color: var(--brand-link) !important;
+}
+a.text-brand-600:hover,
+button.text-brand-600:hover {
+  color: var(--brand-hover) !important;
+}
+/* Link-style text that uses brand-700 (e.g. schedule labels) */
+a.text-brand-700,
+button.text-brand-700 {
+  color: var(--brand-link) !important;
+}
+a.text-brand-700:hover,
+button.text-brand-700:hover {
+  color: var(--brand-hover) !important;
+}

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#a2f4b1">
+  <!-- oval body -->
+  <ellipse cx="12" cy="14" rx="5" ry="6"/>
+  <!-- crown – leaves pointing upward -->
+  <path d="M12 1 L11 8 L13 8 Z"/>
+  <path d="M15 3 L13 9 L15 8 Z"/>
+  <path d="M9 3 L11 8 L9 8 Z"/>
+  <path d="M18 5 L15 10 L17 9 Z"/>
+  <path d="M6 5 L7 9 L9 10 Z"/>
+</svg>

@@ -1,0 +1,5055 @@
+{
+  "meta": {
+    "totalFoods": 500,
+    "requests": 3,
+    "totalImpossible": 2,
+    "totalMg": 2,
+    "byType": {
+      "Branded": {
+        "total": 130,
+        "withServing": 130,
+        "unitMg": 2,
+        "impossibleMg": 2,
+        "examples": [
+          {
+            "fdcId": 2511629,
+            "description": "CEREAL",
+            "servingSize": 32,
+            "servingSizeUnit": "MG",
+            "calories": 438
+          },
+          {
+            "fdcId": 2511635,
+            "description": "CEREAL",
+            "servingSize": 42,
+            "servingSizeUnit": "MG",
+            "calories": 381
+          }
+        ]
+      },
+      "Survey (FNDDS)": {
+        "total": 255,
+        "withServing": 0,
+        "unitMg": 0,
+        "impossibleMg": 0,
+        "examples": []
+      },
+      "SR Legacy": {
+        "total": 113,
+        "withServing": 0,
+        "unitMg": 0,
+        "impossibleMg": 0,
+        "examples": []
+      },
+      "Foundation": {
+        "total": 2,
+        "withServing": 0,
+        "unitMg": 0,
+        "impossibleMg": 0,
+        "examples": []
+      }
+    }
+  },
+  "foods": [
+    {
+      "fdcId": 2617421,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 36,
+      "servingSizeUnit": "GRM",
+      "calories": 389
+    },
+    {
+      "fdcId": 2617422,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 36,
+      "servingSizeUnit": "GRM",
+      "calories": 389
+    },
+    {
+      "fdcId": 2511629,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": true,
+      "impossibleMg": true,
+      "servingSize": 32,
+      "servingSizeUnit": "MG",
+      "calories": 438
+    },
+    {
+      "fdcId": 1889809,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 30,
+      "servingSizeUnit": "g",
+      "calories": 400
+    },
+    {
+      "fdcId": 2171100,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 59,
+      "servingSizeUnit": "g",
+      "calories": 322
+    },
+    {
+      "fdcId": 2642006,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 37,
+      "servingSizeUnit": "GRM",
+      "calories": 351
+    },
+    {
+      "fdcId": 2142860,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 59,
+      "servingSizeUnit": "g",
+      "calories": 322
+    },
+    {
+      "fdcId": 1952060,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 28,
+      "servingSizeUnit": "g",
+      "calories": 393
+    },
+    {
+      "fdcId": 2015814,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 30,
+      "servingSizeUnit": "g",
+      "calories": 267
+    },
+    {
+      "fdcId": 2175559,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 37,
+      "servingSizeUnit": "g",
+      "calories": 351
+    },
+    {
+      "fdcId": 2175879,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 29,
+      "servingSizeUnit": "g",
+      "calories": 379
+    },
+    {
+      "fdcId": 702664,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 61,
+      "servingSizeUnit": "g",
+      "calories": 492
+    },
+    {
+      "fdcId": 1864038,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 27,
+      "servingSizeUnit": "g",
+      "calories": 407
+    },
+    {
+      "fdcId": 2140770,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 53,
+      "servingSizeUnit": "g",
+      "calories": 358
+    },
+    {
+      "fdcId": 2107531,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 29,
+      "servingSizeUnit": "g",
+      "calories": 379
+    },
+    {
+      "fdcId": 1635920,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 31,
+      "servingSizeUnit": "g",
+      "calories": 387
+    },
+    {
+      "fdcId": 1635964,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 31,
+      "servingSizeUnit": "g",
+      "calories": 387
+    },
+    {
+      "fdcId": 2477341,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 30,
+      "servingSizeUnit": "g",
+      "calories": 400
+    },
+    {
+      "fdcId": 2476995,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 30,
+      "servingSizeUnit": "g",
+      "calories": 400
+    },
+    {
+      "fdcId": 1663505,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 29,
+      "servingSizeUnit": "g",
+      "calories": 379
+    },
+    {
+      "fdcId": 2070798,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 59,
+      "servingSizeUnit": "g",
+      "calories": 322
+    },
+    {
+      "fdcId": 2025357,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 29,
+      "servingSizeUnit": "g",
+      "calories": 379
+    },
+    {
+      "fdcId": 2511635,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": true,
+      "impossibleMg": true,
+      "servingSize": 42,
+      "servingSizeUnit": "MG",
+      "calories": 381
+    },
+    {
+      "fdcId": 2487958,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 31,
+      "servingSizeUnit": "g",
+      "calories": 419
+    },
+    {
+      "fdcId": 1939929,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 29,
+      "servingSizeUnit": "g",
+      "calories": 379
+    },
+    {
+      "fdcId": 2617423,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 36,
+      "servingSizeUnit": "GRM",
+      "calories": 389
+    },
+    {
+      "fdcId": 453840,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 48,
+      "servingSizeUnit": "g",
+      "calories": 438
+    },
+    {
+      "fdcId": 2470812,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 36,
+      "servingSizeUnit": "g",
+      "calories": 389
+    },
+    {
+      "fdcId": 2015809,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 30,
+      "servingSizeUnit": "g",
+      "calories": 400
+    },
+    {
+      "fdcId": 2171191,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 60,
+      "servingSizeUnit": "g",
+      "calories": 350
+    },
+    {
+      "fdcId": 2107800,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 59,
+      "servingSizeUnit": "g",
+      "calories": 322
+    },
+    {
+      "fdcId": 1864070,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 27,
+      "servingSizeUnit": "g",
+      "calories": 407
+    },
+    {
+      "fdcId": 2142492,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 59,
+      "servingSizeUnit": "g",
+      "calories": 322
+    },
+    {
+      "fdcId": 2467907,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 36,
+      "servingSizeUnit": "g",
+      "calories": 389
+    },
+    {
+      "fdcId": 2175813,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 42,
+      "servingSizeUnit": "g",
+      "calories": 357
+    },
+    {
+      "fdcId": 2671774,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 32,
+      "servingSizeUnit": "GRM",
+      "calories": 375
+    },
+    {
+      "fdcId": 2089085,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 28,
+      "servingSizeUnit": "g",
+      "calories": 357
+    },
+    {
+      "fdcId": 1926949,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 30,
+      "servingSizeUnit": "g",
+      "calories": 367
+    },
+    {
+      "fdcId": 1727086,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 30,
+      "servingSizeUnit": "g",
+      "calories": 367
+    },
+    {
+      "fdcId": 2027476,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 32,
+      "servingSizeUnit": "g",
+      "calories": 406
+    },
+    {
+      "fdcId": 2552163,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 42,
+      "servingSizeUnit": "GRM",
+      "calories": 357
+    },
+    {
+      "fdcId": 370663,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 55,
+      "servingSizeUnit": "g",
+      "calories": 418
+    },
+    {
+      "fdcId": 1912505,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 29,
+      "servingSizeUnit": "g",
+      "calories": 379
+    },
+    {
+      "fdcId": 2038207,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 30,
+      "servingSizeUnit": "g",
+      "calories": 400
+    },
+    {
+      "fdcId": 2168954,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 41,
+      "servingSizeUnit": "g",
+      "calories": 390
+    },
+    {
+      "fdcId": 2469488,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 39,
+      "servingSizeUnit": "g",
+      "calories": 462
+    },
+    {
+      "fdcId": 1928911,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 58,
+      "servingSizeUnit": "g",
+      "calories": 362
+    },
+    {
+      "fdcId": 2015799,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 30,
+      "servingSizeUnit": "g",
+      "calories": 367
+    },
+    {
+      "fdcId": 2671976,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 29,
+      "servingSizeUnit": "GRM",
+      "calories": 379
+    },
+    {
+      "fdcId": 2089083,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 29,
+      "servingSizeUnit": "g",
+      "calories": 379
+    },
+    {
+      "fdcId": 2089087,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 32,
+      "servingSizeUnit": "g",
+      "calories": 375
+    },
+    {
+      "fdcId": 2587822,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 40,
+      "servingSizeUnit": "GRM",
+      "calories": 400
+    },
+    {
+      "fdcId": 370659,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 30,
+      "servingSizeUnit": "g",
+      "calories": 400
+    },
+    {
+      "fdcId": 2487953,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 27,
+      "servingSizeUnit": "g",
+      "calories": 370
+    },
+    {
+      "fdcId": 2487964,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 29,
+      "servingSizeUnit": "g",
+      "calories": 379
+    },
+    {
+      "fdcId": 2163731,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 43,
+      "servingSizeUnit": "g",
+      "calories": 372
+    },
+    {
+      "fdcId": 2079252,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 55,
+      "servingSizeUnit": "g",
+      "calories": 382
+    },
+    {
+      "fdcId": 604467,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 61,
+      "servingSizeUnit": "g",
+      "calories": 311
+    },
+    {
+      "fdcId": 2107140,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 28,
+      "servingSizeUnit": "g",
+      "calories": 357
+    },
+    {
+      "fdcId": 2175897,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 37,
+      "servingSizeUnit": "g",
+      "calories": 351
+    },
+    {
+      "fdcId": 2149323,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 40,
+      "servingSizeUnit": "g",
+      "calories": 375
+    },
+    {
+      "fdcId": 2153366,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 59,
+      "servingSizeUnit": "g",
+      "calories": 322
+    },
+    {
+      "fdcId": 2477386,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 56,
+      "servingSizeUnit": "g",
+      "calories": 375
+    },
+    {
+      "fdcId": 2093405,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 42,
+      "servingSizeUnit": "g",
+      "calories": 357
+    },
+    {
+      "fdcId": 1747324,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 42,
+      "servingSizeUnit": "g",
+      "calories": 357
+    },
+    {
+      "fdcId": 2487962,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 26,
+      "servingSizeUnit": "g",
+      "calories": 385
+    },
+    {
+      "fdcId": 370639,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 30,
+      "servingSizeUnit": "g",
+      "calories": 400
+    },
+    {
+      "fdcId": 2640903,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 40,
+      "servingSizeUnit": "GRM",
+      "calories": 400
+    },
+    {
+      "fdcId": 1947654,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 59,
+      "servingSizeUnit": "g",
+      "calories": 322
+    },
+    {
+      "fdcId": 1912504,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 29,
+      "servingSizeUnit": "g",
+      "calories": 379
+    },
+    {
+      "fdcId": 2171323,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 59,
+      "servingSizeUnit": "g",
+      "calories": 322
+    },
+    {
+      "fdcId": 2175566,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 37,
+      "servingSizeUnit": "g",
+      "calories": 351
+    },
+    {
+      "fdcId": 2674184,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 31,
+      "servingSizeUnit": "GRM",
+      "calories": 387
+    },
+    {
+      "fdcId": 2471601,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 33,
+      "servingSizeUnit": "g",
+      "calories": 455
+    },
+    {
+      "fdcId": 2061918,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 27,
+      "servingSizeUnit": "g",
+      "calories": 407
+    },
+    {
+      "fdcId": 2015808,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 30,
+      "servingSizeUnit": "g",
+      "calories": 400
+    },
+    {
+      "fdcId": 2175882,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 40,
+      "servingSizeUnit": "g",
+      "calories": 400
+    },
+    {
+      "fdcId": 2475884,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 28,
+      "servingSizeUnit": "g",
+      "calories": 393
+    },
+    {
+      "fdcId": 2089093,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 53,
+      "servingSizeUnit": "g",
+      "calories": 358
+    },
+    {
+      "fdcId": 1967905,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 59,
+      "servingSizeUnit": "g",
+      "calories": 322
+    },
+    {
+      "fdcId": 2155925,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 40,
+      "servingSizeUnit": "g",
+      "calories": 375
+    },
+    {
+      "fdcId": 2124897,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 60,
+      "servingSizeUnit": "g",
+      "calories": 367
+    },
+    {
+      "fdcId": 2708113,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 417
+    },
+    {
+      "fdcId": 2708447,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 398
+    },
+    {
+      "fdcId": 2708461,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 420
+    },
+    {
+      "fdcId": 2708465,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 373
+    },
+    {
+      "fdcId": 173889,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 394
+    },
+    {
+      "fdcId": 174639,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 346
+    },
+    {
+      "fdcId": 2708448,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 374
+    },
+    {
+      "fdcId": 2708480,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 359
+    },
+    {
+      "fdcId": 169039,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 400
+    },
+    {
+      "fdcId": 171650,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 324
+    },
+    {
+      "fdcId": 171647,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 361
+    },
+    {
+      "fdcId": 169040,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 371
+    },
+    {
+      "fdcId": 174641,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 333
+    },
+    {
+      "fdcId": 171667,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 342
+    },
+    {
+      "fdcId": 2708446,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 385
+    },
+    {
+      "fdcId": 2708451,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 380
+    },
+    {
+      "fdcId": 2708449,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 388
+    },
+    {
+      "fdcId": 2708450,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 414
+    },
+    {
+      "fdcId": 2708360,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 64
+    },
+    {
+      "fdcId": 2708454,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 371
+    },
+    {
+      "fdcId": 2708452,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 369
+    },
+    {
+      "fdcId": 2708473,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 380
+    },
+    {
+      "fdcId": 2708460,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 384
+    },
+    {
+      "fdcId": 2708459,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 383
+    },
+    {
+      "fdcId": 2708472,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 363
+    },
+    {
+      "fdcId": 2708471,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 356
+    },
+    {
+      "fdcId": 2708468,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 373
+    },
+    {
+      "fdcId": 2708475,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 379
+    },
+    {
+      "fdcId": 2708462,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 392
+    },
+    {
+      "fdcId": 2708466,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 379
+    },
+    {
+      "fdcId": 2708484,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 384
+    },
+    {
+      "fdcId": 2708486,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 388
+    },
+    {
+      "fdcId": 2708481,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 381
+    },
+    {
+      "fdcId": 2708482,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 370
+    },
+    {
+      "fdcId": 2708478,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 357
+    },
+    {
+      "fdcId": 2708487,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 376
+    },
+    {
+      "fdcId": 2708470,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 357
+    },
+    {
+      "fdcId": 2708476,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 356
+    },
+    {
+      "fdcId": 171665,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 357
+    },
+    {
+      "fdcId": 2710331,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 511
+    },
+    {
+      "fdcId": 174650,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 413
+    },
+    {
+      "fdcId": 2708083,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 365
+    },
+    {
+      "fdcId": 173921,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 376
+    },
+    {
+      "fdcId": 172987,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 348
+    },
+    {
+      "fdcId": 172996,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 342
+    },
+    {
+      "fdcId": 169862,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 403
+    },
+    {
+      "fdcId": 174659,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 373
+    },
+    {
+      "fdcId": 172985,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 407
+    },
+    {
+      "fdcId": 172986,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 372
+    },
+    {
+      "fdcId": 173007,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 373
+    },
+    {
+      "fdcId": 172998,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 365
+    },
+    {
+      "fdcId": 171677,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 62
+    },
+    {
+      "fdcId": 2708498,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 89
+    },
+    {
+      "fdcId": 171365,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 58
+    },
+    {
+      "fdcId": 2708101,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 471
+    },
+    {
+      "fdcId": 2708103,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 342
+    },
+    {
+      "fdcId": 2708469,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 353
+    },
+    {
+      "fdcId": 2708456,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 361
+    },
+    {
+      "fdcId": 2708474,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 375
+    },
+    {
+      "fdcId": 2708453,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 365
+    },
+    {
+      "fdcId": 2708463,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 380
+    },
+    {
+      "fdcId": 2708467,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 372
+    },
+    {
+      "fdcId": 2708464,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 385
+    },
+    {
+      "fdcId": 2708483,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 383
+    },
+    {
+      "fdcId": 2708485,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 422
+    },
+    {
+      "fdcId": 2708445,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 379
+    },
+    {
+      "fdcId": 2708458,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 372
+    },
+    {
+      "fdcId": 2708455,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 358
+    },
+    {
+      "fdcId": 2708457,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 367
+    },
+    {
+      "fdcId": 2708479,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 358
+    },
+    {
+      "fdcId": 169075,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 352
+    },
+    {
+      "fdcId": 169076,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 388
+    },
+    {
+      "fdcId": 173900,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 370
+    },
+    {
+      "fdcId": 173916,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 369
+    },
+    {
+      "fdcId": 171666,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 56
+    },
+    {
+      "fdcId": 2708086,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 413
+    },
+    {
+      "fdcId": 2708444,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 46
+    },
+    {
+      "fdcId": 173006,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 409
+    },
+    {
+      "fdcId": 2708442,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 47
+    },
+    {
+      "fdcId": 172997,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 443
+    },
+    {
+      "fdcId": 173013,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 395
+    },
+    {
+      "fdcId": 171668,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 62
+    },
+    {
+      "fdcId": 2708493,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 390
+    },
+    {
+      "fdcId": 2708443,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 49
+    },
+    {
+      "fdcId": 172999,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 368
+    },
+    {
+      "fdcId": 2708500,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 76
+    },
+    {
+      "fdcId": 2708491,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 376
+    },
+    {
+      "fdcId": 2708496,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 407
+    },
+    {
+      "fdcId": 2708492,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 394
+    },
+    {
+      "fdcId": 171358,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 376
+    },
+    {
+      "fdcId": 170964,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 399
+    },
+    {
+      "fdcId": 170965,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 391
+    },
+    {
+      "fdcId": 171360,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 394
+    },
+    {
+      "fdcId": 171361,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 399
+    },
+    {
+      "fdcId": 170968,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 391
+    },
+    {
+      "fdcId": 170969,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 390
+    },
+    {
+      "fdcId": 170974,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 404
+    },
+    {
+      "fdcId": 171364,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 52
+    },
+    {
+      "fdcId": 170971,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 51
+    },
+    {
+      "fdcId": 168755,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 511
+    },
+    {
+      "fdcId": 2708088,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 390
+    },
+    {
+      "fdcId": 2708089,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 429
+    },
+    {
+      "fdcId": 2708105,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 502
+    },
+    {
+      "fdcId": 2708102,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 408
+    },
+    {
+      "fdcId": 2708490,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 403
+    },
+    {
+      "fdcId": 171646,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 489
+    },
+    {
+      "fdcId": 173893,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 395
+    },
+    {
+      "fdcId": 171660,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 366
+    },
+    {
+      "fdcId": 172989,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 371
+    },
+    {
+      "fdcId": 171676,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 59
+    },
+    {
+      "fdcId": 2707913,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 440
+    },
+    {
+      "fdcId": 2707938,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 417
+    },
+    {
+      "fdcId": 174096,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 440
+    },
+    {
+      "fdcId": 2707578,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 476
+    },
+    {
+      "fdcId": 172974,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 372
+    },
+    {
+      "fdcId": 2708495,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 404
+    },
+    {
+      "fdcId": 2708501,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 75
+    },
+    {
+      "fdcId": 2708497,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 392
+    },
+    {
+      "fdcId": 2038064,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 56,
+      "servingSizeUnit": "g",
+      "calories": 107
+    },
+    {
+      "fdcId": 2029648,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 15,
+      "servingSizeUnit": "g",
+      "calories": 167
+    },
+    {
+      "fdcId": 2667585,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 56,
+      "servingSizeUnit": "GRM",
+      "calories": 107
+    },
+    {
+      "fdcId": 2090362,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 85,
+      "servingSizeUnit": "g",
+      "calories": 188
+    },
+    {
+      "fdcId": 2008553,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 32,
+      "servingSizeUnit": "g",
+      "calories": 219
+    },
+    {
+      "fdcId": 2070165,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 56,
+      "servingSizeUnit": "g",
+      "calories": 161
+    },
+    {
+      "fdcId": 2157165,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 0.8999999761581421,
+      "servingSizeUnit": "g",
+      "calories": 556
+    },
+    {
+      "fdcId": 2706087,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 164
+    },
+    {
+      "fdcId": 2706443,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 262
+    },
+    {
+      "fdcId": 2706538,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 104
+    },
+    {
+      "fdcId": 2707134,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 40
+    },
+    {
+      "fdcId": 2706085,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 215
+    },
+    {
+      "fdcId": 2706084,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 450
+    },
+    {
+      "fdcId": 2706081,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 298
+    },
+    {
+      "fdcId": 2706091,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 201
+    },
+    {
+      "fdcId": 2706083,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 454
+    },
+    {
+      "fdcId": 2706797,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 195
+    },
+    {
+      "fdcId": 2706434,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 167
+    },
+    {
+      "fdcId": 2708745,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 167
+    },
+    {
+      "fdcId": 2706437,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 107
+    },
+    {
+      "fdcId": 2706445,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 280
+    },
+    {
+      "fdcId": 173858,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 158
+    },
+    {
+      "fdcId": 2706428,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 129
+    },
+    {
+      "fdcId": 169886,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 224
+    },
+    {
+      "fdcId": 2706426,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 100
+    },
+    {
+      "fdcId": 2708589,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 304
+    },
+    {
+      "fdcId": 2708713,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 309
+    },
+    {
+      "fdcId": 2708568,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 178
+    },
+    {
+      "fdcId": 2708604,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 206
+    },
+    {
+      "fdcId": 173564,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 900
+    },
+    {
+      "fdcId": 171624,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 223
+    },
+    {
+      "fdcId": 2706154,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 189
+    },
+    {
+      "fdcId": 2708580,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 242
+    },
+    {
+      "fdcId": 2708593,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 287
+    },
+    {
+      "fdcId": 2706444,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 293
+    },
+    {
+      "fdcId": 2706678,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 84
+    },
+    {
+      "fdcId": 2708573,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 174
+    },
+    {
+      "fdcId": 2708601,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 269
+    },
+    {
+      "fdcId": 2706543,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 144
+    },
+    {
+      "fdcId": 2706544,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 172
+    },
+    {
+      "fdcId": 2706429,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 121
+    },
+    {
+      "fdcId": 2706439,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 137
+    },
+    {
+      "fdcId": 2706796,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 129
+    },
+    {
+      "fdcId": 2706421,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 174
+    },
+    {
+      "fdcId": 2706789,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 140
+    },
+    {
+      "fdcId": 2706794,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 295
+    },
+    {
+      "fdcId": 173321,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 271
+    },
+    {
+      "fdcId": 2706090,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 151
+    },
+    {
+      "fdcId": 2706200,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 193
+    },
+    {
+      "fdcId": 2706060,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 257
+    },
+    {
+      "fdcId": 2706064,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 265
+    },
+    {
+      "fdcId": 2706061,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 247
+    },
+    {
+      "fdcId": 2706082,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 245
+    },
+    {
+      "fdcId": 2706089,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 240
+    },
+    {
+      "fdcId": 2706092,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 307
+    },
+    {
+      "fdcId": 2706088,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 287
+    },
+    {
+      "fdcId": 2706151,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 130
+    },
+    {
+      "fdcId": 173873,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 336
+    },
+    {
+      "fdcId": 172957,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 176
+    },
+    {
+      "fdcId": 2708560,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 161
+    },
+    {
+      "fdcId": 2708543,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 244
+    },
+    {
+      "fdcId": 2710782,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 182
+    },
+    {
+      "fdcId": 2706438,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 116
+    },
+    {
+      "fdcId": 2706527,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 110
+    },
+    {
+      "fdcId": 2706442,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 174
+    },
+    {
+      "fdcId": 2706546,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 171
+    },
+    {
+      "fdcId": 2706534,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 119
+    },
+    {
+      "fdcId": 2706433,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 163
+    },
+    {
+      "fdcId": 2706221,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 200
+    },
+    {
+      "fdcId": 171110,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 185
+    },
+    {
+      "fdcId": 171119,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 215
+    },
+    {
+      "fdcId": 2710242,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 164
+    },
+    {
+      "fdcId": 171116,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 143
+    },
+    {
+      "fdcId": 2707468,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 224
+    },
+    {
+      "fdcId": 2706425,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 99
+    },
+    {
+      "fdcId": 169022,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 295
+    },
+    {
+      "fdcId": 2708714,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 283
+    },
+    {
+      "fdcId": 171600,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 51
+    },
+    {
+      "fdcId": 171567,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 381
+    },
+    {
+      "fdcId": 170737,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 351
+    },
+    {
+      "fdcId": 2708756,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 205
+    },
+    {
+      "fdcId": 2708803,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 130
+    },
+    {
+      "fdcId": 173297,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 302
+    },
+    {
+      "fdcId": 2705911,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 242
+    },
+    {
+      "fdcId": 2708581,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 203
+    },
+    {
+      "fdcId": 2708806,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 154
+    },
+    {
+      "fdcId": 2706703,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 255
+    },
+    {
+      "fdcId": 2708596,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 270
+    },
+    {
+      "fdcId": 2709155,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 126
+    },
+    {
+      "fdcId": 2708953,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 173
+    },
+    {
+      "fdcId": 2709149,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 53
+    },
+    {
+      "fdcId": 2707133,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 33
+    },
+    {
+      "fdcId": 2707137,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 91
+    },
+    {
+      "fdcId": 2706677,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 108
+    },
+    {
+      "fdcId": 170725,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 326
+    },
+    {
+      "fdcId": 2707000,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 281
+    },
+    {
+      "fdcId": 2706096,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 298
+    },
+    {
+      "fdcId": 2706098,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 271
+    },
+    {
+      "fdcId": 2706432,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 136
+    },
+    {
+      "fdcId": 2706528,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 122
+    },
+    {
+      "fdcId": 2706435,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 250
+    },
+    {
+      "fdcId": 2706818,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 63
+    },
+    {
+      "fdcId": 2706991,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 245
+    },
+    {
+      "fdcId": 2706990,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 246
+    },
+    {
+      "fdcId": 2706992,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 269
+    },
+    {
+      "fdcId": 2706069,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 260
+    },
+    {
+      "fdcId": 2706063,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 250
+    },
+    {
+      "fdcId": 2706086,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 185
+    },
+    {
+      "fdcId": 2706094,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 307
+    },
+    {
+      "fdcId": 169841,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 297
+    },
+    {
+      "fdcId": 169054,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 51
+    },
+    {
+      "fdcId": 172248,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 146
+    },
+    {
+      "fdcId": 173483,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 130
+    },
+    {
+      "fdcId": 173872,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 272
+    },
+    {
+      "fdcId": 172970,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 298
+    },
+    {
+      "fdcId": 170731,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 292
+    },
+    {
+      "fdcId": 2708562,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 135
+    },
+    {
+      "fdcId": 2708561,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 155
+    },
+    {
+      "fdcId": 2708545,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 203
+    },
+    {
+      "fdcId": 2708544,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 215
+    },
+    {
+      "fdcId": 170790,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 249
+    },
+    {
+      "fdcId": 2707194,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 137
+    },
+    {
+      "fdcId": 2706530,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 140
+    },
+    {
+      "fdcId": 2706529,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 148
+    },
+    {
+      "fdcId": 2706537,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 149
+    },
+    {
+      "fdcId": 2706441,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 210
+    },
+    {
+      "fdcId": 2706801,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 228
+    },
+    {
+      "fdcId": 2706440,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 173
+    },
+    {
+      "fdcId": 2706431,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 157
+    },
+    {
+      "fdcId": 171513,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 287
+    },
+    {
+      "fdcId": 171512,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 292
+    },
+    {
+      "fdcId": 174465,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 130
+    },
+    {
+      "fdcId": 2514746,
+      "dataType": "Foundation",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": null
+    },
+    {
+      "fdcId": 167719,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 234
+    },
+    {
+      "fdcId": 2707469,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 234
+    },
+    {
+      "fdcId": 172396,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 127
+    },
+    {
+      "fdcId": 173641,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 168
+    },
+    {
+      "fdcId": 2708748,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 217
+    },
+    {
+      "fdcId": 2708703,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 266
+    },
+    {
+      "fdcId": 170765,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 294
+    },
+    {
+      "fdcId": 170341,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 274
+    },
+    {
+      "fdcId": 2708757,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 201
+    },
+    {
+      "fdcId": 2708946,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 213
+    },
+    {
+      "fdcId": 172928,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 201
+    },
+    {
+      "fdcId": 167678,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 95
+    },
+    {
+      "fdcId": 167674,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 252
+    },
+    {
+      "fdcId": 167679,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 262
+    },
+    {
+      "fdcId": 168087,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 293
+    },
+    {
+      "fdcId": 2709148,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 42
+    },
+    {
+      "fdcId": 169019,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 325
+    },
+    {
+      "fdcId": 2708509,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 167
+    },
+    {
+      "fdcId": 2706202,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 307
+    },
+    {
+      "fdcId": 2708740,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 215
+    },
+    {
+      "fdcId": 170770,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 278
+    },
+    {
+      "fdcId": 2706539,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 136
+    },
+    {
+      "fdcId": 2706710,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 172
+    },
+    {
+      "fdcId": 2706093,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 307
+    },
+    {
+      "fdcId": 2706816,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 130
+    },
+    {
+      "fdcId": 2706810,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 64
+    },
+    {
+      "fdcId": 2706988,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 176
+    },
+    {
+      "fdcId": 2705964,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 144
+    },
+    {
+      "fdcId": 2706547,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 172
+    },
+    {
+      "fdcId": 2706819,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 115
+    },
+    {
+      "fdcId": 2706208,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 98
+    },
+    {
+      "fdcId": 2706075,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 294
+    },
+    {
+      "fdcId": 2705963,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 175
+    },
+    {
+      "fdcId": 2705971,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 206
+    },
+    {
+      "fdcId": 2705972,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 176
+    },
+    {
+      "fdcId": 2705965,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 181
+    },
+    {
+      "fdcId": 2705966,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 149
+    },
+    {
+      "fdcId": 2706008,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 206
+    },
+    {
+      "fdcId": 2706009,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 172
+    },
+    {
+      "fdcId": 2706016,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 204
+    },
+    {
+      "fdcId": 2706017,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 169
+    },
+    {
+      "fdcId": 2706014,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 186
+    },
+    {
+      "fdcId": 2706015,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 148
+    },
+    {
+      "fdcId": 2706035,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 226
+    },
+    {
+      "fdcId": 2706036,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 193
+    },
+    {
+      "fdcId": 2706043,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 243
+    },
+    {
+      "fdcId": 2706044,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 192
+    },
+    {
+      "fdcId": 2706037,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 227
+    },
+    {
+      "fdcId": 2706038,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 175
+    },
+    {
+      "fdcId": 2706062,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 265
+    },
+    {
+      "fdcId": 2706056,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 257
+    },
+    {
+      "fdcId": 2706097,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 304
+    },
+    {
+      "fdcId": 2706095,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 270
+    },
+    {
+      "fdcId": 2706542,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 162
+    },
+    {
+      "fdcId": 2706100,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 283
+    },
+    {
+      "fdcId": 2706102,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 240
+    },
+    {
+      "fdcId": 172287,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 65
+    },
+    {
+      "fdcId": 172288,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 62
+    },
+    {
+      "fdcId": 172264,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 74
+    },
+    {
+      "fdcId": 172263,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 74
+    },
+    {
+      "fdcId": 173496,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 50
+    },
+    {
+      "fdcId": 173497,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 78
+    },
+    {
+      "fdcId": 173513,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 53
+    },
+    {
+      "fdcId": 173498,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 59
+    },
+    {
+      "fdcId": 172249,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 188
+    },
+    {
+      "fdcId": 2706999,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 199
+    },
+    {
+      "fdcId": 2706998,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 204
+    },
+    {
+      "fdcId": 1909132,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 236,
+      "servingSizeUnit": "ml",
+      "calories": 55
+    },
+    {
+      "fdcId": 2078244,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 62
+    },
+    {
+      "fdcId": 2083027,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 62
+    },
+    {
+      "fdcId": 2062196,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 62
+    },
+    {
+      "fdcId": 2501185,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "MLT",
+      "calories": 62
+    },
+    {
+      "fdcId": 2475001,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 355,
+      "servingSizeUnit": "ml",
+      "calories": 51
+    },
+    {
+      "fdcId": 2503416,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "MLT",
+      "calories": 62
+    },
+    {
+      "fdcId": 2476573,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 67
+    },
+    {
+      "fdcId": 2454032,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 67
+    },
+    {
+      "fdcId": 2098011,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 54
+    },
+    {
+      "fdcId": 1909141,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 236,
+      "servingSizeUnit": "ml",
+      "calories": 55
+    },
+    {
+      "fdcId": 1954124,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 30,
+      "servingSizeUnit": "ml",
+      "calories": 133
+    },
+    {
+      "fdcId": 2471393,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 71
+    },
+    {
+      "fdcId": 2062449,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 414,
+      "servingSizeUnit": "ml",
+      "calories": 63
+    },
+    {
+      "fdcId": 2630156,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "MLT",
+      "calories": 62
+    },
+    {
+      "fdcId": 1881028,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 67
+    },
+    {
+      "fdcId": 2092649,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 62
+    },
+    {
+      "fdcId": 2658737,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "MLT",
+      "calories": 67
+    },
+    {
+      "fdcId": 2078442,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 62
+    },
+    {
+      "fdcId": 2074481,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 62
+    },
+    {
+      "fdcId": 2085761,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 67
+    },
+    {
+      "fdcId": 2657009,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "MLT",
+      "calories": 67
+    },
+    {
+      "fdcId": 1909137,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 62
+    },
+    {
+      "fdcId": 2083378,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 92
+    },
+    {
+      "fdcId": 2062204,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 42
+    },
+    {
+      "fdcId": 1960596,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 236,
+      "servingSizeUnit": "ml",
+      "calories": 64
+    },
+    {
+      "fdcId": 2658501,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "MLT",
+      "calories": 67
+    },
+    {
+      "fdcId": 2098490,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 62
+    },
+    {
+      "fdcId": 2430701,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 67
+    },
+    {
+      "fdcId": 2464034,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 23,
+      "servingSizeUnit": "g",
+      "calories": 348
+    },
+    {
+      "fdcId": 1909134,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 46
+    },
+    {
+      "fdcId": 1909135,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 38
+    },
+    {
+      "fdcId": 2079089,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 62
+    },
+    {
+      "fdcId": 2481948,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 67
+    },
+    {
+      "fdcId": 2092666,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 67
+    },
+    {
+      "fdcId": 2624794,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "MLT",
+      "calories": 71
+    },
+    {
+      "fdcId": 1960637,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 236,
+      "servingSizeUnit": "ml",
+      "calories": 64
+    },
+    {
+      "fdcId": 2673630,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "MLT",
+      "calories": 67
+    },
+    {
+      "fdcId": 2118869,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 236,
+      "servingSizeUnit": "ml",
+      "calories": 51
+    },
+    {
+      "fdcId": 2089787,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 62
+    },
+    {
+      "fdcId": 2338716,
+      "dataType": "Branded",
+      "hasServing": true,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": 240,
+      "servingSizeUnit": "ml",
+      "calories": 62
+    },
+    {
+      "fdcId": 2705383,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": null
+    },
+    {
+      "fdcId": 2705413,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 31
+    },
+    {
+      "fdcId": 174980,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 446
+    },
+    {
+      "fdcId": 2708159,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 446
+    },
+    {
+      "fdcId": 2705395,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 69
+    },
+    {
+      "fdcId": 2705501,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 66
+    },
+    {
+      "fdcId": 2705384,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 52
+    },
+    {
+      "fdcId": 2705385,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 61
+    },
+    {
+      "fdcId": 2705412,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 45
+    },
+    {
+      "fdcId": 2705411,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 47
+    },
+    {
+      "fdcId": 2705477,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 74
+    },
+    {
+      "fdcId": 2705478,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 54
+    },
+    {
+      "fdcId": 167686,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 167
+    },
+    {
+      "fdcId": 173459,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 411
+    },
+    {
+      "fdcId": 2705408,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 43
+    },
+    {
+      "fdcId": 2705407,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 30
+    },
+    {
+      "fdcId": 2705507,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 125
+    },
+    {
+      "fdcId": 2705409,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 15
+    },
+    {
+      "fdcId": 2705410,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 20
+    },
+    {
+      "fdcId": 171942,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 47
+    },
+    {
+      "fdcId": 2710506,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 51
+    },
+    {
+      "fdcId": 2705399,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 134
+    },
+    {
+      "fdcId": 167587,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 535
+    },
+    {
+      "fdcId": 2705517,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 49
+    },
+    {
+      "fdcId": 2705466,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 65
+    },
+    {
+      "fdcId": 2705467,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 83
+    },
+    {
+      "fdcId": 2710603,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 91
+    },
+    {
+      "fdcId": 171274,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 387
+    },
+    {
+      "fdcId": 2705402,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 321
+    },
+    {
+      "fdcId": 2705585,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 362
+    },
+    {
+      "fdcId": 170882,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 108
+    },
+    {
+      "fdcId": 2708416,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 144
+    },
+    {
+      "fdcId": 2705406,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 64
+    },
+    {
+      "fdcId": 2705404,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 53
+    },
+    {
+      "fdcId": 2705405,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 38
+    },
+    {
+      "fdcId": 2705495,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 65
+    },
+    {
+      "fdcId": 2705496,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 86
+    },
+    {
+      "fdcId": 2707570,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 128
+    },
+    {
+      "fdcId": 2707569,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 108
+    },
+    {
+      "fdcId": 170890,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 147
+    },
+    {
+      "fdcId": 173460,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 396
+    },
+    {
+      "fdcId": 2705396,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 32
+    },
+    {
+      "fdcId": 2705397,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 76
+    },
+    {
+      "fdcId": 2705388,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 34
+    },
+    {
+      "fdcId": 2705392,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 61
+    },
+    {
+      "fdcId": 2705387,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 43
+    },
+    {
+      "fdcId": 2707568,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 230
+    },
+    {
+      "fdcId": 2705386,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 50
+    },
+    {
+      "fdcId": 2705403,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 31
+    },
+    {
+      "fdcId": 2705500,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 59
+    },
+    {
+      "fdcId": 168754,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 526
+    },
+    {
+      "fdcId": 170845,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 299
+    },
+    {
+      "fdcId": 170851,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 150
+    },
+    {
+      "fdcId": 746766,
+      "dataType": "Foundation",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 157
+    },
+    {
+      "fdcId": 2705510,
+      "dataType": "Survey (FNDDS)",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 150
+    },
+    {
+      "fdcId": 170883,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 119
+    },
+    {
+      "fdcId": 170884,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 112
+    },
+    {
+      "fdcId": 172225,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 62
+    },
+    {
+      "fdcId": 171275,
+      "dataType": "SR Legacy",
+      "hasServing": false,
+      "unitMg": false,
+      "impossibleMg": false,
+      "servingSize": null,
+      "servingSizeUnit": null,
+      "calories": 321
+    }
+  ]
+}

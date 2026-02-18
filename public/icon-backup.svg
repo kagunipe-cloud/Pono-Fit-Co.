@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="#a2f4b1">
+  <rect width="512" height="512" rx="96" fill="#7e817e"/>
+  <!-- pineapple body -->
+  <ellipse cx="256" cy="300" rx="120" ry="140"/>
+  <!-- crown leaves -->
+  <path d="M256 80 L240 220 L272 220 Z"/>
+  <path d="M280 120 L320 200 L280 200 Z"/>
+  <path d="M232 120 L192 200 L232 200 Z"/>
+  <path d="M320 160 L380 220 L340 220 Z"/>
+  <path d="M192 160 L132 220 L172 220 Z"/>
+</svg>
