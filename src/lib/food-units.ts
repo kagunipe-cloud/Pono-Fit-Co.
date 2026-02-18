@@ -213,7 +213,8 @@ export function formatPortionLabel(
   servingUnit: string | null
 ): string {
   if (servingSize == null || servingUnit == null || servingSize <= 0) {
-    return ` × ${amount}`;
+    const word = amount === 1 ? "serving" : "serving(s)";
+    return ` × ${amount} ${word}`;
   }
   const u = norm(servingUnit);
   const total = amount * servingSize;

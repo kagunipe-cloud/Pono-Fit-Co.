@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
          WHERE ob.occurrence_date >= ? AND ob.occurrence_date <= ?
          ORDER BY ob.occurrence_date, ob.start_time`
       )
-      .all(from, to) as { id: number; member_id: string; guest_name: string | null; occurrence_date: string; start_time: string; duration_minutes: number; pt_session_id: number; first_name: string | null; last_name: string | null; session_name: string | null; trainer: string | null }[];
+      .all(from, to) as { id: number; member_id: string; guest_name: string | null; occurrence_date: string; start_time: string; duration_minutes: number; pt_session_id: number; payment_type: string | null; first_name: string | null; last_name: string | null; session_name: string | null; trainer: string | null }[];
     const out = rows.map((r) => {
       const member_name = (r.guest_name && r.guest_name.trim()) ? r.guest_name.trim() : ([r.first_name, r.last_name].filter(Boolean).join(" ").trim() || r.member_id || "—");
       return {

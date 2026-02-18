@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, ensureMembersStripeColumn } from "../../../../../../lib/db";
+import { getDb, ensureMembersStripeColumn } from "@/lib/db";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";

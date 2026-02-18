@@ -75,3 +75,50 @@ export async function sendMembershipExpiryReminder(params: {
     : `Aloha,\n\nBekah & Perry with Pono Fit Co. here! We're just emailing to let you know that your membership expires on ${params.expiry_date}. Payment is due by then to continue your access. You can renew in the app or at the front desk.${closing}`;
   return sendMemberEmail(params.to, subject, text);
 }
+
+/** Post-purchase receipt / confirmation to member. */
+export async function sendPostPurchaseEmail(params: {
+  to: string;
+  member_id: string;
+  first_name?: string | null;
+  origin: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const subject = "Thanks for your purchase";
+  const text = `Hi${params.first_name ? ` ${params.first_name}` : ""},\n\nThanks for your purchase. You can view your membership and bookings in the app: ${params.origin}.\n\n— Pono Fit Co.`;
+  return sendMemberEmail(params.to, subject, text);
+}
+
+/** Invite member to download the app after first purchase. */
+export async function sendAppDownloadInviteEmail(params: {
+  to: string;
+  first_name?: string | null;
+  origin: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const subject = "Get the Pono Fit Co. app";
+  const text = `Hi${params.first_name ? ` ${params.first_name}` : ""},\n\nDownload our app to view your membership, book classes, and more: ${params.origin}.\n\n— Pono Fit Co.`;
+  return sendMemberEmail(params.to, subject, text);
+}
+
+/** Send waiver signing link to a team member. */
+export async function sendWaiverLinkEmail(params: {
+  to: string;
+  waiver_url: string;
+  team_name: string;
+  first_name?: string | null;
+}): Promise<{ ok: boolean; error?: string }> {
+  const subject = `Sign your waiver — ${params.team_name}`;
+  const text = `Hi${params.first_name ? ` ${params.first_name}` : ""},\n\nPlease sign the waiver for ${params.team_name} by clicking the link below (link expires in 30 days):\n\n${params.waiver_url}\n\n— Pono Fit Co.`;
+  return sendMemberEmail(params.to, subject, text);
+}
+
+/** Send admin a copy when a waiver is signed. */
+export async function sendWaiverSignedCopyToAdmin(params: {
+  member_name: string;
+  team_name: string;
+  email: string;
+  signed_at: string;
+}): Promise<boolean> {
+  const subject = `Waiver signed: ${params.member_name} — ${params.team_name}`;
+  const text = `${params.member_name} (${params.email}) signed the waiver for ${params.team_name} at ${params.signed_at}.`;
+  return sendStaffEmail(subject, text);
+}

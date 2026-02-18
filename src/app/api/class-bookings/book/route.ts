@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "../../../lib/db";
-import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../lib/recurring-classes";
-import { getMemberIdFromSession } from "../../../lib/session";
+import { getDb } from "../../../../lib/db";
+import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../lib/recurring-classes";
+import { getMemberIdFromSession } from "../../../../lib/session";
 
 export const dynamic = "force-dynamic";
 

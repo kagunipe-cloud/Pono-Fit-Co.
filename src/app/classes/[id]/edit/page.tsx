@@ -79,7 +79,7 @@ export default function EditClassPage() {
     try {
       const weeks = Math.min(52, Math.max(1, generateWeeks));
       const res = await fetch(`/api/offerings/classes/${id}/generate-occurrences`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ weeks }) });
-      const data = await res.ok ? res.json() : {};
+      const data = (await (res.ok ? res.json() : {})) as { inserted?: number; error?: string };
       if (res.ok) alert(`Generated ${data.inserted ?? 0} occurrences.`);
       else alert(data.error ?? "Failed");
     } finally {

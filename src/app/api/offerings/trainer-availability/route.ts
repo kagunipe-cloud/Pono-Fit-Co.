@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     const days_of_week_str = (body.days_of_week ?? "").trim() || null;
     let day_of_week = Math.max(0, Math.min(6, parseInt(String(body.day_of_week ?? 0), 10)));
     if (days_of_week_str) {
-      const first = days_of_week_str.split(",").map((d) => parseInt(d.trim(), 10)).find((d) => d >= 0 && d <= 6);
+      const first = days_of_week_str.split(",").map((d: string) => parseInt(d.trim(), 10)).find((d: number) => d >= 0 && d <= 6);
       if (first !== undefined) day_of_week = first;
     }
     const start_time = (body.start_time ?? "09:00").toString().trim();

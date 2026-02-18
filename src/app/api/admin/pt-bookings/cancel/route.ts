@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "../../../../lib/db";
-import { ensurePTSlotTables } from "../../../../lib/pt-slots";
-import { getAdminMemberId } from "../../../../lib/admin";
+import { getDb } from "../../../../../lib/db";
+import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
+import { getAdminMemberId } from "../../../../../lib/admin";
 
 export const dynamic = "force-dynamic";
 

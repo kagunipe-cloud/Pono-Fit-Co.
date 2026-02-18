@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     const duration_minutes = session.duration_minutes ?? 60;
     const timePart = time.includes(":") ? time : `${time}:00`;
     const startMin = (() => {
-      const parts = timePart.split(":").map((x) => parseInt(x, 10));
+      const parts = timePart.split(":").map((x: string) => parseInt(x, 10));
       return ((parts[0] ?? 0) % 24) * 60 + (parts[1] ?? 0);
     })();
     const start_time = `${Math.floor(startMin / 60).toString().padStart(2, "0")}:${(startMin % 60).toString().padStart(2, "0")}`;

@@ -18,7 +18,7 @@ function normalizeSetGroups(
   if (isGrouped) {
     return (sets as (LiftPart | CardioPart)[]).map((g) => (Array.isArray(g) ? g : [g]) as LiftPart[] | CardioPart[]);
   }
-  return (sets as (LiftPart | CardioPart)[]).map((s) => [s]);
+  return (sets as (LiftPart | CardioPart)[]).map((s) => [s]) as (LiftPart[] | CardioPart[])[];
 }
 
 const setSelectCols = "id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index";
@@ -82,8 +82,8 @@ export async function POST(
         const weight_kg = type === "lift" ? (typeof (s as LiftPart).weight_kg === "number" ? (s as LiftPart).weight_kg : parseFloat(String((s as LiftPart).weight_kg ?? 0)) || null) : null;
         const time_seconds = type === "cardio" ? (typeof (s as CardioPart).time_seconds === "number" ? (s as CardioPart).time_seconds : parseInt(String((s as CardioPart).time_seconds ?? 0), 10) || null) : null;
         const distance_km = type === "cardio" ? (typeof (s as CardioPart).distance_km === "number" ? (s as CardioPart).distance_km : parseFloat(String((s as CardioPart).distance_km ?? 0)) || null) : null;
-        if (hasDropIndex) (insertSet as ReturnType<typeof db.prepare>).run(exId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex);
-        else (insertSet as ReturnType<typeof db.prepare>).run(exId, reps, weight_kg, time_seconds, distance_km, setOrder);
+        if (hasDropIndex) insertSet.run([exId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex]);
+        else insertSet.run([exId, reps, weight_kg, time_seconds, distance_km, setOrder]);
       }
       setOrder++;
     }
@@ -156,8 +156,8 @@ export async function PUT(
         const weight_kg = type === "lift" ? (typeof (s as LiftPart).weight_kg === "number" ? (s as LiftPart).weight_kg : parseFloat(String((s as LiftPart).weight_kg ?? 0)) || null) : null;
         const time_seconds = type === "cardio" ? (typeof (s as CardioPart).time_seconds === "number" ? (s as CardioPart).time_seconds : parseInt(String((s as CardioPart).time_seconds ?? 0), 10) || null) : null;
         const distance_km = type === "cardio" ? (typeof (s as CardioPart).distance_km === "number" ? (s as CardioPart).distance_km : parseFloat(String((s as CardioPart).distance_km ?? 0)) || null) : null;
-        if (hasDropIndex) (insertSet as ReturnType<typeof db.prepare>).run(exId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex);
-        else (insertSet as ReturnType<typeof db.prepare>).run(exId, reps, weight_kg, time_seconds, distance_km, setOrder);
+        if (hasDropIndex) insertSet.run([exId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex]);
+        else insertSet.run([exId, reps, weight_kg, time_seconds, distance_km, setOrder]);
       }
     }
 

@@ -187,10 +187,10 @@ function entryMacros(e: Entry): { cal: number; p: number; f: number; c: number }
 
 /** Format measurement for diary display (e.g. "tbsp" → "tbsp", "servings" → "serving(s)"). */
 function formatMeasurementLabel(measurement: string): string {
-  const m = measurement.toLowerCase().trim();
-  if (m === "servings" || m === "serving") return "serving(s)";
+  const m = measurement.toLowerCase().trim().replace(/s$/, "");
+  if (m === "serving") return "serving(s)";
   if (m === "tbsp" || m === "tablespoon") return "tbsp";
-  if (m === "cup" || m === "cups") return "cup(s)";
+  if (m === "cup") return "cup(s)";
   if (m === "tsp" || m === "teaspoon") return "tsp";
   if (m === "g" || m === "gram") return "g";
   if (m === "oz" || m === "ounce") return "oz";
@@ -203,7 +203,10 @@ function entryPortionLabel(e: Entry): string {
     return ` — ${q} ${formatMeasurementLabel(e.measurement)}`;
   }
   const f = e.food;
-  if (!f) return ` × ${e.amount}`;
+  if (!f) {
+    const word = e.amount === 1 ? "serving" : "serving(s)";
+    return ` × ${e.amount} ${word}`;
+  }
   return formatPortionLabel(e.amount, f.serving_size ?? null, f.serving_size_unit ?? null);
 }
 
@@ -614,10 +617,16 @@ export default function MemberMacrosDayPage() {
         return;
       }
       const { id: foodId } = (await createRes.json()) as { id: number };
+      const measurement = (aiPortionUnit || "serving").trim().toLowerCase();
       const entryRes = await fetch(`/api/member/journal/meals/${addFoodMealId}/entries`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ food_id: foodId, amount: val }),
+        body: JSON.stringify({
+          food_id: foodId,
+          amount: val,
+          quantity: val,
+          measurement: measurement || "serving",
+        }),
       });
       if (entryRes.ok) {
         setAddFoodMealId(null);
@@ -844,8 +853,11 @@ export default function MemberMacrosDayPage() {
                         ) : (
                           <>
                             <span>{e.food?.name ?? "—"}{entryPortionLabel(e)}</span>
-                            <span className="text-stone-400">
-                              {Math.round(entryMacros(e).cal)} cal
+                            <span className="text-stone-400 text-xs">
+                              {(() => {
+                                const m = entryMacros(e);
+                                return `${Math.round(m.cal)} cal · P ${m.p.toFixed(0)}g · F ${m.f.toFixed(0)}g · C ${m.c.toFixed(0)}g`;
+                              })()}
                             </span>
                             <span className="flex gap-1">
                               <button type="button" onClick={() => { setEditEntryId(e.id); setEditAmount(String(e.amount)); }} className="text-stone-500 hover:underline text-xs">Edit</button>

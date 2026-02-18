@@ -9,6 +9,7 @@ type MemberData = {
   member: { member_id: string; name: string; email: string | null };
   subscriptions: Record<string, unknown>[];
   classBookings: Record<string, unknown>[];
+  occurrenceBookings: Record<string, unknown>[];
   ptBookings: Record<string, unknown>[];
   hasAccess: boolean;
 } | null;

@@ -26,7 +26,7 @@ export default function MemberClassesPage() {
       fetch("/api/auth/member-me").then((r) => (r.ok ? r.json() : null)),
       fetch("/api/offerings/class-types").then((r) => r.json()),
     ])
-      .then(([me, data]: [unknown, ClassTypesResponse]) => {
+      .then(([me, data]: [{ member_id?: string } | null, ClassTypesResponse]) => {
         if (!me?.member_id) {
           router.replace("/login");
           return;

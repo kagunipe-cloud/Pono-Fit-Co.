@@ -30,6 +30,8 @@ export function ensureJournalTables(db: ReturnType<typeof import("./db").getDb>)
       food_id INTEGER NOT NULL REFERENCES foods(id),
       amount REAL NOT NULL DEFAULT 1,
       sort_order INTEGER NOT NULL DEFAULT 0,
+      quantity REAL,
+      measurement TEXT,
       created_at TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_journal_meal_entries_meal ON journal_meal_entries(journal_meal_id);
