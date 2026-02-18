@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { Suspense, useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type Occurrence = { id: number; class_name: string; instructor: string | null; occurrence_date: string; occurrence_time: string; booked_count: number; capacity: number; price: string };
 
-export default function MemberBookClassesPage() {
+function MemberBookClassesContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const occurrenceIdParam = searchParams.get("occurrence");
@@ -142,5 +142,13 @@ export default function MemberBookClassesPage() {
         <Link href="/member/class-bookings" className="text-brand-600 hover:underline">My class bookings →</Link>
       </p>
     </div>
+  );
+}
+
+export default function MemberBookClassesPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-stone-500">Loading…</div>}>
+      <MemberBookClassesContent />
+    </Suspense>
   );
 }

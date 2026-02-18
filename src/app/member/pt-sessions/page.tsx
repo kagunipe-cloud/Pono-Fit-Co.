@@ -26,7 +26,7 @@ export default function MemberPTSessionsPage() {
       fetch("/api/offerings/pt-session-types").then((r) => r.json()),
       fetch("/api/offerings/pt-pack-products").then((r) => r.json()),
     ])
-      .then(([me, data, packsData]: [unknown, PTSessionTypesResponse, PTPack[]]) => {
+      .then(([me, data, packsData]: [{ member_id?: string } | null, PTSessionTypesResponse, PTPack[]]) => {
         if (!me?.member_id) {
           router.replace("/login");
           return;

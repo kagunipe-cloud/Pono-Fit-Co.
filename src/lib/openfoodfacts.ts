@@ -32,7 +32,6 @@ export type OFFProduct = {
     nutriments?: {
       "energy-kcal_100g"?: number;
       "energy_100g"?: number;
-      energy_100g?: number;
       "energy-kcal_serving"?: number;
       "energy_serving"?: number;
       proteins_100g?: number;
@@ -214,10 +213,11 @@ export async function searchOFF(query: string, pageSize = 20): Promise<{ count: 
   const products: OFFProduct[] = list
     .filter((p: unknown) => p != null && typeof p === "object")
     .map((p: Record<string, unknown>) => {
-      const code = (p.code ?? p.product?.code ?? "") as string;
+      const productObj = p.product as { code?: string } | undefined;
+      const code = (p.code ?? productObj?.code ?? "") as string;
       const product = (p.product ?? p) as OFFProduct["product"];
       return { code: code || (product?.code as string), product } as OFFProduct;
     })
-    .filter((p) => p.code);
+    .filter((p: OFFProduct) => p.code);
   return { count, products };
 }

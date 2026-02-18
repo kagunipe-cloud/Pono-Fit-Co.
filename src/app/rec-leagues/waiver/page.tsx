@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { BRAND } from "@/lib/branding";
 
 const DEFAULT_WAIVER_TEXT = `I understand that participation in rec league activities may involve physical activity and risk of injury. I voluntarily assume all risks. I release ${BRAND.name} and its staff from any liability for injury or loss. I confirm that the information I provide is accurate.`;
 
-export default function RecLeaguesWaiverPage() {
+function RecLeaguesWaiverContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") ?? "";
   const [status, setStatus] = useState<"loading" | "valid" | "invalid" | "signed">("loading");
@@ -127,5 +127,13 @@ export default function RecLeaguesWaiverPage() {
         </button>
       </form>
     </div>
+  );
+}
+
+export default function RecLeaguesWaiverPage() {
+  return (
+    <Suspense fallback={<div className="max-w-xl mx-auto py-12 px-4 text-stone-500">Loading…</div>}>
+      <RecLeaguesWaiverContent />
+    </Suspense>
   );
 }

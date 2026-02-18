@@ -558,7 +558,7 @@ export default function MemberDetailPage() {
                 ))}
                 {(data.ptBlockBookings ?? []).map((b) => (
                   <tr key={`block-${b.id}`} className="border-t border-stone-100">
-                    <td className="py-2 px-4">{String(b.trainer ?? "—")} PT ({b.session_duration_minutes} min)</td>
+                    <td className="py-2 px-4">{String(b.trainer ?? "—")} PT ({String(b.session_duration_minutes ?? "")} min)</td>
                     <td className="py-2 px-4">{String(b.occurrence_date ?? "—")} {String(b.start_time ?? "")}</td>
                     <td className="py-2 px-4">—</td>
                     <td className="py-2 px-4">

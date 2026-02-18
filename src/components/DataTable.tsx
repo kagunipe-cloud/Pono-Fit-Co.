@@ -76,10 +76,10 @@ export default function DataTable({
     }
   }, [debouncedSearch]);
 
-  const displayValue = (row: Record<string, unknown>, key: string) => {
+  const displayValue = (row: Record<string, unknown>, key: string): string => {
     const v = row[key];
     if (v == null || v === "") return "—";
-    if (key === "role" && String(v) === "Admin") return v;
+    if (key === "role" && String(v) === "Admin") return String(v);
     return String(v);
   };
 

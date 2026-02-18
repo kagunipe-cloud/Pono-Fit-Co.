@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import InstallAppBanner from "@/components/InstallAppBanner";
@@ -8,7 +8,7 @@ import { BRAND } from "@/lib/branding";
 
 type Platform = "android" | "ios" | "other";
 
-export default function InstallPage() {
+function InstallContent() {
   const searchParams = useSearchParams();
   const memberId = searchParams.get("member_id") ?? "";
   const email = searchParams.get("email") ?? "";
@@ -91,5 +91,13 @@ export default function InstallPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+export default function InstallPage() {
+  return (
+    <Suspense fallback={<div className="max-w-md mx-auto py-12 px-4 text-stone-500">Loading…</div>}>
+      <InstallContent />
+    </Suspense>
   );
 }

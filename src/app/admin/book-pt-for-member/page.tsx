@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { Suspense, useEffect, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -14,7 +14,7 @@ function normalizeTimeToHHmm(t: string): string {
   return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 }
 
-export default function AdminBookPTForMemberPage() {
+function AdminBookPTForMemberContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const date = searchParams.get("date")?.trim() || "";
@@ -164,5 +164,13 @@ export default function AdminBookPTForMemberPage() {
         You’ll be taken to the member’s cart. Use “Pay with Stripe” to charge their card or complete in-person with your Stripe reader.
       </p>
     </div>
+  );
+}
+
+export default function AdminBookPTForMemberPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-stone-500">Loading…</div>}>
+      <AdminBookPTForMemberContent />
+    </Suspense>
   );
 }

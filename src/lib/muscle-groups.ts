@@ -89,7 +89,7 @@ const MUSCLE_TO_GROUP: Record<string, MuscleGroup> = {
 export const BULGARIAN_SPLIT_SQUAT_MUSCLES = "quadriceps, hamstrings, glutes, hip flexors";
 
 function isBulgarianSplitSquat(name: string | null | undefined): boolean {
-  return /bulgarian\s+split\s+squat/s.test((name ?? "").trim().toLowerCase());
+  return /bulgarian\s+split\s+squat/.test((name ?? "").trim().toLowerCase());
 }
 
 /**

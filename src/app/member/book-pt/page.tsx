@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { Suspense, useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -22,7 +22,7 @@ function normalizeTimeToHHmm(t: string): string {
 
 type PtSessionProduct = { id: number; session_name: string; duration_minutes: number; price: string; trainer: string | null };
 
-export default function MemberBookPTPage() {
+function MemberBookPTContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const highlightDate = searchParams.get("date")?.trim() || null;
@@ -228,5 +228,13 @@ export default function MemberBookPTPage() {
         <Link href="/member/pt-bookings" className="text-brand-600 hover:underline">My PT bookings</Link>
       </p>
     </div>
+  );
+}
+
+export default function MemberBookPTPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-stone-500">Loading…</div>}>
+      <MemberBookPTContent />
+    </Suspense>
   );
 }

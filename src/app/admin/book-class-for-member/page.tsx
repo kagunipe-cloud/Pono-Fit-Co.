@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { Suspense, useEffect, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -16,7 +16,7 @@ type Occurrence = {
   booked_count: number;
 };
 
-export default function AdminBookClassForMemberPage() {
+function AdminBookClassForMemberContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const occurrenceIdParam = searchParams.get("occurrence_id")?.trim() || "";
@@ -174,5 +174,13 @@ export default function AdminBookClassForMemberPage() {
         Stripe reader.
       </p>
     </div>
+  );
+}
+
+export default function AdminBookClassForMemberPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-stone-500">Loading…</div>}>
+      <AdminBookClassForMemberContent />
+    </Suspense>
   );
 }

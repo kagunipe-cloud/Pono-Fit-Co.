@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import InstallAppBanner from "@/components/InstallAppBanner";
 
 const MIN_PASSWORD_LENGTH = 8;
 
-export default function SetPasswordPage() {
+function SetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [memberId, setMemberId] = useState("");
@@ -148,5 +148,13 @@ export default function SetPasswordPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+export default function SetPasswordPage() {
+  return (
+    <Suspense fallback={<div className="max-w-sm mx-auto py-12 px-4 text-stone-500 text-center">Loading…</div>}>
+      <SetPasswordContent />
+    </Suspense>
   );
 }

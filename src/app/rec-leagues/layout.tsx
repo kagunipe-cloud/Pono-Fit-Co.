@@ -27,7 +27,7 @@ export default function RecLeaguesLayout({
       fetch("/api/auth/member-me").then((r) => (r.ok ? r.json() : null)),
       fetch("/api/rec-leagues/teams").then((r) => r.json()),
     ])
-      .then(([me, teams]: [unknown, Team[]]) => {
+      .then(([me, teams]: [{ member_id?: string } | null, Team[]]) => {
         const memberId = me?.member_id;
         if (!memberId || !Array.isArray(teams)) return;
         const myTeam = teams.find((t) => t.created_by_member_id === memberId);

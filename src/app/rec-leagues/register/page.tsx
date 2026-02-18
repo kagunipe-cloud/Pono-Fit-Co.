@@ -33,7 +33,7 @@ export default function RecLeaguesRegisterPage() {
         body: JSON.stringify({ name }),
         credentials: "same-origin",
       });
-      let data: { error?: string } = {};
+      let data: { error?: string; id?: number } = {};
       try {
         data = await res.json();
       } catch {

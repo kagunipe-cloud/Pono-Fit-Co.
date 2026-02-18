@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 type Sub = { plan_name?: string; status?: string; start_date?: string; expiry_date?: string; plan_price?: string };
 
-export default function MemberMembershipPage() {
+function MemberMembershipContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [data, setData] = useState<{ subscriptions: Sub[] } | null>(null);
@@ -99,5 +99,13 @@ export default function MemberMembershipPage() {
         </Link>
       </p>
     </div>
+  );
+}
+
+export default function MemberMembershipPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-stone-500">Loading…</div>}>
+      <MemberMembershipContent />
+    </Suspense>
   );
 }
