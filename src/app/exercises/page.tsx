@@ -373,6 +373,7 @@ export default function ExercisesPage() {
                 <th className="px-3 py-2 font-medium">TARGET MUSCLE</th>
                 <th className="px-3 py-2 font-medium">EQUIPMENT</th>
                 <th className="px-3 py-2 font-medium">INSTRUCTIONS</th>
+                <th className="px-3 py-2 font-medium w-20"> </th>
               </tr>
             </thead>
             <tbody>
@@ -402,6 +403,9 @@ export default function ExercisesPage() {
                     <td className="px-3 py-2 text-stone-600">{ex.equipment || "—"}</td>
                     <td className="px-3 py-2 text-stone-600 max-w-[280px]" title={steps.length > 0 ? steps.join("\n\n") : undefined}>
                       <span className="line-clamp-2 text-xs">{preview}</span>
+                    </td>
+                    <td className="px-3 py-2">
+                      <Link href={`/exercises/${ex.id}/edit`} className="text-brand-600 hover:underline text-sm">Edit</Link>
                     </td>
                   </tr>
                 );
