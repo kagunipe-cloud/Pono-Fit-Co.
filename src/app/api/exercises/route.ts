@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       sql += " AND name LIKE ?";
       params.push(`%${q}%`);
     }
-    sql += " ORDER BY name LIMIT " + (q.length > 0 ? 25 : 500);
+    sql += " ORDER BY name LIMIT " + (q.length > 0 ? 25 : 2000);
 
     const rows = db.prepare(sql).all(...params) as {
       id: number;
