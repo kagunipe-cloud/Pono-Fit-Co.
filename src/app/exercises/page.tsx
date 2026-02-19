@@ -26,8 +26,6 @@ export default function ExercisesPage() {
   const [backfillResult, setBackfillResult] = useState<string | null>(null);
   const [fetchingWger, setFetchingWger] = useState(false);
   const [wgerResult, setWgerResult] = useState<string | null>(null);
-  const [clearing, setClearing] = useState(false);
-  const [clearResult, setClearResult] = useState<string | null>(null);
   const [csvText, setCsvText] = useState("");
   const [importingCsv, setImportingCsv] = useState(false);
   const [csvImportResult, setCsvImportResult] = useState<string | null>(null);
@@ -114,30 +112,6 @@ export default function ExercisesPage() {
       setWgerResult(e instanceof Error ? e.message : "Import failed");
     } finally {
       setFetchingWger(false);
-    }
-  }
-
-  async function handleClearAll() {
-    if (!confirm("Delete every exercise in the database? You can re-import from free-exercise-db or wger afterward.")) return;
-    setClearing(true);
-    setClearResult(null);
-    try {
-      const res = await fetch("/api/exercises/clear", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ confirm: true }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        setClearResult(`Cleared ${data.deleted ?? 0} exercises. You can now import from free-exercise-db or wger.`);
-        fetchList();
-      } else {
-        setClearResult(data.error ?? "Clear failed");
-      }
-    } catch (e) {
-      setClearResult(e instanceof Error ? e.message : "Clear failed");
-    } finally {
-      setClearing(false);
     }
   }
 
@@ -259,24 +233,6 @@ export default function ExercisesPage() {
         </button>
         {fixEncodingResult && (
           <p className={`text-sm ${fixEncodingResult.startsWith("Updated") ? "text-stone-600" : "text-amber-700"}`}>{fixEncodingResult}</p>
-        )}
-      </div>
-
-      <div className="mb-8 p-4 rounded-xl border border-amber-200 bg-amber-50 space-y-3">
-        <h2 className="font-semibold text-stone-800">Clear all exercises</h2>
-        <p className="text-xs text-stone-500">
-          Remove every exercise from the database. Use this to start fresh, then re-import from free-exercise-db, wger, or your own CSV.
-        </p>
-        <button
-          type="button"
-          onClick={handleClearAll}
-          disabled={clearing}
-          className="px-4 py-2 rounded-lg border border-amber-400 text-amber-800 font-medium hover:bg-amber-100 disabled:opacity-50"
-        >
-          {clearing ? "Clearing…" : "Clear all exercises"}
-        </button>
-        {clearResult && (
-          <p className={`text-sm ${clearResult.startsWith("Cleared") ? "text-stone-600" : "text-amber-700"}`}>{clearResult}</p>
         )}
       </div>
 

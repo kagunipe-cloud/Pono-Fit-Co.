@@ -83,6 +83,14 @@ export async function PATCH(
       db.close();
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+    const duplicate = db.prepare("SELECT id FROM exercises WHERE name = ? AND type = ? AND id != ?").get(name, type, id);
+    if (duplicate) {
+      db.close();
+      return NextResponse.json(
+        { error: "Another exercise already has this name and type. Use a different name or type." },
+        { status: 400 }
+      );
+    }
 
     if (instructions !== undefined) {
       db.prepare(
