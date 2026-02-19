@@ -64,6 +64,14 @@ export function ensureJournalTables(db: ReturnType<typeof import("./db").getDb>)
       sort_order INTEGER NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS idx_member_favorite_items_fav ON member_favorite_items(member_favorite_id);
+
+    CREATE TABLE IF NOT EXISTS member_macro_goals (
+      member_id TEXT PRIMARY KEY,
+      calories_goal INTEGER,
+      protein_pct REAL,
+      fat_pct REAL,
+      carbs_pct REAL
+    );
   `);
 }
 

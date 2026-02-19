@@ -260,6 +260,7 @@ export default function MemberMacrosDayPage() {
   const [aiResult, setAiResult] = useState<{ calories: number; protein_g: number; fat_g: number; carbs_g: number } | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [addingAiEntry, setAddingAiEntry] = useState(false);
+  const [goals, setGoals] = useState<{ calories_goal: number | null; protein_pct: number | null; fat_pct: number | null; carbs_pct: number | null }>({ calories_goal: null, protein_pct: null, fat_pct: null, carbs_pct: null });
 
   const AI_PORTION_UNITS = [
     { value: "", label: "—" },
@@ -299,6 +300,13 @@ export default function MemberMacrosDayPage() {
   useEffect(() => {
     fetchDay();
   }, [fetchDay]);
+
+  useEffect(() => {
+    fetch("/api/member/macro-goals")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((g) => g && setGoals(g))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (addFoodMealId != null) {
@@ -777,6 +785,17 @@ export default function MemberMacrosDayPage() {
         <Link href="/member/macros" className="text-brand-600 hover:underline text-sm">← Macros</Link>
       </div>
 
+      {/* CTA: Book session with Exercise Physiologist */}
+      <div className="mb-6 p-3 rounded-xl border border-brand-200 bg-brand-50 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-stone-700 text-sm">
+          <span className="font-medium">Need help setting a goal?</span>{" "}
+          <span className="text-stone-600">Book a session with our Exercise Physiologist.</span>
+        </p>
+        <Link href="/member/book-pt" className="shrink-0 px-3 py-1.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700">
+          Book a session →
+        </Link>
+      </div>
+
       {!day ? (
         <p className="text-stone-500">Creating your journal…</p>
       ) : (
@@ -799,6 +818,87 @@ export default function MemberMacrosDayPage() {
               {addingMeal ? "Adding…" : "Add Meal / Snack"}
             </button>
           </div>
+
+          {/* Today's progress vs goals + remaining */}
+          {(goals.calories_goal != null && goals.calories_goal > 0) && (
+            <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-white">
+              <p className="font-semibold text-stone-800 mb-3">Today&apos;s progress</p>
+              <div className="space-y-3">
+                <div>
+                  <div className="flex justify-between text-xs text-stone-500 mb-0.5">
+                    <span>Calories</span>
+                    <span>{Math.round(dayTotal.cal)} / {goals.calories_goal}</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-stone-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-brand-500 transition-all"
+                      style={{ width: `${Math.min(100, (dayTotal.cal / goals.calories_goal) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+                {dayTotal.cal > 0 && (goals.protein_pct != null || goals.fat_pct != null || goals.carbs_pct != null) && (
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    {[
+                      { key: "Protein", calFrom: dayTotal.p * 4, goalPct: goals.protein_pct, color: "bg-blue-500" },
+                      { key: "Fat", calFrom: dayTotal.f * 9, goalPct: goals.fat_pct, color: "bg-amber-500" },
+                      { key: "Carbs", calFrom: dayTotal.c * 4, goalPct: goals.carbs_pct, color: "bg-emerald-500" },
+                    ].map(({ key, calFrom, goalPct, color }) => {
+                      const actualPct = (calFrom / dayTotal.cal) * 100;
+                      const goal = goalPct ?? 0;
+                      return (
+                        <div key={key}>
+                          <div className="flex justify-between text-stone-500 mb-0.5">
+                            <span>{key}</span>
+                            <span>{actualPct.toFixed(0)}%{goal > 0 ? ` (goal ${goal}%)` : ""}</span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-stone-100 overflow-hidden">
+                            <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, actualPct)}%` }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {/* Left today: calories and P/F/C remaining */}
+                {(() => {
+                  const calGoal = goals.calories_goal ?? 0;
+                  const remainingCal = Math.max(0, calGoal - dayTotal.cal);
+                  const pPct = (goals.protein_pct ?? 0) / 100;
+                  const fPct = (goals.fat_pct ?? 0) / 100;
+                  const cPct = (goals.carbs_pct ?? 0) / 100;
+                  const goalP = calGoal > 0 ? (pPct * calGoal) / 4 : 0;
+                  const goalF = calGoal > 0 ? (fPct * calGoal) / 9 : 0;
+                  const goalC = calGoal > 0 ? (cPct * calGoal) / 4 : 0;
+                  const remainingP = Math.max(0, goalP - dayTotal.p);
+                  const remainingF = Math.max(0, goalF - dayTotal.f);
+                  const remainingC = Math.max(0, goalC - dayTotal.c);
+                  const hasMacroGoals = goalP > 0 || goalF > 0 || goalC > 0;
+                  return (
+                    <div className="pt-3 mt-3 border-t border-stone-100">
+                      <p className="text-xs font-medium text-stone-500 mb-1">Left today</p>
+                      <p className="text-sm text-stone-700">
+                        {remainingCal > 0 ? (
+                          <span>{Math.round(remainingCal).toLocaleString()} cal left</span>
+                        ) : (
+                          <span className="text-amber-600">Calorie goal reached</span>
+                        )}
+                        {hasMacroGoals && (
+                          <>
+                            {" · "}
+                            {remainingP > 0 ? `${Math.round(remainingP)}g P` : "P ✓"}
+                            {" · "}
+                            {remainingF > 0 ? `${Math.round(remainingF)}g F` : "F ✓"}
+                            {" · "}
+                            {remainingC > 0 ? `${Math.round(remainingC)}g C` : "C ✓"}
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
 
           {/* Meals */}
           <div className="space-y-6 mb-8">
@@ -892,12 +992,32 @@ export default function MemberMacrosDayPage() {
             })}
           </div>
 
-          {/* Day total */}
-          <div className="p-4 rounded-xl border-2 border-stone-200 bg-stone-50 mb-8">
-            <p className="font-semibold text-stone-800">Day total</p>
-            <p className="text-stone-600 text-sm">
-              {Math.round(dayTotal.cal)} cal · Protein {dayTotal.p.toFixed(0)}g · Fat {dayTotal.f.toFixed(0)}g · Carbs {dayTotal.c.toFixed(0)}g
-            </p>
+          {/* Day total + How you did */}
+          <div className="p-4 rounded-xl border-2 border-stone-200 bg-stone-50 mb-8 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div>
+              <p className="font-semibold text-stone-800">Day total</p>
+              <p className="text-stone-600 text-sm">
+                {Math.round(dayTotal.cal)} cal · Protein {dayTotal.p.toFixed(0)}g · Fat {dayTotal.f.toFixed(0)}g · Carbs {dayTotal.c.toFixed(0)}g
+              </p>
+            </div>
+            {(goals.calories_goal != null && goals.calories_goal > 0) && (
+              <div className="sm:text-right border-t sm:border-t-0 sm:border-l border-stone-200 pt-4 sm:pt-0 sm:pl-4">
+                <p className="font-semibold text-stone-800 text-sm">How you did</p>
+                <p className="text-stone-600 text-sm">
+                  Calories: {Math.round(dayTotal.cal).toLocaleString()} / {goals.calories_goal.toLocaleString()}
+                  {dayTotal.cal <= goals.calories_goal ? " ✓" : " (over)"}
+                </p>
+                {dayTotal.cal > 0 && (goals.protein_pct != null || goals.fat_pct != null || goals.carbs_pct != null) && (
+                  <p className="text-stone-500 text-xs mt-1">
+                    {[
+                      goals.protein_pct != null && `P ${((dayTotal.p * 4) / dayTotal.cal * 100).toFixed(0)}% (goal ${goals.protein_pct}%)`,
+                      goals.fat_pct != null && `F ${((dayTotal.f * 9) / dayTotal.cal * 100).toFixed(0)}% (goal ${goals.fat_pct}%)`,
+                      goals.carbs_pct != null && `C ${((dayTotal.c * 4) / dayTotal.cal * 100).toFixed(0)}% (goal ${goals.carbs_pct}%)`,
+                    ].filter(Boolean).join(" · ")}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Delete day */}
