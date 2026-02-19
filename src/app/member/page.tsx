@@ -59,10 +59,14 @@ export default function MemberHomePage() {
   }
 
   if (loading) return <div className="p-8 text-center text-stone-500">Loading…</div>;
-  if (!data) return null;
+  if (!data || !data.member) return <div className="p-8 text-center text-stone-500">Unable to load. Try logging in again.</div>;
 
-  const hasAccess = data.hasAccess;
-  const activeSub = data.subscriptions.find((s) => s.status === "Active") as { plan_name?: string; expiry_date?: string } | undefined;
+  const subscriptions = Array.isArray(data.subscriptions) ? data.subscriptions : [];
+  const classBookings = Array.isArray(data.classBookings) ? data.classBookings : [];
+  const occurrenceBookings = Array.isArray(data.occurrenceBookings) ? data.occurrenceBookings : [];
+  const ptBookings = Array.isArray(data.ptBookings) ? data.ptBookings : [];
+  const hasAccess = Boolean(data.hasAccess);
+  const activeSub = subscriptions.find((s) => s.status === "Active") as { plan_name?: string; expiry_date?: string } | undefined;
 
   return (
     <div className="max-w-2xl mx-auto p-6">
@@ -119,7 +123,7 @@ export default function MemberHomePage() {
         >
           <h3 className="font-semibold text-brand-gray">My Class Bookings</h3>
           <p className="text-sm text-brand-gray mt-1">
-            {(data.classBookings?.length ?? 0) + (data.occurrenceBookings?.length ?? 0)} booking{((data.classBookings?.length ?? 0) + (data.occurrenceBookings?.length ?? 0)) !== 1 ? "s" : ""}
+            {classBookings.length + occurrenceBookings.length} booking{(classBookings.length + occurrenceBookings.length) !== 1 ? "s" : ""}
           </p>
         </Link>
         <Link
@@ -128,7 +132,7 @@ export default function MemberHomePage() {
         >
           <h3 className="font-semibold text-brand-gray">My PT Bookings</h3>
           <p className="text-sm text-brand-gray mt-1">
-            {data.ptBookings.length} booking{data.ptBookings.length !== 1 ? "s" : ""}
+            {ptBookings.length} booking{ptBookings.length !== 1 ? "s" : ""}
           </p>
         </Link>
         <Link
