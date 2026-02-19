@@ -4,7 +4,7 @@ import fs from "fs";
 
 const dbPath = path.join(process.cwd(), "data", "the-fox-says.db");
 
-/** Ensures base schema exists (so fresh deploys / new volumes have members table). */
+/** Ensures base schema exists (so fresh deploys / new volumes don't 500 on members/subscriptions). */
 function ensureBaseSchema(db: Database.Database) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS members (
@@ -22,6 +22,35 @@ function ensureBaseSchema(db: Database.Database) {
       created_at TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_members_search ON members(first_name, last_name, email, role);
+
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      subscription_id TEXT,
+      member_id TEXT,
+      product_id TEXT,
+      status TEXT,
+      start_date TEXT,
+      expiry_date TEXT,
+      days_remaining TEXT,
+      kisi_id TEXT,
+      health_check TEXT,
+      price TEXT,
+      sales_id TEXT,
+      quantity TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS membership_plans (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id TEXT,
+      plan_name TEXT,
+      price TEXT,
+      length TEXT,
+      unit TEXT,
+      access_level TEXT,
+      stripe_link TEXT,
+      category TEXT,
+      description TEXT
+    );
   `);
 }
 
