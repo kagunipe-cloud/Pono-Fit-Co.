@@ -50,7 +50,10 @@ export async function middleware(request: NextRequest) {
   }
 
   const cookie = request.headers.get("cookie") ?? "";
-  const checkRes = await fetch(`${request.nextUrl.origin}/api/auth/check-session`, {
+  // Call our own API over HTTP to avoid SSL mismatch behind Railway/proxy (HTTPS in, internal HTTP)
+  const port = process.env.PORT || "3000";
+  const internalOrigin = process.env.INTERNAL_ORIGIN || `http://127.0.0.1:${port}`;
+  const checkRes = await fetch(`${internalOrigin}/api/auth/check-session`, {
     headers: { cookie },
   });
   const data = (await checkRes.json().catch(() => ({}))) as { ok?: boolean; role?: string };

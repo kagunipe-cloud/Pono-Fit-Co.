@@ -1,0 +1,3 @@
+# Native modules (e.g. better-sqlite3) need build tools for node-gyp
+[phases.setup]
+nixPkgs = ["python3", "gcc"]
