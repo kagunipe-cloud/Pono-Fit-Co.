@@ -3,6 +3,24 @@ import path from "path";
 import fs from "fs";
 
 const dbPath = path.join(process.cwd(), "data", "the-fox-says.db");
+const restorePendingPath = path.join(process.cwd(), "data", "restore-pending.db");
+
+let restoreApplied = false;
+/** On first getDb() after deploy, replace DB with restore-pending.db if present (from admin restore). */
+function applyPendingRestore() {
+  if (restoreApplied) return;
+  if (!fs.existsSync(restorePendingPath)) return;
+  restoreApplied = true;
+  try {
+    const dir = path.dirname(dbPath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(restorePendingPath, dbPath);
+    fs.unlinkSync(restorePendingPath);
+    console.log("[db] Applied pending restore.");
+  } catch (err) {
+    console.error("[db] Restore failed:", err);
+  }
+}
 
 /** Ensures base schema exists (so fresh deploys / new volumes don't 500 on members/subscriptions). */
 function ensureBaseSchema(db: Database.Database) {
@@ -60,6 +78,7 @@ function ensureBaseSchema(db: Database.Database) {
 }
 
 export function getDb() {
+  applyPendingRestore();
   const dir = path.dirname(dbPath);
   if (!fs.existsSync(dir)) {
     try {

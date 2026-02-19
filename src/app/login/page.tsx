@@ -116,6 +116,10 @@ function LoginContent() {
         <Link href="/set-password" className="text-brand-600 hover:underline">
           Set your password
         </Link>
+        {" · "}
+        <Link href="/bootstrap" className="text-brand-600 hover:underline">
+          Create first admin
+        </Link>
       </p>
       <p className="mt-2 text-center">
         <Link href="/" className="text-stone-500 hover:text-stone-700 text-sm">

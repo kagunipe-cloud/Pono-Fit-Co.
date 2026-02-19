@@ -291,6 +291,11 @@ export default function Sidebar() {
                   <Link href="/macros" className={`block px-3 py-2 rounded-lg text-sm font-medium ${pathname === "/macros" ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"}`}>Macros</Link>
                 </li>
               )}
+              {isAdmin && (
+                <li>
+                  <Link href="/admin/backup" className={`block px-3 py-2 rounded-lg text-sm font-medium ${pathname === "/admin/backup" ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"}`}>Backup &amp; Restore</Link>
+                </li>
+              )}
               <li>
                 <Link href="/class-packs" className={`block px-3 py-2 rounded-lg text-sm font-medium ${pathname === "/class-packs" ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"}`}>Class Packs</Link>
               </li>
