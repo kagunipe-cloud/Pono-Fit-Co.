@@ -18,6 +18,7 @@ export default function MemberClassesPage() {
   const [loading, setLoading] = useState(true);
   const [addingId, setAddingId] = useState<number | null>(null);
   const [addingSingleCredit, setAddingSingleCredit] = useState(false);
+  const [expandedDescriptionIndex, setExpandedDescriptionIndex] = useState<number | null>(null);
 
   const multiCreditPacks = classPacks.filter((p) => p.credits > 1);
 
@@ -131,9 +132,20 @@ export default function MemberClassesPage() {
                 {c.instructor ? toTitleCase(c.instructor) : "—"} · {formatPrice(c.price)}
               </p>
               {c.description && (
-                <p className="text-sm text-stone-600 line-clamp-4" title={c.description}>
-                  {c.description}
-                </p>
+                <div className="text-sm text-stone-600">
+                  <p className={expandedDescriptionIndex === i ? "" : "line-clamp-3"}>
+                    {c.description}
+                  </p>
+                  {c.description.length > 100 && (
+                    <button
+                      type="button"
+                      onClick={() => setExpandedDescriptionIndex((prev) => (prev === i ? null : i))}
+                      className="mt-1 text-brand-600 hover:underline text-sm font-medium"
+                    >
+                      {expandedDescriptionIndex === i ? "Show less" : "Read more"}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
             <div className="w-full sm:w-auto shrink-0 flex flex-wrap gap-2 sm:flex-nowrap">
