@@ -193,6 +193,7 @@ export async function POST(
         to: emailTo,
         first_name: memberRow?.first_name,
         origin,
+        member_id,
       }).then((r) => {
         if (!r.ok) console.error("[Email] app download invite (complimentary):", r.error);
       });

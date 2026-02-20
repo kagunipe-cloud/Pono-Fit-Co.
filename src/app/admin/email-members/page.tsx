@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
+
+type MemberWithEmail = { member_id: string; email: string; first_name: string | null; last_name: string | null };
 
 export default function AdminEmailMembersPage() {
   const [subject, setSubject] = useState("");
@@ -12,6 +14,14 @@ export default function AdminEmailMembersPage() {
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ sent: number; total: number; failed: number; errors?: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sendingIds, setSendingIds] = useState(false);
+  const [idsResult, setIdsResult] = useState<{ sent: number; total: number; failed: number; errors?: string[] } | null>(null);
+  const [welcomeMembers, setWelcomeMembers] = useState<MemberWithEmail[]>([]);
+  const [loadingWelcomeMembers, setLoadingWelcomeMembers] = useState(false);
+  const [welcomeSearch, setWelcomeSearch] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [sendingSelected, setSendingSelected] = useState(false);
+  const [selectedResult, setSelectedResult] = useState<{ sent: number; total: number; failed: number; errors?: string[] } | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/email-all-members")
@@ -26,6 +36,44 @@ export default function AdminEmailMembersPage() {
       })
       .finally(() => setLoadingCount(false));
   }, []);
+
+  useEffect(() => {
+    if (!smtpConfigured) return;
+    setLoadingWelcomeMembers(true);
+    fetch("/api/admin/email-member-ids")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { members?: MemberWithEmail[] } | null) => {
+        setWelcomeMembers(data?.members ?? []);
+      })
+      .catch(() => setWelcomeMembers([]))
+      .finally(() => setLoadingWelcomeMembers(false));
+  }, [smtpConfigured]);
+
+  const filteredWelcomeMembers = useMemo(() => {
+    if (!welcomeSearch.trim()) return welcomeMembers;
+    const q = welcomeSearch.trim().toLowerCase();
+    return welcomeMembers.filter(
+      (m) =>
+        (m.first_name ?? "").toLowerCase().includes(q) ||
+        (m.last_name ?? "").toLowerCase().includes(q) ||
+        m.email.toLowerCase().includes(q) ||
+        m.member_id.toLowerCase().includes(q)
+    );
+  }, [welcomeMembers, welcomeSearch]);
+
+  const selectAll = () => setSelectedIds(new Set(filteredWelcomeMembers.map((m) => m.member_id)));
+  const deselectAll = () => setSelectedIds(new Set());
+  const toggleOne = (member_id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(member_id)) next.delete(member_id);
+      else next.add(member_id);
+      return next;
+    });
+  };
+  const selectedCount = selectedIds.size;
+  const allFilteredSelected = filteredWelcomeMembers.length > 0 && selectedCount === filteredWelcomeMembers.length;
+  const someFilteredSelected = selectedCount > 0;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -59,13 +107,167 @@ export default function AdminEmailMembersPage() {
     }
   }
 
+  async function handleSendMemberIds() {
+    setError(null);
+    setIdsResult(null);
+    setSendingIds(true);
+    try {
+      const res = await fetch("/api/admin/email-member-ids", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? "Failed to send");
+        return;
+      }
+      setIdsResult({ sent: data.sent, total: data.total, failed: data.failed ?? 0, errors: data.errors });
+    } catch {
+      setError("Something went wrong.");
+    } finally {
+      setSendingIds(false);
+    }
+  }
+
+  async function handleSendToSelected() {
+    if (selectedCount === 0) return;
+    setError(null);
+    setSelectedResult(null);
+    setSendingSelected(true);
+    try {
+      const res = await fetch("/api/admin/email-member-ids", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ member_ids: Array.from(selectedIds) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? "Failed to send");
+        return;
+      }
+      setSelectedResult({ sent: data.sent, total: data.total, failed: data.failed ?? 0, errors: data.errors });
+      setSelectedIds(new Set());
+    } catch {
+      setError("Something went wrong.");
+    } finally {
+      setSendingSelected(false);
+    }
+  }
+
   return (
     <div className="max-w-2xl mx-auto">
       <Link href="/members" className="text-stone-500 hover:text-stone-700 text-sm mb-4 inline-block">← Members</Link>
       <h1 className="text-2xl font-bold text-stone-800 mb-2">Email all members</h1>
       <p className="text-stone-500 text-sm mb-6">
-        Send one email to every member who has an address on file. Uses your configured SMTP.
+        Send one email to every member who has an address on file. Uses your configured email (SMTP or Gmail API).
       </p>
+
+      {recipientCount !== null && recipientCount > 0 && smtpConfigured && (
+        <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50">
+          <h2 className="font-semibold text-stone-800 mb-1">Resend welcome emails</h2>
+          <p className="text-sm text-stone-600 mb-3">
+            Send each member a welcome email with the app install link, their <strong>Member ID</strong>, and a link to set their password. Use this to get everyone their member IDs or resend the original welcome after fixing email setup.
+          </p>
+          <p className="text-sm text-stone-500 mb-3">
+            <strong>{recipientCount}</strong> member{recipientCount !== 1 ? "s" : ""} will receive their own email.
+          </p>
+          {idsResult && (
+            <div className="bg-white border border-stone-200 rounded-lg p-3 text-sm text-stone-700 mb-3">
+              Sent to <strong>{idsResult.sent}</strong> of {idsResult.total}.{" "}
+              {idsResult.failed > 0 && idsResult.errors && (
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-amber-700">{idsResult.failed} failed</summary>
+                  <ul className="mt-1 text-xs list-disc list-inside">{idsResult.errors.slice(0, 5).map((err, i) => <li key={i}>{err}</li>)}</ul>
+                </details>
+              )}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={handleSendMemberIds}
+            disabled={sendingIds}
+            className="px-4 py-2 rounded-lg border border-stone-300 bg-white font-medium hover:bg-stone-50 disabled:opacity-50"
+          >
+            {sendingIds ? "Sending…" : "Resend welcome emails to everyone"}
+          </button>
+        </div>
+      )}
+
+      {smtpConfigured && (
+        <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50">
+          <h2 className="font-semibold text-stone-800 mb-1">Send welcome email to selected members</h2>
+          <p className="text-sm text-stone-600 mb-3">
+            Pick one or more members to send the welcome email (install link, Member ID, set-password link) only to them.
+          </p>
+          {loadingWelcomeMembers ? (
+            <p className="text-sm text-stone-500">Loading members…</p>
+          ) : welcomeMembers.length === 0 ? (
+            <p className="text-sm text-stone-500">No members with an email address.</p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <input
+                  type="search"
+                  placeholder="Search by name, email, or Member ID"
+                  value={welcomeSearch}
+                  onChange={(e) => setWelcomeSearch(e.target.value)}
+                  className="flex-1 min-w-[200px] px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={allFilteredSelected ? deselectAll : selectAll}
+                  className="px-3 py-2 rounded-lg border border-stone-300 bg-white text-sm font-medium hover:bg-stone-50"
+                >
+                  {allFilteredSelected ? "Deselect all" : "Select all"}
+                </button>
+              </div>
+              <div className="max-h-64 overflow-y-auto border border-stone-200 rounded-lg bg-white divide-y divide-stone-100">
+                {filteredWelcomeMembers.map((m) => {
+                  const name = [m.first_name, m.last_name].filter(Boolean).join(" ") || "—";
+                  const checked = selectedIds.has(m.member_id);
+                  return (
+                    <label
+                      key={m.member_id}
+                      className="flex items-center gap-3 px-3 py-2 hover:bg-stone-50 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleOne(m.member_id)}
+                        className="rounded border-stone-300"
+                      />
+                      <span className="text-sm text-stone-800 truncate flex-1">{name}</span>
+                      <span className="text-xs text-stone-500 truncate max-w-[140px]">{m.email}</span>
+                      <span className="text-xs text-stone-400 font-mono">{m.member_id}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              {filteredWelcomeMembers.length === 0 && welcomeSearch.trim() && (
+                <p className="text-sm text-stone-500 mt-2">No members match your search.</p>
+              )}
+              <div className="mt-3 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleSendToSelected}
+                  disabled={selectedCount === 0 || sendingSelected}
+                  className="px-4 py-2 rounded-lg border border-stone-300 bg-white font-medium hover:bg-stone-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {sendingSelected ? "Sending…" : `Send welcome email to selected (${selectedCount})`}
+                </button>
+                {selectedResult && (
+                  <span className="text-sm text-stone-600">
+                    Sent to <strong>{selectedResult.sent}</strong> of {selectedResult.total}.
+                    {selectedResult.failed > 0 && selectedResult.errors && (
+                      <details className="inline ml-1">
+                        <summary className="cursor-pointer text-amber-700">Details</summary>
+                        <ul className="text-xs list-disc list-inside">{selectedResult.errors.slice(0, 5).map((err, i) => <li key={i}>{err}</li>)}</ul>
+                      </details>
+                    )}
+                  </span>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {loadingCount ? (
         <p className="text-stone-500 text-sm">Loading…</p>

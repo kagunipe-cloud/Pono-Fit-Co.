@@ -169,10 +169,30 @@ export async function sendAppDownloadInviteEmail(params: {
   to: string;
   first_name?: string | null;
   origin: string;
+  /** Required so every invite includes Member ID and set-password link. */
+  member_id: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const installUrl = `${params.origin.replace(/\/$/, "")}/install`;
+  const origin = params.origin.replace(/\/$/, "");
+  const installUrl = `${origin}/install`;
+  const memberId = params.member_id.trim();
+  const setPasswordUrl = `${origin}/set-password?member_id=${encodeURIComponent(memberId)}&email=${encodeURIComponent(params.to)}`;
   const subject = "Get the Pono Fit Co. app";
-  const text = `Hi${params.first_name ? ` ${params.first_name}` : ""},\n\nDownload our app to view your membership, book classes, and more:\n\n${installUrl}\n\nOpen this link on your phone and follow the steps to add the app to your home screen.\n\n— Pono Fit Co.`;
+  const text = `Hi${params.first_name ? ` ${params.first_name}` : ""},
+
+Download our app to view your membership, book classes, and more:
+
+${installUrl}
+
+Open this link on your phone and follow the steps to add the app to your home screen.
+
+Your Member ID: ${memberId}
+
+To sign in for the first time, set your password here:
+${setPasswordUrl}
+
+After that you'll sign in with your email and password.
+
+— Pono Fit Co.`;
   return sendMemberEmail(params.to, subject, text);
 }
 

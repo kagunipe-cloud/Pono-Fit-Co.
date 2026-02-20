@@ -250,11 +250,12 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      if (kisiGrants.length > 0 && emailTo) {
+      if (emailTo) {
         sendAppDownloadInviteEmail({
           to: emailTo,
           first_name: memberRow?.first_name,
           origin,
+          member_id,
         }).then((r) => {
           if (!r.ok) console.error("[Email] app download invite:", r.error);
         });
