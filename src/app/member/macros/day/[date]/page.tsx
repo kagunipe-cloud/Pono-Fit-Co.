@@ -207,6 +207,10 @@ function entryPortionLabel(e: Entry): string {
     const word = e.amount === 1 ? "serving" : "serving(s)";
     return ` × ${e.amount} ${word}`;
   }
+  // AI/calculated foods: amount=1 with serving_description (e.g. "4 oz") — show that for display
+  if (e.amount === 1 && f.serving_description?.trim()) {
+    return ` — ${f.serving_description.trim()}`;
+  }
   return formatPortionLabel(e.amount, f.serving_size ?? null, f.serving_size_unit ?? null);
 }
 
@@ -625,15 +629,13 @@ export default function MemberMacrosDayPage() {
         return;
       }
       const { id: foodId } = (await createRes.json()) as { id: number };
-      const measurement = (aiPortionUnit || "serving").trim().toLowerCase();
+      // AI result is already the total for the full portion (e.g. 4 oz = 136 cal). Store amount 1 so we don't double-multiply.
       const entryRes = await fetch(`/api/member/journal/meals/${addFoodMealId}/entries`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           food_id: foodId,
-          amount: val,
-          quantity: val,
-          measurement: measurement || "serving",
+          amount: 1,
         }),
       });
       if (entryRes.ok) {
