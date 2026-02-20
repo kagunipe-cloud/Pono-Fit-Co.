@@ -69,18 +69,27 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Send all in parallel so the request finishes before server timeout (sequential was 2–3s per recipient).
+  const results = await Promise.allSettled(
+    rows.map((row) => {
+      const to = row.email?.trim();
+      if (!to) return Promise.resolve({ ok: false as const, error: "No address" });
+      return sendMemberEmail(to, subject, text);
+    })
+  );
+
   let sent = 0;
   const errors: string[] = [];
-  for (const row of rows) {
-    const to = row.email?.trim();
-    if (!to) continue;
-    const result = await sendMemberEmail(to, subject, text);
-    if (result.ok) {
+  results.forEach((outcome, i) => {
+    const to = rows[i]?.email?.trim();
+    if (!to) return;
+    if (outcome.status === "fulfilled" && outcome.value.ok) {
       sent++;
     } else {
-      errors.push(`${to}: ${result.error ?? "Failed"}`);
+      const err = outcome.status === "fulfilled" ? outcome.value.error : String(outcome.reason);
+      errors.push(`${to}: ${err ?? "Failed"}`);
     }
-  }
+  });
 
   return NextResponse.json({
     sent,
