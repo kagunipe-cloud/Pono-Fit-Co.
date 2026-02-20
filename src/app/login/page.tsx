@@ -49,8 +49,8 @@ function LoginContent() {
       const nextPath = searchParams.get("next")?.trim();
       const defaultDest = data.role === "Admin" ? "/" : "/member";
       const dest = nextPath && nextPath.startsWith("/") && !nextPath.includes("//") ? nextPath : defaultDest;
-      router.push(dest);
-      router.refresh();
+      // Full page redirect so the session cookie is sent on the next request (avoids "sign in twice")
+      window.location.href = dest;
     } catch {
       setError("Something went wrong.");
     } finally {

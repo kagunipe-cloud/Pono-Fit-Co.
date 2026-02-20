@@ -74,6 +74,13 @@ function NavList({
         <li>{link("/member/pt-packs", "PT Packs")}</li>
         <li>{link("/member/memberships", "Memberships")}</li>
         <li>{link("/member/cart", "Cart")}</li>
+        {!isMember && (
+          <li className="pt-2 mt-2 border-t border-stone-100">
+            <Link href="/login" className="block px-3 py-2 rounded-lg text-sm font-medium text-brand-600 hover:bg-brand-50">
+              Log in
+            </Link>
+          </li>
+        )}
         {isMember && (
           <li className="pt-2 mt-2 border-t border-stone-100">
             <button
@@ -162,9 +169,10 @@ export default function Sidebar() {
   const isMember = member !== undefined && member !== null;
   const isAdmin = member?.role === "Admin";
   const inMemberArea = pathname === "/member" || pathname?.startsWith("/member/");
-  const showMemberNav = inMemberArea;
+  // Prior to login: show member nav so visitors see what the app offers. After login, show member nav in member area or admin nav elsewhere.
+  const showMemberNav = !isMember || inMemberArea;
 
-  const logoHref = showMemberNav ? "/member" : "/";
+  const logoHref = isMember ? (showMemberNav ? "/member" : "/") : "/";
   const navProps = { pathname, member: member ?? null, isMember, isAdmin, showMemberNav, onLogout: handleLogout };
 
   return (

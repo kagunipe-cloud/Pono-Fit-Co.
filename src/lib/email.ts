@@ -88,14 +88,15 @@ export async function sendPostPurchaseEmail(params: {
   return sendMemberEmail(params.to, subject, text);
 }
 
-/** Invite member to download the app after first purchase. */
+/** Invite member to download the app after first purchase or when given a membership. */
 export async function sendAppDownloadInviteEmail(params: {
   to: string;
   first_name?: string | null;
   origin: string;
 }): Promise<{ ok: boolean; error?: string }> {
+  const installUrl = `${params.origin.replace(/\/$/, "")}/install`;
   const subject = "Get the Pono Fit Co. app";
-  const text = `Hi${params.first_name ? ` ${params.first_name}` : ""},\n\nDownload our app to view your membership, book classes, and more: ${params.origin}.\n\n— Pono Fit Co.`;
+  const text = `Hi${params.first_name ? ` ${params.first_name}` : ""},\n\nDownload our app to view your membership, book classes, and more:\n\n${installUrl}\n\nOpen this link on your phone and follow the steps to add the app to your home screen.\n\n— Pono Fit Co.`;
   return sendMemberEmail(params.to, subject, text);
 }
 

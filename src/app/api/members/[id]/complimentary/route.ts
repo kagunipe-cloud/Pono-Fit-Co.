@@ -5,6 +5,7 @@ import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
 import { formatInAppTz, formatDateTimeInAppTz } from "../../../../../lib/app-timezone";
 import { getAdminMemberId } from "../../../../../lib/admin";
 import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../../lib/kisi";
+import { sendAppDownloadInviteEmail } from "../../../../../lib/email";
 import { randomUUID } from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -183,6 +184,18 @@ export async function POST(
       } catch (e) {
         console.error("[Kisi] complimentary grant failed for member:", member_id, e);
       }
+    }
+
+    const emailTo = memberRow?.email?.trim();
+    if (emailTo) {
+      const origin = process.env.NEXT_PUBLIC_APP_URL?.trim() || new URL(request.url).origin;
+      sendAppDownloadInviteEmail({
+        to: emailTo,
+        first_name: memberRow?.first_name,
+        origin,
+      }).then((r) => {
+        if (!r.ok) console.error("[Email] app download invite (complimentary):", r.error);
+      });
     }
 
     db.close();
