@@ -29,7 +29,7 @@ function NavList({
   onLogout: () => void;
 }) {
   const link = (href: string, label: string | React.ReactNode, active?: boolean) => {
-    const isActive = active ?? pathname === href || (href !== "/" && pathname?.startsWith(href + "/"));
+    const isActive = active ?? (pathname === href || (href !== "/" && pathname?.startsWith(href + "/")));
     return (
       <Link
         href={href}
