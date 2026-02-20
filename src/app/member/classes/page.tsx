@@ -118,7 +118,7 @@ export default function MemberClassesPage() {
         {classTypes.map((c, i) => (
           <li
             key={`${c.class_name}-${c.instructor ?? ""}-${i}`}
-            className="p-4 rounded-xl border border-stone-200 bg-white flex flex-wrap gap-4"
+            className="p-4 rounded-xl border border-stone-200 bg-white flex flex-wrap gap-4 items-start"
           >
             {c.image_url && (
               <div className="shrink-0 w-24 h-24 rounded-lg overflow-hidden bg-stone-100">
@@ -130,23 +130,26 @@ export default function MemberClassesPage() {
               <p className="text-sm text-stone-500 mb-1">
                 {c.instructor ? toTitleCase(c.instructor) : "—"} · {formatPrice(c.price)}
               </p>
-              {c.description && <p className="text-sm text-stone-600">{c.description}</p>}
+              {c.description && (
+                <p className="text-sm text-stone-600 line-clamp-4" title={c.description}>
+                  {c.description}
+                </p>
+              )}
             </div>
-            <div className="w-full sm:w-auto shrink-0 flex flex-wrap gap-2">
+            <div className="w-full sm:w-auto shrink-0 flex flex-wrap gap-2 sm:flex-nowrap">
               {singleCreditPack && (
                 <button
                   type="button"
                   onClick={addSingleCreditToCart}
                   disabled={addingSingleCredit}
-                  className="px-4 py-2 rounded-lg border border-[#5abd78] text-sm font-medium hover:bg-brand-50 disabled:opacity-50"
-                  style={{ color: "#5abd78" }}
+                  className="px-4 py-2 rounded-lg border border-brand-600 text-brand-700 text-sm font-medium hover:bg-brand-50 disabled:opacity-50 whitespace-nowrap"
                 >
                   {addingSingleCredit ? "Adding…" : "Buy now and schedule later"}
                 </button>
               )}
               <Link
                 href="/schedule"
-                className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 inline-block"
+                className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 inline-block text-center whitespace-nowrap"
               >
                 View on Schedule
               </Link>
