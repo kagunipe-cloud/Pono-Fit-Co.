@@ -265,6 +265,10 @@ export default function MemberMacrosDayPage() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [addingAiEntry, setAddingAiEntry] = useState(false);
   const [goals, setGoals] = useState<{ calories_goal: number | null; protein_pct: number | null; fat_pct: number | null; carbs_pct: number | null }>({ calories_goal: null, protein_pct: null, fat_pct: null, carbs_pct: null });
+  const [shareEmail, setShareEmail] = useState("");
+  const [sharing, setSharing] = useState(false);
+  const [shareResult, setShareResult] = useState<{ ok: boolean; message?: string } | null>(null);
+  const [showShare, setShowShare] = useState(false);
 
   const AI_PORTION_UNITS = [
     { value: "", label: "—" },
@@ -408,6 +412,32 @@ export default function MemberMacrosDayPage() {
       }
     } finally {
       setAddingMeal(false);
+    }
+  }
+
+  async function handleShareDay() {
+    const email = shareEmail.trim().toLowerCase();
+    if (!email) return;
+    setShareResult(null);
+    setSharing(true);
+    try {
+      const res = await fetch("/api/member/journal/send-to-member", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipient_email: email, date }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setShareResult({ ok: true, message: (data as { message?: string }).message });
+        setShareEmail("");
+        setShowShare(false);
+      } else {
+        setShareResult({ ok: false, message: (data as { error?: string }).error ?? "Failed to share" });
+      }
+    } catch {
+      setShareResult({ ok: false, message: "Something went wrong." });
+    } finally {
+      setSharing(false);
     }
   }
 
@@ -784,7 +814,53 @@ export default function MemberMacrosDayPage() {
           <h1 className="text-2xl font-bold text-stone-800">Daily Food Journal</h1>
           <p className="text-stone-500 text-sm">{dateLabel}</p>
         </div>
-        <Link href="/member/macros" className="text-brand-600 hover:underline text-sm">← Macros</Link>
+        <div className="flex items-center gap-2">
+          {day && day.meals.length > 0 && (
+            <>
+              {!showShare ? (
+                <button
+                  type="button"
+                  onClick={() => { setShowShare(true); setShareResult(null); }}
+                  className="text-brand-600 hover:underline text-sm font-medium"
+                >
+                  Share this day
+                </button>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="email"
+                    value={shareEmail}
+                    onChange={(e) => setShareEmail(e.target.value)}
+                    placeholder="Member's email"
+                    className="px-3 py-1.5 rounded-lg border border-stone-200 text-sm w-44"
+                    onKeyDown={(e) => e.key === "Enter" && handleShareDay()}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleShareDay}
+                    disabled={sharing}
+                    className="px-3 py-1.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+                  >
+                    {sharing ? "Sending…" : "Send"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowShare(false); setShareEmail(""); setShareResult(null); }}
+                    className="text-stone-500 hover:text-stone-700 text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+              {shareResult && (
+                <span className={`text-sm ${shareResult.ok ? "text-stone-600" : "text-red-600"}`}>
+                  {shareResult.ok ? shareResult.message : shareResult.message}
+                </span>
+              )}
+            </>
+          )}
+          <Link href="/member/macros" className="text-brand-600 hover:underline text-sm">← Macros</Link>
+        </div>
       </div>
 
       {/* CTA: Book session with Exercise Physiologist */}
