@@ -29,7 +29,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-stone-100 text-stone-900 antialiased">
         <div className="flex min-h-screen">
           <Sidebar />
-          <main className="flex-1 overflow-auto p-6 bg-stone-100">
+          <main className="flex-1 overflow-auto bg-stone-100 p-4 pt-14 md:p-6 md:pt-6">
             {children}
           </main>
         </div>

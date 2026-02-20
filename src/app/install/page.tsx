@@ -15,6 +15,7 @@ function InstallContent() {
   const hasSetPasswordParams = Boolean(memberId && email);
 
   const [platform, setPlatform] = useState<Platform>("other");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -24,19 +25,63 @@ function InstallContent() {
     else setPlatform("other");
   }, []);
 
+  const installUrl = typeof window !== "undefined" ? `${window.location.origin}/install` : "/install";
+
+  async function copyInstallLink() {
+    try {
+      await navigator.clipboard.writeText(installUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const input = document.createElement("input");
+      input.value = installUrl;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      document.body.removeChild(input);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  }
+
   return (
     <div className="max-w-md mx-auto py-12 px-4">
-      <h1 className="text-2xl font-bold text-stone-800 mb-2">Install {BRAND.name}</h1>
+      <h1 className="text-2xl font-bold text-stone-800 mb-2">Add {BRAND.name} to your phone</h1>
       <p className="text-stone-500 text-sm mb-6">
-        Add this app to your home screen to open it like a normal app — no browser bar, quick access.
+        Install the app on your home screen — opens like a normal app, no browser bar.
       </p>
+
+      {/* Send to a friend */}
+      <div className="mb-8 p-4 rounded-xl border border-brand-200 bg-brand-50">
+        <p className="text-sm font-medium text-stone-700 mb-2">Send to a friend</p>
+        <p className="text-xs text-stone-600 mb-3">
+          Text them this link. When they open it on their phone, they’ll see simple install steps.
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            readOnly
+            value={installUrl}
+            className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm text-stone-700"
+          />
+          <button
+            type="button"
+            onClick={copyInstallLink}
+            className="shrink-0 px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700"
+          >
+            {copied ? "Copied!" : "Copy link"}
+          </button>
+        </div>
+      </div>
+
+      <p className="text-sm font-medium text-stone-700 mb-3">On this device</p>
 
       {/* Android: one-tap install when prompt is available */}
       {platform === "android" && (
         <div className="mb-8">
           <InstallAppBanner variant="inline" showInstallLink={false} />
           <p className="text-xs text-stone-500 mt-2">
-            If you don’t see the button above, use Chrome’s menu (⋮) → “Install app” or “Add to Home screen”.
+            No button? Use Chrome’s menu (⋮) → “Install app” or “Add to Home screen”.
           </p>
         </div>
       )}
@@ -44,15 +89,14 @@ function InstallContent() {
       {/* iOS: step-by-step (Safari only) */}
       {platform === "ios" && (
         <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-6 mb-8">
-          <p className="text-sm font-medium text-stone-700 mb-3">Add to Home Screen (Safari)</p>
+          <p className="text-sm font-medium text-stone-700 mb-3">Add to Home Screen (use Safari)</p>
           <ol className="list-decimal list-inside space-y-2 text-sm text-stone-600">
-            <li>Open this page in <strong>Safari</strong> (not Chrome).</li>
             <li>Tap the <strong>Share</strong> button (square with arrow up) at the bottom.</li>
             <li>Scroll and tap <strong>“Add to Home Screen”</strong>.</li>
-            <li>Tap <strong>Add</strong>.</li>
+            <li>Tap <strong>Add</strong>. Done.</li>
           </ol>
           <p className="text-xs text-stone-500 mt-3">
-            The app icon will appear on your home screen. Tap it to open like an app.
+            Icon appears on your home screen — tap to open like an app.
           </p>
         </div>
       )}
@@ -60,7 +104,8 @@ function InstallContent() {
       {/* Desktop / other: generic */}
       {platform === "other" && (
         <div className="bg-stone-100 rounded-xl p-4 mb-8 text-sm text-stone-600">
-          <p>On your phone, open this page in a browser and you’ll see install options for Android or iPhone.</p>
+          <p className="font-medium text-stone-700 mb-1">Open this page on your phone</p>
+          <p>Copy the link above and text it to yourself (or your friend). Open it in the phone's browser — you'll get install steps for iPhone or Android.</p>
         </div>
       )}
 

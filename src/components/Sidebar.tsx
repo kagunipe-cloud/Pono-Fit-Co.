@@ -13,10 +13,132 @@ type MemberMe = {
   role?: string | null;
 } | null;
 
+function NavList({
+  pathname,
+  member,
+  isMember,
+  isAdmin,
+  showMemberNav,
+  onLogout,
+}: {
+  pathname: string | null;
+  member: MemberMe;
+  isMember: boolean;
+  isAdmin: boolean;
+  showMemberNav: boolean;
+  onLogout: () => void;
+}) {
+  const link = (href: string, label: string | React.ReactNode, active?: boolean) => {
+    const isActive = active ?? pathname === href || (href !== "/" && pathname?.startsWith(href + "/"));
+    return (
+      <Link
+        href={href}
+        className={`block px-3 py-2 rounded-lg text-sm font-medium ${
+          isActive ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+        }`}
+      >
+        {label}
+      </Link>
+    );
+  };
+
+  if (showMemberNav) {
+    return (
+      <ul className="space-y-0.5">
+        <li>{link("/member", "Home", pathname === "/member")}</li>
+        <li>{link("/member/membership", "My Membership")}</li>
+        <li>
+          <Link
+            href="/schedule"
+            className={`block px-3 py-2 rounded-lg text-sm font-medium ${
+              pathname === "/schedule" || pathname?.startsWith("/schedule/")
+                ? "bg-brand-50 text-brand-800"
+                : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+            }`}
+          >
+            <span className="block">Schedule</span>
+            <span className="block text-xs font-normal text-stone-500 mt-0.5">Book Classes & PT</span>
+          </Link>
+        </li>
+        <li>{link("/member/class-bookings", "My Class Bookings")}</li>
+        <li>{link("/member/pt-bookings", "My PT Bookings")}</li>
+        <li>{link("/member/workouts", "Workouts", pathname?.startsWith("/member/workouts"))}</li>
+        <li>{link("/member/macros", "Macros", pathname?.startsWith("/member/macros"))}</li>
+        <li>{link("/rec-leagues", "Rec Leagues", pathname?.startsWith("/rec-leagues"))}</li>
+        <li className="pt-2 mt-2 border-t border-stone-100">
+          <span className="block px-3 py-1 text-xs font-medium text-stone-400">Purchase</span>
+        </li>
+        <li>{link("/member/classes", "Browse Classes")}</li>
+        <li>{link("/member/pt-sessions", "Browse PT Sessions")}</li>
+        <li>{link("/member/class-packs", "Class Packs")}</li>
+        <li>{link("/member/pt-packs", "PT Packs")}</li>
+        <li>{link("/member/memberships", "Memberships")}</li>
+        <li>{link("/member/cart", "Cart")}</li>
+        {isMember && (
+          <li className="pt-2 mt-2 border-t border-stone-100">
+            <button
+              type="button"
+              onClick={onLogout}
+              className="block w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+            >
+              Log Out
+            </button>
+          </li>
+        )}
+      </ul>
+    );
+  }
+
+  return (
+    <ul className="space-y-0.5">
+      <li>{link("/", "Home", pathname === "/")}</li>
+      {!isMember && (
+        <li>
+          <Link href="/login" className="block px-3 py-2 rounded-lg text-sm font-medium text-brand-600 hover:bg-brand-50">
+            Login
+          </Link>
+        </li>
+      )}
+      <li>{link("/schedule", "Schedule", pathname === "/schedule" || pathname?.startsWith("/schedule/"))}</li>
+      <li>{link("/rec-leagues", "Rec Leagues", pathname?.startsWith("/rec-leagues"))}</li>
+      {isAdmin && <li>{link("/master-schedule", "Master Schedule")}</li>}
+      {isAdmin && <li>{link("/admin/create-workout-for-member", "Create Workout for Member")}</li>}
+      {isAdmin && <li>{link("/exercises", "Exercises")}</li>}
+      {isAdmin && <li>{link("/macros", "Macros")}</li>}
+      {isAdmin && <li>{link("/admin/backup", "Backup & Restore")}</li>}
+      <li>{link("/class-packs", "Class Packs")}</li>
+      <li>{link("/pt-packs", "PT Packs")}</li>
+      {SECTIONS.map((s) => (
+        <li key={s.slug}>{link(`/${s.slug}`, s.title, pathname === `/${s.slug}`)}</li>
+      ))}
+      {isAdmin && (
+        <>
+          <li className="pt-2 mt-2 border-t border-stone-100">
+            <span className="block px-3 py-1 text-xs font-medium text-stone-400">Member area</span>
+          </li>
+          <li>{link("/member", "Member home", pathname === "/member")}</li>
+          <li>{link("/member/workouts", "My Workouts", pathname?.startsWith("/member/workouts"))}</li>
+          <li>{link("/member/macros", "My Macros", pathname?.startsWith("/member/macros"))}</li>
+          <li className="pt-2 mt-2 border-t border-stone-100">
+            <button
+              type="button"
+              onClick={onLogout}
+              className="block w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+            >
+              Log Out
+            </button>
+          </li>
+        </>
+      )}
+    </ul>
+  );
+}
+
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [member, setMember] = useState<MemberMe | undefined>(undefined);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/member-me")
@@ -25,9 +147,14 @@ export default function Sidebar() {
       .catch(() => setMember(null));
   }, [pathname]);
 
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
   async function handleLogout() {
     await fetch("/api/auth/member-logout", { method: "POST" });
     setMember(null);
+    setMobileMenuOpen(false);
     router.push("/");
     router.refresh();
   }
@@ -37,345 +164,70 @@ export default function Sidebar() {
   const inMemberArea = pathname === "/member" || pathname?.startsWith("/member/");
   const showMemberNav = inMemberArea;
 
+  const logoHref = showMemberNav ? "/member" : "/";
+  const navProps = { pathname, member: member ?? null, isMember, isAdmin, showMemberNav, onLogout: handleLogout };
+
   return (
-    <aside className="w-56 shrink-0 border-r border-stone-200 bg-white flex flex-col">
-      <div className="p-4 border-b border-stone-100">
-        <Link
-          href={showMemberNav ? "/member" : "/"}
-          className="block rounded-lg bg-white overflow-hidden"
-          aria-label={BRAND.name}
+    <>
+      {/* Mobile: fixed header with hamburger */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-40 h-14 bg-white border-b border-stone-200 flex items-center justify-between px-4 safe-area-inset">
+        <Link href={logoHref} className="flex items-center shrink-0" aria-label={BRAND.name} onClick={() => setMobileMenuOpen(false)}>
+          <img src="/Logo-w-gray.svg" alt="" className="h-8 w-auto" />
+        </Link>
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="p-2 -mr-2 rounded-lg text-stone-600 hover:bg-stone-100"
+          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+          aria-expanded={mobileMenuOpen}
         >
+          <span className="sr-only">{mobileMenuOpen ? "Close menu" : "Open menu"}</span>
+          {mobileMenuOpen ? (
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          ) : (
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+          )}
+        </button>
+      </div>
+
+      {/* Mobile: overlay + drawer when menu open */}
+      {mobileMenuOpen && (
+        <>
+          <div
+            className="md:hidden fixed inset-0 z-40 bg-stone-900/50"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-hidden
+          />
+          <div className="md:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-white shadow-xl flex flex-col overflow-hidden">
+            <div className="p-4 border-b border-stone-100 shrink-0">
+              <Link href={logoHref} className="block rounded-lg overflow-hidden" onClick={() => setMobileMenuOpen(false)}>
+                <img src="/Logo-w-gray.svg" alt={BRAND.name} className="w-full h-auto block" />
+              </Link>
+              {isMember && member && (
+                <p className="text-xs text-stone-500 mt-1 truncate" title={member.email ?? undefined}>{member.name}</p>
+              )}
+            </div>
+            <nav className="p-2 flex-1 overflow-y-auto">
+              <NavList {...navProps} />
+            </nav>
+          </div>
+        </>
+      )}
+
+      {/* Desktop: sidebar */}
+      <aside className="hidden md:flex w-56 shrink-0 border-r border-stone-200 bg-white flex-col">
+      <div className="p-4 border-b border-stone-100">
+        <Link href={logoHref} className="block rounded-lg bg-white overflow-hidden" aria-label={BRAND.name}>
           <img src="/Logo-w-gray.svg" alt={BRAND.name} className="w-full h-auto block" />
         </Link>
-        {isMember && (
-          <p className="text-xs text-stone-500 mt-1 truncate" title={member.email ?? undefined}>
-            {member.name}
-          </p>
+        {isMember && member && (
+          <p className="text-xs text-stone-500 mt-1 truncate" title={member.email ?? undefined}>{member.name}</p>
         )}
       </div>
       <nav className="p-2 flex-1 overflow-y-auto">
-        <ul className="space-y-0.5">
-          {showMemberNav ? (
-            <>
-              <li>
-                <Link
-                  href="/member"
-                  className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                    pathname === "/member"
-                      ? "bg-brand-50 text-brand-800"
-                      : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                  }`}
-                >
-                  Home
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/member/membership"
-                  className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                    pathname === "/member/membership"
-                      ? "bg-brand-50 text-brand-800"
-                      : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                  }`}
-                >
-                  My Membership
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/schedule"
-                  className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                    pathname === "/schedule" || pathname?.startsWith("/schedule/")
-                      ? "bg-brand-50 text-brand-800"
-                      : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                  }`}
-                >
-                  <span className="block">Schedule</span>
-                  <span className="block text-xs font-normal text-stone-500 mt-0.5">Book Classes & PT</span>
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/member/class-bookings"
-                  className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                    pathname === "/member/class-bookings"
-                      ? "bg-brand-50 text-brand-800"
-                      : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                  }`}
-                >
-                  My Class Bookings
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/member/pt-bookings"
-                  className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                    pathname === "/member/pt-bookings"
-                      ? "bg-brand-50 text-brand-800"
-                      : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                  }`}
-                >
-                  My PT Bookings
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/member/workouts"
-                  className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                    pathname === "/member/workouts" || pathname?.startsWith("/member/workouts/")
-                      ? "bg-brand-50 text-brand-800"
-                      : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                  }`}
-                >
-                  Workouts
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/member/macros"
-                  className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                    pathname === "/member/macros" || pathname?.startsWith("/member/macros/")
-                      ? "bg-brand-50 text-brand-800"
-                      : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                  }`}
-                >
-                  Macros
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/rec-leagues"
-                  className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                    pathname?.startsWith("/rec-leagues")
-                      ? "bg-brand-50 text-brand-800"
-                      : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                  }`}
-                >
-                  Rec Leagues
-                </Link>
-              </li>
-              <li className="pt-2 mt-2 border-t border-stone-100">
-                <span className="block px-3 py-1 text-xs font-medium text-stone-400">Purchase</span>
-              </li>
-              <li>
-                <Link
-                  href="/member/classes"
-                  className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                    pathname === "/member/classes"
-                      ? "bg-brand-50 text-brand-800"
-                      : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                  }`}
-                >
-                  Browse Classes
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/member/pt-sessions"
-                  className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                    pathname === "/member/pt-sessions"
-                      ? "bg-brand-50 text-brand-800"
-                      : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                  }`}
-                >
-                  Browse PT Sessions
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/member/class-packs"
-                  className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                    pathname === "/member/class-packs"
-                      ? "bg-brand-50 text-brand-800"
-                      : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                  }`}
-                >
-                  Class Packs
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/member/pt-packs"
-                  className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                    pathname === "/member/pt-packs"
-                      ? "bg-brand-50 text-brand-800"
-                      : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                  }`}
-                >
-                  PT Packs
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/member/memberships"
-                  className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                    pathname === "/member/memberships"
-                      ? "bg-brand-50 text-brand-800"
-                      : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                  }`}
-                >
-                  Memberships
-                </Link>
-              </li>
-              <li>
-                <Link
-                  href="/member/cart"
-                  className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                    pathname === "/member/cart"
-                      ? "bg-brand-50 text-brand-800"
-                      : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                  }`}
-                >
-                  Cart
-                </Link>
-              </li>
-              {isMember && (
-                <li className="pt-2 mt-2 border-t border-stone-100">
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    className="block w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                  >
-                    Log Out
-                  </button>
-                </li>
-              )}
-            </>
-          ) : (
-            <>
-              <li>
-                <Link
-                  href="/"
-                  className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                    pathname === "/"
-                      ? "bg-brand-50 text-brand-800"
-                      : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                  }`}
-                >
-                  Home
-                </Link>
-              </li>
-              {!isMember && (
-                <li>
-                  <Link
-                    href="/login"
-                    className="block px-3 py-2 rounded-lg text-sm font-medium text-brand-600 hover:bg-brand-50"
-                  >
-                    Login
-                  </Link>
-                </li>
-              )}
-              <li>
-                <Link href="/schedule" className={`block px-3 py-2 rounded-lg text-sm font-medium ${pathname === "/schedule" || pathname?.startsWith("/schedule/") ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"}`}>Schedule</Link>
-              </li>
-              <li>
-                <Link href="/rec-leagues" className={`block px-3 py-2 rounded-lg text-sm font-medium ${pathname?.startsWith("/rec-leagues") ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"}`}>Rec Leagues</Link>
-              </li>
-              {isAdmin && (
-                <li>
-                  <Link href="/master-schedule" className={`block px-3 py-2 rounded-lg text-sm font-medium ${pathname === "/master-schedule" ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"}`}>Master Schedule</Link>
-                </li>
-              )}
-              {isAdmin && (
-                <li>
-                  <Link href="/admin/create-workout-for-member" className={`block px-3 py-2 rounded-lg text-sm font-medium ${pathname === "/admin/create-workout-for-member" ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"}`}>Create Workout for Member</Link>
-                </li>
-              )}
-              {isAdmin && (
-                <li>
-                  <Link href="/exercises" className={`block px-3 py-2 rounded-lg text-sm font-medium ${pathname === "/exercises" ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"}`}>Exercises</Link>
-                </li>
-              )}
-              {isAdmin && (
-                <li>
-                  <Link href="/macros" className={`block px-3 py-2 rounded-lg text-sm font-medium ${pathname === "/macros" ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"}`}>Macros</Link>
-                </li>
-              )}
-              {isAdmin && (
-                <li>
-                  <Link href="/admin/backup" className={`block px-3 py-2 rounded-lg text-sm font-medium ${pathname === "/admin/backup" ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"}`}>Backup &amp; Restore</Link>
-                </li>
-              )}
-              <li>
-                <Link href="/class-packs" className={`block px-3 py-2 rounded-lg text-sm font-medium ${pathname === "/class-packs" ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"}`}>Class Packs</Link>
-              </li>
-              <li>
-                <Link href="/pt-packs" className={`block px-3 py-2 rounded-lg text-sm font-medium ${pathname === "/pt-packs" ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"}`}>PT Packs</Link>
-              </li>
-              {SECTIONS.map((s) => {
-                const href = `/${s.slug}`;
-                const isActive = pathname === href;
-                return (
-                  <li key={s.slug}>
-                    <Link
-                      href={href}
-                      className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                        isActive
-                          ? "bg-brand-50 text-brand-800"
-                          : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                      }`}
-                    >
-                      {s.title}
-                    </Link>
-                  </li>
-                );
-              })}
-              {isAdmin && (
-                <>
-                  <li className="pt-2 mt-2 border-t border-stone-100">
-                    <span className="block px-3 py-1 text-xs font-medium text-stone-400">Member area</span>
-                  </li>
-                  <li>
-                    <Link
-                      href="/member"
-                      className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                        pathname === "/member"
-                          ? "bg-brand-50 text-brand-800"
-                          : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                      }`}
-                    >
-                      Member home
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      href="/member/workouts"
-                      className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                        pathname?.startsWith("/member/workouts")
-                          ? "bg-brand-50 text-brand-800"
-                          : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                      }`}
-                    >
-                      My Workouts
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      href="/member/macros"
-                      className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-                        pathname?.startsWith("/member/macros")
-                          ? "bg-brand-50 text-brand-800"
-                          : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                      }`}
-                    >
-                      My Macros
-                    </Link>
-                  </li>
-                  <li className="pt-2 mt-2 border-t border-stone-100">
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="block w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                    >
-                      Log Out
-                    </button>
-                  </li>
-                </>
-              )}
-            </>
-          )}
-        </ul>
+        <NavList {...navProps} />
       </nav>
     </aside>
+    </>
   );
 }
