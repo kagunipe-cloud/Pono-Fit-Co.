@@ -7,6 +7,7 @@ export default function AdminEmailMembersPage() {
   const [subject, setSubject] = useState("");
   const [text, setText] = useState("");
   const [recipientCount, setRecipientCount] = useState<number | null>(null);
+  const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
   const [loadingCount, setLoadingCount] = useState(true);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ sent: number; total: number; failed: number; errors?: string[] } | null>(null);
@@ -15,10 +16,14 @@ export default function AdminEmailMembersPage() {
   useEffect(() => {
     fetch("/api/admin/email-all-members")
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: { count?: number } | null) => {
+      .then((data: { count?: number; smtp_configured?: boolean } | null) => {
         setRecipientCount(data?.count ?? 0);
+        setSmtpConfigured(data?.smtp_configured ?? false);
       })
-      .catch(() => setRecipientCount(0))
+      .catch(() => {
+        setRecipientCount(0);
+        setSmtpConfigured(false);
+      })
       .finally(() => setLoadingCount(false));
   }, []);
 
@@ -64,6 +69,21 @@ export default function AdminEmailMembersPage() {
 
       {loadingCount ? (
         <p className="text-stone-500 text-sm">Loading…</p>
+      ) : smtpConfigured === false ? (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-amber-900">
+          <p className="font-medium mb-2">SMTP is not configured</p>
+          <p className="text-sm mb-2">
+            Email sending is disabled until you set these environment variables (e.g. in Railway or your host):
+          </p>
+          <ul className="text-sm list-disc list-inside space-y-1 font-mono text-amber-800">
+            <li>SMTP_HOST</li>
+            <li>SMTP_USER</li>
+            <li>SMTP_PASS</li>
+          </ul>
+          <p className="text-sm mt-3">
+            Use your email provider’s SMTP settings (Gmail, SendGrid, Mailgun, etc.). After you add them and redeploy, this page will allow you to send.
+          </p>
+        </div>
       ) : recipientCount === 0 ? (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-800 text-sm">
           No members have an email address. Add emails in the member directory first.

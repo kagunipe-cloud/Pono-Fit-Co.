@@ -5,8 +5,16 @@ import { sendMemberEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
+/** True if SMTP env vars are set so we can send mail. */
+function isSmtpConfigured(): boolean {
+  const host = process.env.SMTP_HOST?.trim();
+  const user = process.env.SMTP_USER?.trim();
+  const pass = process.env.SMTP_PASS?.trim();
+  return !!(host && user && pass);
+}
+
 /**
- * GET — returns count of members with an email (for the form).
+ * GET — returns count of members with an email and whether SMTP is configured.
  * POST — sends one email (subject + text) to every member with an email. Admin only.
  */
 export async function GET(request: NextRequest) {
@@ -19,7 +27,7 @@ export async function GET(request: NextRequest) {
     .prepare("SELECT member_id, email FROM members WHERE TRIM(COALESCE(email, '')) != ''")
     .all() as { member_id: string; email: string }[];
   db.close();
-  return NextResponse.json({ count: rows.length });
+  return NextResponse.json({ count: rows.length, smtp_configured: isSmtpConfigured() });
 }
 
 export async function POST(request: NextRequest) {
@@ -52,6 +60,13 @@ export async function POST(request: NextRequest) {
 
   if (rows.length === 0) {
     return NextResponse.json({ error: "No members with an email address" }, { status: 400 });
+  }
+
+  if (!isSmtpConfigured()) {
+    return NextResponse.json(
+      { error: "SMTP is not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASS in your environment (e.g. Railway variables) to send email." },
+      { status: 503 }
+    );
   }
 
   let sent = 0;
