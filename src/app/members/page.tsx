@@ -58,12 +58,20 @@ export default function MembersPage() {
           </h1>
           <p className="text-stone-500 mt-1">Manage members and view linked subscriptions, bookings, and sales</p>
         </div>
-        <Link
-          href="/members/new"
-          className="inline-flex items-center px-4 py-2.5 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 transition-colors"
-        >
-          Add member
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/admin/email-members"
+            className="inline-flex items-center px-4 py-2.5 rounded-lg border border-stone-200 bg-white text-stone-700 font-medium hover:bg-stone-50 transition-colors"
+          >
+            Email all members
+          </Link>
+          <Link
+            href="/members/new"
+            className="inline-flex items-center px-4 py-2.5 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 transition-colors"
+          >
+            Add member
+          </Link>
+        </div>
       </header>
 
       <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">

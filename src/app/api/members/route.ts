@@ -49,7 +49,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const first_name = (body.first_name ?? "").trim() || null;
     const last_name = (body.last_name ?? "").trim() || null;
-    const email = (body.email ?? "").trim() || null;
+    const emailRaw = (body.email ?? "").trim();
+    if (!emailRaw) {
+      return NextResponse.json(
+        { error: "Email is required. It is used for login and Kisi door access." },
+        { status: 400 }
+      );
+    }
+    const email = emailRaw;
     const role = (body.role ?? "Member").trim() || "Member";
 
     const db = getDb();

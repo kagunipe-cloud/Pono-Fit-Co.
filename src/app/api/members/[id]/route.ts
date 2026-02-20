@@ -127,10 +127,15 @@ export async function PATCH(
     ] as const;
     for (const field of fields) {
       if (body[field] !== undefined) {
+        const val = typeof body[field] === "string" ? body[field].trim() || null : body[field];
+        if (field === "email" && (val == null || val === "")) {
+          return NextResponse.json(
+            { error: "Email is required. It is used for login and Kisi door access." },
+            { status: 400 }
+          );
+        }
         updates.push(`${field} = ?`);
-        values.push(
-          typeof body[field] === "string" ? body[field].trim() || null : body[field]
-        );
+        values.push(val);
       }
     }
     if (updates.length === 0) {

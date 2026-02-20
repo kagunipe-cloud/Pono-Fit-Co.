@@ -423,11 +423,12 @@ export default function MemberDetailPage() {
                 />
               </div>
               <div className="sm:col-span-2">
-                <label className="block text-sm font-medium text-stone-600 mb-1">Email</label>
+                <label className="block text-sm font-medium text-stone-600 mb-1">Email (required for login & Kisi)</label>
                 <input
                   type="email"
                   value={editForm.email ?? ""}
                   onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+                  required
                   className="w-full px-3 py-2 rounded-lg border border-stone-200"
                 />
               </div>
