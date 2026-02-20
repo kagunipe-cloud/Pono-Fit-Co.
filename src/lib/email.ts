@@ -2,6 +2,72 @@ import nodemailer from "nodemailer";
 
 let transporter: nodemailer.Transporter | null = null;
 
+/** True if Gmail API OAuth env vars are set. Sending then uses HTTPS (port 443) so it works when SMTP is blocked. */
+export function isGmailApiConfigured(): boolean {
+  const clientId = process.env.GMAIL_OAUTH_CLIENT_ID?.trim();
+  const clientSecret = process.env.GMAIL_OAUTH_CLIENT_SECRET?.trim();
+  const refreshToken = process.env.GMAIL_OAUTH_REFRESH_TOKEN?.trim();
+  const from = process.env.GMAIL_FROM_EMAIL?.trim();
+  return !!(clientId && clientSecret && refreshToken && from);
+}
+
+/** Exchange refresh token for access token. */
+async function getGmailAccessToken(): Promise<string | null> {
+  const clientId = process.env.GMAIL_OAUTH_CLIENT_ID?.trim();
+  const clientSecret = process.env.GMAIL_OAUTH_CLIENT_SECRET?.trim();
+  const refreshToken = process.env.GMAIL_OAUTH_REFRESH_TOKEN?.trim();
+  if (!clientId || !clientSecret || !refreshToken) return null;
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token",
+    }),
+  });
+  const data = (await res.json().catch(() => ({}))) as { access_token?: string };
+  return data.access_token ?? null;
+}
+
+/** Send one email via Gmail API (HTTPS). Uses port 443 so it works when SMTP is blocked. */
+async function sendViaGmailApi(to: string, subject: string, text: string): Promise<{ ok: boolean; error?: string }> {
+  const from = process.env.GMAIL_FROM_EMAIL?.trim();
+  if (!from) return { ok: false, error: "GMAIL_FROM_EMAIL not set" };
+
+  const accessToken = await getGmailAccessToken();
+  if (!accessToken) return { ok: false, error: "Failed to get Gmail access token" };
+
+  const lines = [
+    `From: ${from}`,
+    `To: ${to}`,
+    `Subject: ${subject.replace(/\r?\n/g, " ")}`,
+    "MIME-Version: 1.0",
+    "Content-Type: text/plain; charset=utf-8",
+    "",
+    text,
+  ];
+  const raw = lines.join("\r\n");
+  const rawBase64 = Buffer.from(raw, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+  const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ raw: rawBase64 }),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text();
+    return { ok: false, error: `Gmail API ${res.status}: ${errBody.slice(0, 200)}` };
+  }
+  return { ok: true };
+}
+
 function getTransporter(): nodemailer.Transporter | null {
   if (transporter) return transporter;
   const host = process.env.SMTP_HOST;
@@ -21,10 +87,14 @@ function getTransporter(): nodemailer.Transporter | null {
   return transporter;
 }
 
-/** Send an email to staff (STAFF_EMAIL). No-op if SMTP not configured. */
+/** Send an email to staff (STAFF_EMAIL). Uses Gmail API if configured, else SMTP. */
 export async function sendStaffEmail(subject: string, text: string): Promise<boolean> {
   const staffEmail = process.env.STAFF_EMAIL;
   if (!staffEmail) return false;
+  if (isGmailApiConfigured()) {
+    const result = await sendViaGmailApi(staffEmail, subject, text);
+    return result.ok;
+  }
   const trans = getTransporter();
   if (!trans) return false;
   try {
@@ -41,15 +111,21 @@ export async function sendStaffEmail(subject: string, text: string): Promise<boo
   }
 }
 
-/** Send an email to a member. No-op if SMTP not configured. Returns { ok, error? }. */
+/** Send an email to a member. Uses Gmail API if configured (HTTPS), else SMTP. Returns { ok, error? }. */
 export async function sendMemberEmail(to: string, subject: string, text: string): Promise<{ ok: boolean; error?: string }> {
   if (!to?.trim()) return { ok: false, error: "No recipient" };
+  const toTrim = to.trim();
+
+  if (isGmailApiConfigured()) {
+    return sendViaGmailApi(toTrim, subject, text);
+  }
+
   const trans = getTransporter();
   if (!trans) return { ok: false, error: "SMTP not configured" };
   try {
     await trans.sendMail({
       from: process.env.SMTP_FROM ?? process.env.SMTP_USER ?? "noreply@localhost",
-      to: to.trim(),
+      to: toTrim,
       subject,
       text,
     });

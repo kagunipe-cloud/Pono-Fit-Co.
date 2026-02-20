@@ -71,18 +71,31 @@ export default function AdminEmailMembersPage() {
         <p className="text-stone-500 text-sm">Loading…</p>
       ) : smtpConfigured === false ? (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 text-amber-900">
-          <p className="font-medium mb-2">SMTP is not configured</p>
-          <p className="text-sm mb-2">
-            Email sending is disabled until you set these environment variables (e.g. in Railway or your host):
+          <p className="font-medium mb-2">Email is not configured</p>
+          <p className="text-sm mb-3">
+            Use one of these options (set env vars in Railway or your host, then redeploy):
           </p>
-          <ul className="text-sm list-disc list-inside space-y-1 font-mono text-amber-800">
-            <li>SMTP_HOST</li>
-            <li>SMTP_USER</li>
-            <li>SMTP_PASS</li>
-          </ul>
-          <p className="text-sm mt-3">
-            Use your email provider’s SMTP settings (Gmail, SendGrid, Mailgun, etc.). After you add them and redeploy, this page will allow you to send.
-          </p>
+          <div className="space-y-3 text-sm">
+            <div>
+              <p className="font-medium text-amber-800 mb-1">Option 1: Gmail API (recommended if SMTP is blocked)</p>
+              <p className="mb-1">Uses HTTPS so it works on Railway and other hosts that block SMTP. You need a Google Cloud project, Gmail API enabled, and OAuth credentials. Set:</p>
+              <ul className="list-disc list-inside font-mono text-amber-800">
+                <li>GMAIL_OAUTH_CLIENT_ID</li>
+                <li>GMAIL_OAUTH_CLIENT_SECRET</li>
+                <li>GMAIL_OAUTH_REFRESH_TOKEN</li>
+                <li>GMAIL_FROM_EMAIL (your Gmail address)</li>
+              </ul>
+              <p className="mt-2 text-xs">Step-by-step: see <code className="bg-amber-100 px-1 rounded">docs/EMAIL_GMAIL_API_SETUP.md</code> in the repo.</p>
+            </div>
+            <div>
+              <p className="font-medium text-amber-800 mb-1">Option 2: SMTP</p>
+              <ul className="list-disc list-inside font-mono text-amber-800">
+                <li>SMTP_HOST (e.g. smtp.gmail.com)</li>
+                <li>SMTP_USER</li>
+                <li>SMTP_PASS</li>
+              </ul>
+            </div>
+          </div>
         </div>
       ) : recipientCount === 0 ? (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-800 text-sm">

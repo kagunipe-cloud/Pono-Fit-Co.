@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
-import { sendMemberEmail } from "@/lib/email";
+import { sendMemberEmail, isGmailApiConfigured } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +11,11 @@ function isSmtpConfigured(): boolean {
   const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASS?.trim();
   return !!(host && user && pass);
+}
+
+/** True if we can send (SMTP or Gmail API). Gmail API uses HTTPS so it works when SMTP is blocked. */
+function isEmailConfigured(): boolean {
+  return isSmtpConfigured() || isGmailApiConfigured();
 }
 
 /**
@@ -27,7 +32,7 @@ export async function GET(request: NextRequest) {
     .prepare("SELECT member_id, email FROM members WHERE TRIM(COALESCE(email, '')) != ''")
     .all() as { member_id: string; email: string }[];
   db.close();
-  return NextResponse.json({ count: rows.length, smtp_configured: isSmtpConfigured() });
+  return NextResponse.json({ count: rows.length, smtp_configured: isEmailConfigured() });
 }
 
 export async function POST(request: NextRequest) {
@@ -62,9 +67,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No members with an email address" }, { status: 400 });
   }
 
-  if (!isSmtpConfigured()) {
+  if (!isEmailConfigured()) {
     return NextResponse.json(
-      { error: "SMTP is not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASS in your environment (e.g. Railway variables) to send email." },
+      { error: "Email not configured. Set SMTP (SMTP_HOST, SMTP_USER, SMTP_PASS) or Gmail API (GMAIL_OAUTH_CLIENT_ID, GMAIL_OAUTH_CLIENT_SECRET, GMAIL_OAUTH_REFRESH_TOKEN, GMAIL_FROM_EMAIL). Gmail API uses HTTPS and works when SMTP is blocked." },
       { status: 503 }
     );
   }
