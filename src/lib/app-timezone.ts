@@ -52,6 +52,12 @@ export function todayInAppTz(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: APP_TIMEZONE });
 }
 
+/** Date (YYYY-MM-DD) in app timezone for a given ISO timestamp (e.g. from DB created_at). */
+export function dateStringInAppTz(iso: string | null): string {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("en-CA", { timeZone: APP_TIMEZONE });
+}
+
 /** Monday (YYYY-MM-DD) of the week containing the given date string. */
 export function weekStartInAppTz(dateStr: string): string {
   const d = new Date(dateStr + "T12:00:00Z");
