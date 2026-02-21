@@ -51,6 +51,11 @@ export function ensurePTSlotTables(db: ReturnType<typeof getDb>) {
   } catch {
     /* already exists */
   }
+  try {
+    db.exec("ALTER TABLE pt_sessions ADD COLUMN image_url TEXT");
+  } catch {
+    /* already exists */
+  }
   db.exec(`
     CREATE TABLE IF NOT EXISTS trainer_availability (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

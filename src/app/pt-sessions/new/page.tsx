@@ -16,6 +16,7 @@ export default function NewPTSessionPage() {
     category: "PT",
     description: "",
     duration_minutes: 60,
+    image_url: "",
   });
 
   async function handleSubmit(e: React.FormEvent) {
@@ -73,6 +74,10 @@ export default function NewPTSessionPage() {
         <div>
           <label className="block text-sm font-medium text-stone-700 mb-1">Description</label>
           <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} rows={2} className="w-full px-4 py-2.5 rounded-lg border border-stone-200" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-stone-700 mb-1">Image URL</label>
+          <input type="url" value={form.image_url} onChange={(e) => setForm((f) => ({ ...f, image_url: e.target.value }))} placeholder="https://…" className="w-full px-4 py-2.5 rounded-lg border border-stone-200" />
         </div>
         <div className="flex gap-3 pt-2">
           <button type="submit" disabled={loading} className="px-4 py-2.5 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50">{loading ? "Creating…" : "Create"}</button>

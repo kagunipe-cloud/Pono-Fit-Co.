@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
     const stripe_link = (body.stripe_link ?? "").trim() || null;
     const category = (body.category ?? "PT").trim() || "PT";
     const description = (body.description ?? "").trim() || null;
+    const image_url = (body.image_url ?? "").trim() || null;
     const product_id = (body.product_id ?? "").trim() || randomUUID().slice(0, 8);
     let duration_minutes = parseInt(String(body.duration_minutes ?? 60), 10);
     if (![30, 60, 90].includes(duration_minutes)) duration_minutes = 60;
@@ -72,10 +73,10 @@ export async function POST(request: NextRequest) {
       }
     }
     const stmt = db.prepare(`
-      INSERT INTO pt_sessions (product_id, session_name, session_duration, date_time, price, trainer, stripe_link, category, description, duration_minutes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO pt_sessions (product_id, session_name, session_duration, date_time, price, trainer, stripe_link, category, description, duration_minutes, image_url)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(product_id, session_name, session_duration, date_time, price, trainer, stripe_link, category, description, duration_minutes);
+    const result = stmt.run(product_id, session_name, session_duration, date_time, price, trainer, stripe_link, category, description, duration_minutes, image_url);
     const row = db.prepare("SELECT * FROM pt_sessions WHERE id = ?").get(result.lastInsertRowid);
     db.close();
     return NextResponse.json(row);

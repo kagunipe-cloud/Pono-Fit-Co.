@@ -48,3 +48,15 @@ KISI_LOCK_ID=12345
 ## Member email required
 
 Each member who gets door access must have an **email** in your app. We use it to find or create their Kisi user and to store the returned Kisi user id (`kisi_id`) for renewals. If a member has no email, we still complete the sale and create the subscription but skip the Kisi step.
+
+## Unlock tracking (webhook)
+
+To record gym usage when members unlock the door, configure a **Kisi Event Webhook** so Kisi POSTs `lock.unlock` events to your app:
+
+1. In Kisi: **Integrations** (grid icon) → **Add Integration** → **Event Webhook**.
+2. Name it (e.g. “Unlock tracking”).
+3. **Event types**: select `lock.unlock`.
+4. **URL**: `https://your-app-url.com/api/kisi/webhook` (use your real domain, e.g. Railway).
+5. **Signature key** (optional but recommended): set a secret string. Then set the same value in your app env as `KISI_WEBHOOK_SECRET`. The app will verify the `X-Signature` header (HMAC-SHA256 of the body, hex-encoded).
+
+Events are stored in `door_access_events` and linked to members via `members.kisi_id` when the actor is a Kisi User. See **Usage tracking** in the repo for how to view or use this data.

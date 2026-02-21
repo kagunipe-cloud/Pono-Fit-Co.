@@ -4,7 +4,7 @@ import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 
 export const dynamic = "force-dynamic";
 
-type ProductRow = { id: number; session_name: string; trainer: string | null; price: string; duration_minutes: number | null; description: string | null };
+type ProductRow = { id: number; session_name: string; trainer: string | null; price: string; duration_minutes: number | null; description: string | null; image_url: string | null };
 
 /** Returns PT session products (date_time IS NULL) — bookable into any slot. Recurring/scheduled sessions (with date_time) are not shown. */
 export async function GET() {
@@ -13,7 +13,7 @@ export async function GET() {
     ensurePTSlotTables(db);
     const products = db
       .prepare(
-        `SELECT id, session_name, trainer, price, duration_minutes, description
+        `SELECT id, session_name, trainer, price, duration_minutes, description, image_url
          FROM pt_sessions
          WHERE date_time IS NULL
          ORDER BY session_name ASC, COALESCE(trainer, ''), duration_minutes ASC`
@@ -37,6 +37,7 @@ export async function GET() {
         price: p.price,
         duration_minutes: p.duration_minutes ?? 60,
         description: description || null,
+        image_url: (p.image_url && String(p.image_url).trim()) || null,
       };
     });
     const singleCreditPack = db

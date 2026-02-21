@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatPrice, toTitleCase } from "@/lib/format";
 
-type SessionType = { id: number; session_name: string; trainer: string | null; price: string; duration_minutes: number; description: string | null };
+type SessionType = { id: number; session_name: string; trainer: string | null; price: string; duration_minutes: number; description: string | null; image_url: string | null };
 type PTSessionTypesResponse = { types: SessionType[]; singleCreditPack: { id: number; price: string } | null };
 type PTPack = { id: number; name: string; price: string; credits: number; duration_minutes: number };
 
@@ -118,10 +118,14 @@ export default function MemberPTSessionsPage() {
         {sessionTypes.map((s, i) => (
           <li
             key={`${s.id}-${i}`}
-            className="p-4 rounded-xl border border-stone-200 bg-white"
+            className="p-4 rounded-xl border border-stone-200 bg-white flex flex-wrap gap-4 items-start"
           >
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
+            {s.image_url && (
+              <div className="shrink-0 w-24 h-24 rounded-lg overflow-hidden bg-stone-100">
+                <img src={s.image_url} alt="" className="w-full h-full object-cover" />
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
                 <p className="font-medium text-stone-800">{toTitleCase(s.session_name)}</p>
                 <p className="text-sm text-stone-500">
                   {s.trainer ? toTitleCase(s.trainer) : "—"} · {formatPrice(s.price)}
@@ -148,7 +152,6 @@ export default function MemberPTSessionsPage() {
                   Book now
                 </Link>
               </div>
-            </div>
           </li>
         ))}
       </ul>
