@@ -46,3 +46,17 @@ export function formatDateOnlyInAppTz(
 export function formatWeekdayShortInAppTz(dateStr: string): string {
   return formatInAppTz(new Date(dateStr + "T12:00:00Z"), { weekday: "short" });
 }
+
+/** Today's date (YYYY-MM-DD) in app timezone (Hawaiian). Use for journal "today" and API defaults. */
+export function todayInAppTz(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: APP_TIMEZONE });
+}
+
+/** Monday (YYYY-MM-DD) of the week containing the given date string. */
+export function weekStartInAppTz(dateStr: string): string {
+  const d = new Date(dateStr + "T12:00:00Z");
+  const day = d.getUTCDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  d.setUTCDate(d.getUTCDate() + mondayOffset);
+  return d.toISOString().slice(0, 10);
+}

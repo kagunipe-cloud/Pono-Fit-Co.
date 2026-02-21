@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { getMemberIdFromSession } from "@/lib/session";
 import { ensureFoodsTable } from "@/lib/macros";
 import { ensureJournalTables, weekStart } from "@/lib/journal";
+import { todayInAppTz } from "@/lib/app-timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,7 @@ export async function GET(request: NextRequest) {
     const weekParam = searchParams.get("week");
     const monday = weekParam && /^\d{4}-\d{2}-\d{2}$/.test(weekParam)
       ? weekParam
-      : weekStart(new Date().toISOString().slice(0, 10));
+      : weekStart(todayInAppTz());
 
     const db = getDb();
     ensureFoodsTable(db);
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
     const dateParam = body.date;
     const date = typeof dateParam === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
       ? dateParam
-      : new Date().toISOString().slice(0, 10);
+      : todayInAppTz();
 
     const db = getDb();
     ensureFoodsTable(db);

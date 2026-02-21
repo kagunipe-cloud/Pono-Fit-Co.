@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatDateOnlyInAppTz, formatInAppTz, formatWeekdayShortInAppTz } from "@/lib/app-timezone";
+import { formatDateOnlyInAppTz, formatInAppTz, formatWeekdayShortInAppTz, todayInAppTz, weekStartInAppTz } from "@/lib/app-timezone";
 
 type JournalDay = { id: number; member_id: string; date: string; created_at: string };
 type MacroGoals = { calories_goal: number | null; protein_pct: number | null; fat_pct: number | null; carbs_pct: number | null };
@@ -33,14 +33,8 @@ export default function MemberMacrosPage() {
   const [savingGoals, setSavingGoals] = useState(false);
   const [weekSummary, setWeekSummary] = useState<Record<string, DaySummary> | null>(null);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const thisWeekMonday = (() => {
-    const d = new Date();
-    const day = d.getDay();
-    const offset = day === 0 ? -6 : 1 - day;
-    d.setDate(d.getDate() + offset);
-    return d.toISOString().slice(0, 10);
-  })();
+  const today = todayInAppTz();
+  const thisWeekMonday = weekStartInAppTz(today);
   const weekList = weeks.includes(thisWeekMonday) ? weeks : [thisWeekMonday, ...weeks];
 
   function fetchWeeks() {
