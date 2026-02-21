@@ -7,6 +7,10 @@ type SetRow = { reps: string; weight: string } | { time: string; distance: strin
 type ExerciseEntry = {
   type: "lift" | "cardio";
   exercise_name: string;
+  muscle_group: string;
+  primary_muscles: string;
+  equipment: string;
+  instructions: string;
   sets: SetRow[];
 };
 
@@ -14,6 +18,10 @@ export default function AdminCreateWorkoutForMemberPage() {
   const [exercises, setExercises] = useState<ExerciseEntry[]>([]);
   const [mode, setMode] = useState<"lift" | "cardio" | null>(null);
   const [exerciseName, setExerciseName] = useState("");
+  const [muscleGroup, setMuscleGroup] = useState("");
+  const [primaryMuscles, setPrimaryMuscles] = useState("");
+  const [equipment, setEquipment] = useState("");
+  const [instructions, setInstructions] = useState("");
   const [sets, setSets] = useState<SetRow[]>([{ reps: "", weight: "" }]);
   const [memberEmail, setMemberEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -23,12 +31,20 @@ export default function AdminCreateWorkoutForMemberPage() {
   function startAddLift() {
     setMode("lift");
     setExerciseName("");
+    setMuscleGroup("");
+    setPrimaryMuscles("");
+    setEquipment("");
+    setInstructions("");
     setSets([{ reps: "", weight: "" }]);
   }
 
   function startAddCardio() {
     setMode("cardio");
     setExerciseName("");
+    setMuscleGroup("");
+    setPrimaryMuscles("");
+    setEquipment("");
+    setInstructions("");
     setSets([{ time: "", distance: "" }]);
   }
 
@@ -44,11 +60,19 @@ export default function AdminCreateWorkoutForMemberPage() {
       {
         type: mode!,
         exercise_name: exerciseName.trim(),
+        muscle_group: muscleGroup.trim(),
+        primary_muscles: primaryMuscles.trim(),
+        equipment: equipment.trim(),
+        instructions: instructions.trim(),
         sets: [...sets],
       },
     ]);
     setMode(null);
     setExerciseName("");
+    setMuscleGroup("");
+    setPrimaryMuscles("");
+    setEquipment("");
+    setInstructions("");
     setSets([{ reps: "", weight: "" }]);
   }
 
@@ -77,6 +101,10 @@ export default function AdminCreateWorkoutForMemberPage() {
           ? {
               type: "lift" as const,
               exercise_name: ex.exercise_name,
+              muscle_group: ex.muscle_group || undefined,
+              primary_muscles: ex.primary_muscles || undefined,
+              equipment: ex.equipment || undefined,
+              instructions: ex.instructions ? ex.instructions.split("\n").map((s) => s.trim()).filter(Boolean) : undefined,
               sets: (ex.sets as { reps: string; weight: string }[]).map((s) => ({
                 reps: parseInt(s.reps, 10) || null,
                 weight_kg: parseFloat(s.weight) || null,
@@ -85,6 +113,10 @@ export default function AdminCreateWorkoutForMemberPage() {
           : {
               type: "cardio" as const,
               exercise_name: ex.exercise_name,
+              muscle_group: ex.muscle_group || undefined,
+              primary_muscles: ex.primary_muscles || undefined,
+              equipment: ex.equipment || undefined,
+              instructions: ex.instructions ? ex.instructions.split("\n").map((s) => s.trim()).filter(Boolean) : undefined,
               sets: (ex.sets as { time: string; distance: string }[]).map((s) => ({
                 time_seconds: parseInt(s.time, 10) ? parseInt(s.time, 10) * 60 : null,
                 distance_km: parseFloat(s.distance) || null,
@@ -150,13 +182,53 @@ export default function AdminCreateWorkoutForMemberPage() {
             <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-stone-50 space-y-4">
               <h3 className="font-semibold text-stone-800">{mode === "lift" ? "Add Lift" : "Add Cardio"}</h3>
               <div>
-                <label className="block text-sm font-medium text-stone-600 mb-1">Exercise</label>
+                <label className="block text-sm font-medium text-stone-600 mb-1">Name</label>
                 <input
                   type="text"
                   value={exerciseName}
                   onChange={(e) => setExerciseName(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-stone-200"
                   placeholder="e.g. Bench Press, Treadmill"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-600 mb-1">Muscle group</label>
+                <input
+                  type="text"
+                  value={muscleGroup}
+                  onChange={(e) => setMuscleGroup(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                  placeholder="e.g. legs, back, chest"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-600 mb-1">Target muscle</label>
+                <input
+                  type="text"
+                  value={primaryMuscles}
+                  onChange={(e) => setPrimaryMuscles(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                  placeholder="e.g. pectorals, triceps"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-600 mb-1">Equipment</label>
+                <input
+                  type="text"
+                  value={equipment}
+                  onChange={(e) => setEquipment(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                  placeholder="e.g. barbell, dumbbell"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-600 mb-1">Instructions (one step per line)</label>
+                <textarea
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                  placeholder="Step 1&#10;Step 2&#10;..."
+                  rows={4}
                 />
               </div>
               {mode === "lift" ? (
@@ -238,6 +310,8 @@ export default function AdminCreateWorkoutForMemberPage() {
                   <span className="font-medium text-stone-800">
                     {ex.exercise_name}
                     <span className="ml-2 text-xs text-stone-500 capitalize">({ex.type})</span>
+                    {ex.muscle_group && <span className="ml-2 text-xs text-stone-400">· {ex.muscle_group}</span>}
+                    {ex.primary_muscles && <span className="ml-2 text-xs text-stone-400">· {ex.primary_muscles}</span>}
                     <span className="ml-2 text-xs text-stone-400">— {ex.sets.length} set(s)</span>
                   </span>
                   <button
