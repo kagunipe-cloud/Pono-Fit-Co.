@@ -7,7 +7,7 @@ export const metadata = {
   description: "Gym membership, classes, PT, and door access",
   manifest: "/api/manifest",
   icons: {
-    icon: [{ url: "/app-icon.png", sizes: "192x192", type: "image/png" }, { url: "/app-icon.svg", sizes: "any", type: "image/svg+xml" }],
+    icon: [{ url: "/app-icon.png", sizes: "192x192", type: "image/png" }],
     apple: "/app-icon.png",
   },
   appleWebApp: {

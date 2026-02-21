@@ -13,7 +13,6 @@ export function GET() {
     orientation: "portrait-primary",
     icons: [
       { src: "/app-icon.png", sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: "/app-icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
     ],
   };
   return NextResponse.json(manifest, {

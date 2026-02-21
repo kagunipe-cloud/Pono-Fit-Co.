@@ -82,6 +82,10 @@ export default function MemberWorkoutDetailPage() {
   const [workoutNameValue, setWorkoutNameValue] = useState("");
   const [savingWorkoutName, setSavingWorkoutName] = useState(false);
   const [congratsMessage, setCongratsMessage] = useState<string | null>(null);
+  const [shareEmail, setShareEmail] = useState("");
+  const [sharing, setSharing] = useState(false);
+  const [shareResult, setShareResult] = useState<{ ok: boolean; message?: string } | null>(null);
+  const [showShare, setShowShare] = useState(false);
 
   function fetchWorkout() {
     fetch(`/api/member/workouts/${id}`)
@@ -417,6 +421,32 @@ export default function MemberWorkoutDetailPage() {
     }
   }
 
+  async function handleSendToMember() {
+    const email = shareEmail.trim().toLowerCase();
+    if (!email) return;
+    setShareResult(null);
+    setSharing(true);
+    try {
+      const res = await fetch(`/api/member/workouts/${id}/send-to-member`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipient_email: email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setShareResult({ ok: true, message: (data as { message?: string }).message });
+        setShareEmail("");
+        setShowShare(false);
+      } else {
+        setShareResult({ ok: false, message: (data as { error?: string }).error ?? "Failed to send" });
+      }
+    } catch {
+      setShareResult({ ok: false, message: "Something went wrong." });
+    } finally {
+      setSharing(false);
+    }
+  }
+
   return (
     <div className="max-w-2xl mx-auto p-6">
       <div className="mb-6 flex items-center justify-between flex-wrap gap-2">
@@ -473,16 +503,56 @@ export default function MemberWorkoutDetailPage() {
             <span className="px-2.5 py-1 rounded-md text-sm font-medium bg-stone-100 text-stone-600">My workout</span>
           ) : null}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           {!isOpen && (
-            <button
-              type="button"
-              onClick={repeatWorkout}
-              disabled={repeating}
-              className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
-            >
-              {repeating ? "Starting…" : "Repeat Workout"}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={repeatWorkout}
+                disabled={repeating}
+                className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
+              >
+                {repeating ? "Starting…" : "Repeat Workout"}
+              </button>
+              {!showShare ? (
+                <button
+                  type="button"
+                  onClick={() => { setShowShare(true); setShareResult(null); }}
+                  className="px-4 py-2 rounded-lg border border-stone-300 bg-white font-medium text-stone-700 hover:bg-stone-50"
+                >
+                  Send to a member
+                </button>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="email"
+                    value={shareEmail}
+                    onChange={(e) => setShareEmail(e.target.value)}
+                    placeholder="Member's email"
+                    className="px-3 py-2 rounded-lg border border-stone-200 text-sm w-44"
+                    onKeyDown={(e) => e.key === "Enter" && handleSendToMember()}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSendToMember}
+                    disabled={sharing}
+                    className="px-3 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+                  >
+                    {sharing ? "Sending…" : "Send"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowShare(false); setShareEmail(""); setShareResult(null); }}
+                    className="text-stone-500 hover:text-stone-700 text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+              {shareResult && (
+                <span className={`text-sm ${shareResult.ok ? "text-stone-600" : "text-red-600"}`}>{shareResult.message}</span>
+              )}
+            </>
           )}
           <Link href="/member/workouts" className="text-brand-600 hover:underline text-sm">← Workouts</Link>
         </div>

@@ -38,8 +38,26 @@ export async function GET(request: NextRequest) {
       instructions?: string | null;
     }[];
     db.close();
+
+    // Deduplicate: if one exercise name is contained in another (e.g. "T-Rex" vs "Young T-Rex"), keep only the shorter one so users don't see near-duplicates.
+    const normalized = (s: string) => s.trim().toLowerCase();
+    const sortedByLength = [...rows].sort((a, b) => normalized(a.name).length - normalized(b.name).length);
+    const deduped: typeof rows = [];
+    for (const r of sortedByLength) {
+      const n = normalized(r.name);
+      const isDuplicate = deduped.some((d) => {
+        const dn = normalized(d.name);
+        if (d.type !== r.type) return false;
+        if (n === dn) return true;
+        if (n.includes(dn) || dn.includes(n)) return true; // one name contains the other
+        return false;
+      });
+      if (!isDuplicate) deduped.push(r);
+    }
+    const rowsToUse = deduped.length > 0 ? deduped : rows;
+
     // Derive muscle_group for rows that don't have it; apply name-based overrides (e.g. Bulgarian split squat = legs)
-    const out = rows.map((r) => {
+    const out = rowsToUse.map((r) => {
       const canonicalMuscles = getCanonicalPrimaryMuscles(r.name);
       const primary_muscles = canonicalMuscles ?? r.primary_muscles ?? "";
       const muscle_group = r.muscle_group && r.muscle_group.trim() ? r.muscle_group : getMuscleGroup(primary_muscles, r.name);
