@@ -19,6 +19,10 @@ export default function ExercisesPage() {
   const [loading, setLoading] = useState(true);
   const [addName, setAddName] = useState("");
   const [addType, setAddType] = useState<"lift" | "cardio">("lift");
+  const [addMuscleGroup, setAddMuscleGroup] = useState("");
+  const [addPrimaryMuscles, setAddPrimaryMuscles] = useState("");
+  const [addEquipment, setAddEquipment] = useState("");
+  const [addInstructions, setAddInstructions] = useState("");
   const [adding, setAdding] = useState(false);
   const [fetchingDb, setFetchingDb] = useState(false);
   const [freeDbResult, setFreeDbResult] = useState<string | null>(null);
@@ -49,13 +53,26 @@ export default function ExercisesPage() {
     if (!name) return;
     setAdding(true);
     try {
+      const instructionsText = addInstructions.trim();
+      const instructions = instructionsText ? instructionsText.split("\n").map((s) => s.trim()).filter(Boolean) : undefined;
       const res = await fetch("/api/exercises", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, type: addType }),
+        body: JSON.stringify({
+          name,
+          type: addType,
+          muscle_group: addMuscleGroup.trim() || undefined,
+          primary_muscles: addPrimaryMuscles.trim() || undefined,
+          equipment: addEquipment.trim() || undefined,
+          instructions,
+        }),
       });
       if (res.ok) {
         setAddName("");
+        setAddMuscleGroup("");
+        setAddPrimaryMuscles("");
+        setAddEquipment("");
+        setAddInstructions("");
         fetchList();
       }
     } finally {
@@ -172,33 +189,79 @@ export default function ExercisesPage() {
         Official exercises members can pick when logging workouts. Picked exercises are available for progress charts.
       </p>
 
-      <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50 space-y-3">
+      <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50 space-y-4">
         <h2 className="font-semibold text-stone-800">Add one</h2>
-        <div className="flex flex-wrap gap-2 items-center">
+        <div>
+          <label className="block text-sm font-medium text-stone-600 mb-1">Name</label>
           <input
             type="text"
             value={addName}
             onChange={(e) => setAddName(e.target.value)}
             placeholder="e.g. Bench Press"
-            className="px-3 py-2 rounded-lg border border-stone-200 flex-1 min-w-[160px]"
+            className="w-full px-3 py-2 rounded-lg border border-stone-200"
           />
-          <select
-            value={addType}
-            onChange={(e) => setAddType(e.target.value as "lift" | "cardio")}
-            className="px-3 py-2 rounded-lg border border-stone-200"
-          >
-            <option value="lift">Lift</option>
-            <option value="cardio">Cardio</option>
-          </select>
-          <button
-            type="button"
-            onClick={handleAdd}
-            disabled={adding || !addName.trim()}
-            className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
-          >
-            {adding ? "Adding…" : "Add"}
-          </button>
         </div>
+        <div className="flex flex-wrap gap-4">
+          <div className="flex-1 min-w-[120px]">
+            <label className="block text-sm font-medium text-stone-600 mb-1">Type</label>
+            <select
+              value={addType}
+              onChange={(e) => setAddType(e.target.value as "lift" | "cardio")}
+              className="w-full px-3 py-2 rounded-lg border border-stone-200"
+            >
+              <option value="lift">Lift</option>
+              <option value="cardio">Cardio</option>
+            </select>
+          </div>
+          <div className="flex-1 min-w-[120px]">
+            <label className="block text-sm font-medium text-stone-600 mb-1">Muscle group</label>
+            <input
+              type="text"
+              value={addMuscleGroup}
+              onChange={(e) => setAddMuscleGroup(e.target.value)}
+              placeholder="e.g. chest, legs"
+              className="w-full px-3 py-2 rounded-lg border border-stone-200"
+            />
+          </div>
+          <div className="flex-1 min-w-[160px]">
+            <label className="block text-sm font-medium text-stone-600 mb-1">Target muscle</label>
+            <input
+              type="text"
+              value={addPrimaryMuscles}
+              onChange={(e) => setAddPrimaryMuscles(e.target.value)}
+              placeholder="e.g. pectorals, triceps"
+              className="w-full px-3 py-2 rounded-lg border border-stone-200"
+            />
+          </div>
+          <div className="flex-1 min-w-[120px]">
+            <label className="block text-sm font-medium text-stone-600 mb-1">Equipment</label>
+            <input
+              type="text"
+              value={addEquipment}
+              onChange={(e) => setAddEquipment(e.target.value)}
+              placeholder="e.g. barbell, dumbbell"
+              className="w-full px-3 py-2 rounded-lg border border-stone-200"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-stone-600 mb-1">Instructions (one step per line)</label>
+          <textarea
+            value={addInstructions}
+            onChange={(e) => setAddInstructions(e.target.value)}
+            placeholder="Step 1&#10;Step 2&#10;..."
+            rows={4}
+            className="w-full px-3 py-2 rounded-lg border border-stone-200"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleAdd}
+          disabled={adding || !addName.trim()}
+          className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
+        >
+          {adding ? "Adding…" : "Add"}
+        </button>
       </div>
 
       <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50 space-y-3">

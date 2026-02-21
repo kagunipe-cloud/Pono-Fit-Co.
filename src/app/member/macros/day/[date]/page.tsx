@@ -1017,17 +1017,22 @@ export default function MemberMacrosDayPage() {
                     {meal.entries.map((e) => (
                       <li key={e.id} className="flex items-center justify-between gap-2">
                         {editEntryId === e.id ? (
-                          <>
-                            <input
-                              type="number"
-                              step="0.25"
-                              value={editAmount}
-                              onChange={(ev) => setEditAmount(ev.target.value)}
-                              className="w-20 px-2 py-1 border rounded"
-                            />
-                            <button type="button" onClick={() => handleUpdateEntryAmount(e.id)} className="text-brand-600 text-xs">Save</button>
-                            <button type="button" onClick={() => setEditEntryId(null)} className="text-stone-400 text-xs">Cancel</button>
-                          </>
+                          <span className="flex flex-col gap-1">
+                            <span className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                step="0.25"
+                                value={editAmount}
+                                onChange={(ev) => setEditAmount(ev.target.value)}
+                                className="w-20 px-2 py-1 border rounded"
+                              />
+                              <button type="button" onClick={() => handleUpdateEntryAmount(e.id)} className="text-brand-600 text-xs">Save</button>
+                              <button type="button" onClick={() => setEditEntryId(null)} className="text-stone-400 text-xs">Cancel</button>
+                            </span>
+                            {e.amount === 1 && e.food?.serving_description?.trim() && (
+                              <span className="text-xs text-stone-400">1 = full portion ({e.food.serving_description.trim()}). Use 2 only to add another same portion.</span>
+                            )}
+                          </span>
                         ) : (
                           <>
                             <span>{e.food?.name ?? "—"}{entryPortionLabel(e)}</span>

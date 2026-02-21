@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       sql += " AND name LIKE ?";
       params.push(`%${q}%`);
     }
-    sql += " ORDER BY name LIMIT " + (q.length > 0 ? 25 : 2000);
+    sql += " ORDER BY name LIMIT " + (q.length > 0 ? 25 : 10000);
 
     const rows = db.prepare(sql).all(...params) as {
       id: number;
@@ -39,22 +39,25 @@ export async function GET(request: NextRequest) {
     }[];
     db.close();
 
-    // Deduplicate: if one exercise name is contained in another (e.g. "T-Rex" vs "Young T-Rex"), keep only the shorter one so users don't see near-duplicates.
-    const normalized = (s: string) => s.trim().toLowerCase();
-    const sortedByLength = [...rows].sort((a, b) => normalized(a.name).length - normalized(b.name).length);
-    const deduped: typeof rows = [];
-    for (const r of sortedByLength) {
-      const n = normalized(r.name);
-      const isDuplicate = deduped.some((d) => {
-        const dn = normalized(d.name);
-        if (d.type !== r.type) return false;
-        if (n === dn) return true;
-        if (n.includes(dn) || dn.includes(n)) return true; // one name contains the other
-        return false;
-      });
-      if (!isDuplicate) deduped.push(r);
+    // Deduplicate only when searching (member autocomplete); admin list shows all exercises.
+    let rowsToUse = rows;
+    if (q.length > 0) {
+      const normalized = (s: string) => s.trim().toLowerCase();
+      const sortedByLength = [...rows].sort((a, b) => normalized(a.name).length - normalized(b.name).length);
+      const deduped: typeof rows = [];
+      for (const r of sortedByLength) {
+        const n = normalized(r.name);
+        const isDuplicate = deduped.some((d) => {
+          const dn = normalized(d.name);
+          if (d.type !== r.type) return false;
+          if (n === dn) return true;
+          if (n.includes(dn) || dn.includes(n)) return true;
+          return false;
+        });
+        if (!isDuplicate) deduped.push(r);
+      }
+      rowsToUse = deduped.length > 0 ? deduped : rows;
     }
-    const rowsToUse = deduped.length > 0 ? deduped : rows;
 
     // Derive muscle_group for rows that don't have it; apply name-based overrides (e.g. Bulgarian split squat = legs)
     const out = rowsToUse.map((r) => {

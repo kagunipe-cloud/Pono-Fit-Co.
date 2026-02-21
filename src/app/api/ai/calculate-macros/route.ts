@@ -7,12 +7,51 @@ const GEMINI_VERSION = process.env.GEMINI_API_VERSION?.trim() || "v1beta";
 const GEMINI_BASE = `https://generativelanguage.googleapis.com/${GEMINI_VERSION}`;
 const DEFAULT_MODEL = "gemini-2.0-flash";
 
+// Gemini free tier: ~10 RPM, 250 RPD for 2.0 Flash. Cache identical requests to avoid burning quota.
+// https://ai.google.dev/gemini-api/docs/rate-limits
+const MACROS_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+const MACROS_CACHE_MAX = 500;
+
+type CachedMacros = { calories: number; protein_g: number; fat_g: number; carbs_g: number };
+const macrosCache = new Map<string, { result: CachedMacros; expires: number }>();
+
+function cacheKey(food: string, portionValue: number, portionUnit: string): string {
+  const u = portionUnit.toLowerCase().trim();
+  const unit = u === "servings" || u === "serving" || u === "" ? "serving" : u;
+  return `${food.toLowerCase()}|${portionValue}|${unit}`;
+}
+
+function getCached(key: string): CachedMacros | null {
+  const now = Date.now();
+  const entry = macrosCache.get(key);
+  if (!entry || entry.expires < now) {
+    if (entry) macrosCache.delete(key);
+    return null;
+  }
+  return entry.result;
+}
+
+function setCached(key: string, result: CachedMacros) {
+  if (macrosCache.size >= MACROS_CACHE_MAX) {
+    const now = Date.now();
+    for (const [k, v] of macrosCache) {
+      if (v.expires < now) macrosCache.delete(k);
+    }
+    if (macrosCache.size >= MACROS_CACHE_MAX) {
+      const first = macrosCache.keys().next().value;
+      if (first != null) macrosCache.delete(first);
+    }
+  }
+  macrosCache.set(key, { result, expires: Date.now() + MACROS_CACHE_TTL_MS });
+}
+
 type CalculateBody = { food: string; portionValue: number; portionUnit: string };
 
 /**
  * POST — get nutrition (calories, protein_g, fat_g, carbs_g) for a food + portion via Gemini.
  * Body: { food: string, portionValue: number, portionUnit: string }.
  * Requires GEMINI_API_KEY in env.
+ * Identical requests are cached 24h to stay within Gemini free tier (10 RPM, 250 RPD).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -28,6 +67,12 @@ export async function POST(request: NextRequest) {
 
     if (!food) {
       return NextResponse.json({ error: "food is required" }, { status: 400 });
+    }
+
+    const key = cacheKey(food, portionValue, portionUnit);
+    const cached = getCached(key);
+    if (cached) {
+      return NextResponse.json(cached);
     }
 
     // When unit is null/blank: search exactly what's in the food bar (e.g. "7 nilla wafers"). When unit is set: "macros for 4 servings of oreos".
@@ -100,12 +145,14 @@ Respond with exactly this format (numbers only, USDA-style):
       return NextResponse.json({ error: "Could not parse nutrition from response" }, { status: 502 });
     }
 
-    return NextResponse.json({
+    const result: CachedMacros = {
       calories: calories ?? 0,
       protein_g: protein_g ?? 0,
       fat_g: fat_g ?? 0,
       carbs_g: carbs_g ?? 0,
-    });
+    };
+    setCached(key, result);
+    return NextResponse.json(result);
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: "Failed to calculate macros" }, { status: 500 });
