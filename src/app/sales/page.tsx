@@ -2,22 +2,30 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-type Sale = { sales_id: string; date_time: string; member_id: string; email?: string; status: string; grand_total?: string };
+type Sale = { sales_id: string; date_time: string; member_id: string; member_name?: string | null; email?: string; status: string; grand_total?: string };
 
 export default function SalesPage() {
+  const router = useRouter();
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [adminMemberId, setAdminMemberId] = useState("");
   const [refundingId, setRefundingId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/data/sales")
-      .then((r) => r.json())
+    fetch("/api/admin/sales")
+      .then((r) => {
+        if (r.status === 401) {
+          router.replace("/login");
+          return null;
+        }
+        return r.json();
+      })
       .then((data) => setSales(Array.isArray(data) ? data : []))
       .catch(() => setSales([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [router]);
 
   async function refundSale(salesId: string) {
     if (!adminMemberId.trim() && !confirm("Admin only. Enter your Admin member ID above.")) return;
@@ -74,7 +82,7 @@ export default function SalesPage() {
                   <td className="py-2 px-4">{s.date_time ?? "—"}</td>
                   <td className="py-2 px-4">
                     <Link href={`/members/${encodeURIComponent(s.member_id)}`} className="text-brand-600 hover:underline">
-                      {s.member_id}
+                      {(s.member_name && s.member_name.trim()) || s.member_id}
                     </Link>
                   </td>
                   <td className="py-2 px-4">{s.status ?? "—"}</td>

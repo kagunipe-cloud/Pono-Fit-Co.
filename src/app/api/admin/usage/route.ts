@@ -27,22 +27,34 @@ export async function GET(request: NextRequest) {
 
     const doorRows = since
       ? db.prepare(
-          `SELECT id, uuid, member_id, kisi_actor_id, kisi_actor_name, lock_id, lock_name, success, happened_at, created_at
-           FROM door_access_events WHERE happened_at >= ? ORDER BY happened_at DESC LIMIT ?`
+          `SELECT d.id, d.uuid, d.member_id, d.kisi_actor_id, d.kisi_actor_name, d.lock_id, d.lock_name, d.success, d.happened_at, d.created_at,
+            TRIM(COALESCE(m.first_name, '') || ' ' || COALESCE(m.last_name, '')) AS member_name
+           FROM door_access_events d
+           LEFT JOIN members m ON m.member_id = d.member_id
+           WHERE d.happened_at >= ? ORDER BY d.happened_at DESC LIMIT ?`
         ).all(since, limit)
       : db.prepare(
-          `SELECT id, uuid, member_id, kisi_actor_id, kisi_actor_name, lock_id, lock_name, success, happened_at, created_at
-           FROM door_access_events ORDER BY happened_at DESC LIMIT ?`
+          `SELECT d.id, d.uuid, d.member_id, d.kisi_actor_id, d.kisi_actor_name, d.lock_id, d.lock_name, d.success, d.happened_at, d.created_at,
+            TRIM(COALESCE(m.first_name, '') || ' ' || COALESCE(m.last_name, '')) AS member_name
+           FROM door_access_events d
+           LEFT JOIN members m ON m.member_id = d.member_id
+           ORDER BY d.happened_at DESC LIMIT ?`
         ).all(limit);
 
     const appRows = since
       ? db.prepare(
-          `SELECT id, member_id, event_type, path, created_at
-           FROM app_usage_events WHERE created_at >= ? ORDER BY created_at DESC LIMIT ?`
+          `SELECT a.id, a.member_id, a.event_type, a.path, a.created_at,
+            TRIM(COALESCE(m.first_name, '') || ' ' || COALESCE(m.last_name, '')) AS member_name
+           FROM app_usage_events a
+           LEFT JOIN members m ON m.member_id = a.member_id
+           WHERE a.created_at >= ? ORDER BY a.created_at DESC LIMIT ?`
         ).all(since, limit)
       : db.prepare(
-          `SELECT id, member_id, event_type, path, created_at
-           FROM app_usage_events ORDER BY created_at DESC LIMIT ?`
+          `SELECT a.id, a.member_id, a.event_type, a.path, a.created_at,
+            TRIM(COALESCE(m.first_name, '') || ' ' || COALESCE(m.last_name, '')) AS member_name
+           FROM app_usage_events a
+           LEFT JOIN members m ON m.member_id = a.member_id
+           ORDER BY a.created_at DESC LIMIT ?`
         ).all(limit);
 
     db.close();

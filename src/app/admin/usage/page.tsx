@@ -8,6 +8,7 @@ type DoorEvent = {
   id: number;
   uuid: string;
   member_id: string | null;
+  member_name: string | null;
   kisi_actor_id: number | null;
   kisi_actor_name: string | null;
   lock_id: number | null;
@@ -20,6 +21,7 @@ type DoorEvent = {
 type AppEvent = {
   id: number;
   member_id: string;
+  member_name: string | null;
   event_type: string;
   path: string | null;
   created_at: string;
@@ -136,10 +138,10 @@ export default function AdminUsagePage() {
                           <td className="py-2 px-3">
                             {e.member_id ? (
                               <Link href={`/members/${e.member_id}`} className="text-brand-600 hover:underline">
-                                {e.member_id}
+                                {(e.member_name && e.member_name.trim()) || e.member_id}
                               </Link>
                             ) : (
-                              <span className="text-stone-400">{e.kisi_actor_name ?? e.kisi_actor_id ?? "—"}</span>
+                              <span className="text-stone-400">{e.kisi_actor_name ?? (e.kisi_actor_id != null ? `Kisi #${e.kisi_actor_id}` : "—")}</span>
                             )}
                           </td>
                           <td className="py-2 px-3">{e.lock_name ?? e.lock_id ?? "—"}</td>
@@ -175,7 +177,7 @@ export default function AdminUsagePage() {
                           <td className="py-2 px-3 whitespace-nowrap">{formatDateTime(e.created_at)}</td>
                           <td className="py-2 px-3">
                             <Link href={`/members/${e.member_id}`} className="text-brand-600 hover:underline">
-                              {e.member_id}
+                              {(e.member_name && e.member_name.trim()) || e.member_id}
                             </Link>
                           </td>
                           <td className="py-2 px-3">{e.event_type}</td>
