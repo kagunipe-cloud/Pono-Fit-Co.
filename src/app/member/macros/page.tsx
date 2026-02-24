@@ -130,7 +130,7 @@ export default function MemberMacrosPage() {
 
       {/* CTA: Book session with Exercise Physiologist */}
       <div className="mb-6 p-4 rounded-xl border border-brand-200 bg-brand-50">
-        <p className="text-stone-700 text-sm font-medium mb-2">Need help setting a goal?</p>
+        <p className="text-stone-700 text-sm font-medium mb-2">Need help setting or hitting a goal?</p>
         <p className="text-stone-600 text-sm mb-3">Book a session with our Exercise Physiologist to get personalized macro and nutrition guidance.</p>
         <Link
           href="/member/book-pt"
