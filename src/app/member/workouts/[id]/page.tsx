@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { getWeightComparisonWithArticle } from "@/lib/workout-congrats";
@@ -86,6 +86,20 @@ export default function MemberWorkoutDetailPage() {
   const [sharing, setSharing] = useState(false);
   const [shareResult, setShareResult] = useState<{ ok: boolean; message?: string } | null>(null);
   const [showShare, setShowShare] = useState(false);
+
+  /** Map of source workout sets by a stable exercise key so \"last time\" stays attached even if you delete/reorder exercises. */
+  const sourceSetsByExerciseKey = useMemo(() => {
+    const map = new Map<string, Exercise["sets"]>();
+    if (!sourceWorkout) return map;
+    for (const ex of sourceWorkout.exercises) {
+      const key =
+        (ex.exercise_id != null ? `id:${ex.exercise_id}` : null) ??
+        (ex.exercise_name ? `name:${ex.exercise_name.trim().toLowerCase()}` : "");
+      if (!key || map.has(key)) continue;
+      map.set(key, ex.sets);
+    }
+    return map;
+  }, [sourceWorkout]);
 
   function fetchWorkout() {
     fetch(`/api/member/workouts/${id}`)
@@ -827,9 +841,12 @@ export default function MemberWorkoutDetailPage() {
             </p>
           )}
           <ul className="space-y-4 mb-8">
-            {workout.exercises.map((ex, exIndex) => {
+            {workout.exercises.map((ex) => {
               const vol = ex.type === "lift" ? liftVolume(ex.sets) : 0;
-              const lastTimeSets = isRepeatMode && sourceWorkout?.exercises[exIndex]?.sets;
+              const exKey =
+                (ex.exercise_id != null ? `id:${ex.exercise_id}` : null) ??
+                (ex.exercise_name ? `name:${ex.exercise_name.trim().toLowerCase()}` : "");
+              const lastTimeSets = isRepeatMode && exKey ? sourceSetsByExerciseKey.get(exKey) : null;
               const isAddingSets = addSetsForExId === ex.id;
               return (
                 <li key={ex.id} className="p-4 rounded-xl border border-stone-200 bg-white">

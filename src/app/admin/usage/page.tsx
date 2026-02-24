@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { formatDateTimeInAppTz } from "@/lib/app-timezone";
 
 type DoorEvent = {
   id: number;
@@ -29,10 +30,11 @@ type AppEvent = {
 
 type UsageData = { door: DoorEvent[]; app: AppEvent[] } | null;
 
-function formatDateTime(s: string) {
+function formatDateTimeHawaii(s: string) {
   if (!s) return "—";
   const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? s : d.toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
+  if (Number.isNaN(d.getTime())) return s;
+  return formatDateTimeInAppTz(d);
 }
 
 export default function AdminUsagePage() {
@@ -134,7 +136,7 @@ export default function AdminUsagePage() {
                     <tbody>
                       {data.door.map((e) => (
                         <tr key={e.id} className="border-t border-stone-100">
-                          <td className="py-2 px-3 whitespace-nowrap">{formatDateTime(e.happened_at)}</td>
+                          <td className="py-2 px-3 whitespace-nowrap">{formatDateTimeHawaii(e.happened_at)}</td>
                           <td className="py-2 px-3">
                             {e.member_id ? (
                               <Link href={`/members/${e.member_id}`} className="text-brand-600 hover:underline">
@@ -174,7 +176,7 @@ export default function AdminUsagePage() {
                     <tbody>
                       {data.app.map((e) => (
                         <tr key={e.id} className="border-t border-stone-100">
-                          <td className="py-2 px-3 whitespace-nowrap">{formatDateTime(e.created_at)}</td>
+                          <td className="py-2 px-3 whitespace-nowrap">{formatDateTimeHawaii(e.created_at)}</td>
                           <td className="py-2 px-3">
                             <Link href={`/members/${e.member_id}`} className="text-brand-600 hover:underline">
                               {(e.member_name && e.member_name.trim()) || e.member_id}
