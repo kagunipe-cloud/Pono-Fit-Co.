@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDateOnlyInAppTz, formatInAppTz, formatWeekdayShortInAppTz, todayInAppTz, weekStartInAppTz } from "@/lib/app-timezone";
-import { useAppTimezone } from "@/contexts/SettingsContext";
+import { useAppTimezone } from "@/lib/settings-context";
 
 type JournalDay = { id: number; member_id: string; date: string; created_at: string };
 type MacroGoals = { calories_goal: number | null; protein_pct: number | null; fat_pct: number | null; carbs_pct: number | null };

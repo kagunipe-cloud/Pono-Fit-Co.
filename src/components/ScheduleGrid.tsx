@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { formatInAppTz, todayInAppTz, weekStartInAppTz, addDaysToDateStr } from "@/lib/app-timezone";
-import { useAppTimezone } from "@/contexts/SettingsContext";
+import { useAppTimezone } from "@/lib/settings-context";
 
 type Occurrence = {
   id: number;
@@ -79,6 +79,11 @@ export default function ScheduleGrid({ variant }: ScheduleGridProps) {
   const [loading, setLoading] = useState(true);
   const bookPtQuery = productId ? `&product=${encodeURIComponent(productId)}` : "";
   const isMaster = variant === "master";
+
+  // Recompute initial week when gym timezone loads/updates (SettingsContext fetches async)
+  useEffect(() => {
+    setWeekStartStr(getInitialWeekStartStr(tz));
+  }, [tz]);
 
   const fromStr = weekStartStr;
   const toStr = addDaysToDateStr(weekStartStr, 6);

@@ -1,6 +1,6 @@
 import Sidebar from "@/components/Sidebar";
 import { BRAND } from "@/lib/branding";
-import { SettingsProvider } from "@/contexts/SettingsContext";
+import { SettingsProvider } from "@/lib/settings-context";
 import "./globals.css";
 
 export const metadata = {

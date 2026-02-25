@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, ensureMembersStripeColumn } from "../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersStripeColumn } from "../../../../lib/db";
 import { sendPostPurchaseEmail, sendAppDownloadInviteEmail } from "../../../../lib/email";
 import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../lib/kisi";
 import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
@@ -84,7 +84,8 @@ export async function POST(request: NextRequest) {
     }
 
     const sales_id = randomUUID().slice(0, 8);
-    const date_time = formatDateTimeInAppTz(new Date());
+    const tz = getAppTimezone(db);
+    const date_time = formatDateTimeInAppTz(new Date(), undefined, tz);
     let grand_total = 0;
     const memberRow = db.prepare("SELECT kisi_id, email, first_name, last_name FROM members WHERE member_id = ?").get(member_id) as {
       kisi_id: string | null;
@@ -104,8 +105,8 @@ export async function POST(request: NextRequest) {
             grand_total += price;
             const start_date = new Date();
             const expiry_date = addDuration(start_date, plan.length || "1", plan.unit || "Month");
-            const startStr = formatInAppTz(start_date, { month: "numeric", day: "numeric", year: "numeric" });
-            const expiryStr = formatInAppTz(expiry_date, { month: "numeric", day: "numeric", year: "numeric" });
+            const startStr = formatInAppTz(start_date, { month: "numeric", day: "numeric", year: "numeric" }, tz);
+            const expiryStr = formatInAppTz(expiry_date, { month: "numeric", day: "numeric", year: "numeric" }, tz);
             const daysRemaining = Math.ceil((expiry_date.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
             const sub_id = randomUUID().slice(0, 8);
             db.prepare(`

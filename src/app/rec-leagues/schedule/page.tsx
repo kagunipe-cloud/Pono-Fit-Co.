@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatDateOnlyInAppTz } from "@/lib/app-timezone";
-import { useAppTimezone } from "@/contexts/SettingsContext";
+import { useAppTimezone } from "@/lib/settings-context";
 
 type Game = {
   id: number;

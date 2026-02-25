@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDateTimeInAppTz } from "@/lib/app-timezone";
-import { useAppTimezone } from "@/contexts/SettingsContext";
+import { useAppTimezone } from "@/lib/settings-context";
 
 type DoorEvent = {
   id: number;

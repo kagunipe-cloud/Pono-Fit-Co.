@@ -96,7 +96,13 @@ function ensureAppSettingsDefaults(db: Database.Database) {
 export function getAppTimezone(db: ReturnType<typeof getDb>): string {
   const row = db.prepare("SELECT value FROM app_settings WHERE key = ?").get("timezone") as { value: string } | undefined;
   const tz = row?.value?.trim();
-  return tz && Intl.DateTimeFormat().resolvedOptions().timeZone ? tz : DEFAULT_TIMEZONE;
+  if (!tz) return DEFAULT_TIMEZONE;
+  try {
+    new Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return tz;
+  } catch {
+    return DEFAULT_TIMEZONE;
+  }
 }
 
 export function getDb() {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, ensureMembersStripeColumn } from "../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersStripeColumn } from "../../../../lib/db";
 import { grantAccess as kisiGrantAccess } from "../../../../lib/kisi";
 import { formatInAppTz, formatDateTimeInAppTz } from "../../../../lib/app-timezone";
 import { randomUUID } from "crypto";
@@ -23,9 +23,9 @@ function addDuration(startDate: Date, length: string, unit: string): Date {
   return d;
 }
 
-/** Today in app timezone (e.g. "1/15/2026") to match expiry_date in DB. */
-function todayString(): string {
-  return formatInAppTz(new Date(), { month: "numeric", day: "numeric", year: "numeric" });
+/** Today in gym timezone (e.g. "1/15/2026") to match expiry_date in DB. */
+function todayString(tz: string): string {
+  return formatInAppTz(new Date(), { month: "numeric", day: "numeric", year: "numeric" }, tz);
 }
 
 export async function GET(request: NextRequest) {
@@ -42,7 +42,8 @@ export async function GET(request: NextRequest) {
   const db = getDb();
   ensureMembersStripeColumn(db);
 
-  const today = todayString();
+  const tz = getAppTimezone(db);
+  const today = todayString(tz);
   // Only auto-renew monthly memberships (not yearly, daily, or other plan types)
   const expiring = db.prepare(`
     SELECT s.subscription_id, s.member_id, s.product_id, s.expiry_date, s.price as sub_price, s.quantity,
@@ -108,8 +109,8 @@ export async function GET(request: NextRequest) {
 
       const startDate = new Date();
       const expiryDate = addDuration(startDate, sub.length || "1", sub.unit || "Month");
-      const startStr = formatInAppTz(startDate, { month: "numeric", day: "numeric", year: "numeric" });
-      const expiryStr = formatInAppTz(expiryDate, { month: "numeric", day: "numeric", year: "numeric" });
+      const startStr = formatInAppTz(startDate, { month: "numeric", day: "numeric", year: "numeric" }, tz);
+      const expiryStr = formatInAppTz(expiryDate, { month: "numeric", day: "numeric", year: "numeric" }, tz);
       const daysRemaining = Math.ceil((expiryDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
       const sales_id = randomUUID().slice(0, 8);
       const new_sub_id = randomUUID().slice(0, 8);
@@ -121,7 +122,7 @@ export async function GET(request: NextRequest) {
           INSERT INTO subscriptions (subscription_id, member_id, product_id, status, start_date, expiry_date, days_remaining, price, sales_id, quantity)
           VALUES (?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?)
         `).run(new_sub_id, sub.member_id, sub.product_id, startStr, expiryStr, String(daysRemaining), sub.plan_price, sales_id, sub.quantity);
-        const date_time = formatDateTimeInAppTz(new Date());
+        const date_time = formatDateTimeInAppTz(new Date(), undefined, tz);
         db.prepare(`
           INSERT INTO sales (sales_id, date_time, member_id, grand_total, email, status)
           VALUES (?, ?, ?, ?, ?, 'Paid')

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, ensureMembersStripeColumn } from "../../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersStripeColumn } from "../../../../../lib/db";
 import { ensureRecurringClassesTables } from "../../../../../lib/recurring-classes";
 import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
 import { formatInAppTz, formatDateTimeInAppTz } from "../../../../../lib/app-timezone";
@@ -64,7 +64,8 @@ export async function POST(
   }
 
   const sales_id = randomUUID().slice(0, 8);
-  const date_time = formatDateTimeInAppTz(new Date());
+  const tz = getAppTimezone(db);
+  const date_time = formatDateTimeInAppTz(new Date(), undefined, tz);
   const memberRow = db.prepare("SELECT email, kisi_id, first_name, last_name FROM members WHERE member_id = ?").get(member_id) as {
     email: string | null;
     kisi_id: string | null;
@@ -87,8 +88,8 @@ export async function POST(
       const monthsToAdd = free_months != null && free_months >= 0 ? free_months : parseInt(plan.length || "1", 10);
       const expiry_date = addDuration(start_date, String(monthsToAdd), plan.unit === "Month" ? "Month" : plan.unit || "Month");
       kisiValidUntil = expiry_date;
-      const startStr = formatInAppTz(start_date, { month: "numeric", day: "numeric", year: "numeric" });
-      const expiryStr = formatInAppTz(expiry_date, { month: "numeric", day: "numeric", year: "numeric" });
+      const startStr = formatInAppTz(start_date, { month: "numeric", day: "numeric", year: "numeric" }, tz);
+      const expiryStr = formatInAppTz(expiry_date, { month: "numeric", day: "numeric", year: "numeric" }, tz);
       const daysRemaining = Math.ceil((expiry_date.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
       const sub_id = randomUUID().slice(0, 8);
       db.prepare(`

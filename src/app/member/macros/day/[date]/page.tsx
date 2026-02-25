@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { formatDateOnlyInAppTz } from "@/lib/app-timezone";
-import { useAppTimezone } from "@/contexts/SettingsContext";
+import { useAppTimezone } from "@/lib/settings-context";
 import { getUnitType, MEASUREMENT_OPTIONS, getServingMeasurementOptions, formatPortionLabel, formatServingForDisplay, unitToGrams } from "@/lib/food-units";
 import { validateMacros } from "@/lib/food-quality";
 

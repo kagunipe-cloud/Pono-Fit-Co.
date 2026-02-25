@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, ensureMembersStripeColumn } from "../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersStripeColumn } from "../../../../lib/db";
 import { formatInAppTz } from "../../../../lib/app-timezone";
 import { sendMembershipExpiryReminder } from "../../../../lib/email";
 
 export const dynamic = "force-dynamic";
-
-/** Date in app timezone (e.g. "2/5/2026") to match expiry_date in DB. */
-function dateString(d: Date): string {
-  return formatInAppTz(d, { month: "numeric", day: "numeric", year: "numeric" });
-}
 
 /** GET: find active subscriptions expiring in 2 days and email members. Card on file = remind them they're set; no card = payment due on expiry date. */
 export async function GET(request: NextRequest) {
@@ -19,6 +14,10 @@ export async function GET(request: NextRequest) {
 
   const db = getDb();
   ensureMembersStripeColumn(db);
+  const tz = getAppTimezone(db);
+
+  /** Date in gym timezone (e.g. "2/5/2026") to match expiry_date in DB. */
+  const dateString = (d: Date) => formatInAppTz(d, { month: "numeric", day: "numeric", year: "numeric" }, tz);
 
   const inTwoDays = new Date();
   inTwoDays.setDate(inTwoDays.getDate() + 2);

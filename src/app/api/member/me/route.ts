@@ -3,7 +3,7 @@ import { getDb, getAppTimezone } from "../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../lib/recurring-classes";
 import { getMemberIdFromSession } from "../../../../lib/session";
-import { formatInAppTz, todayInAppTz } from "../../../../lib/app-timezone";
+import { todayInAppTz } from "../../../../lib/app-timezone";
 
 export const dynamic = "force-dynamic";
 
