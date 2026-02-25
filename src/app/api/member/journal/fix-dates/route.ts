@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { getDb, getAppTimezone } from "@/lib/db";
 import { getMemberIdFromSession } from "@/lib/session";
 import { ensureJournalTables } from "@/lib/journal";
 import { dateStringInAppTz } from "@/lib/app-timezone";
@@ -18,6 +18,7 @@ export async function POST() {
 
     const db = getDb();
     ensureJournalTables(db);
+    const tz = getAppTimezone(db);
 
     const rows = db.prepare(
       "SELECT id, date, created_at FROM journal_days WHERE member_id = ? ORDER BY date"
@@ -29,7 +30,7 @@ export async function POST() {
 
     for (const row of rows) {
       const createdAt = row.created_at ?? "";
-      const hawaiianDate = dateStringInAppTz(createdAt);
+      const hawaiianDate = dateStringInAppTz(createdAt, tz);
       if (!hawaiianDate || hawaiianDate === row.date) continue;
 
       const existing = db.prepare(

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatDateOnlyInAppTz } from "@/lib/app-timezone";
+import { useAppTimezone } from "@/contexts/SettingsContext";
 
 type Game = {
   id: number;
@@ -18,6 +19,7 @@ type Game = {
 type MemberMe = { role?: string | null } | null;
 
 export default function RecLeaguesSchedulePage() {
+  const tz = useAppTimezone();
   const [games, setGames] = useState<Game[]>([]);
   const [leagueFilter, setLeagueFilter] = useState<string>("");
   const [leagues, setLeagues] = useState<{ id: number; name: string }[]>([]);
@@ -109,7 +111,7 @@ export default function RecLeaguesSchedulePage() {
           {sortedDates.map((date) => (
             <li key={date}>
               <p className="text-sm font-medium text-stone-500 mb-2">
-                {formatDateOnlyInAppTz(date, { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                {formatDateOnlyInAppTz(date, { weekday: "short", month: "short", day: "numeric", year: "numeric" }, tz)}
               </p>
               <ul className="space-y-2">
                 {byDate[date].map((g) => (

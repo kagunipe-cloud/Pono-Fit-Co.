@@ -3,7 +3,8 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { formatInAppTz } from "@/lib/app-timezone";
+import { formatInAppTz, todayInAppTz, weekStartInAppTz, addDaysToDateStr } from "@/lib/app-timezone";
+import { useAppTimezone } from "@/contexts/SettingsContext";
 
 type Occurrence = {
   id: number;
@@ -32,17 +33,9 @@ const TIME_SLOT_MAX = 22 * 60;
 const SLOT_MINUTES = 30;
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-function getWeekStart(d: Date): Date {
-  const date = new Date(d);
-  const day = date.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  date.setDate(date.getDate() + diff);
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
-
-function toYMD(d: Date): string {
-  return d.toISOString().slice(0, 10);
+/** Week range in gym timezone: Monday YYYY-MM-DD. */
+function getInitialWeekStartStr(tz: string): string {
+  return weekStartInAppTz(todayInAppTz(tz));
 }
 
 function parseTimeToMinutes(t: string): number {
@@ -76,8 +69,9 @@ type ScheduleGridProps = { variant: "member" | "master" };
 
 export default function ScheduleGrid({ variant }: ScheduleGridProps) {
   const searchParams = useSearchParams();
+  const tz = useAppTimezone();
   const productId = searchParams.get("product")?.trim() || null;
-  const [weekStart, setWeekStart] = useState<Date>(() => getWeekStart(new Date()));
+  const [weekStartStr, setWeekStartStr] = useState<string>(() => getInitialWeekStartStr(tz));
   const [occurrences, setOccurrences] = useState<Occurrence[]>([]);
   const [unavailable, setUnavailable] = useState<UnavailableOccurrence[]>([]);
   const [ptBlocks, setPtBlocks] = useState<PtBlockWithSegments[]>([]);
@@ -86,14 +80,8 @@ export default function ScheduleGrid({ variant }: ScheduleGridProps) {
   const bookPtQuery = productId ? `&product=${encodeURIComponent(productId)}` : "";
   const isMaster = variant === "master";
 
-  const weekEnd = useMemo(() => {
-    const end = new Date(weekStart);
-    end.setDate(end.getDate() + 6);
-    return end;
-  }, [weekStart]);
-
-  const fromStr = toYMD(weekStart);
-  const toStr = toYMD(weekEnd);
+  const fromStr = weekStartStr;
+  const toStr = addDaysToDateStr(weekStartStr, 6);
 
   useEffect(() => {
     setLoading(true);
@@ -119,12 +107,8 @@ export default function ScheduleGrid({ variant }: ScheduleGridProps) {
   }, [fromStr, toStr]);
 
   const dayDates = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(weekStart);
-      d.setDate(d.getDate() + i);
-      return toYMD(d);
-    });
-  }, [weekStart]);
+    return [0, 1, 2, 3, 4, 5, 6].map((i) => addDaysToDateStr(weekStartStr, i));
+  }, [weekStartStr]);
 
   const timeSlots = useMemo(() => {
     const slots: number[] = [];
@@ -209,16 +193,16 @@ export default function ScheduleGrid({ variant }: ScheduleGridProps) {
   }, [dayDates, occurrences, unavailable, openBookings, ptBlocks]);
 
   function prevWeek() {
-    setWeekStart((d) => { const n = new Date(d); n.setDate(n.getDate() - 7); return n; });
+    setWeekStartStr((s) => addDaysToDateStr(s, -7));
   }
   function nextWeek() {
-    setWeekStart((d) => { const n = new Date(d); n.setDate(n.getDate() + 7); return n; });
+    setWeekStartStr((s) => addDaysToDateStr(s, 7));
   }
   function goToToday() {
-    setWeekStart(getWeekStart(new Date()));
+    setWeekStartStr(getInitialWeekStartStr(tz));
   }
 
-  const weekLabel = `${formatInAppTz(weekStart, { month: "short", day: "numeric", year: "numeric" })} – ${formatInAppTz(weekEnd, { month: "short", day: "numeric", year: "numeric" })}`;
+  const weekLabel = `${formatInAppTz(new Date(weekStartStr + "T12:00:00Z"), { month: "short", day: "numeric", year: "numeric" }, tz)} – ${formatInAppTz(new Date(toStr + "T12:00:00Z"), { month: "short", day: "numeric", year: "numeric" }, tz)}`;
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -270,7 +254,7 @@ export default function ScheduleGrid({ variant }: ScheduleGridProps) {
                   {DAY_NAMES.map((name, i) => (
                     <th key={name} className="py-2 px-1 sm:px-2 text-center text-xs font-medium text-stone-600 border-b border-r border-stone-200 bg-stone-50/50 last:border-r-0">
                       <span className="block">{name}</span>
-                      <span className="block text-stone-400 font-normal">{new Date(dayDates[i]).getDate()}</span>
+                      <span className="block text-stone-400 font-normal">{parseInt(dayDates[i].slice(8, 10), 10)}</span>
                     </th>
                   ))}
                 </tr>

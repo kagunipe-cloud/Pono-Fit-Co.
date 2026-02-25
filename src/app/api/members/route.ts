@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "../../../lib/db";
+import { getDb, getAppTimezone } from "../../../lib/db";
 import { formatInAppTz } from "../../../lib/app-timezone";
 import { randomUUID } from "crypto";
 
@@ -60,8 +60,9 @@ export async function POST(request: NextRequest) {
     const role = (body.role ?? "Member").trim() || "Member";
 
     const db = getDb();
+    const tz = getAppTimezone(db);
     const member_id = randomUUID().slice(0, 8);
-    const join_date = formatInAppTz(new Date(), { month: "numeric", day: "numeric", year: "numeric" });
+    const join_date = formatInAppTz(new Date(), { month: "numeric", day: "numeric", year: "numeric" }, tz);
 
     const stmt = db.prepare(`
       INSERT INTO members (member_id, first_name, last_name, email, join_date, role)

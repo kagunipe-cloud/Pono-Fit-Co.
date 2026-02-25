@@ -4,26 +4,28 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDateOnlyInAppTz, formatInAppTz, formatWeekdayShortInAppTz, todayInAppTz, weekStartInAppTz } from "@/lib/app-timezone";
+import { useAppTimezone } from "@/contexts/SettingsContext";
 
 type JournalDay = { id: number; member_id: string; date: string; created_at: string };
 type MacroGoals = { calories_goal: number | null; protein_pct: number | null; fat_pct: number | null; carbs_pct: number | null };
 type DaySummary = { cal: number; p: number; f: number; c: number };
 
-function weekLabel(monday: string): string {
+function weekLabel(monday: string, tz: string): string {
   const d = new Date(monday + "T12:00:00Z");
   const sun = new Date(d);
   sun.setUTCDate(sun.getUTCDate() + 6);
-  const monStr = formatInAppTz(d, { month: "short", day: "numeric" });
-  const sunStr = formatInAppTz(sun, { month: "short", day: "numeric", year: "numeric" });
+  const monStr = formatInAppTz(d, { month: "short", day: "numeric" }, tz);
+  const sunStr = formatInAppTz(sun, { month: "short", day: "numeric", year: "numeric" }, tz);
   return `${monStr} – ${sunStr}`;
 }
 
-function daySlug(d: string): string {
-  return formatWeekdayShortInAppTz(d);
+function daySlug(d: string, tz: string): string {
+  return formatWeekdayShortInAppTz(d, tz);
 }
 
 export default function MemberMacrosPage() {
   const router = useRouter();
+  const tz = useAppTimezone();
   const [weeks, setWeeks] = useState<string[]>([]);
   const [daysByWeek, setDaysByWeek] = useState<Record<string, JournalDay[]>>({});
   const [loading, setLoading] = useState(true);
@@ -35,7 +37,7 @@ export default function MemberMacrosPage() {
   const [fixingDates, setFixingDates] = useState(false);
   const [fixDatesResult, setFixDatesResult] = useState<{ updated: number; merged: number } | null>(null);
 
-  const today = todayInAppTz();
+  const today = todayInAppTz(tz);
   const thisWeekMonday = weekStartInAppTz(today);
   const weekList = weeks.includes(thisWeekMonday) ? weeks : [thisWeekMonday, ...weeks];
 
@@ -217,7 +219,7 @@ export default function MemberMacrosPage() {
         >
           <span className="font-semibold text-stone-800">Today&apos;s Journal</span>
           <span className="block text-sm text-stone-500 mt-0.5">
-            {formatDateOnlyInAppTz(today)}
+            {formatDateOnlyInAppTz(today, undefined, tz)}
           </span>
           <span className="text-brand-600 text-sm font-medium mt-1 inline-block">Open journal →</span>
         </Link>
@@ -235,7 +237,7 @@ export default function MemberMacrosPage() {
                 onClick={() => setSelectedWeek(selectedWeek === monday ? null : monday)}
                 className="w-full text-left p-4 rounded-xl border border-stone-200 bg-white hover:bg-stone-50"
               >
-                <span className="font-medium text-stone-800">{weekLabel(monday)}</span>
+                <span className="font-medium text-stone-800">{weekLabel(monday, tz)}</span>
                 {monday === thisWeekMonday && (
                   <span className="ml-2 text-xs font-medium text-brand-600">This week</span>
                 )}
@@ -300,7 +302,7 @@ export default function MemberMacrosPage() {
                                 href={`/member/macros/day/${date}`}
                                 className="block py-1.5 text-sm text-stone-700 hover:text-brand-600"
                               >
-                                {daySlug(date)} {date} {daySet.has(date) ? "· logged" : ""}{calStr}{pctStr}
+                                {daySlug(date, tz)} {date} {daySet.has(date) ? "· logged" : ""}{calStr}{pctStr}
                               </Link>
                             </li>
                           );

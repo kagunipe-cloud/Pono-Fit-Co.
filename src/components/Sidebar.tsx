@@ -114,6 +114,7 @@ function NavList({
       {isAdmin && <li>{link("/macros", "Macros")}</li>}
       {isAdmin && <li>{link("/admin/backup", "Backup & Restore")}</li>}
       {isAdmin && <li>{link("/admin/import-members", "Import members")}</li>}
+      {isAdmin && <li>{link("/admin/settings", "Settings")}</li>}
       {isAdmin && <li>{link("/admin/usage", "Usage tracking")}</li>}
       {isAdmin && <li>{link("/admin/email-members", "Email all members")}</li>}
       <li>{link("/class-packs", "Class Packs")}</li>

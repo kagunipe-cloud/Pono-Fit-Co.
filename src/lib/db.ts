@@ -70,11 +70,33 @@ function ensureBaseSchema(db: Database.Database) {
         category TEXT,
         description TEXT
       );
+
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      );
     `);
+    ensureAppSettingsDefaults(db);
   } catch (err) {
     console.error("[db] ensureBaseSchema failed:", err);
     throw err;
   }
+}
+
+const DEFAULT_TIMEZONE = "Pacific/Honolulu";
+
+function ensureAppSettingsDefaults(db: Database.Database) {
+  const row = db.prepare("SELECT 1 FROM app_settings WHERE key = ?").get("timezone");
+  if (!row) {
+    db.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?)").run("timezone", DEFAULT_TIMEZONE);
+  }
+}
+
+/** Get the gym's timezone (e.g. for schedules, macros, usage). Default Pacific/Honolulu. */
+export function getAppTimezone(db: ReturnType<typeof getDb>): string {
+  const row = db.prepare("SELECT value FROM app_settings WHERE key = ?").get("timezone") as { value: string } | undefined;
+  const tz = row?.value?.trim();
+  return tz && Intl.DateTimeFormat().resolvedOptions().timeZone ? tz : DEFAULT_TIMEZONE;
 }
 
 export function getDb() {

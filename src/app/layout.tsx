@@ -1,5 +1,6 @@
 import Sidebar from "@/components/Sidebar";
 import { BRAND } from "@/lib/branding";
+import { SettingsProvider } from "@/contexts/SettingsContext";
 import "./globals.css";
 
 export const metadata = {
@@ -27,12 +28,14 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-stone-100 text-stone-900 antialiased">
+        <SettingsProvider>
         <div className="flex min-h-screen">
           <Sidebar />
           <main className="flex-1 overflow-auto bg-stone-100 p-4 pt-14 md:p-6 md:pt-6">
             {children}
           </main>
         </div>
+        </SettingsProvider>
       </body>
     </html>
   );

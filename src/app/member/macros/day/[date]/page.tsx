@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { formatDateOnlyInAppTz } from "@/lib/app-timezone";
+import { useAppTimezone } from "@/contexts/SettingsContext";
 import { getUnitType, MEASUREMENT_OPTIONS, getServingMeasurementOptions, formatPortionLabel, formatServingForDisplay, unitToGrams } from "@/lib/food-units";
 import { validateMacros } from "@/lib/food-quality";
 
@@ -231,6 +232,7 @@ function sumMacros(entries: Entry[]) {
 export default function MemberMacrosDayPage() {
   const params = useParams();
   const router = useRouter();
+  const tz = useAppTimezone();
   const date = params.date as string;
   const [day, setDay] = useState<DayData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -804,7 +806,7 @@ export default function MemberMacrosDayPage() {
 
   if (loading && !day) return <div className="p-8 text-center text-stone-500">Loading…</div>;
 
-  const dateLabel = formatDateOnlyInAppTz(date);
+  const dateLabel = formatDateOnlyInAppTz(date, undefined, tz);
   const dayTotal = day ? sumMacros(day.meals.flatMap((m) => m.entries)) : { cal: 0, p: 0, f: 0, c: 0 };
 
   return (

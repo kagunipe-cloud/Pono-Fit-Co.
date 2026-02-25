@@ -1,15 +1,11 @@
 import { NextResponse } from "next/server";
-import { getDb } from "../../../../lib/db";
+import { getDb, getAppTimezone } from "../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../lib/recurring-classes";
 import { getMemberIdFromSession } from "../../../../lib/session";
-import { formatInAppTz } from "../../../../lib/app-timezone";
+import { formatInAppTz, todayInAppTz } from "../../../../lib/app-timezone";
 
 export const dynamic = "force-dynamic";
-
-function todayString(): string {
-  return formatInAppTz(new Date(), { month: "numeric", day: "numeric", year: "numeric" });
-}
 
 export async function GET() {
   try {
@@ -136,9 +132,10 @@ export async function GET() {
       return dB.localeCompare(dA);
     });
 
+    const tz = getAppTimezone(db);
     db.close();
 
-    const today = todayString();
+    const today = todayInAppTz(tz);
     const hasAccess = subscriptions.some(
       (s) => s.status === "Active" && String(s.expiry_date ?? "") >= today
     );

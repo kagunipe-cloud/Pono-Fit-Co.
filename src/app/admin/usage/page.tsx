@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDateTimeInAppTz } from "@/lib/app-timezone";
+import { useAppTimezone } from "@/contexts/SettingsContext";
 
 type DoorEvent = {
   id: number;
@@ -30,15 +31,16 @@ type AppEvent = {
 
 type UsageData = { door: DoorEvent[]; app: AppEvent[] } | null;
 
-function formatDateTimeHawaii(s: string) {
+function formatDateTimeGym(s: string, tz: string) {
   if (!s) return "—";
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return s;
-  return formatDateTimeInAppTz(d);
+  return formatDateTimeInAppTz(d, undefined, tz);
 }
 
 export default function AdminUsagePage() {
   const router = useRouter();
+  const tz = useAppTimezone();
   const [data, setData] = useState<UsageData>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState<string>("30");
@@ -136,7 +138,7 @@ export default function AdminUsagePage() {
                     <tbody>
                       {data.door.map((e) => (
                         <tr key={e.id} className="border-t border-stone-100">
-                          <td className="py-2 px-3 whitespace-nowrap">{formatDateTimeHawaii(e.happened_at)}</td>
+                          <td className="py-2 px-3 whitespace-nowrap">{formatDateTimeGym(e.happened_at, tz)}</td>
                           <td className="py-2 px-3">
                             {e.member_id ? (
                               <Link href={`/members/${e.member_id}`} className="text-brand-600 hover:underline">
@@ -176,7 +178,7 @@ export default function AdminUsagePage() {
                     <tbody>
                       {data.app.map((e) => (
                         <tr key={e.id} className="border-t border-stone-100">
-                          <td className="py-2 px-3 whitespace-nowrap">{formatDateTimeHawaii(e.created_at)}</td>
+                          <td className="py-2 px-3 whitespace-nowrap">{formatDateTimeGym(e.created_at, tz)}</td>
                           <td className="py-2 px-3">
                             <Link href={`/members/${e.member_id}`} className="text-brand-600 hover:underline">
                               {(e.member_name && e.member_name.trim()) || e.member_id}
