@@ -5,7 +5,6 @@ export type SectionSlug =
   | "pt-bookings"
   | "class-bookings"
   | "subscriptions"
-  | "shopping-cart"
   | "sales"
   | "pt-sessions"
   | "classes"
@@ -106,21 +105,6 @@ export const SECTIONS: SectionConfig[] = [
       { key: "expiry_date", label: "Expiry date" },
       { key: "days_remaining", label: "Days remaining" },
       { key: "price", label: "Price" },
-    ],
-  },
-  {
-    slug: "shopping-cart",
-    title: "Shopping Cart",
-    description: "Cart line items",
-    columns: [
-      { key: "line_item_id", label: "Line item" },
-      { key: "sales_id", label: "Sales ID" },
-      { key: "product_id", label: "Product ID" },
-      { key: "category", label: "Category" },
-      { key: "price", label: "Price" },
-      { key: "quantity", label: "Qty" },
-      { key: "member_id", label: "Member ID" },
-      { key: "email", label: "Email" },
     ],
   },
   {

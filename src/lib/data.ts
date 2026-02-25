@@ -7,7 +7,6 @@ const SLUG_TO_TABLE: Record<string, string> = {
   "pt-bookings": "pt_bookings",
   "class-bookings": "class_bookings",
   subscriptions: "subscriptions",
-  "shopping-cart": "shopping_cart",
   sales: "sales",
   "pt-sessions": "pt_sessions",
   classes: "classes",

@@ -10,7 +10,6 @@ const VALID_SLUGS: SectionSlug[] = [
   "pt-bookings",
   "class-bookings",
   "subscriptions",
-  "shopping-cart",
   "sales",
   "pt-sessions",
   "classes",
