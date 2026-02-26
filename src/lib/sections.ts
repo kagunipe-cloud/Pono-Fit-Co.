@@ -179,3 +179,13 @@ export const SECTIONS: SectionConfig[] = [
 export function getSection(slug: SectionSlug): SectionConfig | undefined {
   return SECTIONS.find((s) => s.slug === slug);
 }
+
+/** Slugs that appear under the sidebar "Reports" dropdown. Add more here as you add report pages. */
+export const REPORT_SUB_SLUGS: SectionSlug[] = ["sales", "transactions"];
+
+export function getReportSubSections(): { slug: SectionSlug; title: string }[] {
+  return REPORT_SUB_SLUGS.map((slug) => {
+    const s = getSection(slug);
+    return { slug, title: s?.title ?? slug };
+  });
+}

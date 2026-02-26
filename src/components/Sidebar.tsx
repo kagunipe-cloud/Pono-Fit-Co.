@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BRAND } from "@/lib/branding";
-import { SECTIONS } from "../lib/sections";
+import { SECTIONS, getReportSubSections, REPORT_SUB_SLUGS } from "../lib/sections";
 
 type MemberMe = {
   member_id: string;
@@ -28,6 +29,35 @@ function NavList({
   showMemberNav: boolean;
   onLogout: () => void;
 }) {
+  const [reportsOpen, setReportsOpen] = useState(false);
+  const reportsRef = useRef<HTMLLIElement>(null);
+  const reportsButtonRef = useRef<HTMLButtonElement>(null);
+  const reportsDropdownRef = useRef<HTMLDivElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    setReportsOpen(false);
+  }, [pathname]);
+
+  // Position dropdown to the right of the Reports button (for portal)
+  useEffect(() => {
+    if (!reportsOpen || !reportsButtonRef.current) return;
+    const rect = reportsButtonRef.current.getBoundingClientRect();
+    setDropdownPosition({ top: rect.top, left: rect.right });
+  }, [reportsOpen]);
+
+  // Close reports dropdown when clicking outside (sidebar row or dropdown panel)
+  useEffect(() => {
+    if (!reportsOpen) return;
+    function handleClick(e: MouseEvent) {
+      const target = e.target as Node;
+      const inReports = reportsRef.current?.contains(target);
+      const inDropdown = reportsDropdownRef.current?.contains(target);
+      if (!inReports && !inDropdown) setReportsOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [reportsOpen]);
   const link = (href: string, label: string | React.ReactNode, active?: boolean) => {
     const isActive = active ?? (pathname === href || (href !== "/" && pathname?.startsWith(href + "/")));
     return (
@@ -41,6 +71,10 @@ function NavList({
       </Link>
     );
   };
+
+  const reportSubs = getReportSubSections();
+  const mainSections = SECTIONS.filter((s) => !REPORT_SUB_SLUGS.includes(s.slug));
+  const isOnReportPage = pathname != null && REPORT_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`));
 
   if (showMemberNav) {
     return (
@@ -119,9 +153,57 @@ function NavList({
       {isAdmin && <li>{link("/admin/email-members", "Email all members")}</li>}
       <li>{link("/class-packs", "Class Packs")}</li>
       <li>{link("/pt-packs", "PT Packs")}</li>
-      {SECTIONS.map((s) => (
+      {mainSections.map((s) => (
         <li key={s.slug}>{link(`/${s.slug}`, s.title, pathname === `/${s.slug}`)}</li>
       ))}
+      <li ref={reportsRef} className="relative">
+        <button
+          ref={reportsButtonRef}
+          type="button"
+          onClick={() => setReportsOpen((open) => !open)}
+          className={`w-full text-left block px-3 py-2 rounded-lg text-sm font-medium ${
+            isOnReportPage ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+          }`}
+        >
+          <span className="flex items-center justify-between gap-1">
+            Reports
+            <svg
+              className={`w-4 h-4 shrink-0 transition-transform ${reportsOpen ? "rotate-90" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </span>
+        </button>
+        {reportsOpen &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              ref={reportsDropdownRef}
+              className="fixed min-w-[10rem] py-1 rounded-lg border border-stone-200 bg-white shadow-lg z-[100]"
+              style={{ top: dropdownPosition.top, left: dropdownPosition.left, marginLeft: 4 }}
+              role="menu"
+            >
+              {reportSubs.map(({ slug, title }) => (
+                <Link
+                  key={slug}
+                  href={`/${slug}`}
+                  className={`block px-3 py-2 text-sm font-medium ${
+                    pathname === `/${slug}` ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                  }`}
+                  role="menuitem"
+                  onClick={() => setReportsOpen(false)}
+                >
+                  {title}
+                </Link>
+              ))}
+            </div>,
+            document.body
+          )}
+      </li>
       {isAdmin && (
         <>
           <li className="pt-2 mt-2 border-t border-stone-100">
