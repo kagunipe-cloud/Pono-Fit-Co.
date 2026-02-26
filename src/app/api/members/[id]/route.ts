@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "../../../../lib/db";
+import { getDb, expiryDateSortableSql } from "../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +18,8 @@ export async function GET(
     const db = getDb();
 
     const memberStmt = db.prepare(`
-      SELECT m.id, m.member_id, m.first_name, m.last_name, m.email, m.kisi_id, m.kisi_group_id, m.join_date,
-        COALESCE(m.exp_next_payment_date, (SELECT MAX(s.expiry_date) FROM subscriptions s WHERE s.member_id = m.member_id AND s.status = 'Active')) AS exp_next_payment_date,
+      SELECT m.id, m.member_id, m.first_name, m.last_name, m.email, m.phone, m.kisi_id, m.kisi_group_id, m.join_date,
+        COALESCE(m.exp_next_payment_date, (SELECT s.expiry_date FROM subscriptions s WHERE s.member_id = m.member_id AND s.status = 'Active' ORDER BY ${expiryDateSortableSql("s.expiry_date")} DESC LIMIT 1)) AS exp_next_payment_date,
         m.role, m.created_at
       FROM members m WHERE m.id = ? OR m.member_id = ?
     `);
@@ -119,6 +119,7 @@ export async function PATCH(
       "first_name",
       "last_name",
       "email",
+      "phone",
       "kisi_id",
       "kisi_group_id",
       "join_date",
@@ -149,7 +150,7 @@ export async function PATCH(
     `);
     stmt.run(...values);
     const row = db.prepare(
-      "SELECT id, member_id, first_name, last_name, email, kisi_id, kisi_group_id, join_date, exp_next_payment_date, role, created_at FROM members WHERE id = ?"
+      "SELECT id, member_id, first_name, last_name, email, phone, kisi_id, kisi_group_id, join_date, exp_next_payment_date, role, created_at FROM members WHERE id = ?"
     ).get(numericId);
     db.close();
 

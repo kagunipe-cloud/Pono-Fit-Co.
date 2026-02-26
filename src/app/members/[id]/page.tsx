@@ -83,6 +83,7 @@ export default function MemberDetailPage() {
         first_name: String(json.member?.first_name ?? ""),
         last_name: String(json.member?.last_name ?? ""),
         email: String(json.member?.email ?? ""),
+        phone: String(json.member?.phone ?? ""),
         role: String(json.member?.role ?? "Member"),
         join_date: String(json.member?.join_date ?? ""),
         exp_next_payment_date: String(json.member?.exp_next_payment_date ?? ""),
@@ -432,6 +433,16 @@ export default function MemberDetailPage() {
                   className="w-full px-3 py-2 rounded-lg border border-stone-200"
                 />
               </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-stone-600 mb-1">Phone (optional)</label>
+                <input
+                  type="tel"
+                  value={editForm.phone ?? ""}
+                  onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+                  placeholder="e.g. (808) 555-1234"
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-stone-600 mb-1">Role</label>
                 <select
@@ -463,6 +474,7 @@ export default function MemberDetailPage() {
           ) : (
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
               <div><dt className="text-stone-500">Email</dt><dd className="font-medium">{String(member.email ?? "—")}</dd></div>
+              <div><dt className="text-stone-500">Phone</dt><dd className="font-medium">{String(member.phone ?? "—")}</dd></div>
               <div><dt className="text-stone-500">Role</dt><dd><span className={`px-2 py-0.5 rounded text-xs font-medium ${member.role === "Admin" ? "bg-brand-100 text-brand-800" : "bg-stone-100"}`}>{String(member.role ?? "—")}</span></dd></div>
               <div><dt className="text-stone-500">Join date</dt><dd className="font-medium">{String(member.join_date ?? "—")}</dd></div>
               <div><dt className="text-stone-500">Renewal date</dt><dd className="font-medium">{String(member.exp_next_payment_date ?? "—")}</dd></div>

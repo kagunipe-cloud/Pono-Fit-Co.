@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
+
+export type MemberType = "Monthly" | "Day pass" | "Week pass" | "Class client" | "PT client";
 
 type Member = {
   id: number;
@@ -12,7 +14,11 @@ type Member = {
   role: string | null;
   join_date: string | null;
   exp_next_payment_date: string | null;
+  active: boolean;
+  types: MemberType[];
 };
+
+const MEMBER_TYPES: MemberType[] = ["Monthly", "Day pass", "Week pass", "Class client", "PT client"];
 
 export default function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
@@ -20,6 +26,8 @@ export default function MembersPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
+  const [typeFilter, setTypeFilter] = useState<MemberType | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
@@ -49,6 +57,14 @@ export default function MembersPage() {
     fetchMembers(debouncedSearch);
   }, [debouncedSearch, fetchMembers]);
 
+  const filteredMembers = useMemo(() => {
+    let list = members;
+    if (activeFilter === "active") list = list.filter((m) => m.active);
+    if (activeFilter === "inactive") list = list.filter((m) => !m.active);
+    if (typeFilter) list = list.filter((m) => m.types?.includes(typeFilter));
+    return list;
+  }, [members, activeFilter, typeFilter]);
+
   return (
     <div className="max-w-6xl mx-auto">
       <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
@@ -75,17 +91,75 @@ export default function MembersPage() {
       </header>
 
       <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-stone-100 flex flex-wrap items-center gap-3">
-          <input
-            type="search"
-            placeholder="Search by name, email, role..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="flex-1 min-w-[200px] px-4 py-2.5 rounded-lg border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
-          />
-          <span className="text-sm text-stone-400">
-            {members.length} member{members.length !== 1 ? "s" : ""}
-          </span>
+        <div className="p-4 border-b border-stone-100 space-y-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              type="search"
+              placeholder="Search by name, email, role..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="flex-1 min-w-[200px] px-4 py-2.5 rounded-lg border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+            />
+            <span className="text-sm text-stone-400">
+              {filteredMembers.length} of {members.length} member{members.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-stone-500 uppercase tracking-wide">Access</span>
+            <button
+              type="button"
+              onClick={() => setActiveFilter("all")}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                activeFilter === "all" ? "bg-brand-600 text-white" : "bg-stone-100 text-stone-700 hover:bg-stone-200"
+              }`}
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveFilter("active")}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                activeFilter === "active" ? "bg-brand-600 text-white" : "bg-stone-100 text-stone-700 hover:bg-stone-200"
+              }`}
+            >
+              Active
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveFilter("inactive")}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                activeFilter === "inactive" ? "bg-brand-600 text-white" : "bg-stone-100 text-stone-700 hover:bg-stone-200"
+              }`}
+            >
+              Non-active
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-stone-500 uppercase tracking-wide">Type</span>
+            <button
+              type="button"
+              onClick={() => setTypeFilter(null)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                typeFilter === null ? "bg-stone-700 text-white" : "bg-stone-100 text-stone-700 hover:bg-stone-200"
+              }`}
+            >
+              All types
+            </button>
+            {MEMBER_TYPES.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTypeFilter(typeFilter === t ? null : t)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                  typeFilter === t ? "bg-stone-700 text-white" : "bg-stone-100 text-stone-700 hover:bg-stone-200"
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="overflow-x-auto">
@@ -96,12 +170,16 @@ export default function MembersPage() {
           )}
           {loading ? (
             <div className="p-12 text-center text-stone-500">Loading…</div>
-          ) : members.length === 0 ? (
+          ) : filteredMembers.length === 0 ? (
             <div className="p-12 text-center text-stone-500">
-              No members found.{" "}
-              <Link href="/members/new" className="text-brand-600 hover:underline">
-                Add your first member
-              </Link>
+              No members match the current filters.
+              {members.length === 0 && (
+                <>{" "}
+                  <Link href="/members/new" className="text-brand-600 hover:underline">
+                    Add your first member
+                  </Link>
+                </>
+              )}
             </div>
           ) : (
             <table className="w-full text-left">
@@ -109,6 +187,7 @@ export default function MembersPage() {
                 <tr className="bg-stone-50 text-stone-500 text-sm font-medium">
                   <th className="py-3 px-4">Name</th>
                   <th className="py-3 px-4">Email</th>
+                  <th className="py-3 px-4">Type</th>
                   <th className="py-3 px-4">Role</th>
                   <th className="py-3 px-4">Join date</th>
                   <th className="py-3 px-4">Renewal date</th>
@@ -117,7 +196,7 @@ export default function MembersPage() {
                 </tr>
               </thead>
               <tbody>
-                {members.map((m) => (
+                {filteredMembers.map((m) => (
                   <tr
                     key={m.id}
                     className="border-t border-stone-100 hover:bg-brand-50/30 transition-colors"
@@ -126,8 +205,27 @@ export default function MembersPage() {
                       <Link href={`/members/${m.id}`} className="hover:text-brand-700 hover:underline">
                         {[m.first_name, m.last_name].filter(Boolean).join(" ") || "—"}
                       </Link>
+                      {m.active && (
+                        <span className="ml-1.5 inline-block px-1.5 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Active</span>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-stone-600">{m.email ?? "—"}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex flex-wrap gap-1">
+                        {(m.types ?? []).length === 0 ? (
+                          <span className="text-stone-400">—</span>
+                        ) : (
+                          (m.types ?? []).map((t) => (
+                            <span
+                              key={t}
+                              className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-stone-100 text-stone-700"
+                            >
+                              {t}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                    </td>
                     <td className="py-3 px-4">
                       <span
                         className={`inline-block px-2 py-0.5 rounded text-xs font-medium ${

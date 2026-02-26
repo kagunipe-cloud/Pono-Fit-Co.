@@ -5,7 +5,6 @@ const ADMIN_PATHS = [
   "/",
   "/members",
   "/money-owed",
-  "/live-dashboard",
   "/pt-bookings",
   "/class-bookings",
   "/subscriptions",

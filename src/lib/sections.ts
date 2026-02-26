@@ -1,7 +1,6 @@
 export type SectionSlug =
   | "members"
   | "money-owed"
-  | "live-dashboard"
   | "pt-bookings"
   | "class-bookings"
   | "subscriptions"
@@ -31,6 +30,7 @@ export const SECTIONS: SectionConfig[] = [
       { key: "first_name", label: "First name" },
       { key: "last_name", label: "Last name" },
       { key: "email", label: "Email" },
+      { key: "phone", label: "Phone" },
       { key: "role", label: "Role" },
       { key: "join_date", label: "Join date" },
       { key: "exp_next_payment_date", label: "Renewal date" },
@@ -40,25 +40,15 @@ export const SECTIONS: SectionConfig[] = [
   {
     slug: "money-owed",
     title: "Money Owed",
-    description: "Outstanding balances",
+    description: "Recurring payments declined or not collected",
     columns: [
       { key: "member_name", label: "Member" },
       { key: "member_id", label: "Member ID" },
-      { key: "product_id", label: "Product ID" },
-      { key: "amount_owed", label: "Amount owed" },
-      { key: "days_remaining", label: "Days remaining" },
-      { key: "health_check", label: "Health check" },
-    ],
-  },
-  {
-    slug: "live-dashboard",
-    title: "Live Dashboard",
-    description: "Member status and expiry",
-    columns: [
-      { key: "member_id", label: "Member ID" },
-      { key: "status", label: "Status" },
-      { key: "expiry_date", label: "Expiry date" },
-      { key: "days_remaining", label: "Days remaining" },
+      { key: "plan_name", label: "Plan" },
+      { key: "amount_dollars", label: "Amount" },
+      { key: "reason", label: "Reason" },
+      { key: "stripe_error_code", label: "Stripe code" },
+      { key: "attempted_at", label: "When" },
     ],
   },
   {
@@ -181,7 +171,7 @@ export function getSection(slug: SectionSlug): SectionConfig | undefined {
 }
 
 /** Slugs that appear under the sidebar "Reports" dropdown. Add more here as you add report pages. */
-export const REPORT_SUB_SLUGS: SectionSlug[] = ["sales", "transactions"];
+export const REPORT_SUB_SLUGS: SectionSlug[] = ["sales", "transactions", "money-owed"];
 
 export function getReportSubSections(): { slug: SectionSlug; title: string }[] {
   return REPORT_SUB_SLUGS.map((slug) => {

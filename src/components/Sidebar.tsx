@@ -140,8 +140,8 @@ function NavList({
           </Link>
         </li>
       )}
-      <li>{link("/schedule", "Schedule", pathname === "/schedule" || pathname?.startsWith("/schedule/"))}</li>
       <li>{link("/rec-leagues", "Rec Leagues", pathname?.startsWith("/rec-leagues"))}</li>
+      {!isAdmin && <li>{link("/schedule", "Schedule", pathname === "/schedule" || pathname?.startsWith("/schedule/"))}</li>}
       {isAdmin && <li>{link("/master-schedule", "Master Schedule")}</li>}
       {isAdmin && <li>{link("/admin/create-workout-for-member", "Create Workout for Member")}</li>}
       {isAdmin && <li>{link("/exercises", "Exercises")}</li>}

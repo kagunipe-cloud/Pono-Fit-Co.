@@ -5,8 +5,6 @@ import { getSection, type SectionSlug } from "@/lib/sections";
 
 const VALID_SLUGS: SectionSlug[] = [
   "members",
-  "money-owed",
-  "live-dashboard",
   "pt-bookings",
   "class-bookings",
   "subscriptions",

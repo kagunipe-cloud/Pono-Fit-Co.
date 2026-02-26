@@ -2,8 +2,6 @@ import { getDb } from "./db";
 
 const SLUG_TO_TABLE: Record<string, string> = {
   members: "members",
-  "money-owed": "money_owed",
-  "live-dashboard": "live_dashboard",
   "pt-bookings": "pt_bookings",
   "class-bookings": "class_bookings",
   subscriptions: "subscriptions",

@@ -12,6 +12,7 @@ export default function NewMemberPage() {
     first_name: "",
     last_name: "",
     email: "",
+    phone: "",
     role: "Member",
   });
 
@@ -88,6 +89,19 @@ export default function NewMemberPage() {
             value={form.email}
             onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
             required
+            className="w-full px-4 py-2.5 rounded-lg border border-stone-200 bg-stone-50 text-stone-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
+          />
+        </div>
+        <div>
+          <label htmlFor="phone" className="block text-sm font-medium text-stone-700 mb-1">
+            Phone <span className="text-stone-400 font-normal">(optional)</span>
+          </label>
+          <input
+            id="phone"
+            type="tel"
+            value={form.phone}
+            onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+            placeholder="e.g. (808) 555-1234"
             className="w-full px-4 py-2.5 rounded-lg border border-stone-200 bg-stone-50 text-stone-900 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
           />
         </div>

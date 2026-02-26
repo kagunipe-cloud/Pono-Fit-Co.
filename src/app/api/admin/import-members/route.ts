@@ -3,7 +3,7 @@ import { parse } from "csv-parse/sync";
 import { randomUUID } from "crypto";
 import { getDb } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
-import { ensureMembersStripeColumn, ensureMembersPasswordColumn } from "@/lib/db";
+import { ensureMembersStripeColumn, ensureMembersPasswordColumn, ensureMembersPhoneColumn } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -66,17 +66,18 @@ export async function POST(request: NextRequest) {
   const db = getDb();
   ensureMembersStripeColumn(db);
   ensureMembersPasswordColumn(db);
+  ensureMembersPhoneColumn(db);
 
   const getByEmail = db.prepare(
     "SELECT id, member_id, first_name, last_name, email, kisi_id FROM members WHERE LOWER(TRIM(email)) = ?"
   );
   const updateMember = db.prepare(
-    `UPDATE members SET first_name = ?, last_name = ?, role = ?, join_date = ?, exp_next_payment_date = ?
+    `UPDATE members SET first_name = ?, last_name = ?, role = ?, join_date = ?, exp_next_payment_date = ?, phone = ?
      WHERE member_id = ?`
   );
   const insertMember = db.prepare(
-    `INSERT INTO members (member_id, first_name, last_name, email, role, join_date, exp_next_payment_date)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO members (member_id, first_name, last_name, email, role, join_date, exp_next_payment_date, phone)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   let created = 0;
@@ -98,6 +99,7 @@ export async function POST(request: NextRequest) {
     const role = "Member";
     const joinDate = parseAdded(row["Added"]) ?? null;
     const expNextPaymentDate = parseExpiry(row["Membership Expiry Date"]) ?? null;
+    const phone = (row["Phone"] ?? "").trim() || null;
 
     const existing = getByEmail.get(emailLower) as
       | { id: number; member_id: string; first_name: string | null; last_name: string | null; email: string | null; kisi_id: string | null }
@@ -111,6 +113,7 @@ export async function POST(request: NextRequest) {
           role,
           joinDate,
           expNextPaymentDate,
+          phone,
           existing.member_id
         );
         updated++;
@@ -123,7 +126,8 @@ export async function POST(request: NextRequest) {
           rawEmail || emailLower,
           role,
           joinDate,
-          expNextPaymentDate
+          expNextPaymentDate,
+          phone
         );
         created++;
       }

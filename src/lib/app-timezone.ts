@@ -77,3 +77,23 @@ export function addDaysToDateStr(dateStr: string, days: number): string {
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
+
+/** Parse app date string "M/D/YYYY" or "MM/DD/YYYY" to [year, month, day] for comparison. Returns null if invalid. */
+export function parseAppDateToYMD(dateStr: string | null | undefined): [number, number, number] | null {
+  if (!dateStr || typeof dateStr !== "string") return null;
+  const parts = dateStr.trim().split("/");
+  if (parts.length !== 3) return null;
+  const month = parseInt(parts[0]!, 10);
+  const day = parseInt(parts[1]!, 10);
+  const year = parseInt(parts[2]!, 10);
+  if (Number.isNaN(month) || Number.isNaN(day) || Number.isNaN(year) || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return [year, month, day];
+}
+
+/** Compare two [year, month, day] arrays. Returns true if a >= b. */
+export function ymdGte(a: [number, number, number] | null, b: [number, number, number] | null): boolean {
+  if (!a || !b) return false;
+  if (a[0] !== b[0]) return a[0] > b[0];
+  if (a[1] !== b[1]) return a[1] > b[1];
+  return a[2] >= b[2];
+}

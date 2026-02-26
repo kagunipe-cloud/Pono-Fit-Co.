@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensureMembersStripeColumn } from "../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersStripeColumn, ensurePaymentFailuresTable } from "../../../../lib/db";
 import { grantAccess as kisiGrantAccess } from "../../../../lib/kisi";
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
 import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz } from "../../../../lib/app-timezone";
@@ -42,8 +42,13 @@ export async function GET(request: NextRequest) {
 
   const db = getDb();
   ensureMembersStripeColumn(db);
+  ensurePaymentFailuresTable(db);
 
   const tz = getAppTimezone(db);
+  const insertFailure = db.prepare(`
+    INSERT INTO payment_failures (member_id, subscription_id, plan_name, amount_cents, reason, stripe_error_code)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
   const today = todayString(tz);
   // Only auto-renew monthly memberships (not yearly, daily, or other plan types)
   const expiring = db.prepare(`
@@ -69,15 +74,17 @@ export async function GET(request: NextRequest) {
   const results: { member_id: string; status: "renewed" | "skipped" | "error"; message?: string }[] = [];
 
   for (const sub of expiring) {
+    const amountCents = parsePriceToCents(sub.plan_price) * Math.max(1, sub.quantity);
     const memberRow = db.prepare("SELECT stripe_customer_id, email, first_name FROM members WHERE member_id = ?").get(sub.member_id) as { stripe_customer_id: string | null; email: string; first_name: string | null } | undefined;
     if (!memberRow?.stripe_customer_id) {
       results.push({ member_id: sub.member_id, status: "skipped", message: "No saved card" });
+      insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "No saved card", null);
       continue;
     }
 
-    const amountCents = parsePriceToCents(sub.plan_price) * Math.max(1, sub.quantity);
     if (amountCents <= 0) {
       results.push({ member_id: sub.member_id, status: "error", message: "Invalid price" });
+      insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "Invalid price", null);
       continue;
     }
 
@@ -89,6 +96,7 @@ export async function GET(request: NextRequest) {
       const pm = paymentMethods.data[0];
       if (!pm) {
         results.push({ member_id: sub.member_id, status: "error", message: "No payment method on file" });
+        insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "No payment method on file", null);
         continue;
       }
 
@@ -104,7 +112,11 @@ export async function GET(request: NextRequest) {
       });
 
       if (paymentIntent.status !== "succeeded") {
-        results.push({ member_id: sub.member_id, status: "error", message: `Payment status: ${paymentIntent.status}` });
+        const statusMsg = `Payment status: ${paymentIntent.status}`;
+        const lastError = (paymentIntent as { last_payment_error?: { code?: string; message?: string } }).last_payment_error;
+        const stripeCode = lastError?.code ?? null;
+        results.push({ member_id: sub.member_id, status: "error", message: statusMsg });
+        insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, lastError?.message || statusMsg, stripeCode);
         continue;
       }
 
@@ -152,7 +164,10 @@ export async function GET(request: NextRequest) {
       results.push({ member_id: sub.member_id, status: "renewed" });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      const stripeErr = err as { code?: string; decline_code?: string };
+      const stripeCode = stripeErr.decline_code ?? stripeErr.code ?? null;
       results.push({ member_id: sub.member_id, status: "error", message: msg });
+      insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, msg, stripeCode);
     }
   }
 

@@ -120,6 +120,8 @@ export function getDb() {
   ensureBaseSchema(db);
   ensureSalesSaleDateColumn(db);
   ensureMembersWaiverColumns(db);
+  ensureMembersPhoneColumn(db);
+  ensurePaymentFailuresTable(db);
   return db;
 }
 
@@ -174,6 +176,49 @@ export function ensureMembersPasswordColumn(db: ReturnType<typeof getDb>) {
   }
 }
 
+/** Add phone to members if missing (optional contact number). */
+export function ensureMembersPhoneColumn(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE members ADD COLUMN phone TEXT");
+  } catch {
+    // Column already exists
+  }
+}
+
+/**
+ * SQLite expression that converts an expiry_date column (M/D/YYYY or MM/DD/YYYY text)
+ * to YYYY-MM-DD for chronological ORDER BY / comparison.
+ * @param columnRef - Full column reference, e.g. "s.expiry_date" or "expiry_date"
+ */
+export function expiryDateSortableSql(columnRef: string): string {
+  const c = columnRef;
+  return `PRINTF('%04d-%02d-%02d',
+    CAST(SUBSTR(SUBSTR(${c}, INSTR(${c}, '/') + 1), INSTR(SUBSTR(${c}, INSTR(${c}, '/') + 1), '/') + 1) AS INTEGER),
+    CAST(SUBSTR(${c}, 1, INSTR(${c}, '/') - 1) AS INTEGER),
+    CAST(SUBSTR(SUBSTR(${c}, INSTR(${c}, '/') + 1), 1, INSTR(SUBSTR(${c}, INSTR(${c}, '/') + 1), '/') - 1) AS INTEGER)
+  )`;
+}
+
+/** Table of failed/skipped recurring payment attempts for the Money Owed report. */
+export function ensurePaymentFailuresTable(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS payment_failures (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        member_id TEXT NOT NULL,
+        subscription_id TEXT,
+        plan_name TEXT,
+        amount_cents INTEGER,
+        reason TEXT NOT NULL,
+        stripe_error_code TEXT,
+        attempted_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+  } catch (err) {
+    console.error("[db] ensurePaymentFailuresTable", err);
+  }
+}
+
 export type Member = {
   id: number;
   member_id: string;
@@ -187,5 +232,6 @@ export type Member = {
   role: string | null;
   stripe_customer_id: string | null;
   password_hash: string | null;
+  phone: string | null;
   created_at: string | null;
 };
