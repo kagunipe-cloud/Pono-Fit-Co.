@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone, ensureMembersStripeColumn } from "../../../../lib/db";
 import { sendPostPurchaseEmail, sendAppDownloadInviteEmail } from "../../../../lib/email";
 import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../lib/kisi";
+import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
 import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
-import { formatInAppTz, formatDateTimeInAppTz } from "../../../../lib/app-timezone";
+import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz } from "../../../../lib/app-timezone";
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { getAdminMemberId } from "../../../../lib/admin";
 import { randomUUID } from "crypto";
@@ -86,6 +87,7 @@ export async function POST(request: NextRequest) {
     const sales_id = randomUUID().slice(0, 8);
     const tz = getAppTimezone(db);
     const date_time = formatDateTimeInAppTz(new Date(), undefined, tz);
+    const sale_date = todayInAppTz(tz);
     let grand_total = 0;
     const memberRow = db.prepare("SELECT kisi_id, email, first_name, last_name FROM members WHERE member_id = ?").get(member_id) as {
       kisi_id: string | null;
@@ -207,9 +209,9 @@ export async function POST(request: NextRequest) {
 
       const member = db.prepare("SELECT email FROM members WHERE member_id = ?").get(member_id) as { email: string } | undefined;
       db.prepare(`
-        INSERT INTO sales (sales_id, date_time, member_id, grand_total, email, status)
-        VALUES (?, ?, ?, ?, ?, 'Paid')
-      `).run(sales_id, date_time, member_id, String(grand_total), member?.email ?? "");
+        INSERT INTO sales (sales_id, date_time, member_id, grand_total, email, status, sale_date)
+        VALUES (?, ?, ?, ?, ?, 'Paid', ?)
+      `).run(sales_id, date_time, member_id, String(grand_total), member?.email ?? "", sale_date);
 
       db.prepare("DELETE FROM cart_items WHERE cart_id = ?").run(cart.id);
 
@@ -229,25 +231,31 @@ export async function POST(request: NextRequest) {
         });
       }
 
+      const waiver = await ensureWaiverBeforeKisi(member_id, {
+        email: memberRow?.email ?? null,
+        first_name: memberRow?.first_name,
+      }, origin);
       let kisiId = memberRow?.kisi_id?.trim() || null;
-      for (const g of kisiGrants) {
-        try {
-          if (!kisiId) {
-            const email = memberRow?.email?.trim();
-            if (email) {
-              const name = [memberRow?.first_name, memberRow?.last_name].filter(Boolean).join(" ") || undefined;
-              kisiId = await ensureKisiUser(email, name || undefined);
-              const db2 = getDb();
-              ensureMembersStripeColumn(db2);
-              db2.prepare("UPDATE members SET kisi_id = ? WHERE member_id = ?").run(kisiId, member_id);
-              db2.close();
+      if (waiver.shouldGrantKisi) {
+        for (const g of kisiGrants) {
+          try {
+            if (!kisiId) {
+              const email = memberRow?.email?.trim();
+              if (email) {
+                const name = [memberRow?.first_name, memberRow?.last_name].filter(Boolean).join(" ") || undefined;
+                kisiId = await ensureKisiUser(email, name || undefined);
+                const db2 = getDb();
+                ensureMembersStripeColumn(db2);
+                db2.prepare("UPDATE members SET kisi_id = ? WHERE member_id = ?").run(kisiId, member_id);
+                db2.close();
+              }
             }
+            if (kisiId) {
+              await kisiGrantAccess(kisiId, g.valid_until);
+            }
+          } catch (e) {
+            console.error("[Kisi] grant failed for member:", member_id, e);
           }
-          if (kisiId) {
-            await kisiGrantAccess(kisiId, g.valid_until);
-          }
-        } catch (e) {
-          console.error("[Kisi] grant failed for member:", member_id, e);
         }
       }
 
@@ -266,7 +274,9 @@ export async function POST(request: NextRequest) {
         success: true,
         sale_id: sales_id,
         grand_total,
-        message: "Payment confirmed. Membership/bookings created. Kisi notified for door access (if configured).",
+        message: waiver.shouldGrantKisi
+          ? "Payment confirmed. Membership/bookings created. Kisi notified for door access (if configured)."
+          : "Payment confirmed. Check your email to sign the liability waiver and activate door access.",
       });
     } catch (e) {
       db.exec("ROLLBACK");

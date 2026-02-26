@@ -219,3 +219,14 @@ export async function sendWaiverSignedCopyToAdmin(params: {
   const text = `${params.member_name} (${params.email}) signed the waiver for ${params.team_name} at ${params.signed_at}.`;
   return sendStaffEmail(subject, text);
 }
+
+/** Send liability waiver link so member can sign before door (Kisi) access. */
+export async function sendLiabilityWaiverEmail(params: {
+  to: string;
+  first_name?: string | null;
+  waiver_url: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const subject = "Sign your liability waiver to get door access";
+  const text = `Hi${params.first_name ? ` ${params.first_name}` : ""},\n\nPlease sign the liability waiver to activate your door access. Open the link below (valid for 14 days):\n\n${params.waiver_url}\n\n— Pono Fit Co.`;
+  return sendMemberEmail(params.to, subject, text);
+}

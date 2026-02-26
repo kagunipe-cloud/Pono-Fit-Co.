@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone, ensureMembersStripeColumn } from "../../../../lib/db";
 import { grantAccess as kisiGrantAccess } from "../../../../lib/kisi";
-import { formatInAppTz, formatDateTimeInAppTz } from "../../../../lib/app-timezone";
+import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
+import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz } from "../../../../lib/app-timezone";
 import { randomUUID } from "crypto";
 import Stripe from "stripe";
 
@@ -68,7 +69,7 @@ export async function GET(request: NextRequest) {
   const results: { member_id: string; status: "renewed" | "skipped" | "error"; message?: string }[] = [];
 
   for (const sub of expiring) {
-    const memberRow = db.prepare("SELECT stripe_customer_id, email FROM members WHERE member_id = ?").get(sub.member_id) as { stripe_customer_id: string | null; email: string } | undefined;
+    const memberRow = db.prepare("SELECT stripe_customer_id, email, first_name FROM members WHERE member_id = ?").get(sub.member_id) as { stripe_customer_id: string | null; email: string; first_name: string | null } | undefined;
     if (!memberRow?.stripe_customer_id) {
       results.push({ member_id: sub.member_id, status: "skipped", message: "No saved card" });
       continue;
@@ -124,21 +125,28 @@ export async function GET(request: NextRequest) {
         `).run(new_sub_id, sub.member_id, sub.product_id, startStr, expiryStr, String(daysRemaining), sub.plan_price, sales_id, sub.quantity);
         const date_time = formatDateTimeInAppTz(new Date(), undefined, tz);
         db.prepare(`
-          INSERT INTO sales (sales_id, date_time, member_id, grand_total, email, status)
-          VALUES (?, ?, ?, ?, ?, 'Paid')
-        `).run(sales_id, date_time, sub.member_id, String(amountCents / 100), memberRow.email ?? "");
+          INSERT INTO sales (sales_id, date_time, member_id, grand_total, email, status, sale_date)
+          VALUES (?, ?, ?, ?, ?, 'Paid', ?)
+        `).run(sales_id, date_time, sub.member_id, String(amountCents / 100), memberRow.email ?? "", todayInAppTz(tz));
         db.prepare("UPDATE members SET exp_next_payment_date = ? WHERE member_id = ?").run(expiryStr, sub.member_id);
         db.exec("COMMIT");
       } catch (e) {
         db.exec("ROLLBACK");
         throw e;
       }
-      const kisiId = db.prepare("SELECT kisi_id FROM members WHERE member_id = ?").get(sub.member_id) as { kisi_id: string | null } | undefined;
-      if (kisiId?.kisi_id) {
-        try {
-          await kisiGrantAccess(kisiId.kisi_id, expiryDate);
-        } catch (e) {
-          console.error("[Kisi] renewal grant failed for member:", sub.member_id, e);
+      const origin = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
+      const waiver = await ensureWaiverBeforeKisi(sub.member_id, {
+        email: memberRow.email ?? null,
+        first_name: memberRow.first_name ?? null,
+      }, origin);
+      if (waiver.shouldGrantKisi) {
+        const kisiId = db.prepare("SELECT kisi_id FROM members WHERE member_id = ?").get(sub.member_id) as { kisi_id: string | null } | undefined;
+        if (kisiId?.kisi_id) {
+          try {
+            await kisiGrantAccess(kisiId.kisi_id, expiryDate);
+          } catch (e) {
+            console.error("[Kisi] renewal grant failed for member:", sub.member_id, e);
+          }
         }
       }
       results.push({ member_id: sub.member_id, status: "renewed" });

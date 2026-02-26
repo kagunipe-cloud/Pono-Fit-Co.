@@ -5,6 +5,7 @@ export type SectionSlug =
   | "pt-bookings"
   | "class-bookings"
   | "subscriptions"
+  | "transactions"
   | "sales"
   | "pt-sessions"
   | "classes"
@@ -108,9 +109,9 @@ export const SECTIONS: SectionConfig[] = [
     ],
   },
   {
-    slug: "sales",
-    title: "Sales",
-    description: "Sales records",
+    slug: "transactions",
+    title: "Transactions",
+    description: "Purchase history and refunds",
     columns: [
       { key: "sales_id", label: "Sales ID" },
       { key: "date_time", label: "Date / time" },
@@ -118,7 +119,16 @@ export const SECTIONS: SectionConfig[] = [
       { key: "email", label: "Email" },
       { key: "status", label: "Status" },
       { key: "grand_total", label: "Grand total" },
-      { key: "price", label: "Price" },
+    ],
+  },
+  {
+    slug: "sales",
+    title: "Sales",
+    description: "Transactions by category",
+    columns: [
+      { key: "category", label: "Category" },
+      { key: "count", label: "Count" },
+      { key: "revenue", label: "Revenue" },
     ],
   },
   {

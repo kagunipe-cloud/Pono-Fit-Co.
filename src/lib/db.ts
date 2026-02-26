@@ -118,6 +118,8 @@ export function getDb() {
   }
   const db = new Database(dbPath);
   ensureBaseSchema(db);
+  ensureSalesSaleDateColumn(db);
+  ensureMembersWaiverColumns(db);
   return db;
 }
 
@@ -132,6 +134,34 @@ export function ensureMembersStripeColumn(db: ReturnType<typeof getDb>) {
     db.exec("ALTER TABLE members ADD COLUMN stripe_customer_id TEXT");
   } catch {
     // Column already exists
+  }
+}
+
+/** Add sale_date (YYYY-MM-DD) to sales if missing, for date-range filtering. */
+export function ensureSalesSaleDateColumn(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE sales ADD COLUMN sale_date TEXT");
+  } catch {
+    // Column already exists or table missing
+  }
+}
+
+/** Add waiver columns to members if missing (liability waiver before Kisi access). */
+export function ensureMembersWaiverColumns(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE members ADD COLUMN waiver_signed_at TEXT");
+  } catch {
+    // already exists
+  }
+  try {
+    db.exec("ALTER TABLE members ADD COLUMN waiver_token TEXT");
+  } catch {
+    // already exists
+  }
+  try {
+    db.exec("ALTER TABLE members ADD COLUMN waiver_token_expires_at TEXT");
+  } catch {
+    // already exists
   }
 }
 

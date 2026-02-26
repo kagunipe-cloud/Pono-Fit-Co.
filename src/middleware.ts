@@ -9,7 +9,7 @@ const ADMIN_PATHS = [
   "/pt-bookings",
   "/class-bookings",
   "/subscriptions",
-  "/shopping-cart",
+  "/transactions",
   "/sales",
   "/pt-sessions",
   "/classes",

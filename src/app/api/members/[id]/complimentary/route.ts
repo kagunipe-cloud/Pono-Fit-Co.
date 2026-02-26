@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone, ensureMembersStripeColumn } from "../../../../../lib/db";
 import { ensureRecurringClassesTables } from "../../../../../lib/recurring-classes";
 import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
-import { formatInAppTz, formatDateTimeInAppTz } from "../../../../../lib/app-timezone";
+import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz } from "../../../../../lib/app-timezone";
 import { getAdminMemberId } from "../../../../../lib/admin";
 import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../../lib/kisi";
 import { sendAppDownloadInviteEmail } from "../../../../../lib/email";
+import { ensureWaiverBeforeKisi } from "../../../../../lib/waiver";
 import { randomUUID } from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -66,6 +67,7 @@ export async function POST(
   const sales_id = randomUUID().slice(0, 8);
   const tz = getAppTimezone(db);
   const date_time = formatDateTimeInAppTz(new Date(), undefined, tz);
+  const sale_date = todayInAppTz(tz);
   const memberRow = db.prepare("SELECT email, kisi_id, first_name, last_name FROM members WHERE member_id = ?").get(member_id) as {
     email: string | null;
     kisi_id: string | null;
@@ -165,13 +167,18 @@ export async function POST(
 
     ensureMembersStripeColumn(db);
     db.prepare(`
-      INSERT INTO sales (sales_id, date_time, member_id, grand_total, email, status)
-      VALUES (?, ?, ?, '0', ?, 'Complimentary')
-    `).run(sales_id, date_time, member_id, memberRow?.email ?? "");
+      INSERT INTO sales (sales_id, date_time, member_id, grand_total, email, status, sale_date)
+      VALUES (?, ?, ?, '0', ?, 'Complimentary', ?)
+    `).run(sales_id, date_time, member_id, memberRow?.email ?? "", sale_date);
 
     db.exec("COMMIT");
 
-    if (kisiValidUntil && memberRow) {
+    const origin = process.env.NEXT_PUBLIC_APP_URL?.trim() || new URL(request.url).origin;
+    const waiver = await ensureWaiverBeforeKisi(member_id, {
+      email: memberRow?.email ?? null,
+      first_name: memberRow?.first_name,
+    }, origin);
+    if (kisiValidUntil && memberRow && waiver.shouldGrantKisi) {
       try {
         let kisiId = memberRow.kisi_id?.trim() || null;
         if (!kisiId && memberRow.email?.trim()) {
@@ -189,7 +196,6 @@ export async function POST(
 
     const emailTo = memberRow?.email?.trim();
     if (emailTo) {
-      const origin = process.env.NEXT_PUBLIC_APP_URL?.trim() || new URL(request.url).origin;
       sendAppDownloadInviteEmail({
         to: emailTo,
         first_name: memberRow?.first_name,
