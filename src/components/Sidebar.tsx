@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BRAND } from "@/lib/branding";
-import { SECTIONS, getReportSubSections, REPORT_SUB_SLUGS } from "../lib/sections";
+import { SECTIONS, getReportSubSections, getBookingsSubSections, getServicesSubSections, REPORT_SUB_SLUGS, BOOKINGS_SUB_SLUGS, SERVICES_SUB_SLUGS } from "../lib/sections";
 
 type MemberMe = {
   member_id: string;
@@ -43,9 +43,16 @@ function NavList({
   const bookingsDropdownRef = useRef<HTMLDivElement>(null);
   const [bookingsPosition, setBookingsPosition] = useState({ top: 0, left: 0 });
 
+  const [servicesOpen, setServicesOpen] = useState(false);
+  const servicesRef = useRef<HTMLLIElement>(null);
+  const servicesButtonRef = useRef<HTMLButtonElement>(null);
+  const servicesDropdownRef = useRef<HTMLDivElement>(null);
+  const [servicesPosition, setServicesPosition] = useState({ top: 0, left: 0 });
+
   useEffect(() => {
     setReportsOpen(false);
     setBookingsOpen(false);
+    setServicesOpen(false);
   }, [pathname]);
 
   // Position dropdown to the right of the Reports button (for portal)
@@ -87,6 +94,26 @@ function NavList({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [bookingsOpen]);
+
+  // Position Services dropdown to the right
+  useEffect(() => {
+    if (!servicesOpen || !servicesButtonRef.current) return;
+    const rect = servicesButtonRef.current.getBoundingClientRect();
+    setServicesPosition({ top: rect.top, left: rect.right });
+  }, [servicesOpen]);
+
+  // Close Services dropdown when clicking outside
+  useEffect(() => {
+    if (!servicesOpen) return;
+    function handleClick(e: MouseEvent) {
+      const target = e.target as Node;
+      const inRow = servicesRef.current?.contains(target);
+      const inDropdown = servicesDropdownRef.current?.contains(target);
+      if (!inRow && !inDropdown) setServicesOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [servicesOpen]);
   const link = (href: string, label: string | React.ReactNode, active?: boolean) => {
     const isActive = active ?? (pathname === href || (href !== "/" && pathname?.startsWith(href + "/")));
     return (
@@ -102,8 +129,14 @@ function NavList({
   };
 
   const reportSubs = getReportSubSections();
-  const mainSections = SECTIONS.filter((s) => !REPORT_SUB_SLUGS.includes(s.slug));
+  const bookingsSubs = getBookingsSubSections();
+  const servicesSubs = getServicesSubSections();
+  const mainSections = SECTIONS.filter(
+    (s) => !REPORT_SUB_SLUGS.includes(s.slug) && !BOOKINGS_SUB_SLUGS.includes(s.slug) && !SERVICES_SUB_SLUGS.includes(s.slug)
+  );
   const isOnReportPage = pathname != null && REPORT_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`));
+  const isOnBookingsPage = pathname != null && BOOKINGS_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`));
+  const isOnServicesPage = pathname != null && (pathname.startsWith("/rec-leagues") || SERVICES_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`)));
 
   if (showMemberNav) {
     return (
@@ -219,7 +252,6 @@ function NavList({
       {isTrainer && (
         <li>{link("/trainer", "My schedule", pathname === "/trainer" || pathname?.startsWith("/trainer/"))}</li>
       )}
-      <li>{link("/rec-leagues", "Rec Leagues", pathname?.startsWith("/rec-leagues"))}</li>
       {!isAdmin && <li>{link("/schedule", "Schedule", pathname === "/schedule" || pathname?.startsWith("/schedule/"))}</li>}
       {isAdmin && <li>{link("/master-schedule", "Master Schedule")}</li>}
       {isAdmin && <li>{link("/admin/trainers", "Trainers")}</li>}
@@ -234,7 +266,119 @@ function NavList({
       <li>{link("/class-packs", "Class Packs")}</li>
       <li>{link("/pt-packs", "PT Packs")}</li>
       {mainSections.map((s) => (
-        <li key={s.slug}>{link(`/${s.slug}`, s.title, pathname === `/${s.slug}`)}</li>
+        <React.Fragment key={s.slug}>
+          <li>{link(`/${s.slug}`, s.title, pathname === `/${s.slug}`)}</li>
+          {s.slug === "members" && (
+            <li ref={bookingsRef} className="relative">
+              <button
+                ref={bookingsButtonRef}
+                type="button"
+                onClick={() => setBookingsOpen((open) => !open)}
+                className={`w-full text-left block px-3 py-2 rounded-lg text-sm font-medium ${
+                  isOnBookingsPage ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                }`}
+              >
+                <span className="flex items-center justify-between gap-1">
+                  Bookings
+                  <svg
+                    className={`w-4 h-4 shrink-0 transition-transform ${bookingsOpen ? "rotate-90" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </span>
+              </button>
+              {bookingsOpen &&
+                typeof document !== "undefined" &&
+                createPortal(
+                  <div
+                    ref={bookingsDropdownRef}
+                    className="fixed min-w-[10rem] py-1 rounded-lg border border-stone-200 bg-white shadow-lg z-[100]"
+                    style={{ top: bookingsPosition.top, left: bookingsPosition.left, marginLeft: 4 }}
+                    role="menu"
+                  >
+                    {bookingsSubs.map(({ slug, title }) => (
+                      <Link
+                        key={slug}
+                        href={`/${slug}`}
+                        className={`block px-3 py-2 text-sm font-medium ${
+                          pathname === `/${slug}` ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                        }`}
+                        role="menuitem"
+                        onClick={() => setBookingsOpen(false)}
+                      >
+                        {title}
+                      </Link>
+                    ))}
+                  </div>,
+                  document.body
+                )}
+            </li>
+          )}
+          {s.slug === "members" && (
+            <li ref={servicesRef} className="relative">
+              <button
+                ref={servicesButtonRef}
+                type="button"
+                onClick={() => setServicesOpen((open) => !open)}
+                className={`w-full text-left block px-3 py-2 rounded-lg text-sm font-medium ${
+                  isOnServicesPage ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                }`}
+              >
+                <span className="flex items-center justify-between gap-1">
+                  Services
+                  <svg
+                    className={`w-4 h-4 shrink-0 transition-transform ${servicesOpen ? "rotate-90" : ""}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </span>
+              </button>
+              {servicesOpen &&
+                typeof document !== "undefined" &&
+                createPortal(
+                  <div
+                    ref={servicesDropdownRef}
+                    className="fixed min-w-[10rem] py-1 rounded-lg border border-stone-200 bg-white shadow-lg z-[100]"
+                    style={{ top: servicesPosition.top, left: servicesPosition.left, marginLeft: 4 }}
+                    role="menu"
+                  >
+                    <Link
+                      href="/rec-leagues"
+                      className={`block px-3 py-2 text-sm font-medium ${
+                        pathname?.startsWith("/rec-leagues") ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                      }`}
+                      role="menuitem"
+                      onClick={() => setServicesOpen(false)}
+                    >
+                      Rec Leagues
+                    </Link>
+                    {servicesSubs.map(({ slug, title }) => (
+                      <Link
+                        key={slug}
+                        href={`/${slug}`}
+                        className={`block px-3 py-2 text-sm font-medium ${
+                          pathname === `/${slug}` ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                        }`}
+                        role="menuitem"
+                        onClick={() => setServicesOpen(false)}
+                      >
+                        {title}
+                      </Link>
+                    ))}
+                  </div>,
+                  document.body
+                )}
+            </li>
+          )}
+        </React.Fragment>
       ))}
       <li ref={reportsRef} className="relative">
         <button

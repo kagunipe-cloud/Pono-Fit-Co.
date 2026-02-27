@@ -173,8 +173,28 @@ export function getSection(slug: SectionSlug): SectionConfig | undefined {
 /** Slugs that appear under the sidebar "Reports" dropdown. Add more here as you add report pages. */
 export const REPORT_SUB_SLUGS: SectionSlug[] = ["sales", "transactions", "money-owed"];
 
+/** Slugs that appear under the sidebar "Bookings" dropdown (admin nav). */
+export const BOOKINGS_SUB_SLUGS: SectionSlug[] = ["pt-bookings", "class-bookings"];
+
+/** Slugs that appear under the sidebar "Services" dropdown (admin nav). Rec Leagues is added in the Sidebar. */
+export const SERVICES_SUB_SLUGS: SectionSlug[] = ["classes", "pt-sessions", "membership-plans"];
+
 export function getReportSubSections(): { slug: SectionSlug; title: string }[] {
   return REPORT_SUB_SLUGS.map((slug) => {
+    const s = getSection(slug);
+    return { slug, title: s?.title ?? slug };
+  });
+}
+
+export function getBookingsSubSections(): { slug: SectionSlug; title: string }[] {
+  return BOOKINGS_SUB_SLUGS.map((slug) => {
+    const s = getSection(slug);
+    return { slug, title: s?.title ?? slug };
+  });
+}
+
+export function getServicesSubSections(): { slug: SectionSlug; title: string }[] {
+  return SERVICES_SUB_SLUGS.map((slug) => {
     const s = getSection(slug);
     return { slug, title: s?.title ?? slug };
   });
