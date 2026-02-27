@@ -37,12 +37,6 @@ function NavList({
   const reportsDropdownRef = useRef<HTMLDivElement>(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
 
-  const [trainerSchedulesOpen, setTrainerSchedulesOpen] = useState(false);
-  const trainerSchedulesRef = useRef<HTMLLIElement>(null);
-  const trainerSchedulesButtonRef = useRef<HTMLButtonElement>(null);
-  const trainerSchedulesDropdownRef = useRef<HTMLDivElement>(null);
-  const [trainerSchedulesPosition, setTrainerSchedulesPosition] = useState({ top: 0, left: 0 });
-  const [trainersList, setTrainersList] = useState<{ member_id: string; display_name: string }[]>([]);
   const [bookingsOpen, setBookingsOpen] = useState(false);
   const bookingsRef = useRef<HTMLLIElement>(null);
   const bookingsButtonRef = useRef<HTMLButtonElement>(null);
@@ -51,7 +45,6 @@ function NavList({
 
   useEffect(() => {
     setReportsOpen(false);
-    setTrainerSchedulesOpen(false);
     setBookingsOpen(false);
   }, [pathname]);
 
@@ -62,28 +55,12 @@ function NavList({
     setDropdownPosition({ top: rect.top, left: rect.right });
   }, [reportsOpen]);
 
-  // Position Trainer schedules dropdown to the right
-  useEffect(() => {
-    if (!trainerSchedulesOpen || !trainerSchedulesButtonRef.current) return;
-    const rect = trainerSchedulesButtonRef.current.getBoundingClientRect();
-    setTrainerSchedulesPosition({ top: rect.top, left: rect.right });
-  }, [trainerSchedulesOpen]);
-
   // Position Bookings dropdown to the right
   useEffect(() => {
     if (!bookingsOpen || !bookingsButtonRef.current) return;
     const rect = bookingsButtonRef.current.getBoundingClientRect();
     setBookingsPosition({ top: rect.top, left: rect.right });
   }, [bookingsOpen]);
-
-  // Fetch trainers when Trainer schedules dropdown is opened
-  useEffect(() => {
-    if (!trainerSchedulesOpen || trainersList.length > 0) return;
-    fetch("/api/trainers")
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data: { member_id: string; display_name: string }[]) => setTrainersList(Array.isArray(data) ? data : []))
-      .catch(() => setTrainersList([]));
-  }, [trainerSchedulesOpen, trainersList.length]);
 
   // Close reports dropdown when clicking outside (sidebar row or dropdown panel)
   useEffect(() => {
@@ -97,19 +74,6 @@ function NavList({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [reportsOpen]);
-
-  // Close Trainer schedules dropdown when clicking outside
-  useEffect(() => {
-    if (!trainerSchedulesOpen) return;
-    function handleClick(e: MouseEvent) {
-      const target = e.target as Node;
-      const inRow = trainerSchedulesRef.current?.contains(target);
-      const inDropdown = trainerSchedulesDropdownRef.current?.contains(target);
-      if (!inRow && !inDropdown) setTrainerSchedulesOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [trainerSchedulesOpen]);
 
   // Close Bookings dropdown when clicking outside
   useEffect(() => {
@@ -259,59 +223,6 @@ function NavList({
       {!isAdmin && <li>{link("/schedule", "Schedule", pathname === "/schedule" || pathname?.startsWith("/schedule/"))}</li>}
       {isAdmin && <li>{link("/master-schedule", "Master Schedule")}</li>}
       {isAdmin && <li>{link("/admin/trainers", "Trainers")}</li>}
-      {isAdmin && (
-        <li ref={trainerSchedulesRef} className="relative">
-          <button
-            ref={trainerSchedulesButtonRef}
-            type="button"
-            onClick={() => setTrainerSchedulesOpen((open) => !open)}
-            className={`w-full text-left block px-3 py-2 rounded-lg text-sm font-medium ${
-              pathname === "/schedule" ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-            }`}
-          >
-            <span className="flex items-center justify-between gap-1">
-              Trainer schedules
-              <svg
-                className={`w-4 h-4 shrink-0 transition-transform ${trainerSchedulesOpen ? "rotate-90" : ""}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                aria-hidden
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </span>
-          </button>
-          {trainerSchedulesOpen &&
-            typeof document !== "undefined" &&
-            createPortal(
-              <div
-                ref={trainerSchedulesDropdownRef}
-                className="fixed min-w-[12rem] max-h-[70vh] overflow-y-auto py-1 rounded-lg border border-stone-200 bg-white shadow-lg z-[100]"
-                style={{ top: trainerSchedulesPosition.top, left: trainerSchedulesPosition.left, marginLeft: 4 }}
-                role="menu"
-              >
-                {trainersList.length === 0 ? (
-                  <div className="px-3 py-2 text-sm text-stone-500">No trainers yet</div>
-                ) : (
-                  trainersList.map((t) => (
-                    <Link
-                      key={t.member_id}
-                      href={`/schedule?trainer=${encodeURIComponent(t.member_id)}`}
-                      className="block px-3 py-2 text-sm font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                      role="menuitem"
-                      onClick={() => setTrainerSchedulesOpen(false)}
-                    >
-                      {t.display_name}
-                    </Link>
-                  ))
-                )}
-              </div>,
-              document.body
-            )}
-        </li>
-      )}
-      {isAdmin && <li>{link("/admin/block-time", "Block time")}</li>}
       {isAdmin && <li>{link("/admin/create-workout-for-member", "Create Workout for Member")}</li>}
       {isAdmin && <li>{link("/exercises", "Exercises")}</li>}
       {isAdmin && <li>{link("/macros", "Macros")}</li>}
