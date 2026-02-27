@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { getUnavailableInRange } from "../../../../lib/pt-availability";
+import { getAdminMemberId } from "../../../../lib/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -28,9 +29,13 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/** POST { trainer?: string, day_of_week: number, start_time, end_time, description } */
+/** POST { trainer?: string, day_of_week: number, start_time, end_time, description } — Admin only. Block off time for a trainer (use display name) or leave trainer empty for facility-wide. */
 export async function POST(request: NextRequest) {
   try {
+    const adminId = await getAdminMemberId(request);
+    if (!adminId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const body = await request.json();
     const trainer = (body.trainer ?? "").trim();
     const day_of_week = Math.max(0, Math.min(6, parseInt(String(body.day_of_week ?? 0), 10)));

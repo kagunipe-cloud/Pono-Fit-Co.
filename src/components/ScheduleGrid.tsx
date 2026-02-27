@@ -65,9 +65,9 @@ function slotOverlaps(slotMin: number, startMin: number, endMin: number): boolea
   return startMin < slotEnd && endMin > slotMin;
 }
 
-type ScheduleGridProps = { variant: "member" | "master" };
+type ScheduleGridProps = { variant: "member" | "master" | "trainer"; trainerMemberId?: string | null; trainerDisplayName?: string | null };
 
-export default function ScheduleGrid({ variant }: ScheduleGridProps) {
+export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayName }: ScheduleGridProps) {
   const searchParams = useSearchParams();
   const tz = useAppTimezone();
   const productId = searchParams.get("product")?.trim() || null;
@@ -79,6 +79,8 @@ export default function ScheduleGrid({ variant }: ScheduleGridProps) {
   const [loading, setLoading] = useState(true);
   const bookPtQuery = productId ? `&product=${encodeURIComponent(productId)}` : "";
   const isMaster = variant === "master";
+  const isTrainer = variant === "trainer";
+  const effectiveTrainerId = trainerMemberId ?? null;
 
   // Recompute initial week when gym timezone loads/updates (SettingsContext fetches async)
   useEffect(() => {
@@ -90,10 +92,13 @@ export default function ScheduleGrid({ variant }: ScheduleGridProps) {
 
   useEffect(() => {
     setLoading(true);
+    const ptUrl = effectiveTrainerId
+      ? `/api/offerings/pt-availability?from=${fromStr}&to=${toStr}&segments=1&trainer_member_id=${encodeURIComponent(effectiveTrainerId)}`
+      : `/api/offerings/pt-availability?from=${fromStr}&to=${toStr}&segments=1`;
     Promise.all([
       fetch(`/api/offerings/class-occurrences?from=${fromStr}&to=${toStr}`).then((r) => r.json()),
       fetch(`/api/offerings/unavailable-blocks?from=${fromStr}&to=${toStr}`).then((r) => r.json()),
-      fetch(`/api/offerings/pt-availability?from=${fromStr}&to=${toStr}&segments=1`).then((r) => r.json()),
+      fetch(ptUrl).then((r) => r.json()),
       fetch(`/api/offerings/pt-open-bookings?from=${fromStr}&to=${toStr}`).then((r) => r.json()),
     ])
       .then(([classData, unavailData, ptData, openData]) => {
@@ -109,7 +114,7 @@ export default function ScheduleGrid({ variant }: ScheduleGridProps) {
         setOpenBookings([]);
       })
       .finally(() => setLoading(false));
-  }, [fromStr, toStr]);
+  }, [fromStr, toStr, effectiveTrainerId]);
 
   const dayDates = useMemo(() => {
     return [0, 1, 2, 3, 4, 5, 6].map((i) => addDaysToDateStr(weekStartStr, i));
@@ -122,6 +127,9 @@ export default function ScheduleGrid({ variant }: ScheduleGridProps) {
   }, []);
 
   const grid = useMemo(() => {
+    const unavailList = isTrainer && trainerDisplayName
+      ? unavailable.filter((u) => u.trainer === "" || u.trainer === trainerDisplayName)
+      : unavailable;
     const map = new Map<string, CellItem>();
     for (const date of dayDates) {
       for (let slotMin = TIME_SLOT_MIN; slotMin < TIME_SLOT_MAX; slotMin += SLOT_MINUTES) {
@@ -145,7 +153,7 @@ export default function ScheduleGrid({ variant }: ScheduleGridProps) {
           });
           continue;
         }
-        const unavailAtSlot = unavailable.find((u) => {
+        const unavailAtSlot = unavailList.find((u) => {
           if (u.date !== date) return false;
           const startMin = parseTimeToMinutes(u.start_time);
           const endMin = parseTimeToMinutes(u.end_time);
@@ -195,7 +203,7 @@ export default function ScheduleGrid({ variant }: ScheduleGridProps) {
       }
     }
     return map;
-  }, [dayDates, occurrences, unavailable, openBookings, ptBlocks]);
+  }, [dayDates, occurrences, unavailable, openBookings, ptBlocks, isTrainer, trainerDisplayName]);
 
   function prevWeek() {
     setWeekStartStr((s) => addDaysToDateStr(s, -7));
@@ -213,7 +221,9 @@ export default function ScheduleGrid({ variant }: ScheduleGridProps) {
     <div className="max-w-6xl mx-auto">
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-stone-800 tracking-tight">{isMaster ? "Master Schedule" : "Schedule"}</h1>
+          <h1 className="text-3xl font-bold text-stone-800 tracking-tight">
+            {isMaster ? "Master Schedule" : isTrainer ? "My Schedule" : "Schedule"}
+          </h1>
           {isMaster && (
             <p className="mt-1 text-sm text-stone-500">
               Add recurring:{" "}
@@ -222,6 +232,8 @@ export default function ScheduleGrid({ variant }: ScheduleGridProps) {
               <Link href="/pt-bookings/generate-recurring" className="text-brand-600 hover:underline font-medium">PT recurring</Link>
               {" · "}
               <Link href="/classes" className="text-brand-600 hover:underline font-medium">Classes</Link>
+              {" · "}
+              <Link href="/admin/block-time" className="text-brand-600 hover:underline font-medium">Block time</Link>
             </p>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -231,10 +243,14 @@ export default function ScheduleGrid({ variant }: ScheduleGridProps) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/member/classes" className="text-brand-600 hover:underline font-medium">Browse Classes</Link>
-          <span className="text-stone-300">|</span>
-          <Link href="/member/book-pt" className="text-brand-600 hover:underline font-medium">Book PT</Link>
-          <span className="text-stone-300">|</span>
+          {!isTrainer && (
+            <>
+              <Link href="/member/classes" className="text-brand-600 hover:underline font-medium">Browse Classes</Link>
+              <span className="text-stone-300">|</span>
+              <Link href="/member/book-pt" className="text-brand-600 hover:underline font-medium">Book PT</Link>
+              <span className="text-stone-300">|</span>
+            </>
+          )}
           <button type="button" onClick={prevWeek} className="px-3 py-1.5 rounded-lg border border-stone-200 hover:bg-stone-50 text-sm font-medium text-stone-700">← Prev</button>
           <button type="button" onClick={goToToday} className="px-3 py-1.5 rounded-lg border border-stone-200 hover:bg-stone-50 text-sm font-medium text-stone-700">Today</button>
           <button type="button" onClick={nextWeek} className="px-3 py-1.5 rounded-lg border border-stone-200 hover:bg-stone-50 text-sm font-medium text-stone-700">Next →</button>
@@ -310,22 +326,28 @@ export default function ScheduleGrid({ variant }: ScheduleGridProps) {
                           )}
                           {item.type === "pt_segment" && (
                             <div className={`rounded-lg border px-2 py-1.5 min-h-[2.5rem] ${item.booked ? "bg-stone-400 border-stone-500" : "bg-white border-2 border-brand-500 hover:border-brand-600"}`}>
-                              {item.booked ? (isMaster ? (
+                              {item.booked ? (isMaster || isTrainer ? (
                                 <span className="text-xs text-stone-200 block truncate" title={item.member_name ?? "Booked"}>
                                   {item.member_name ?? "Booked"}
                                 </span>
                               ) : null) : (
                                 <>
                                   <span className="text-xs font-medium text-stone-800">Available</span>
-                                  <span className="text-xs text-stone-500 block truncate">{item.trainer}</span>
-                                  <Link href={variant === "master" ? `/admin/book-pt-for-member?block=${item.blockId}&date=${date}&time=${item.start_time}` : `/member/book-pt?block=${item.blockId}&date=${date}${bookPtQuery || ""}`} className="text-xs text-brand-600 hover:underline mt-0.5 inline-block" onClick={(e) => e.stopPropagation()}>Book</Link>
+                                  {!isTrainer && <span className="text-xs text-stone-500 block truncate">{item.trainer}</span>}
+                                  {!isTrainer && (
+                                    <Link href={variant === "master" ? `/admin/book-pt-for-member?block=${item.blockId}&date=${date}&time=${item.start_time}` : `/member/book-pt?block=${item.blockId}&date=${date}${bookPtQuery || ""}`} className="text-xs text-brand-600 hover:underline mt-0.5 inline-block" onClick={(e) => e.stopPropagation()}>Book</Link>
+                                  )}
                                 </>
                               )}
                             </div>
                           )}
                           {item.type === "available" && (
                             <div className="rounded-lg border border-brand-200 bg-brand-50 hover:bg-brand-100 px-2 py-1.5 min-h-[2.5rem] flex items-center justify-center transition-colors">
-                              <Link href={variant === "master" ? `/admin/book-pt-for-member?date=${date}&time=${timeStr}` : `/member/book-pt?date=${date}&time=${timeStr}${bookPtQuery || ""}`} className="text-xs text-brand-700 hover:text-brand-800 hover:underline">Available</Link>
+                              {isTrainer ? (
+                                <span className="text-xs text-stone-500">—</span>
+                              ) : (
+                                <Link href={variant === "master" ? `/admin/book-pt-for-member?date=${date}&time=${timeStr}` : `/member/book-pt?date=${date}&time=${timeStr}${bookPtQuery || ""}`} className="text-xs text-brand-700 hover:text-brand-800 hover:underline">Available</Link>
+                              )}
                             </div>
                           )}
                         </td>

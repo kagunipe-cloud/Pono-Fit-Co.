@@ -7,12 +7,13 @@ import { ensurePTSlotTables, timeToMinutes, minutesToTime, reservedMinutes, RESE
 
 export type FreeInterval = { startMin: number; endMin: number };
 
-export function getBlocksInRange(from: string, to: string): { id: number; trainer: string; date: string; start_time: string; end_time: string; description?: string | null }[] {
+export function getBlocksInRange(from: string, to: string): { id: number; trainer: string; trainer_member_id?: string | null; date: string; start_time: string; end_time: string; description?: string | null }[] {
   const db = getDb();
   ensurePTSlotTables(db);
-  const rows = db.prepare("SELECT id, trainer, day_of_week, start_time, end_time, description, days_of_week FROM trainer_availability").all() as {
+  const rows = db.prepare("SELECT id, trainer, trainer_member_id, day_of_week, start_time, end_time, description, days_of_week FROM trainer_availability").all() as {
     id: number;
     trainer: string;
+    trainer_member_id?: string | null;
     day_of_week: number;
     start_time: string;
     end_time: string;
@@ -23,7 +24,7 @@ export function getBlocksInRange(from: string, to: string): { id: number; traine
 
   const fromDate = new Date(from + "T12:00:00");
   const toDate = new Date(to + "T12:00:00");
-  const blocks: { id: number; trainer: string; date: string; start_time: string; end_time: string; description?: string | null }[] = [];
+  const blocks: { id: number; trainer: string; trainer_member_id?: string | null; date: string; start_time: string; end_time: string; description?: string | null }[] = [];
   const cur = new Date(fromDate);
   while (cur <= toDate) {
     const dateStr = cur.toISOString().slice(0, 10);
@@ -41,6 +42,7 @@ export function getBlocksInRange(from: string, to: string): { id: number; traine
         blocks.push({
           id: r.id,
           trainer: r.trainer,
+          trainer_member_id: r.trainer_member_id ?? null,
           date: dateStr,
           start_time: r.start_time,
           end_time: r.end_time,

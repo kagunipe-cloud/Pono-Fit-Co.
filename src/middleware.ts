@@ -20,11 +20,19 @@ const ADMIN_PATHS = [
   "/pt-packs",
 ];
 
+const TRAINER_PATHS = ["/trainer"];
+
 function isAdminPath(pathname: string): boolean {
   if (pathname === "/") return true;
   if (ADMIN_PATHS.some((p) => p !== "/" && pathname === p)) return true;
   if (pathname.startsWith("/members/")) return true;
   if (pathname.startsWith("/admin")) return true;
+  return false;
+}
+
+function isTrainerPath(pathname: string): boolean {
+  if (TRAINER_PATHS.some((p) => pathname === p)) return true;
+  if (pathname.startsWith("/trainer/")) return true;
   return false;
 }
 
@@ -68,6 +76,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  if (isTrainerPath(pathname)) {
+    if (!ok) {
+      const login = new URL("/login", request.url);
+      login.searchParams.set("next", pathname);
+      return NextResponse.redirect(login);
+    }
+    if (role !== "Trainer" && role !== "Admin") {
+      return NextResponse.redirect(new URL("/member", request.url));
+    }
+    return NextResponse.next();
+  }
+
   if (isAdminPath(pathname)) {
     if (!ok) {
       const login = new URL("/login", request.url);
@@ -75,7 +95,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(login);
     }
     if (role !== "Admin") {
-      return NextResponse.redirect(new URL("/member", request.url));
+      return NextResponse.redirect(role === "Trainer" ? new URL("/trainer", request.url) : new URL("/member", request.url));
     }
     return NextResponse.next();
   }

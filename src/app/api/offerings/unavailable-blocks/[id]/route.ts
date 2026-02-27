@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
+import { getAdminMemberId } from "../../../../../lib/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const adminId = await getAdminMemberId(request);
+    if (!adminId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { id } = await params;
     const numericId = parseInt(id, 10);
     if (Number.isNaN(numericId)) {
@@ -49,6 +52,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const adminId = await getAdminMemberId(_request);
+    if (!adminId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { id } = await params;
     const numericId = parseInt(id, 10);
     if (Number.isNaN(numericId)) {

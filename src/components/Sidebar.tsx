@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { BRAND } from "@/lib/branding";
 import { SECTIONS, getReportSubSections, REPORT_SUB_SLUGS } from "../lib/sections";
 
@@ -19,6 +19,7 @@ function NavList({
   member,
   isMember,
   isAdmin,
+  isTrainer,
   showMemberNav,
   onLogout,
 }: {
@@ -26,6 +27,7 @@ function NavList({
   member: MemberMe;
   isMember: boolean;
   isAdmin: boolean;
+  isTrainer: boolean;
   showMemberNav: boolean;
   onLogout: () => void;
 }) {
@@ -35,8 +37,16 @@ function NavList({
   const reportsDropdownRef = useRef<HTMLDivElement>(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
 
+  const [trainerSchedulesOpen, setTrainerSchedulesOpen] = useState(false);
+  const trainerSchedulesRef = useRef<HTMLLIElement>(null);
+  const trainerSchedulesButtonRef = useRef<HTMLButtonElement>(null);
+  const trainerSchedulesDropdownRef = useRef<HTMLDivElement>(null);
+  const [trainerSchedulesPosition, setTrainerSchedulesPosition] = useState({ top: 0, left: 0 });
+  const [trainersList, setTrainersList] = useState<{ member_id: string; display_name: string }[]>([]);
+
   useEffect(() => {
     setReportsOpen(false);
+    setTrainerSchedulesOpen(false);
   }, [pathname]);
 
   // Position dropdown to the right of the Reports button (for portal)
@@ -45,6 +55,22 @@ function NavList({
     const rect = reportsButtonRef.current.getBoundingClientRect();
     setDropdownPosition({ top: rect.top, left: rect.right });
   }, [reportsOpen]);
+
+  // Position Trainer schedules dropdown to the right
+  useEffect(() => {
+    if (!trainerSchedulesOpen || !trainerSchedulesButtonRef.current) return;
+    const rect = trainerSchedulesButtonRef.current.getBoundingClientRect();
+    setTrainerSchedulesPosition({ top: rect.top, left: rect.right });
+  }, [trainerSchedulesOpen]);
+
+  // Fetch trainers when Trainer schedules dropdown is opened
+  useEffect(() => {
+    if (!trainerSchedulesOpen || trainersList.length > 0) return;
+    fetch("/api/trainers")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: { member_id: string; display_name: string }[]) => setTrainersList(Array.isArray(data) ? data : []))
+      .catch(() => setTrainersList([]));
+  }, [trainerSchedulesOpen, trainersList.length]);
 
   // Close reports dropdown when clicking outside (sidebar row or dropdown panel)
   useEffect(() => {
@@ -58,6 +84,19 @@ function NavList({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [reportsOpen]);
+
+  // Close Trainer schedules dropdown when clicking outside
+  useEffect(() => {
+    if (!trainerSchedulesOpen) return;
+    function handleClick(e: MouseEvent) {
+      const target = e.target as Node;
+      const inRow = trainerSchedulesRef.current?.contains(target);
+      const inDropdown = trainerSchedulesDropdownRef.current?.contains(target);
+      if (!inRow && !inDropdown) setTrainerSchedulesOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [trainerSchedulesOpen]);
   const link = (href: string, label: string | React.ReactNode, active?: boolean) => {
     const isActive = active ?? (pathname === href || (href !== "/" && pathname?.startsWith(href + "/")));
     return (
@@ -75,6 +114,8 @@ function NavList({
   const reportSubs = getReportSubSections();
   const mainSections = SECTIONS.filter((s) => !REPORT_SUB_SLUGS.includes(s.slug));
   const isOnReportPage = pathname != null && REPORT_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`));
+  const searchParams = useSearchParams();
+  const isViewingTrainerSchedule = pathname === "/schedule" && searchParams.get("trainer");
 
   if (showMemberNav) {
     return (
@@ -140,9 +181,65 @@ function NavList({
           </Link>
         </li>
       )}
+      {isTrainer && (
+        <li>{link("/trainer", member?.role === "Admin" ? "Trainer schedule" : "My Schedule", pathname === "/trainer" || pathname?.startsWith("/trainer/"))}</li>
+      )}
       <li>{link("/rec-leagues", "Rec Leagues", pathname?.startsWith("/rec-leagues"))}</li>
       {!isAdmin && <li>{link("/schedule", "Schedule", pathname === "/schedule" || pathname?.startsWith("/schedule/"))}</li>}
       {isAdmin && <li>{link("/master-schedule", "Master Schedule")}</li>}
+      {isAdmin && (
+        <li ref={trainerSchedulesRef} className="relative">
+          <button
+            ref={trainerSchedulesButtonRef}
+            type="button"
+            onClick={() => setTrainerSchedulesOpen((open) => !open)}
+            className={`w-full text-left block px-3 py-2 rounded-lg text-sm font-medium ${
+              isViewingTrainerSchedule ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+            }`}
+          >
+            <span className="flex items-center justify-between gap-1">
+              Trainer schedules
+              <svg
+                className={`w-4 h-4 shrink-0 transition-transform ${trainerSchedulesOpen ? "rotate-90" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </span>
+          </button>
+          {trainerSchedulesOpen &&
+            typeof document !== "undefined" &&
+            createPortal(
+              <div
+                ref={trainerSchedulesDropdownRef}
+                className="fixed min-w-[12rem] max-h-[70vh] overflow-y-auto py-1 rounded-lg border border-stone-200 bg-white shadow-lg z-[100]"
+                style={{ top: trainerSchedulesPosition.top, left: trainerSchedulesPosition.left, marginLeft: 4 }}
+                role="menu"
+              >
+                {trainersList.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-stone-500">No trainers yet</div>
+                ) : (
+                  trainersList.map((t) => (
+                    <Link
+                      key={t.member_id}
+                      href={`/schedule?trainer=${encodeURIComponent(t.member_id)}`}
+                      className="block px-3 py-2 text-sm font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                      role="menuitem"
+                      onClick={() => setTrainerSchedulesOpen(false)}
+                    >
+                      {t.display_name}
+                    </Link>
+                  ))
+                )}
+              </div>,
+              document.body
+            )}
+        </li>
+      )}
+      {isAdmin && <li>{link("/admin/block-time", "Block time")}</li>}
       {isAdmin && <li>{link("/admin/create-workout-for-member", "Create Workout for Member")}</li>}
       {isAdmin && <li>{link("/exercises", "Exercises")}</li>}
       {isAdmin && <li>{link("/macros", "Macros")}</li>}
@@ -254,12 +351,14 @@ export default function Sidebar() {
 
   const isMember = member !== undefined && member !== null;
   const isAdmin = member?.role === "Admin";
+  const isTrainer = member?.role === "Trainer" || member?.role === "Admin";
   const inMemberArea = pathname === "/member" || pathname?.startsWith("/member/");
+  const inTrainerArea = pathname === "/trainer" || pathname?.startsWith("/trainer/");
   // Prior to login: show member nav so visitors see what the app offers. After login, show member nav in member area or admin nav elsewhere.
   const showMemberNav = !isMember || inMemberArea;
 
-  const logoHref = isMember ? (showMemberNav ? "/member" : "/") : "/";
-  const navProps = { pathname, member: member ?? null, isMember, isAdmin, showMemberNav, onLogout: handleLogout };
+  const logoHref = isMember ? (showMemberNav ? "/member" : inTrainerArea ? "/trainer" : "/") : "/";
+  const navProps = { pathname, member: member ?? null, isMember, isAdmin, isTrainer, showMemberNav, onLogout: handleLogout };
 
   return (
     <>

@@ -5,22 +5,25 @@ import { getBlocksInRange, getUnavailableInRange, getUnavailableRangesForBlock, 
 export const dynamic = "force-dynamic";
 
 /**
- * GET ?from=YYYY-MM-DD&to=YYYY-MM-DD&member_id= (optional)&segments=1 (optional)
- * Returns trainer availability blocks in range. Each block has date, trainer, start/end,
- * bookable_start_times: { 30: [...], 60: [...], 90: [...] },
- * and if member_id given: my_booking. If segments=1, each block includes segments: [{ start_time, end_time, booked, member_name?, trainer }].
+ * GET ?from=YYYY-MM-DD&to=YYYY-MM-DD&member_id= (optional)&segments=1 (optional)&trainer_member_id= (optional)
+ * Returns trainer availability blocks in range. If trainer_member_id provided, only blocks for that trainer.
+ * Each block has date, trainer, start/end, bookable_start_times, and if member_id given: my_booking. If segments=1, segments.
  */
 export async function GET(request: NextRequest) {
   try {
     const from = request.nextUrl.searchParams.get("from")?.trim();
     const to = request.nextUrl.searchParams.get("to")?.trim();
     const member_id = request.nextUrl.searchParams.get("member_id")?.trim() || null;
+    const trainer_member_id = request.nextUrl.searchParams.get("trainer_member_id")?.trim() || null;
     const segments = request.nextUrl.searchParams.get("segments") === "1";
     if (!from || !to) {
       return NextResponse.json({ error: "from and to (YYYY-MM-DD) required" }, { status: 400 });
     }
 
-    const blocks = getBlocksInRange(from, to);
+    let blocks = getBlocksInRange(from, to);
+    if (trainer_member_id) {
+      blocks = blocks.filter((b) => b.trainer_member_id === trainer_member_id);
+    }
     const unavailableOccurrences = getUnavailableInRange(from, to);
     const db = getDb();
 

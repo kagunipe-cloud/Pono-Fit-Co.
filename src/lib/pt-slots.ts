@@ -76,6 +76,11 @@ export function ensurePTSlotTables(db: ReturnType<typeof getDb>) {
   } catch {
     /* already exists */
   }
+  try {
+    db.exec("ALTER TABLE trainer_availability ADD COLUMN trainer_member_id TEXT");
+  } catch {
+    /* already exists */
+  }
   db.exec(`
     CREATE TABLE IF NOT EXISTS pt_block_bookings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
