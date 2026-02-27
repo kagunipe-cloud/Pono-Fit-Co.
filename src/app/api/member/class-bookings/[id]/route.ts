@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone } from "../../../../../../lib/db";
-import { ensureRecurringClassesTables } from "../../../../../../lib/recurring-classes";
-import { getMemberIdFromSession } from "../../../../../../lib/session";
-import { sendStaffEmail, sendMemberEmail } from "../../../../../../lib/email";
-import { formatDateTimeInAppTz } from "../../../../../../lib/app-timezone";
+import { getDb, getAppTimezone } from "@/lib/db";
+import { ensureRecurringClassesTables } from "@/lib/recurring-classes";
+import { getMemberIdFromSession } from "@/lib/session";
+import { sendStaffEmail, sendMemberEmail } from "@/lib/email";
+import { formatDateTimeInAppTz } from "@/lib/app-timezone";
 
 export const dynamic = "force-dynamic";
 
