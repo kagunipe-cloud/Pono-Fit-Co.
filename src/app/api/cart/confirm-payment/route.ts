@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone, ensureMembersStripeColumn } from "../../../../lib/db";
-import { sendPostPurchaseEmail, sendAppDownloadInviteEmail } from "../../../../lib/email";
+import { sendPostPurchaseEmail, sendAppDownloadInviteEmail, sendStaffEmail, sendMemberEmail } from "../../../../lib/email";
 import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../lib/kisi";
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
 import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
@@ -97,6 +97,21 @@ export async function POST(request: NextRequest) {
     } | undefined;
     const kisiGrants: { valid_until: Date }[] = [];
 
+    const classBookingEvents: {
+      member_id: string;
+      class_name: string;
+      date: string;
+      time: string;
+      trainer_member_id?: string | null;
+    }[] = [];
+    const ptBookingEvents: {
+      member_id: string;
+      trainerName?: string | null;
+      session_name: string;
+      date: string;
+      time: string;
+    }[] = [];
+
     db.exec("BEGIN TRANSACTION");
     try {
       for (const it of items) {
@@ -156,7 +171,7 @@ export async function POST(request: NextRequest) {
             }
           }
         } else if (it.product_type === "class") {
-          const cls = db.prepare("SELECT * FROM classes WHERE id = ?").get(it.product_id) as { price: string; product_id: string } | undefined;
+          const cls = db.prepare("SELECT * FROM classes WHERE id = ?").get(it.product_id) as { price: string; product_id: string; class_name?: string | null; date?: string | null; time?: string | null; trainer_member_id?: string | null } | undefined;
           if (cls) {
             grand_total += parsePrice(cls.price) * it.quantity;
             const class_booking_id = randomUUID().slice(0, 8);
@@ -164,6 +179,13 @@ export async function POST(request: NextRequest) {
               INSERT INTO class_bookings (class_booking_id, product_id, member_id, payment_status, booking_date, sales_id, price, quantity)
               VALUES (?, ?, ?, 'Paid', ?, ?, ?, ?)
             `).run(class_booking_id, cls.product_id, member_id, date_time, sales_id, cls.price, it.quantity);
+            classBookingEvents.push({
+              member_id,
+              class_name: String((cls as any).class_name ?? "Class"),
+              date: String((cls as any).date ?? ""),
+              time: String((cls as any).time ?? ""),
+              trainer_member_id: (cls as any).trainer_member_id ?? null,
+            });
           }
         } else if (it.product_type === "class_pack") {
           ensureRecurringClassesTables(db);
@@ -179,12 +201,17 @@ export async function POST(request: NextRequest) {
         } else if (it.product_type === "class_occurrence") {
           ensureRecurringClassesTables(db);
           const occ = db.prepare(`
-            SELECT o.id, COALESCE(c.price, r.price, '0') AS price
+            SELECT o.id,
+                   o.occurrence_date,
+                   o.occurrence_time,
+                   COALESCE(c.price, r.price, '0') AS price,
+                   COALESCE(c.class_name, r.name) AS class_name,
+                   c.trainer_member_id
             FROM class_occurrences o
             LEFT JOIN classes c ON c.id = o.class_id
             LEFT JOIN recurring_classes r ON r.id = o.recurring_class_id
             WHERE o.id = ?
-          `).get(it.product_id) as { id: number; price: string } | undefined;
+          `).get(it.product_id) as { id: number; price: string; occurrence_date: string; occurrence_time: string | null; class_name: string | null; trainer_member_id: string | null } | undefined;
           if (occ) {
             grand_total += parsePrice(occ.price) * it.quantity;
             try {
@@ -192,6 +219,13 @@ export async function POST(request: NextRequest) {
             } catch {
               /* already booked */
             }
+            classBookingEvents.push({
+              member_id,
+              class_name: occ.class_name || "Class",
+              date: occ.occurrence_date,
+              time: occ.occurrence_time ?? "",
+              trainer_member_id: occ.trainer_member_id,
+            });
           }
         } else if (it.product_type === "pt_pack") {
           ensurePTSlotTables(db);
@@ -207,7 +241,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const member = db.prepare("SELECT email FROM members WHERE member_id = ?").get(member_id) as { email: string } | undefined;
+    const member = db.prepare("SELECT email FROM members WHERE member_id = ?").get(member_id) as { email: string } | undefined;
       db.prepare(`
         INSERT INTO sales (sales_id, date_time, member_id, grand_total, email, status, sale_date)
         VALUES (?, ?, ?, ?, ?, 'Paid', ?)
@@ -269,6 +303,64 @@ export async function POST(request: NextRequest) {
           if (!r.ok) console.error("[Email] app download invite:", r.error);
         });
       }
+
+      // Fire-and-forget booking notification emails after commit
+      (async () => {
+        try {
+          const memberName = memberRow ? [memberRow.first_name, memberRow.last_name].filter(Boolean).join(" ").trim() || member_id : member_id;
+          // Class bookings
+          for (const ev of classBookingEvents) {
+            const whenStr = `${ev.date} ${ev.time}`.trim();
+            const className = ev.class_name;
+            const staffSubject = `Class booking: ${memberName} → ${className}`;
+            const staffBody = `${memberName} booked ${className} on ${whenStr || ev.date}.`;
+            await sendStaffEmail(staffSubject, staffBody);
+            const trainerId = (ev.trainer_member_id ?? "").trim();
+            if (trainerId) {
+              const dbt = getDb();
+              const trainerRow = dbt
+                .prepare("SELECT email, first_name, last_name FROM members WHERE member_id = ?")
+                .get(trainerId) as { email: string | null } | undefined;
+              dbt.close();
+              const trainerEmail = trainerRow?.email?.trim();
+              if (trainerEmail) {
+                const trainerSubject = `New class booking for ${className}`;
+                const trainerBody = `${memberName} booked your class "${className}" on ${whenStr || ev.date}.`;
+                await sendMemberEmail(trainerEmail, trainerSubject, trainerBody);
+              }
+            }
+          }
+
+          // PT bookings (only open slots created via this confirm)
+          for (const ev of ptBookingEvents) {
+            const whenStr = `${ev.date} ${ev.time}`.trim();
+            const staffSubject = `PT booking: ${memberName} → ${ev.session_name}`;
+            const staffBody = `${memberName} booked ${ev.session_name} on ${whenStr || ev.date}.`;
+            await sendStaffEmail(staffSubject, staffBody);
+            const trainerName = (ev.trainerName ?? "").trim();
+            if (trainerName) {
+              const dbt = getDb();
+              const trainerRow = dbt
+                .prepare(
+                  `SELECT m.email
+                   FROM trainers t
+                   JOIN members m ON m.member_id = t.member_id
+                   WHERE TRIM(COALESCE(m.first_name, '') || ' ' || COALESCE(m.last_name, '')) = ?`
+                )
+                .get(trainerName) as { email: string | null } | undefined;
+              dbt.close();
+              const trainerEmail = trainerRow?.email?.trim();
+              if (trainerEmail) {
+                const trainerSubject = `New PT booking with ${memberName}`;
+                const trainerBody = `${memberName} booked ${ev.session_name} with you on ${whenStr || ev.date}.`;
+                await sendMemberEmail(trainerEmail, trainerSubject, trainerBody);
+              }
+            }
+          }
+        } catch (err) {
+          console.error("[Email] booking notifications failed:", err);
+        }
+      })();
 
       return NextResponse.json({
         success: true,

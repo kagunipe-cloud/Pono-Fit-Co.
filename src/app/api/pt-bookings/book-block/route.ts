@@ -3,6 +3,7 @@ import { getDb } from "../../../../lib/db";
 import { ensurePTSlotTables, getPTCreditBalance, reservedMinutes } from "../../../../lib/pt-slots";
 import { getBlocksInRange, getFreeIntervals, getBookingsForBlock } from "../../../../lib/pt-availability";
 import { timeToMinutes } from "../../../../lib/pt-slots";
+import { sendStaffEmail, sendMemberEmail } from "../../../../lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -29,8 +30,8 @@ export async function POST(request: NextRequest) {
     const db = getDb();
     ensurePTSlotTables(db);
 
-    const block = db.prepare("SELECT id, trainer, start_time, end_time FROM trainer_availability WHERE id = ?").get(trainer_availability_id) as
-      | { id: number; trainer: string; start_time: string; end_time: string }
+    const block = db.prepare("SELECT id, trainer, trainer_member_id, start_time, end_time FROM trainer_availability WHERE id = ?").get(trainer_availability_id) as
+      | { id: number; trainer: string; trainer_member_id: string | null; start_time: string; end_time: string }
       | undefined;
     if (!block) {
       db.close();
@@ -77,6 +78,34 @@ export async function POST(request: NextRequest) {
     ).run(trainer_availability_id, occurrence_date, start_time, session_duration_minutes, reserved_minutes, member_id, use_credit ? "credit" : "paid");
 
     const newBalance = use_credit ? getPTCreditBalance(db, member_id, session_duration_minutes) : undefined;
+
+    // Email notifications: staff + trainer
+    try {
+      const memberRow = db
+        .prepare("SELECT email, first_name, last_name FROM members WHERE member_id = ?")
+        .get(member_id) as { email: string | null; first_name: string | null; last_name: string | null } | undefined;
+      const memberName = memberRow ? [memberRow.first_name, memberRow.last_name].filter(Boolean).join(" ").trim() || member_id : member_id;
+      const whenStr = `${occurrence_date} ${start_time}`;
+      const staffSubject = `PT booking: ${memberName} → ${block.trainer}`;
+      const staffBody = `${memberName} booked PT (${session_duration_minutes} min) with ${block.trainer} on ${whenStr}.`;
+      sendStaffEmail(staffSubject, staffBody).catch(() => {});
+
+      const trainerId = (block.trainer_member_id ?? "").trim();
+      if (trainerId) {
+        const trainerRow = db
+          .prepare("SELECT email, first_name, last_name FROM members WHERE member_id = ?")
+          .get(trainerId) as { email: string | null; first_name: string | null; last_name: string | null } | undefined;
+        const trainerEmail = trainerRow?.email?.trim();
+        if (trainerEmail) {
+          const trainerSubject = `New PT booking with ${memberName}`;
+          const trainerBody = `${memberName} booked a ${session_duration_minutes}-minute PT session with you on ${whenStr}.`;
+          sendMemberEmail(trainerEmail, trainerSubject, trainerBody).catch(() => {});
+        }
+      }
+    } catch {
+      // ignore email errors
+    }
+
     db.close();
     return NextResponse.json({ ok: true, balance: newBalance });
   } catch (err) {

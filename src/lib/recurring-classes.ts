@@ -17,6 +17,11 @@ export function ensureClassesRecurringColumns(db: ReturnType<typeof getDb>) {
     /* already exists */
   }
   try {
+    db.exec("ALTER TABLE classes ADD COLUMN trainer_member_id TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
     db.exec("ALTER TABLE classes ADD COLUMN duration_minutes INTEGER DEFAULT 60");
   } catch {
     /* already exists */

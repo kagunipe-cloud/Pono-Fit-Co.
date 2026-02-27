@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const class_name = (body.class_name ?? "").trim() || null;
     const instructor = (body.instructor ?? "").trim() || null;
+    const trainer_member_id = (body.trainer_member_id ?? "").trim() || null;
     const date = (body.date ?? "").trim() || null;
     const time = (body.time ?? "").trim() || null;
     const capacity = (body.capacity ?? "").trim() || null;
@@ -57,10 +58,10 @@ export async function POST(request: NextRequest) {
     }
     ensureRecurringClassesTables(db);
     const stmt = db.prepare(`
-      INSERT INTO classes (product_id, class_name, instructor, date, time, capacity, status, price, stripe_link, category, description, image_url, is_recurring, days_of_week, duration_minutes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO classes (product_id, class_name, instructor, trainer_member_id, date, time, capacity, status, price, stripe_link, category, description, image_url, is_recurring, days_of_week, duration_minutes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    const result = stmt.run(product_id, class_name, instructor, date, time, capacity, status, price, stripe_link, category, description, image_url, is_recurring, days_of_week, duration_minutes);
+    const result = stmt.run(product_id, class_name, instructor, trainer_member_id, date, time, capacity, status, price, stripe_link, category, description, image_url, is_recurring, days_of_week, duration_minutes);
     const classId = result.lastInsertRowid as number;
     if (!is_recurring && date && time) {
       const cap = capacity != null && capacity !== "" ? parseInt(String(capacity), 10) || 20 : 20;

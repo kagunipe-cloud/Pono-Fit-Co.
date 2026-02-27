@@ -43,10 +43,16 @@ function NavList({
   const trainerSchedulesDropdownRef = useRef<HTMLDivElement>(null);
   const [trainerSchedulesPosition, setTrainerSchedulesPosition] = useState({ top: 0, left: 0 });
   const [trainersList, setTrainersList] = useState<{ member_id: string; display_name: string }[]>([]);
+  const [bookingsOpen, setBookingsOpen] = useState(false);
+  const bookingsRef = useRef<HTMLLIElement>(null);
+  const bookingsButtonRef = useRef<HTMLButtonElement>(null);
+  const bookingsDropdownRef = useRef<HTMLDivElement>(null);
+  const [bookingsPosition, setBookingsPosition] = useState({ top: 0, left: 0 });
 
   useEffect(() => {
     setReportsOpen(false);
     setTrainerSchedulesOpen(false);
+    setBookingsOpen(false);
   }, [pathname]);
 
   // Position dropdown to the right of the Reports button (for portal)
@@ -62,6 +68,13 @@ function NavList({
     const rect = trainerSchedulesButtonRef.current.getBoundingClientRect();
     setTrainerSchedulesPosition({ top: rect.top, left: rect.right });
   }, [trainerSchedulesOpen]);
+
+  // Position Bookings dropdown to the right
+  useEffect(() => {
+    if (!bookingsOpen || !bookingsButtonRef.current) return;
+    const rect = bookingsButtonRef.current.getBoundingClientRect();
+    setBookingsPosition({ top: rect.top, left: rect.right });
+  }, [bookingsOpen]);
 
   // Fetch trainers when Trainer schedules dropdown is opened
   useEffect(() => {
@@ -97,6 +110,19 @@ function NavList({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [trainerSchedulesOpen]);
+
+  // Close Bookings dropdown when clicking outside
+  useEffect(() => {
+    if (!bookingsOpen) return;
+    function handleClick(e: MouseEvent) {
+      const target = e.target as Node;
+      const inRow = bookingsRef.current?.contains(target);
+      const inDropdown = bookingsDropdownRef.current?.contains(target);
+      if (!inRow && !inDropdown) setBookingsOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [bookingsOpen]);
   const link = (href: string, label: string | React.ReactNode, active?: boolean) => {
     const isActive = active ?? (pathname === href || (href !== "/" && pathname?.startsWith(href + "/")));
     return (
@@ -133,8 +159,55 @@ function NavList({
             <span className="block text-xs font-normal text-stone-500 mt-0.5">Book Classes & PT</span>
           </Link>
         </li>
-        <li>{link("/member/class-bookings", "My Class Bookings")}</li>
-        <li>{link("/member/pt-bookings", "My PT Bookings")}</li>
+        <li ref={bookingsRef} className="relative">
+          <button
+            ref={bookingsButtonRef}
+            type="button"
+            onClick={() => setBookingsOpen((open) => !open)}
+            className="w-full text-left block px-3 py-2 rounded-lg text-sm font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+          >
+            <span className="flex items-center justify-between gap-1">
+              Bookings
+              <svg
+                className={`w-4 h-4 shrink-0 transition-transform ${bookingsOpen ? "rotate-90" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </span>
+          </button>
+          {bookingsOpen &&
+            typeof document !== "undefined" &&
+            createPortal(
+              <div
+                ref={bookingsDropdownRef}
+                className="fixed min-w-[10rem] py-1 rounded-lg border border-stone-200 bg-white shadow-lg z-[100]"
+                style={{ top: bookingsPosition.top, left: bookingsPosition.left, marginLeft: 4 }}
+                role="menu"
+              >
+                <Link
+                  href="/member/class-bookings"
+                  className="block px-3 py-2 text-sm font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                  role="menuitem"
+                  onClick={() => setBookingsOpen(false)}
+                >
+                  Class bookings
+                </Link>
+                <Link
+                  href="/member/pt-bookings"
+                  className="block px-3 py-2 text-sm font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                  role="menuitem"
+                  onClick={() => setBookingsOpen(false)}
+                >
+                  PT bookings
+                </Link>
+              </div>,
+              document.body
+            )}
+        </li>
         <li>{link("/member/workouts", "Workouts", pathname?.startsWith("/member/workouts"))}</li>
         <li>{link("/member/macros", "Macros", pathname?.startsWith("/member/macros"))}</li>
         <li>{link("/rec-leagues", "Rec Leagues", pathname?.startsWith("/rec-leagues"))}</li>
@@ -180,11 +253,12 @@ function NavList({
         </li>
       )}
       {isTrainer && (
-        <li>{link("/trainer", member?.role === "Admin" ? "Trainer schedule" : "My Schedule", pathname === "/trainer" || pathname?.startsWith("/trainer/"))}</li>
+        <li>{link("/trainer", "My schedule", pathname === "/trainer" || pathname?.startsWith("/trainer/"))}</li>
       )}
       <li>{link("/rec-leagues", "Rec Leagues", pathname?.startsWith("/rec-leagues"))}</li>
       {!isAdmin && <li>{link("/schedule", "Schedule", pathname === "/schedule" || pathname?.startsWith("/schedule/"))}</li>}
       {isAdmin && <li>{link("/master-schedule", "Master Schedule")}</li>}
+      {isAdmin && <li>{link("/admin/trainers", "Trainers")}</li>}
       {isAdmin && (
         <li ref={trainerSchedulesRef} className="relative">
           <button

@@ -36,7 +36,7 @@ export async function PATCH(
   }
   try {
     const body = await request.json();
-    const fields = ["product_id", "class_name", "instructor", "date", "time", "capacity", "status", "price", "stripe_link", "category", "description", "image_url", "is_recurring", "days_of_week", "duration_minutes"] as const;
+    const fields = ["product_id", "class_name", "instructor", "trainer_member_id", "date", "time", "capacity", "status", "price", "stripe_link", "category", "description", "image_url", "is_recurring", "days_of_week", "duration_minutes"] as const;
     const updates: string[] = [];
     const values: unknown[] = [];
     for (const f of fields) {

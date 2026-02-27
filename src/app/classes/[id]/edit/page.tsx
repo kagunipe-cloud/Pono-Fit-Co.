@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
+type Trainer = { member_id: string; display_name: string };
+
 export default function EditClassPage() {
   const params = useParams();
   const router = useRouter();
@@ -14,6 +16,7 @@ export default function EditClassPage() {
   const [form, setForm] = useState({
     class_name: "",
     instructor: "",
+    trainer_member_id: "",
     date: "",
     time: "",
     capacity: "",
@@ -28,8 +31,14 @@ export default function EditClassPage() {
   });
   const [generating, setGenerating] = useState(false);
   const [generateWeeks, setGenerateWeeks] = useState(12);
+  const [trainers, setTrainers] = useState<Trainer[]>([]);
 
   useEffect(() => {
+    fetch("/api/trainers")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: Trainer[]) => setTrainers(Array.isArray(data) ? data : []))
+      .catch(() => setTrainers([]));
+
     let cancelled = false;
     fetch(`/api/offerings/classes/${id}`)
       .then((res) => { if (!res.ok) throw new Error("Not found"); return res.json(); })
@@ -37,6 +46,7 @@ export default function EditClassPage() {
         if (!cancelled) setForm({
           class_name: String(data.class_name ?? ""),
           instructor: String(data.instructor ?? ""),
+          trainer_member_id: String(data.trainer_member_id ?? ""),
           date: String(data.date ?? ""),
           time: String(data.time ?? ""),
           capacity: String(data.capacity ?? ""),
@@ -100,7 +110,31 @@ export default function EditClassPage() {
           <input type="text" value={form.class_name} onChange={(e) => setForm((f) => ({ ...f, class_name: e.target.value }))} className="w-full px-4 py-2.5 rounded-lg border border-stone-200" required />
         </div>
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1">Instructor</label>
+          <label className="block text-sm font-medium text-stone-700 mb-1">Trainer (optional)</label>
+          <select
+            value={form.trainer_member_id}
+            onChange={(e) => {
+              const id = e.target.value;
+              const trainer = trainers.find((t) => t.member_id === id);
+              setForm((f) => ({
+                ...f,
+                trainer_member_id: id,
+                instructor: trainer ? trainer.display_name : f.instructor,
+              }));
+            }}
+            className="w-full px-4 py-2.5 rounded-lg border border-stone-200 bg-white"
+          >
+            <option value="">Unassigned / custom</option>
+            {trainers.map((t) => (
+              <option key={t.member_id} value={t.member_id}>
+                {t.display_name}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-stone-500">Pick a trainer or leave unassigned and fill in Instructor manually.</p>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-stone-700 mb-1">Instructor (displayed on schedule)</label>
           <input type="text" value={form.instructor} onChange={(e) => setForm((f) => ({ ...f, instructor: e.target.value }))} className="w-full px-4 py-2.5 rounded-lg border border-stone-200" />
         </div>
         <div>
