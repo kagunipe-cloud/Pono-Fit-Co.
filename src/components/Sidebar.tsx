@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { BRAND } from "@/lib/branding";
 import { SECTIONS, getReportSubSections, REPORT_SUB_SLUGS } from "../lib/sections";
 
@@ -114,8 +114,6 @@ function NavList({
   const reportSubs = getReportSubSections();
   const mainSections = SECTIONS.filter((s) => !REPORT_SUB_SLUGS.includes(s.slug));
   const isOnReportPage = pathname != null && REPORT_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`));
-  const searchParams = useSearchParams();
-  const isViewingTrainerSchedule = pathname === "/schedule" && searchParams.get("trainer");
 
   if (showMemberNav) {
     return (
@@ -194,7 +192,7 @@ function NavList({
             type="button"
             onClick={() => setTrainerSchedulesOpen((open) => !open)}
             className={`w-full text-left block px-3 py-2 rounded-lg text-sm font-medium ${
-              isViewingTrainerSchedule ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+              pathname === "/schedule" ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
             }`}
           >
             <span className="flex items-center justify-between gap-1">
