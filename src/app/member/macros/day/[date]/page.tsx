@@ -271,7 +271,7 @@ function PonoPlateTracker({
             title={`${Math.round(current - goal)} ${unit} over`}
           />
         )}
-        {/* Water fill (ring): behind the plate so it shows through the black area */}
+        {/* Ring + water: full ring always visible (dark), colored fill from bottom; plate on top shows branding */}
         <div
           className="absolute inset-0 rounded-full overflow-hidden"
           style={{
@@ -279,6 +279,9 @@ function PonoPlateTracker({
             WebkitMaskImage: "radial-gradient(circle at center, transparent 28%, black 28%)",
           }}
         >
+          {/* Unfilled part of ring: dark so outline is always visible */}
+          <div className="absolute inset-0 bg-stone-900" />
+          {/* Filled part: macro color from bottom up */}
           <div
             className={`absolute inset-x-0 bottom-0 transition-all duration-500 ${isOver ? "bg-red-500" : fillColorClass}`}
             style={{
@@ -286,9 +289,9 @@ function PonoPlateTracker({
             }}
           />
         </div>
-        {/* Plate image on top; screen blend so black shows the water, neon green stays visible */}
+        {/* Plate image on top; screen blend so black shows ring/fill, neon green stays visible */}
         <div
-          className="absolute inset-0 rounded-full bg-cover bg-center bg-no-repeat mix-blend-screen"
+          className="absolute inset-0 rounded-full bg-cover bg-center bg-no-repeat mix-blend-screen pointer-events-none"
           style={{ backgroundImage: "url(/pono-plate.png)" }}
           aria-hidden
         />
