@@ -936,7 +936,7 @@ export default function MemberMacrosDayPage() {
       {/* CTA: Book session with Exercise Physiologist */}
       <div className="mb-6 p-3 rounded-xl border border-brand-200 bg-brand-50 flex flex-wrap items-center justify-between gap-2">
         <p className="text-stone-700 text-sm">
-          <span className="font-medium">Need help setting or hitting a gsoal?</span>{" "}
+          <span className="font-medium">Need help setting or hitting a goal?</span>{" "}
           <span className="text-stone-600">Book a session with our Exercise Physiologist.</span>
         </p>
         <Link href="/member/book-pt" className="shrink-0 px-3 py-1.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700">
