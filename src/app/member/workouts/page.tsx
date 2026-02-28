@@ -5,11 +5,23 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDateInAppTz } from "@/lib/app-timezone";
 import { getWeightComparisonWithArticle } from "@/lib/workout-congrats";
+import { useAppTimezone } from "@/lib/settings-context";
 
 type Workout = { id: number; member_id: string; started_at: string; finished_at: string | null; total_volume?: number; assigned_by_admin?: number; name?: string | null };
 
+function getWorkoutDateInTz(w: Workout, tz: string): string {
+  const raw = w.finished_at ?? w.started_at ?? "";
+  if (!raw) return "";
+  try {
+    return new Date(raw).toLocaleDateString("en-CA", { timeZone: tz });
+  } catch {
+    return raw.slice(0, 10);
+  }
+}
+
 export default function MemberWorkoutsPage() {
   const router = useRouter();
+  const tz = useAppTimezone();
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
@@ -67,6 +79,47 @@ export default function MemberWorkoutsPage() {
   const openWorkout = workouts.find((w) => !w.finished_at);
   const pastWorkouts = workouts.filter((w) => w.finished_at).sort((a, b) => (b.finished_at ?? "").localeCompare(a.finished_at ?? ""));
 
+  const now = new Date();
+  const thisYear = now.toLocaleDateString("en-CA", { timeZone: tz }).slice(0, 4);
+  const thisMonth = now.toLocaleDateString("en-CA", { timeZone: tz }).slice(0, 7);
+  const volumeThisMonth = pastWorkouts
+    .filter((w) => getWorkoutDateInTz(w, tz).startsWith(thisMonth))
+    .reduce((sum, w) => sum + (w.total_volume ?? 0), 0);
+  const volumeThisYear = pastWorkouts
+    .filter((w) => getWorkoutDateInTz(w, tz).startsWith(thisYear))
+    .reduce((sum, w) => sum + (w.total_volume ?? 0), 0);
+
+  const byMonth = new Map<string, number>();
+  const byYear = new Map<string, number>();
+  for (const w of pastWorkouts) {
+    const dateStr = getWorkoutDateInTz(w, tz);
+    if (!dateStr) continue;
+    const vol = w.total_volume ?? 0;
+    const monthKey = dateStr.slice(0, 7);
+    const yearKey = dateStr.slice(0, 4);
+    byMonth.set(monthKey, (byMonth.get(monthKey) ?? 0) + vol);
+    byYear.set(yearKey, (byYear.get(yearKey) ?? 0) + vol);
+  }
+  let monthlyRecord: { volume: number; monthKey: string } | null = null;
+  let yearlyRecord: { volume: number; yearKey: string } | null = null;
+  for (const [monthKey, volume] of byMonth) {
+    if (volume > 0 && (!monthlyRecord || volume > monthlyRecord.volume)) {
+      monthlyRecord = { volume, monthKey };
+    }
+  }
+  for (const [yearKey, volume] of byYear) {
+    if (volume > 0 && (!yearlyRecord || volume > yearlyRecord.volume)) {
+      yearlyRecord = { volume, yearKey };
+    }
+  }
+  const formatMonthKey = (key: string) => {
+    try {
+      return new Date(key + "-01").toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    } catch {
+      return key;
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto p-6">
       <h1 className="text-2xl font-bold text-stone-800 mb-6">Workouts</h1>
@@ -95,6 +148,49 @@ export default function MemberWorkoutsPage() {
       <p className="mb-6">
         <Link href="/member/workouts/progress" className="text-brand-600 hover:underline text-sm">View progress charts →</Link>
       </p>
+      {(volumeThisMonth > 0 || volumeThisYear > 0 || monthlyRecord || yearlyRecord) && (
+        <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-stone-50">
+          <h2 className="text-sm font-medium text-stone-500 mb-2">Total volume lifted</h2>
+          <ul className="space-y-1 text-sm">
+            {volumeThisMonth > 0 && (
+              <li className="text-stone-700">
+                <span className="font-medium text-brand-700">{Number(volumeThisMonth).toLocaleString()}</span> lbs this month
+                {getWeightComparisonWithArticle(volumeThisMonth) && (
+                  <span className="text-stone-500"> · {getWeightComparisonWithArticle(volumeThisMonth)}</span>
+                )}
+              </li>
+            )}
+            {volumeThisYear > 0 && (
+              <li className="text-stone-700">
+                <span className="font-medium text-brand-700">{Number(volumeThisYear).toLocaleString()}</span> lbs this year
+                {getWeightComparisonWithArticle(volumeThisYear) && (
+                  <span className="text-stone-500"> · {getWeightComparisonWithArticle(volumeThisYear)}</span>
+                )}
+              </li>
+            )}
+            {monthlyRecord && monthlyRecord.volume > 0 && (
+              <li className="text-stone-700 pt-1 border-t border-stone-200 mt-1">
+                <span className="font-medium text-stone-800">Monthly record:</span>{" "}
+                <span className="font-medium text-brand-700">{Number(monthlyRecord.volume).toLocaleString()}</span> lbs
+                <span className="text-stone-500"> ({formatMonthKey(monthlyRecord.monthKey)})</span>
+                {getWeightComparisonWithArticle(monthlyRecord.volume) && (
+                  <span className="text-stone-500"> · {getWeightComparisonWithArticle(monthlyRecord.volume)}</span>
+                )}
+              </li>
+            )}
+            {yearlyRecord && yearlyRecord.volume > 0 && (
+              <li className="text-stone-700">
+                <span className="font-medium text-stone-800">Yearly record:</span>{" "}
+                <span className="font-medium text-brand-700">{Number(yearlyRecord.volume).toLocaleString()}</span> lbs
+                <span className="text-stone-500"> ({yearlyRecord.yearKey})</span>
+                {getWeightComparisonWithArticle(yearlyRecord.volume) && (
+                  <span className="text-stone-500"> · {getWeightComparisonWithArticle(yearlyRecord.volume)}</span>
+                )}
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
       <h2 className="text-sm font-medium text-stone-500 mb-3">Past Workouts</h2>
       {pastWorkouts.length === 0 ? (
         <p className="text-stone-500">No past workouts yet. Start one above to track your lifts and cardio.</p>
