@@ -65,9 +65,9 @@ function slotOverlaps(slotMin: number, startMin: number, endMin: number): boolea
   return startMin < slotEnd && endMin > slotMin;
 }
 
-type ScheduleGridProps = { variant: "member" | "master" | "trainer"; trainerMemberId?: string | null; trainerDisplayName?: string | null };
+type ScheduleGridProps = { variant: "member" | "master" | "trainer"; trainerMemberId?: string | null; trainerDisplayName?: string | null; /** When this changes (e.g. after trainer adds/removes availability), grid refetches. */ scheduleRefreshKey?: number };
 
-export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayName }: ScheduleGridProps) {
+export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayName, scheduleRefreshKey }: ScheduleGridProps) {
   const searchParams = useSearchParams();
   const tz = useAppTimezone();
   const productId = searchParams.get("product")?.trim() || null;
@@ -114,7 +114,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
         setOpenBookings([]);
       })
       .finally(() => setLoading(false));
-  }, [fromStr, toStr, effectiveTrainerId]);
+  }, [fromStr, toStr, effectiveTrainerId, scheduleRefreshKey]);
 
   const dayDates = useMemo(() => {
     return [0, 1, 2, 3, 4, 5, 6].map((i) => addDaysToDateStr(weekStartStr, i));
@@ -325,7 +325,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                             </div>
                           )}
                           {item.type === "pt_segment" && (
-                            <div className={`rounded-lg border px-2 py-1.5 min-h-[2.5rem] ${item.booked ? "bg-stone-400 border-stone-500" : "bg-white border-2 border-brand-500 hover:border-brand-600"}`}>
+                            <div className={`rounded-lg border px-2 py-1.5 min-h-[2.5rem] ${item.booked ? "bg-stone-400 border-stone-500 text-stone-100" : "bg-brand-50 border-2 border-brand-500 hover:border-brand-600"}`}>
                               {item.booked ? (isMaster || isTrainer ? (
                                 <span className="text-xs text-stone-200 block truncate" title={item.member_name ?? "Booked"}>
                                   {item.member_name ?? "Booked"}
@@ -342,9 +342,13 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                             </div>
                           )}
                           {item.type === "available" && (
-                            <div className="rounded-lg border border-brand-200 bg-brand-50 hover:bg-brand-100 px-2 py-1.5 min-h-[2.5rem] flex items-center justify-center transition-colors">
+                            <div className={`rounded-lg border min-h-[2.5rem] flex items-center justify-center transition-colors ${
+                              isTrainer
+                                ? "bg-stone-300 border-stone-400"
+                                : "border-brand-200 bg-brand-50 hover:bg-brand-100"
+                            } px-2 py-1.5`}>
                               {isTrainer ? (
-                                <span className="text-xs text-stone-500">—</span>
+                                <span className="text-xs text-stone-500">Unavailable</span>
                               ) : (
                                 <Link href={variant === "master" ? `/admin/book-pt-for-member?date=${date}&time=${timeStr}` : `/member/book-pt?date=${date}&time=${timeStr}${bookPtQuery || ""}`} className="text-xs text-brand-700 hover:text-brand-800 hover:underline">Available</Link>
                               )}

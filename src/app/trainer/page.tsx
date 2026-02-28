@@ -22,6 +22,7 @@ export default function TrainerSchedulePage() {
   const router = useRouter();
   const [member, setMember] = useState<MemberMe>(null);
   const [blocks, setBlocks] = useState<AvailabilityBlock[]>([]);
+  const [scheduleRefreshKey, setScheduleRefreshKey] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [addDay, setAddDay] = useState(1);
@@ -65,6 +66,7 @@ export default function TrainerSchedulePage() {
       const data = await res.json();
       if (res.ok) {
         setBlocks((prev) => [...prev, data]);
+        setScheduleRefreshKey((k) => k + 1);
         setShowAdd(false);
         setAddDesc("");
       } else {
@@ -80,8 +82,10 @@ export default function TrainerSchedulePage() {
     setDeletingId(id);
     try {
       const res = await fetch(`/api/trainer/availability/${id}`, { method: "DELETE" });
-      if (res.ok) setBlocks((prev) => prev.filter((b) => b.id !== id));
-      else {
+      if (res.ok) {
+        setBlocks((prev) => prev.filter((b) => b.id !== id));
+        setScheduleRefreshKey((k) => k + 1);
+      } else {
         const data = await res.json();
         alert(data.error ?? "Failed to delete");
       }
@@ -105,6 +109,7 @@ export default function TrainerSchedulePage() {
         variant="trainer"
         trainerMemberId={member.member_id}
         trainerDisplayName={displayName}
+        scheduleRefreshKey={scheduleRefreshKey}
       />
 
       <div className="mt-10 max-w-2xl">
