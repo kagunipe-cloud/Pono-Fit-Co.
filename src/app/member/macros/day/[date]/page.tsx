@@ -275,8 +275,8 @@ function PonoPlateTracker({
         <div
           className="absolute inset-0 rounded-full overflow-hidden"
           style={{
-            maskImage: "radial-gradient(circle at center, transparent 28%, black 28%)",
-            WebkitMaskImage: "radial-gradient(circle at center, transparent 28%, black 28%)",
+            maskImage: "radial-gradient(circle at center, transparent 18%, black 18%)",
+            WebkitMaskImage: "radial-gradient(circle at center, transparent 18%, black 18%)",
           }}
         >
           {/* Unfilled part of ring: dark so outline is always visible */}
