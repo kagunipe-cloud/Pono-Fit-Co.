@@ -133,7 +133,7 @@ function NavList({
   const mainSections = SECTIONS.filter(
     (s) => !REPORT_SUB_SLUGS.includes(s.slug) && !BOOKINGS_SUB_SLUGS.includes(s.slug) && !SERVICES_SUB_SLUGS.includes(s.slug)
   );
-  const isOnReportPage = pathname != null && REPORT_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`));
+  const isOnReportPage = pathname != null && (REPORT_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`)) || pathname === "/admin/usage" || pathname.startsWith("/admin/usage/"));
   const isOnBookingsPage = pathname != null && BOOKINGS_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`));
   const isOnServicesPage = pathname != null && (pathname.startsWith("/rec-leagues") || pathname.startsWith("/class-packs") || pathname.startsWith("/pt-packs") || SERVICES_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`)));
 
@@ -255,12 +255,7 @@ function NavList({
       {isAdmin && <li>{link("/master-schedule", "Master Schedule")}</li>}
       {isAdmin && <li>{link("/admin/trainers", "Trainers")}</li>}
       {isAdmin && <li>{link("/admin/create-workout-for-member", "Create Workout for Member")}</li>}
-      {isAdmin && <li>{link("/exercises", "Exercises")}</li>}
-      {isAdmin && <li>{link("/macros", "Macros")}</li>}
-      {isAdmin && <li>{link("/admin/backup", "Backup & Restore")}</li>}
-      {isAdmin && <li>{link("/admin/import-members", "Import members")}</li>}
       {isAdmin && <li>{link("/admin/settings", "Settings")}</li>}
-      {isAdmin && <li>{link("/admin/usage", "Usage tracking")}</li>}
       {isAdmin && <li>{link("/admin/email-members", "Email all members")}</li>}
       {mainSections.map((s) => (
         <React.Fragment key={s.slug}>
@@ -420,6 +415,16 @@ function NavList({
                   {title}
                 </Link>
               ))}
+              <Link
+                href="/admin/usage"
+                className={`block px-3 py-2 text-sm font-medium ${
+                  pathname === "/admin/usage" || pathname?.startsWith("/admin/usage/") ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                }`}
+                role="menuitem"
+                onClick={() => setReportsOpen(false)}
+              >
+                Usage tracking
+              </Link>
             </div>,
             document.body
           )}

@@ -229,6 +229,69 @@ function sumMacros(entries: Entry[]) {
   );
 }
 
+/** Mountain (mauna) tracker: fills from bottom; over goal = red lava overflow */
+function MaunaTracker({
+  label,
+  current,
+  goal,
+  unit,
+  fillColor = "bg-brand-500",
+}: {
+  label: string;
+  current: number;
+  goal: number;
+  unit: string;
+  fillColor?: string;
+}) {
+  const hasGoal = goal > 0;
+  const fillPct = hasGoal ? Math.min(100, (current / goal) * 100) : 0;
+  const isOver = hasGoal && current > goal;
+  const overflowPct = hasGoal && goal > 0 ? Math.min(50, ((current - goal) / goal) * 100) : 0; // cap overflow height at 50% of mountain
+
+  return (
+    <div className="flex flex-col items-center">
+      <div className="flex justify-between w-full text-xs text-stone-500 mb-1">
+        <span className="font-medium text-stone-600">{label}</span>
+        <span>
+          {unit === "cal" ? Math.round(current).toLocaleString() : Math.round(current)}
+          {hasGoal ? ` / ${unit === "cal" ? Math.round(goal).toLocaleString() : Math.round(goal)}${unit}` : unit}
+        </span>
+      </div>
+      <div className="w-full relative" style={{ height: 88 }}>
+        {/* Lava overflow (when over goal) */}
+        {isOver && overflowPct > 0 && (
+          <div
+            className="absolute left-0 right-0 rounded-t-lg bg-red-500 border-2 border-red-600 shadow-lg transition-all"
+            style={{
+              bottom: "100%",
+              height: `${overflowPct}%`,
+              minHeight: 8,
+            }}
+            title={`${Math.round(current - goal)} ${unit} over`}
+          />
+        )}
+        {/* Mountain shape: trapezoid (wider at base) */}
+        <div
+          className="absolute inset-x-0 bottom-0 overflow-hidden rounded-b-lg bg-stone-200"
+          style={{
+            height: "100%",
+            clipPath: "polygon(8% 100%, 50% 8%, 92% 100%)",
+          }}
+        >
+          {/* Fill from bottom */}
+          <div
+            className={`absolute left-0 right-0 bottom-0 transition-all duration-500 ${isOver ? "bg-red-500" : fillColor}`}
+            style={{
+              height: `${isOver ? 100 : fillPct}%`,
+              clipPath: "polygon(8% 100%, 50% 8%, 92% 100%)",
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function MemberMacrosDayPage() {
   const params = useParams();
   const router = useRouter();
@@ -899,86 +962,51 @@ export default function MemberMacrosDayPage() {
             </button>
           </div>
 
-          {/* Today's progress vs goals + remaining */}
-          {(goals.calories_goal != null && goals.calories_goal > 0) && (
-            <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-white">
-              <p className="font-semibold text-stone-800 mb-3">Today&apos;s progress</p>
-              <div className="space-y-3">
-                <div>
-                  <div className="flex justify-between text-xs text-stone-500 mb-0.5">
-                    <span>Calories</span>
-                    <span>{Math.round(dayTotal.cal)} / {goals.calories_goal}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-stone-100 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-brand-500 transition-all"
-                      style={{ width: `${Math.min(100, (dayTotal.cal / goals.calories_goal) * 100)}%` }}
-                    />
-                  </div>
+          {/* Today's progress: mauna (mountain) trackers — fill the mountain; over = red lava overflow */}
+          {(goals.calories_goal != null && goals.calories_goal > 0) && (() => {
+            const calGoal = goals.calories_goal ?? 0;
+            const pPct = (goals.protein_pct ?? 0) / 100;
+            const fPct = (goals.fat_pct ?? 0) / 100;
+            const cPct = (goals.carbs_pct ?? 0) / 100;
+            const goalP = calGoal > 0 ? (pPct * calGoal) / 4 : 0;
+            const goalF = calGoal > 0 ? (fPct * calGoal) / 9 : 0;
+            const goalC = calGoal > 0 ? (cPct * calGoal) / 4 : 0;
+            return (
+              <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-white">
+                <p className="font-semibold text-stone-800 mb-4">Today&apos;s progress</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+                  <MaunaTracker
+                    label="Calories"
+                    current={dayTotal.cal}
+                    goal={calGoal}
+                    unit="cal"
+                    fillColor="bg-brand-500"
+                  />
+                  <MaunaTracker
+                    label="Protein"
+                    current={dayTotal.p}
+                    goal={goalP}
+                    unit="g"
+                    fillColor="bg-blue-500"
+                  />
+                  <MaunaTracker
+                    label="Fat"
+                    current={dayTotal.f}
+                    goal={goalF}
+                    unit="g"
+                    fillColor="bg-amber-500"
+                  />
+                  <MaunaTracker
+                    label="Carbs"
+                    current={dayTotal.c}
+                    goal={goalC}
+                    unit="g"
+                    fillColor="bg-emerald-500"
+                  />
                 </div>
-                {dayTotal.cal > 0 && (goals.protein_pct != null || goals.fat_pct != null || goals.carbs_pct != null) && (
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    {[
-                      { key: "Protein", calFrom: dayTotal.p * 4, goalPct: goals.protein_pct, color: "bg-blue-500" },
-                      { key: "Fat", calFrom: dayTotal.f * 9, goalPct: goals.fat_pct, color: "bg-amber-500" },
-                      { key: "Carbs", calFrom: dayTotal.c * 4, goalPct: goals.carbs_pct, color: "bg-emerald-500" },
-                    ].map(({ key, calFrom, goalPct, color }) => {
-                      const actualPct = (calFrom / dayTotal.cal) * 100;
-                      const goal = goalPct ?? 0;
-                      return (
-                        <div key={key}>
-                          <div className="flex justify-between text-stone-500 mb-0.5">
-                            <span>{key}</span>
-                            <span>{actualPct.toFixed(0)}%{goal > 0 ? ` (goal ${goal}%)` : ""}</span>
-                          </div>
-                          <div className="h-1.5 rounded-full bg-stone-100 overflow-hidden">
-                            <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(100, actualPct)}%` }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-                {/* Left today: calories and P/F/C remaining */}
-                {(() => {
-                  const calGoal = goals.calories_goal ?? 0;
-                  const remainingCal = Math.max(0, calGoal - dayTotal.cal);
-                  const pPct = (goals.protein_pct ?? 0) / 100;
-                  const fPct = (goals.fat_pct ?? 0) / 100;
-                  const cPct = (goals.carbs_pct ?? 0) / 100;
-                  const goalP = calGoal > 0 ? (pPct * calGoal) / 4 : 0;
-                  const goalF = calGoal > 0 ? (fPct * calGoal) / 9 : 0;
-                  const goalC = calGoal > 0 ? (cPct * calGoal) / 4 : 0;
-                  const remainingP = Math.max(0, goalP - dayTotal.p);
-                  const remainingF = Math.max(0, goalF - dayTotal.f);
-                  const remainingC = Math.max(0, goalC - dayTotal.c);
-                  const hasMacroGoals = goalP > 0 || goalF > 0 || goalC > 0;
-                  return (
-                    <div className="pt-3 mt-3 border-t border-stone-100">
-                      <p className="text-xs font-medium text-stone-500 mb-1">Left today</p>
-                      <p className="text-sm text-stone-700">
-                        {remainingCal > 0 ? (
-                          <span>{Math.round(remainingCal).toLocaleString()} cal left</span>
-                        ) : (
-                          <span className="text-amber-600">Calorie goal reached</span>
-                        )}
-                        {hasMacroGoals && (
-                          <>
-                            {" · "}
-                            {remainingP > 0 ? `${Math.round(remainingP)}g P` : "P ✓"}
-                            {" · "}
-                            {remainingF > 0 ? `${Math.round(remainingF)}g F` : "F ✓"}
-                            {" · "}
-                            {remainingC > 0 ? `${Math.round(remainingC)}g C` : "C ✓"}
-                          </>
-                        )}
-                      </p>
-                    </div>
-                  );
-                })()}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Meals */}
           <div className="space-y-6 mb-8">

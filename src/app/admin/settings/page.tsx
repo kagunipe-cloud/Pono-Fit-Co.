@@ -61,17 +61,53 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <div className="max-w-xl">
+    <div className="max-w-2xl">
       <header className="mb-8">
         <Link href="/" className="text-stone-500 hover:text-stone-700 text-sm mb-2 inline-block">
           ← Back to home
         </Link>
         <h1 className="text-2xl font-bold text-stone-800">Settings</h1>
         <p className="text-stone-500 mt-1">
-          Gym timezone for schedules, macros, usage, and journal dates.
+          Manage databases, backup, and more.
         </p>
       </header>
 
+      <div className="mb-8 grid gap-3 sm:grid-cols-2">
+        <Link
+          href="/exercises"
+          className="block p-4 rounded-xl border border-stone-200 bg-white hover:border-brand-300 hover:bg-brand-50/30 transition-colors"
+        >
+          <h2 className="font-semibold text-stone-800">Exercise database</h2>
+          <p className="text-sm text-stone-500 mt-0.5">Add and edit exercises for workouts.</p>
+        </Link>
+        <Link
+          href="/macros"
+          className="block p-4 rounded-xl border border-stone-200 bg-white hover:border-brand-300 hover:bg-brand-50/30 transition-colors"
+        >
+          <h2 className="font-semibold text-stone-800">Macros database</h2>
+          <p className="text-sm text-stone-500 mt-0.5">Manage macro templates and food entries.</p>
+        </Link>
+        <Link
+          href="/admin/backup"
+          className="block p-4 rounded-xl border border-stone-200 bg-white hover:border-brand-300 hover:bg-brand-50/30 transition-colors"
+        >
+          <h2 className="font-semibold text-stone-800">Backup & Restore</h2>
+          <p className="text-sm text-stone-500 mt-0.5">Download a backup or restore from file.</p>
+        </Link>
+        <Link
+          href="/admin/import-members"
+          className="block p-4 rounded-xl border border-stone-200 bg-white hover:border-brand-300 hover:bg-brand-50/30 transition-colors"
+        >
+          <h2 className="font-semibold text-stone-800">Import members</h2>
+          <p className="text-sm text-stone-500 mt-0.5">Import members from a CSV file.</p>
+        </Link>
+      </div>
+
+      <section className="mb-8">
+        <h2 className="text-lg font-semibold text-stone-800 mb-3">General</h2>
+        <p className="text-stone-500 mb-4">
+          Gym timezone for schedules, macros, usage, and journal dates.
+        </p>
       {loading ? (
         <p className="text-stone-500">Loading…</p>
       ) : (
@@ -113,6 +149,7 @@ export default function AdminSettingsPage() {
           )}
         </form>
       )}
+      </section>
     </div>
   );
 }
