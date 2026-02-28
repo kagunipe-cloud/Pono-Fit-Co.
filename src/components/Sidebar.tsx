@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BRAND } from "@/lib/branding";
-import { SECTIONS, getReportSubSections, getBookingsSubSections, getServicesSubSections, REPORT_SUB_SLUGS, BOOKINGS_SUB_SLUGS, SERVICES_SUB_SLUGS } from "../lib/sections";
+import { SECTIONS, getReportSubSections, getBookingsSubSections, REPORT_SUB_SLUGS, BOOKINGS_SUB_SLUGS, SERVICES_SUB_SLUGS } from "../lib/sections";
 
 type MemberMe = {
   member_id: string;
@@ -130,13 +130,12 @@ function NavList({
 
   const reportSubs = getReportSubSections();
   const bookingsSubs = getBookingsSubSections();
-  const servicesSubs = getServicesSubSections();
   const mainSections = SECTIONS.filter(
     (s) => !REPORT_SUB_SLUGS.includes(s.slug) && !BOOKINGS_SUB_SLUGS.includes(s.slug) && !SERVICES_SUB_SLUGS.includes(s.slug)
   );
   const isOnReportPage = pathname != null && REPORT_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`));
   const isOnBookingsPage = pathname != null && BOOKINGS_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`));
-  const isOnServicesPage = pathname != null && (pathname.startsWith("/rec-leagues") || SERVICES_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`)));
+  const isOnServicesPage = pathname != null && (pathname.startsWith("/rec-leagues") || pathname.startsWith("/class-packs") || pathname.startsWith("/pt-packs") || SERVICES_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`)));
 
   if (showMemberNav) {
     return (
@@ -263,8 +262,6 @@ function NavList({
       {isAdmin && <li>{link("/admin/settings", "Settings")}</li>}
       {isAdmin && <li>{link("/admin/usage", "Usage tracking")}</li>}
       {isAdmin && <li>{link("/admin/email-members", "Email all members")}</li>}
-      <li>{link("/class-packs", "Class Packs")}</li>
-      <li>{link("/pt-packs", "PT Packs")}</li>
       {mainSections.map((s) => (
         <React.Fragment key={s.slug}>
           <li>{link(`/${s.slug}`, s.title, pathname === `/${s.slug}`)}</li>
@@ -350,27 +347,26 @@ function NavList({
                     style={{ top: servicesPosition.top, left: servicesPosition.left, marginLeft: 4 }}
                     role="menu"
                   >
-                    <Link
-                      href="/rec-leagues"
-                      className={`block px-3 py-2 text-sm font-medium ${
-                        pathname?.startsWith("/rec-leagues") ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                      }`}
-                      role="menuitem"
-                      onClick={() => setServicesOpen(false)}
-                    >
-                      Rec Leagues
-                    </Link>
-                    {servicesSubs.map(({ slug, title }) => (
+                    {[
+                      { href: "/membership-plans", label: "Membership Plans" },
+                      { href: "/pt-sessions", label: "PT Sessions" },
+                      { href: "/pt-packs", label: "PT Packs" },
+                      { href: "/classes", label: "Classes" },
+                      { href: "/class-packs", label: "Class Packs" },
+                      { href: "/rec-leagues", label: "Rec Leagues" },
+                    ].map(({ href, label }) => (
                       <Link
-                        key={slug}
-                        href={`/${slug}`}
+                        key={href}
+                        href={href}
                         className={`block px-3 py-2 text-sm font-medium ${
-                          pathname === `/${slug}` ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                          pathname === href || pathname?.startsWith(href + "/")
+                            ? "bg-brand-50 text-brand-800"
+                            : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
                         }`}
                         role="menuitem"
                         onClick={() => setServicesOpen(false)}
                       >
-                        {title}
+                        {label}
                       </Link>
                     ))}
                   </div>,

@@ -86,11 +86,10 @@ export const SECTIONS: SectionConfig[] = [
   {
     slug: "subscriptions",
     title: "Subscriptions",
-    description: "Active subscriptions",
+    description: "Active and cancelled subscriptions",
     columns: [
-      { key: "subscription_id", label: "Subscription ID" },
-      { key: "member_id", label: "Member ID" },
-      { key: "product_id", label: "Product ID" },
+      { key: "member_name", label: "Member Name" },
+      { key: "plan_name", label: "Subscription Name" },
       { key: "status", label: "Status" },
       { key: "start_date", label: "Start date" },
       { key: "expiry_date", label: "Expiry date" },
@@ -171,7 +170,7 @@ export function getSection(slug: SectionSlug): SectionConfig | undefined {
 }
 
 /** Slugs that appear under the sidebar "Reports" dropdown. Add more here as you add report pages. */
-export const REPORT_SUB_SLUGS: SectionSlug[] = ["sales", "transactions", "money-owed"];
+export const REPORT_SUB_SLUGS: SectionSlug[] = ["sales", "transactions", "money-owed", "subscriptions"];
 
 /** Slugs that appear under the sidebar "Bookings" dropdown (admin nav). */
 export const BOOKINGS_SUB_SLUGS: SectionSlug[] = ["pt-bookings", "class-bookings"];
