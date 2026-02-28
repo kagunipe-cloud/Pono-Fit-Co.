@@ -275,8 +275,8 @@ function PonoPlateTracker({
         <div
           className="absolute inset-0 rounded-full overflow-hidden"
           style={{
-            maskImage: "radial-gradient(circle at center, transparent 12%, black 12%)",
-            WebkitMaskImage: "radial-gradient(circle at center, transparent 12%, black 12%)",
+            maskImage: "radial-gradient(circle at center, transparent 8%, black 8%)",
+            WebkitMaskImage: "radial-gradient(circle at center, transparent 8%, black 8%)",
           }}
         >
           {/* Unfilled part of ring: dark so outline is always visible */}
@@ -870,7 +870,7 @@ export default function MemberMacrosDayPage() {
     return (
       <div className="max-w-2xl mx-auto p-6">
         <p className="text-stone-500">Invalid date.</p>
-        <Link href="/member/macros" className="text-brand-600 underline text-sm mt-2 inline-block">← Macros</Link>
+        <Link href="/member/macros" className="text-brand-600 underline text-sm mt-2 inline-block">← My Macros</Link>
       </div>
     );
   }
@@ -932,7 +932,7 @@ export default function MemberMacrosDayPage() {
               )}
             </>
           )}
-          <Link href="/member/macros" className="text-brand-600 hover:underline text-sm">← Macros</Link>
+          <Link href="/member/macros" className="text-brand-600 hover:underline text-sm">← My Macros</Link>
         </div>
       </div>
 

@@ -30,12 +30,11 @@ export default function MemberMacrosPage() {
   const [daysByWeek, setDaysByWeek] = useState<Record<string, JournalDay[]>>({});
   const [loading, setLoading] = useState(true);
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
+
   const [goals, setGoals] = useState<MacroGoals>({ calories_goal: null, protein_pct: null, fat_pct: null, carbs_pct: null });
   const [goalsDraft, setGoalsDraft] = useState<MacroGoals>({ calories_goal: null, protein_pct: null, fat_pct: null, carbs_pct: null });
   const [savingGoals, setSavingGoals] = useState(false);
   const [weekSummary, setWeekSummary] = useState<Record<string, DaySummary> | null>(null);
-  const [fixingDates, setFixingDates] = useState(false);
-  const [fixDatesResult, setFixDatesResult] = useState<{ updated: number; merged: number } | null>(null);
 
   const today = todayInAppTz(tz);
   const thisWeekMonday = weekStartInAppTz(today);
@@ -70,22 +69,6 @@ export default function MemberMacrosPage() {
       })
       .catch(() => {});
   }, []);
-
-  async function fixJournalDates() {
-    setFixingDates(true);
-    setFixDatesResult(null);
-    try {
-      const res = await fetch("/api/member/journal/fix-dates", { method: "POST" });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) setFixDatesResult({ updated: data.updated ?? 0, merged: data.merged ?? 0 });
-      if (res.ok && ((data.updated ?? 0) + (data.merged ?? 0)) > 0) {
-        fetchWeeks();
-        if (selectedWeek) fetchDaysForWeek(selectedWeek);
-      }
-    } finally {
-      setFixingDates(false);
-    }
-  }
 
   function saveGoals() {
     setSavingGoals(true);
@@ -127,7 +110,7 @@ export default function MemberMacrosPage() {
 
   return (
     <div className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl font-bold text-stone-800 mb-2">Macros</h1>
+      <h1 className="text-2xl font-bold text-stone-800 mb-2">My Macros</h1>
       <p className="text-stone-600 text-sm mb-6">Daily Food Journal — log meals and snacks, track macros by day and by week.</p>
 
       {/* CTA: Book session with Exercise Physiologist */}
@@ -316,26 +299,6 @@ export default function MemberMacrosPage() {
           ))}
         </ul>
       )}
-
-      {/* One-time fix: reassign journal days to Hawaiian date when they were created */}
-      <div className="mt-8 p-4 rounded-xl border border-stone-200 bg-stone-50">
-        <p className="text-stone-600 text-sm mb-2">If you logged food when &quot;today&quot; was still using the wrong timezone, you can move those days to the correct date (Hawaiian time).</p>
-        <button
-          type="button"
-          onClick={fixJournalDates}
-          disabled={fixingDates}
-          className="text-brand-600 hover:underline text-sm font-medium disabled:opacity-50"
-        >
-          {fixingDates ? "Fixing…" : "Fix past journal dates"}
-        </button>
-        {fixDatesResult && (
-          <p className="text-stone-500 text-xs mt-2">
-            {fixDatesResult.updated + fixDatesResult.merged === 0
-              ? "No changes needed."
-              : `Updated ${fixDatesResult.updated} day(s), merged ${fixDatesResult.merged} into existing days.`}
-          </p>
-        )}
-      </div>
 
       <p className="mt-8">
         <Link href="/member" className="text-brand-600 hover:underline text-sm">← Back to member home</Link>

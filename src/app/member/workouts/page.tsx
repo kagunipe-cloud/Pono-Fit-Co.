@@ -122,7 +122,7 @@ export default function MemberWorkoutsPage() {
 
   return (
     <div className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl font-bold text-stone-800 mb-6">Workouts</h1>
+      <h1 className="text-2xl font-bold text-stone-800 mb-6">My Workouts</h1>
 
       {error && (
         <p className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">{error}</p>

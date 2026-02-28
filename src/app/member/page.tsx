@@ -139,7 +139,7 @@ export default function MemberHomePage() {
           href="/member/workouts"
           className="block p-4 rounded-xl border-0 text-white shadow-md hover:opacity-95 hover:shadow-lg transition-all bg-[linear-gradient(90deg,theme(colors.red.400),theme(colors.amber.400),theme(colors.emerald.400),theme(colors.sky.400),theme(colors.violet.400))]"
         >
-          <h3 className="font-semibold">Workouts</h3>
+          <h3 className="font-semibold">My Workouts</h3>
           <p className="text-sm text-white/90 mt-1">
             Track Your Lifts and Cardio
           </p>
@@ -148,7 +148,7 @@ export default function MemberHomePage() {
           href="/member/macros"
           className="block p-4 rounded-xl border-0 text-white shadow-md hover:opacity-95 hover:shadow-lg transition-all bg-[linear-gradient(90deg,theme(colors.violet.400),theme(colors.sky.400),theme(colors.emerald.400),theme(colors.amber.400),theme(colors.red.400))]"
         >
-          <h3 className="font-semibold">Macros</h3>
+          <h3 className="font-semibold">My Macros</h3>
           <p className="text-sm text-white/90 mt-1">
             Log and Track Your Nutrition
           </p>

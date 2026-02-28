@@ -51,7 +51,7 @@ export default function MemberWorkoutProgressPage() {
     <div className="max-w-2xl mx-auto p-6">
       <div className="flex items-center justify-between flex-wrap gap-4 mb-6">
         <h1 className="text-2xl font-bold text-stone-800">Progress</h1>
-        <Link href="/member/workouts" className="text-brand-600 hover:underline text-sm">← Workouts</Link>
+        <Link href="/member/workouts" className="text-brand-600 hover:underline text-sm">← My Workouts</Link>
       </div>
       <p className="text-stone-600 text-sm mb-6">
         See how an exercise has improved over time. Only exercises you logged from the official list show up here.

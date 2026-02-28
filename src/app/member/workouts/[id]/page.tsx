@@ -413,7 +413,7 @@ export default function MemberWorkoutDetailPage() {
   }
 
   if (loading) return <div className="p-8 text-center text-stone-500">Loading…</div>;
-  if (!workout) return <div className="p-8 text-center text-stone-500">Workout not found. <Link href="/member/workouts" className="text-brand-600 underline">Back to Workouts</Link></div>;
+  if (!workout) return <div className="p-8 text-center text-stone-500">Workout not found. <Link href="/member/workouts" className="text-brand-600 underline">Back to My Workouts</Link></div>;
 
   const isOpen = !workout.finished_at;
   const isRepeatMode = isOpen && !!sourceWorkout;
@@ -568,7 +568,7 @@ export default function MemberWorkoutDetailPage() {
               )}
             </>
           )}
-          <Link href="/member/workouts" className="text-brand-600 hover:underline text-sm">← Workouts</Link>
+          <Link href="/member/workouts" className="text-brand-600 hover:underline text-sm">← My Workouts</Link>
         </div>
       </div>
 
