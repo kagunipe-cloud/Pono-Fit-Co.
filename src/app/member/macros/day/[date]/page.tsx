@@ -229,64 +229,69 @@ function sumMacros(entries: Entry[]) {
   );
 }
 
-/** Mountain (mauna) tracker: fills from bottom; over goal = red lava overflow */
-function MaunaTracker({
+/** Pono plate tracker: circular plate (like pono-plate.png) with colored "water" filling the ring from the bottom. Over goal = red overflow. */
+function PonoPlateTracker({
   label,
   current,
   goal,
   unit,
-  fillColor = "bg-brand-500",
+  fillColorClass = "bg-brand-500",
 }: {
   label: string;
   current: number;
   goal: number;
   unit: string;
-  fillColor?: string;
+  fillColorClass?: string;
 }) {
   const hasGoal = goal > 0;
   const fillPct = hasGoal ? Math.min(100, (current / goal) * 100) : 0;
   const isOver = hasGoal && current > goal;
-  const overflowPct = hasGoal && goal > 0 ? Math.min(50, ((current - goal) / goal) * 100) : 0; // cap overflow height at 50% of mountain
+  const overflowPct = hasGoal && goal > 0 ? Math.min(40, ((current - goal) / goal) * 100) : 0;
 
   return (
     <div className="flex flex-col items-center">
-      <div className="flex justify-between w-full text-xs text-stone-500 mb-1">
+      <div className="flex justify-between w-full text-xs text-stone-500 mb-2">
         <span className="font-medium text-stone-600">{label}</span>
         <span>
           {unit === "cal" ? Math.round(current).toLocaleString() : Math.round(current)}
           {hasGoal ? ` / ${unit === "cal" ? Math.round(goal).toLocaleString() : Math.round(goal)}${unit}` : unit}
         </span>
       </div>
-      <div className="w-full relative" style={{ height: 88 }}>
-        {/* Lava overflow (when over goal) */}
+      <div className="relative w-full max-w-[120px] mx-auto" style={{ aspectRatio: "1" }}>
+        {/* Red overflow "spill" when over goal */}
         {isOver && overflowPct > 0 && (
           <div
-            className="absolute left-0 right-0 rounded-t-lg bg-red-500 border-2 border-red-600 shadow-lg transition-all"
+            className="absolute left-1/2 -translate-x-1/2 rounded-full border-2 border-red-600 bg-red-500 shadow-lg transition-all z-10"
             style={{
               bottom: "100%",
-              height: `${overflowPct}%`,
-              minHeight: 8,
+              width: "45%",
+              aspectRatio: "1",
+              marginBottom: -2,
             }}
             title={`${Math.round(current - goal)} ${unit} over`}
           />
         )}
-        {/* Mountain shape: trapezoid (wider at base) */}
+        {/* Water fill (ring): behind the plate so it shows through the black area */}
         <div
-          className="absolute inset-x-0 bottom-0 overflow-hidden rounded-b-lg bg-stone-200"
+          className="absolute inset-0 rounded-full overflow-hidden"
           style={{
-            height: "100%",
-            clipPath: "polygon(8% 100%, 50% 8%, 92% 100%)",
+            maskImage: "radial-gradient(circle at center, transparent 28%, black 28%)",
+            WebkitMaskImage: "radial-gradient(circle at center, transparent 28%, black 28%)",
           }}
         >
-          {/* Fill from bottom */}
           <div
-            className={`absolute left-0 right-0 bottom-0 transition-all duration-500 ${isOver ? "bg-red-500" : fillColor}`}
+            className={`absolute inset-x-0 bottom-0 transition-all duration-500 ${isOver ? "bg-red-500" : fillColorClass}`}
             style={{
               height: `${isOver ? 100 : fillPct}%`,
-              clipPath: "polygon(8% 100%, 50% 8%, 92% 100%)",
             }}
           />
         </div>
+        {/* Plate image on top; screen blend so black shows the water, neon green stays visible */}
+        <div
+          className="absolute inset-0 rounded-full bg-cover bg-center bg-no-repeat mix-blend-screen"
+          style={{ backgroundImage: "url(/pono-plate.png)" }}
+          aria-hidden
+        />
       </div>
     </div>
   );
@@ -962,7 +967,7 @@ export default function MemberMacrosDayPage() {
             </button>
           </div>
 
-          {/* Today's progress: mauna (mountain) trackers — fill the mountain; over = red lava overflow */}
+          {/* Today's progress: Pono plate — fill with colored "water" per macro; over goal = red overflow */}
           {(goals.calories_goal != null && goals.calories_goal > 0) && (() => {
             const calGoal = goals.calories_goal ?? 0;
             const pPct = (goals.protein_pct ?? 0) / 100;
@@ -975,33 +980,33 @@ export default function MemberMacrosDayPage() {
               <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-white">
                 <p className="font-semibold text-stone-800 mb-4">Today&apos;s progress</p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-                  <MaunaTracker
+                  <PonoPlateTracker
                     label="Calories"
                     current={dayTotal.cal}
                     goal={calGoal}
                     unit="cal"
-                    fillColor="bg-brand-500"
+                    fillColorClass="bg-brand-500"
                   />
-                  <MaunaTracker
+                  <PonoPlateTracker
                     label="Protein"
                     current={dayTotal.p}
                     goal={goalP}
                     unit="g"
-                    fillColor="bg-blue-500"
+                    fillColorClass="bg-blue-500"
                   />
-                  <MaunaTracker
+                  <PonoPlateTracker
                     label="Fat"
                     current={dayTotal.f}
                     goal={goalF}
                     unit="g"
-                    fillColor="bg-amber-500"
+                    fillColorClass="bg-amber-500"
                   />
-                  <MaunaTracker
+                  <PonoPlateTracker
                     label="Carbs"
                     current={dayTotal.c}
                     goal={goalC}
                     unit="g"
-                    fillColor="bg-emerald-500"
+                    fillColorClass="bg-emerald-500"
                   />
                 </div>
               </div>
