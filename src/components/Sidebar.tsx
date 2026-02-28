@@ -478,7 +478,8 @@ export default function Sidebar() {
   const inMemberArea = pathname === "/member" || pathname?.startsWith("/member/");
   const inTrainerArea = pathname === "/trainer" || pathname?.startsWith("/trainer/");
   // Prior to login: show member nav so visitors see what the app offers. After login, show member nav in member area or admin nav elsewhere.
-  const showMemberNav = !isMember || inMemberArea;
+  // When an admin clicks Schedule from member nav, keep member nav so it doesn't feel like leaving member space.
+  const showMemberNav = !isMember || inMemberArea || (isAdmin && pathname === "/schedule");
 
   const logoHref = isMember ? (showMemberNav ? "/member" : inTrainerArea ? "/trainer" : "/") : "/";
   const navProps = { pathname, member: member ?? null, isMember, isAdmin, isTrainer, showMemberNav, onLogout: handleLogout };
