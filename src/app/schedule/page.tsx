@@ -46,6 +46,9 @@ function ScheduleContent() {
               {t.display_name}
             </button>
           ))}
+          {selectedTrainerId === null && (
+            <span className="text-sm text-stone-500 ml-1">— select one to see only their availability</span>
+          )}
         </div>
       )}
       <ScheduleGrid variant="member" trainerMemberId={selectedTrainerId ?? undefined} />

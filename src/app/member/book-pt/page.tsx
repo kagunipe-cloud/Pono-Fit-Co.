@@ -21,6 +21,7 @@ function normalizeTimeToHHmm(t: string): string {
 }
 
 type PtSessionProduct = { id: number; session_name: string; duration_minutes: number; price: string; trainer: string | null };
+type TrainerOption = { member_id: string; display_name: string };
 
 function MemberBookPTContent() {
   const router = useRouter();
@@ -35,9 +36,17 @@ function MemberBookPTContent() {
   const [memberId, setMemberId] = useState<string | null>(null);
   const [credits, setCredits] = useState<Record<number, number>>({ 30: 0, 60: 0, 90: 0 });
   const [sessionProducts, setSessionProducts] = useState<PtSessionProduct[]>([]);
+  const [trainers, setTrainers] = useState<TrainerOption[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [slotBookingInProgress, setSlotBookingInProgress] = useState(false);
   const [slotAddToCartInProgress, setSlotAddToCartInProgress] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/trainers")
+      .then((r) => r.json())
+      .then((data: TrainerOption[]) => setTrainers(Array.isArray(data) ? data : []))
+      .catch(() => setTrainers([]));
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -204,16 +213,56 @@ function MemberBookPTContent() {
           )}
         </div>
       ) : (
-        <p className="text-stone-600 mb-6">
-          Pick an{" "}
-          <Link
-            href={selectedProductId != null ? `/schedule?product=${selectedProductId}` : "/schedule"}
-            className="text-brand-600 hover:underline font-medium"
-          >
-            available time on the Schedule
-          </Link>{" "}
-          to book a PT session. You have <strong>{credits[30]}×30min</strong>, <strong>{credits[60]}×60min</strong>, <strong>{credits[90]}×90min</strong> credits.
-        </p>
+        <>
+          {trainers.length > 0 && (
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-stone-800 mb-2">Choose a trainer</h2>
+              <p className="text-sm text-stone-600 mb-3">
+                View a trainer’s schedule to see when they’re available, then pick a time to book.
+              </p>
+              <ul className="space-y-2">
+                {trainers.map((t) => {
+                  const scheduleHref = selectedProductId != null
+                    ? `/schedule?trainer=${encodeURIComponent(t.member_id)}&product=${selectedProductId}`
+                    : `/schedule?trainer=${encodeURIComponent(t.member_id)}`;
+                  return (
+                    <li key={t.member_id}>
+                      <Link
+                        href={scheduleHref}
+                        className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 text-left hover:border-brand-300 hover:bg-brand-50/50 transition-colors"
+                      >
+                        <span className="font-medium text-stone-800">{t.display_name}</span>
+                        <span className="text-sm text-brand-600 font-medium">View schedule →</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="text-sm text-stone-500 mt-3">
+                Or see{" "}
+                <Link href={selectedProductId != null ? `/schedule?product=${selectedProductId}` : "/schedule"} className="text-brand-600 hover:underline">
+                  all trainers on the Schedule
+                </Link>.
+              </p>
+            </div>
+          )}
+          <p className="text-stone-600 mb-6">
+            {trainers.length > 0 ? (
+              <>After you pick a time on a trainer’s schedule, you can book here with a credit or add to cart. You have <strong>{credits[30]}×30min</strong>, <strong>{credits[60]}×60min</strong>, <strong>{credits[90]}×90min</strong> credits.</>
+            ) : (
+              <>
+                Pick an{" "}
+                <Link
+                  href={selectedProductId != null ? `/schedule?product=${selectedProductId}` : "/schedule"}
+                  className="text-brand-600 hover:underline font-medium"
+                >
+                  available time on the Schedule
+                </Link>{" "}
+                to book a PT session. You have <strong>{credits[30]}×30min</strong>, <strong>{credits[60]}×60min</strong>, <strong>{credits[90]}×90min</strong> credits.
+              </>
+            )}
+          </p>
+        </>
       )}
 
       <p className="text-sm text-stone-500 mb-6">
