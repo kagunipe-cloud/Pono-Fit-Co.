@@ -101,7 +101,7 @@ export function isPTBookingSlotFree(
     .all(date) as { occurrence_date: string; start_time: string; duration_minutes: number }[];
   for (const b of openBookings) {
     const bStart = parseTimeToMinutes(b.start_time);
-    const bEnd = bStart + (b.duration_minutes ?? 60);
+    const bEnd = bStart + (b.duration_minutes ?? 60) + PT_BUFFER_MINUTES;
     if (startMin < bEnd && endMin > bStart) return false;
     if (bStart > endMin && bStart <= endMin + PT_BUFFER_MINUTES) return false;
   }

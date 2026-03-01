@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -17,6 +18,7 @@ type UnavailableBlock = {
 };
 
 export default function AdminBlockTimePage() {
+  const searchParams = useSearchParams();
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [blocks, setBlocks] = useState<UnavailableBlock[]>([]);
   const [trainer, setTrainer] = useState("");
@@ -26,6 +28,20 @@ export default function AdminBlockTimePage() {
   const [description, setDescription] = useState("Unavailable");
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const t = searchParams.get("trainer")?.trim();
+    if (t) setTrainer(t);
+    const d = searchParams.get("day")?.trim();
+    if (d !== null && d !== undefined) {
+      const dayNum = parseInt(d, 10);
+      if (dayNum >= 0 && dayNum <= 6) setDayOfWeek(dayNum);
+    }
+    const start = searchParams.get("start")?.trim();
+    if (start) setStartTime(start);
+    const end = searchParams.get("end")?.trim();
+    if (end) setEndTime(end);
+  }, [searchParams]);
 
   function loadBlocks() {
     fetch("/api/offerings/unavailable-blocks")

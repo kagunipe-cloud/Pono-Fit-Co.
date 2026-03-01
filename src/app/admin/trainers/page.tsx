@@ -99,6 +99,7 @@ export default function AdminTrainersPage() {
                     variant="trainer"
                     trainerMemberId={selected.member_id}
                     trainerDisplayName={selected.display_name}
+                    allowAdminEdit
                   />
                 </div>
               </>
