@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { formatPrice } from "@/lib/format";
+import { todayInAppTz, weekStartInAppTz, addDaysToDateStr, formatInAppTz } from "@/lib/app-timezone";
+import { useAppTimezone } from "@/lib/settings-context";
 
 type CartItem = {
   id: number;
@@ -16,9 +18,44 @@ type CartItem = {
 
 type Plan = { id: number; plan_name: string; price: string };
 type Session = { id: number; session_name: string; price: string };
-type ClassRow = { id: number; class_name: string; price: string };
 type ClassPack = { id: number; name: string; price: string; credits: number };
 type PTPack = { id: number; name: string; price: string; credits: number; duration_minutes: number };
+
+type ClassOccurrence = {
+  id: number;
+  class_name: string;
+  instructor: string | null;
+  occurrence_date: string;
+  occurrence_time: string;
+  price: string;
+  capacity: number;
+  booked_count: number;
+  duration_minutes?: number;
+};
+
+const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const TIME_SLOT_MIN = 6 * 60;
+const TIME_SLOT_MAX = 22 * 60;
+const SLOT_MINUTES = 30;
+
+function parseTimeToMinutes(t: string): number {
+  const parts = String(t).trim().split(/[:\s]/).map((x) => parseInt(x, 10));
+  return ((parts[0] ?? 0) % 24) * 60 + (parts[1] ?? 0);
+}
+
+function formatTime(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return "12:" + (m < 10 ? "0" : "") + m + " AM";
+  if (h < 12) return h + ":" + (m < 10 ? "0" : "") + m + " AM";
+  if (h === 12) return "12:" + (m < 10 ? "0" : "") + m + " PM";
+  return h - 12 + ":" + (m < 10 ? "0" : "") + m + " PM";
+}
+
+function slotOverlaps(slotMin: number, startMin: number, endMin: number): boolean {
+  const slotEnd = slotMin + SLOT_MINUTES;
+  return startMin < slotEnd && endMin > slotMin;
+}
 
 export default function MemberCartPage() {
   const params = useParams();
@@ -30,12 +67,16 @@ export default function MemberCartPage() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [classes, setClasses] = useState<ClassRow[]>([]);
   const [classPacks, setClassPacks] = useState<ClassPack[]>([]);
   const [ptPacks, setPtPacks] = useState<PTPack[]>([]);
   const [addMode, setAddMode] = useState<"membership_plan" | "pt_session" | "class" | "class_pack" | "pt_pack" | null>(null);
   const [saveCardForFuture, setSaveCardForFuture] = useState<boolean | null>(null);
   const [hasSavedCard, setHasSavedCard] = useState(false);
+
+  const tz = useAppTimezone();
+  const [classScheduleWeekStart, setClassScheduleWeekStart] = useState<string>(() => weekStartInAppTz(todayInAppTz(tz)));
+  const [classOccurrences, setClassOccurrences] = useState<ClassOccurrence[]>([]);
+  const [classScheduleLoading, setClassScheduleLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,7 +92,6 @@ export default function MemberCartPage() {
         setItems(data.items ?? []);
         setPlans(data.plans ?? []);
         setSessions(data.sessions ?? []);
-        setClasses(data.classes ?? []);
         setClassPacks(data.classPacks ?? []);
         setPtPacks(data.ptPackProducts ?? []);
         setHasSavedCard(Boolean(data.has_saved_card));
@@ -66,8 +106,56 @@ export default function MemberCartPage() {
     return () => { cancelled = true; };
   }, [id]);
 
+  const classScheduleFrom = classScheduleWeekStart;
+  const classScheduleTo = addDaysToDateStr(classScheduleWeekStart, 6);
+  useEffect(() => {
+    if (addMode !== "class") return;
+    setClassScheduleLoading(true);
+    fetch(`/api/offerings/class-occurrences?from=${classScheduleFrom}&to=${classScheduleTo}`)
+      .then((r) => r.json())
+      .then((data) => setClassOccurrences(Array.isArray(data) ? data : []))
+      .catch(() => setClassOccurrences([]))
+      .finally(() => setClassScheduleLoading(false));
+  }, [addMode, classScheduleFrom, classScheduleTo]);
 
-  async function addToCart(product_type: "membership_plan" | "pt_session" | "class" | "class_pack" | "pt_pack", product_id: number) {
+  const classScheduleDayDates = useMemo(
+    () => [0, 1, 2, 3, 4, 5, 6].map((i) => addDaysToDateStr(classScheduleWeekStart, i)),
+    [classScheduleWeekStart]
+  );
+  const classScheduleGrid = useMemo(() => {
+    const map = new Map<string, ClassOccurrence>();
+    for (const o of classOccurrences) {
+      const date = o.occurrence_date;
+      const startMin = parseTimeToMinutes(o.occurrence_time);
+      const duration = o.duration_minutes ?? 60;
+      const endMin = startMin + duration;
+      for (let slotMin = TIME_SLOT_MIN; slotMin < TIME_SLOT_MAX; slotMin += SLOT_MINUTES) {
+        if (slotOverlaps(slotMin, startMin, endMin)) {
+          const key = `${date}-${slotMin}`;
+          if (!map.has(key)) map.set(key, o);
+          break;
+        }
+      }
+    }
+    return map;
+  }, [classOccurrences]);
+  const classScheduleTimeSlots = useMemo(() => {
+    const slotSet = new Set<number>();
+    for (const o of classOccurrences) {
+      const startMin = parseTimeToMinutes(o.occurrence_time);
+      const duration = o.duration_minutes ?? 60;
+      const endMin = startMin + duration;
+      for (let slotMin = TIME_SLOT_MIN; slotMin < TIME_SLOT_MAX; slotMin += SLOT_MINUTES) {
+        if (slotOverlaps(slotMin, startMin, endMin)) {
+          slotSet.add(slotMin);
+        }
+      }
+    }
+    return Array.from(slotSet).sort((a, b) => a - b);
+  }, [classOccurrences]);
+
+
+  async function addToCart(product_type: "membership_plan" | "pt_session" | "class" | "class_pack" | "class_occurrence" | "pt_pack", product_id: number) {
     if (!memberId) return;
     const res = await fetch("/api/cart/items", {
       method: "POST",
@@ -75,7 +163,7 @@ export default function MemberCartPage() {
       body: JSON.stringify({ member_id: memberId, product_type, product_id, quantity: 1 }),
     });
     if (res.ok) {
-      const data = await fetch(`/api/cart?member_id=${encodeURIComponent(memberId)}`).then((r) => r.json());
+      const data = await fetch(`/api/members/${id}/cart-data`).then((r) => r.json());
       setItems(data.items ?? []);
       setAddMode(null);
     }
@@ -83,8 +171,8 @@ export default function MemberCartPage() {
 
   async function removeItem(itemId: number) {
     await fetch(`/api/cart/items/${itemId}`, { method: "DELETE" });
-    if (memberId) {
-      const data = await fetch(`/api/cart?member_id=${encodeURIComponent(memberId)}`).then((r) => r.json());
+    if (memberId && id) {
+      const data = await fetch(`/api/members/${id}/cart-data`).then((r) => r.json());
       setItems(data.items ?? []);
     }
   }
@@ -196,18 +284,72 @@ export default function MemberCartPage() {
         </div>
       )}
       {addMode === "class" && (
-        <div className="mb-6 p-4 rounded-xl border border-stone-300 bg-stone-200">
-          <p className="text-sm font-medium mb-2" style={{ color: "#5abd78" }}>Select a class</p>
-          <ul className="space-y-1">
-            {classes.map((c) => (
-              <li key={c.id}>
-                <button type="button" onClick={() => addToCart("class", c.id)} className="hover:underline font-medium" style={{ color: "#5abd78" }}>
-                  {c.class_name} — {formatPrice(c.price)}
-                </button>
-              </li>
-            ))}
-            {classes.length === 0 && <li className="text-stone-600 text-sm">No classes.</li>}
-          </ul>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60" onClick={() => setAddMode(null)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="p-4 border-b border-stone-200 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-stone-800">Add class — pick a time</h2>
+              <button type="button" onClick={() => setAddMode(null)} className="p-2 rounded-lg text-stone-500 hover:bg-stone-100" aria-label="Close">×</button>
+            </div>
+            <div className="p-3 border-b border-stone-100 flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => setClassScheduleWeekStart((s) => addDaysToDateStr(s, -7))} className="px-2 py-1 rounded border border-stone-200 text-sm hover:bg-stone-50">← Prev</button>
+              <button type="button" onClick={() => setClassScheduleWeekStart(weekStartInAppTz(todayInAppTz(tz)))} className="px-2 py-1 rounded border border-stone-200 text-sm hover:bg-stone-50">Today</button>
+              <button type="button" onClick={() => setClassScheduleWeekStart((s) => addDaysToDateStr(s, 7))} className="px-2 py-1 rounded border border-stone-200 text-sm hover:bg-stone-50">Next →</button>
+              <span className="text-sm text-stone-500 ml-2">
+                {formatInAppTz(new Date(classScheduleFrom + "T12:00:00Z"), { month: "short", day: "numeric", year: "numeric" }, tz)} – {formatInAppTz(new Date(classScheduleTo + "T12:00:00Z"), { month: "short", day: "numeric", year: "numeric" }, tz)}
+              </span>
+            </div>
+            <div className="flex-1 overflow-auto p-3">
+              {classScheduleLoading ? (
+                <p className="text-center text-stone-500 py-8">Loading schedule…</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse text-sm" style={{ minWidth: 520 }}>
+                    <thead>
+                      <tr>
+                        <th className="w-14 py-1.5 px-1 text-left text-xs font-medium text-stone-500 border-b border-r border-stone-200 bg-stone-50">Time</th>
+                        {DAY_NAMES.map((name, i) => (
+                          <th key={name} className="py-1.5 px-1 text-center text-xs font-medium text-stone-600 border-b border-r border-stone-200 bg-stone-50 last:border-r-0">
+                            {name} {parseInt(classScheduleDayDates[i].slice(8, 10), 10)}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {classScheduleTimeSlots.map((slotMin) => (
+                        <tr key={slotMin} className="border-b border-stone-100 last:border-b-0">
+                          <td className="py-0.5 px-1 text-xs text-stone-500 border-r border-stone-200 whitespace-nowrap">{formatTime(slotMin)}</td>
+                          {classScheduleDayDates.map((date) => {
+                            const key = `${date}-${slotMin}`;
+                            const occ = classScheduleGrid.get(key);
+                            return (
+                              <td key={date} className="align-top p-0.5 min-w-[100px] border-r border-stone-100 last:border-r-0">
+                                {occ ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => addToCart("class_occurrence", occ.id)}
+                                    className="w-full text-left rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 hover:bg-blue-100 hover:border-blue-300 transition-colors"
+                                  >
+                                    <span className="font-medium text-stone-800 block truncate" title={occ.class_name}>{occ.class_name}</span>
+                                    {occ.instructor && <span className="text-xs text-stone-500 block truncate">{occ.instructor}</span>}
+                                    <span className="text-xs text-stone-600">{formatPrice(occ.price)}</span>
+                                  </button>
+                                ) : (
+                                  <div className="min-h-[2rem]" />
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {!classScheduleLoading && classOccurrences.length === 0 && (
+                <p className="text-center text-stone-500 py-6">No classes this week. Try another week.</p>
+              )}
+            </div>
+          </div>
         </div>
       )}
       {addMode === "class_pack" && (
