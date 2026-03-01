@@ -36,7 +36,7 @@ function isOpenSlotFree(
     .all(date) as { occurrence_date: string; start_time: string; duration_minutes: number }[];
   for (const b of openBookings) {
     const bStart = timeToMinutes(b.start_time);
-    const bEnd = bStart + b.duration_minutes;
+    const bEnd = bStart + (b.duration_minutes ?? 60) + PT_BUFFER_MINUTES; // session + 15 min buffer
     if (startMin < bEnd && endMin > bStart) return false;
     if (bStart > endMin && bStart <= endMin + PT_BUFFER_MINUTES) return false;
   }

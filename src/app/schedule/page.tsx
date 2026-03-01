@@ -54,7 +54,11 @@ function ScheduleContent() {
           )}
         </div>
       )}
-      <ScheduleGrid variant="member" trainerMemberId={selectedTrainerId ?? undefined} />
+      <ScheduleGrid
+        variant="member"
+        trainerMemberId={selectedTrainerId ?? undefined}
+        trainerDisplayName={trainers.find((t) => t.member_id === selectedTrainerId)?.display_name ?? undefined}
+      />
     </div>
   );
 }

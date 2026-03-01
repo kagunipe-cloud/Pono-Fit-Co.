@@ -29,6 +29,8 @@ function MemberBookPTContent() {
   const highlightDate = searchParams.get("date")?.trim() || null;
   const highlightTime = searchParams.get("time")?.trim() || null;
   const slotFromSchedule = highlightDate && highlightTime;
+  const selectedTrainerNameFromUrl = searchParams.get("trainer_name")?.trim() || null;
+  const selectedTrainerIdFromUrl = searchParams.get("trainer")?.trim() || null;
 
   const productFromUrl = searchParams.get("product")?.trim() || null;
   const productIdFromUrl = productFromUrl ? parseInt(productFromUrl, 10) : null;
@@ -67,23 +69,38 @@ function MemberBookPTContent() {
   useEffect(() => {
     fetch("/api/offerings/pt-session-products")
       .then((r) => r.json())
-        .then((data) => {
+      .then((data) => {
         const list = Array.isArray(data) ? data : [];
         setSessionProducts(list);
         if (list.length > 0) {
-          const match = productIdFromUrl && list.some((p: PtSessionProduct) => p.id === productIdFromUrl)
-            ? productIdFromUrl
-            : list[0].id;
-          setSelectedProductId(match);
+          const byProductUrl = productIdFromUrl && list.some((p: PtSessionProduct) => p.id === productIdFromUrl) ? productIdFromUrl : null;
+          const byTrainer = selectedTrainerNameFromUrl
+            ? list.find((p: PtSessionProduct) => (p.trainer ?? "").trim() === selectedTrainerNameFromUrl.trim())?.id
+            : null;
+          setSelectedProductId(byProductUrl ?? byTrainer ?? list[0].id);
         }
       })
       .catch(() => setSessionProducts([]));
-  }, []);
+  }, [selectedTrainerNameFromUrl]);
 
   const slotProduct = useMemo(
     () => (selectedProductId != null ? sessionProducts.find((p) => p.id === selectedProductId) ?? null : null),
     [sessionProducts, selectedProductId]
   );
+
+  const [slotFree, setSlotFree] = useState<boolean | null>(null);
+  const slotFromOpenSchedule = slotFromSchedule && !searchParams.get("block"); // date+time from "Available" (no block)
+  useEffect(() => {
+    if (!slotFromOpenSchedule || !highlightDate || !highlightTime || !slotProduct) {
+      setSlotFree(null);
+      return;
+    }
+    const start_time = normalizeTimeToHHmm(highlightTime);
+    fetch(`/api/pt-bookings/check-open-slot?date=${encodeURIComponent(highlightDate)}&time=${encodeURIComponent(start_time)}&duration_minutes=${slotProduct.duration_minutes}`)
+      .then((r) => r.json())
+      .then((data: { free?: boolean }) => setSlotFree(data.free === true))
+      .catch(() => setSlotFree(null));
+  }, [slotFromOpenSchedule, highlightDate, highlightTime, slotProduct]);
 
   async function submitSlotWithCredit() {
     if (!slotFromSchedule || !highlightDate || !highlightTime || !memberId || !slotProduct) return;
@@ -158,6 +175,11 @@ function MemberBookPTContent() {
       {slotFromSchedule && highlightDate ? (
         <div className="mb-6 p-4 rounded-xl border-2 border-brand-200 bg-brand-50">
           <h2 className="font-semibold text-stone-800 mb-2">Book This Slot</h2>
+          {selectedTrainerNameFromUrl && (
+            <p className="text-sm font-medium text-brand-700 mb-2">
+              Booking with <span className="font-semibold">{selectedTrainerNameFromUrl}</span>
+            </p>
+          )}
           <p className="text-sm text-stone-600 mb-3">
             {highlightDate} at {slotTimeDisplay}
           </p>
@@ -186,10 +208,15 @@ function MemberBookPTContent() {
               <span className="text-sm text-stone-700">
                 {slotProduct.session_name} — ${slotProduct.price}
               </span>
+              {slotFree === false && (
+                <p className="text-amber-700 text-sm font-medium w-full">
+                  This time doesn&apos;t have enough space for a {slotProduct.duration_minutes}-min session. Please choose another slot on the <Link href="/schedule" className="underline">schedule</Link>.
+                </p>
+              )}
               <button
                 type="button"
                 onClick={submitSlotWithCredit}
-                disabled={slotBookingInProgress || (credits[slotProduct.duration_minutes] ?? 0) < 1}
+                disabled={slotBookingInProgress || (credits[slotProduct.duration_minutes] ?? 0) < 1 || slotFree === false}
                 className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
               >
                 {slotBookingInProgress ? "Booking…" : `Use 1 credit (${slotProduct.duration_minutes} min)`}
@@ -197,7 +224,7 @@ function MemberBookPTContent() {
               <button
                 type="button"
                 onClick={addSlotToCart}
-                disabled={slotAddToCartInProgress}
+                disabled={slotAddToCartInProgress || slotFree === false}
                 className="px-4 py-2 rounded-lg border border-stone-200 bg-white text-sm font-medium hover:bg-stone-50 disabled:opacity-50"
               >
                 {slotAddToCartInProgress ? "Adding…" : `Add to cart ($${slotProduct.price})`}
