@@ -24,6 +24,9 @@ type WorkoutData = {
   finished_at: string | null;
   source_workout_id?: number | null;
   assigned_by_admin?: number;
+  assigned_by_trainer_member_id?: string | null;
+  trainer_notes?: string | null;
+  client_completion_notes?: string | null;
   name?: string | null;
   exercises: Exercise[];
 };
@@ -86,6 +89,7 @@ export default function MemberWorkoutDetailPage() {
   const [sharing, setSharing] = useState(false);
   const [shareResult, setShareResult] = useState<{ ok: boolean; message?: string } | null>(null);
   const [showShare, setShowShare] = useState(false);
+  const [clientCompletionNotes, setClientCompletionNotes] = useState("");
 
   /** Map of source workout sets by a stable exercise key so \"last time\" stays attached even if you delete/reorder exercises. */
   const sourceSetsByExerciseKey = useMemo(() => {
@@ -241,7 +245,7 @@ export default function MemberWorkoutDetailPage() {
       const res = await fetch(`/api/member/workouts/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ finish: true }),
+        body: JSON.stringify({ finish: true, client_completion_notes: clientCompletionNotes.trim() || null }),
       });
       if (res.ok) {
         const volume = totalWorkoutVolume(workout.exercises);
@@ -497,7 +501,7 @@ export default function MemberWorkoutDetailPage() {
           ) : (
             <>
               <h1 className="text-2xl font-bold text-stone-800">
-                {workout.name?.trim() || (isOpen ? (isRepeatMode ? "Repeat workout" : "Workout in progress") : "Past workout")}
+                {workout.name?.trim() || (isOpen ? (isRepeatMode ? "Repeat workout" : workout.assigned_by_trainer_member_id ? "Start workout" : "Workout in progress") : "Past workout")}
               </h1>
               <button
                 type="button"
@@ -511,7 +515,7 @@ export default function MemberWorkoutDetailPage() {
               </button>
             </>
           )}
-          {workout.assigned_by_admin ? (
+          {workout.assigned_by_admin || workout.assigned_by_trainer_member_id ? (
             <span className="px-2.5 py-1 rounded-md text-sm font-medium bg-brand-100 text-brand-800">From trainer</span>
           ) : !isOpen ? (
             <span className="px-2.5 py-1 rounded-md text-sm font-medium bg-stone-100 text-stone-600">My workout</span>
@@ -1280,17 +1284,57 @@ export default function MemberWorkoutDetailPage() {
         </>
       )}
 
+      {!isOpen && (workout.trainer_notes || workout.client_completion_notes) && (
+        <div className="mb-6 space-y-2">
+          {workout.trainer_notes && (
+            <div className="p-3 rounded-lg bg-brand-50 border border-brand-100">
+              <p className="text-xs font-medium text-brand-800 mb-1">Note from your trainer</p>
+              <p className="text-sm text-stone-700 whitespace-pre-wrap">{workout.trainer_notes}</p>
+            </div>
+          )}
+          {workout.client_completion_notes && (
+            <div className="p-3 rounded-lg bg-stone-100 border border-stone-200">
+              <p className="text-xs font-medium text-stone-600 mb-1">Your notes to trainer</p>
+              <p className="text-sm text-stone-700 whitespace-pre-wrap">{workout.client_completion_notes}</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {isOpen && (
         <div className="pt-4 border-t border-stone-200">
+          {workout.assigned_by_trainer_member_id && workout.trainer_notes && (
+            <div className="mb-4 p-3 rounded-lg bg-brand-50 border border-brand-100">
+              <p className="text-xs font-medium text-brand-800 mb-1">Note from your trainer</p>
+              <p className="text-sm text-stone-700 whitespace-pre-wrap">{workout.trainer_notes}</p>
+            </div>
+          )}
+          {workout.assigned_by_trainer_member_id && (
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-stone-700 mb-1">Notes to trainer (optional)</label>
+              <textarea
+                value={clientCompletionNotes}
+                onChange={(e) => setClientCompletionNotes(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm min-h-[72px]"
+                placeholder="e.g. Felt strong on squats. Right knee a bit tight."
+                rows={3}
+              />
+              <p className="text-xs text-stone-500 mt-1">Included when you send this workout back to your trainer.</p>
+            </div>
+          )}
           <button
             type="button"
             onClick={finishWorkout}
             disabled={finishing}
             className="w-full sm:w-auto px-6 py-3 rounded-lg bg-stone-800 text-white font-medium hover:bg-stone-900 disabled:opacity-50"
           >
-            {finishing ? "Saving…" : "Finish Workout"}
+            {finishing ? "Saving…" : workout.assigned_by_trainer_member_id ? "Finish Workout and Send to Trainer" : "Finish Workout"}
           </button>
-          <p className="mt-2 text-sm text-stone-500">This will save the workout to your past workouts and return you to the list.</p>
+          <p className="mt-2 text-sm text-stone-500">
+            {workout.assigned_by_trainer_member_id
+              ? "This will save your sets, reps, and weight and send the results to your trainer."
+              : "This will save the workout to your past workouts and return you to the list."}
+          </p>
         </div>
       )}
 

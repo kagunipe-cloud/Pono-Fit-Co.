@@ -13,10 +13,12 @@ export async function GET() {
     const db = getDb();
     ensureWorkoutTables(db);
     const hasName = (db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[]).some((c) => c.name === "name");
+    const hasTrainer = (db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[]).some((c) => c.name === "assigned_by_trainer_member_id");
     const nameCol = hasName ? "w.name," : "";
+    const trainerCol = hasTrainer ? "w.assigned_by_trainer_member_id," : "";
     const rows = db
       .prepare(
-        `SELECT w.id, w.member_id, w.started_at, w.finished_at, w.assigned_by_admin, ${nameCol}
+        `SELECT w.id, w.member_id, w.started_at, w.finished_at, w.assigned_by_admin, ${trainerCol} ${nameCol}
                 (SELECT COALESCE(SUM(COALESCE(ws.reps, 0) * COALESCE(ws.weight_kg, 0)), 0)
                  FROM workout_exercises we
                  JOIN workout_sets ws ON ws.workout_exercise_id = we.id
@@ -25,7 +27,7 @@ export async function GET() {
          WHERE w.member_id = ?
          ORDER BY w.started_at DESC`
       )
-      .all(memberId) as { id: number; member_id: string; started_at: string; finished_at: string | null; assigned_by_admin: number; name?: string | null; total_volume: number }[];
+      .all(memberId) as { id: number; member_id: string; started_at: string; finished_at: string | null; assigned_by_admin: number; assigned_by_trainer_member_id?: string | null; name?: string | null; total_volume: number }[];
     db.close();
     return NextResponse.json(rows);
   } catch (err) {

@@ -4,16 +4,20 @@ import { ensureTrainersTable } from "../../../lib/trainers";
 
 export const dynamic = "force-dynamic";
 
-/** GET — list trainers (member_id, display_name) for dropdowns. Used by members to filter PT by trainer and by admin to block time. */
+/** GET — list trainers (member_id, display_name) for dropdowns. Includes everyone in the trainers table plus all Admins (admins count as trainers by default). */
 export async function GET() {
   try {
     const db = getDb();
     ensureTrainersTable(db);
     const rows = db.prepare(`
-      SELECT t.member_id, m.first_name, m.last_name
+      SELECT m.member_id, m.first_name, m.last_name
       FROM trainers t
       JOIN members m ON m.member_id = t.member_id
-      ORDER BY m.last_name ASC, m.first_name ASC
+      UNION
+      SELECT m.member_id, m.first_name, m.last_name
+      FROM members m
+      WHERE m.role = 'Admin' AND m.member_id NOT IN (SELECT member_id FROM trainers)
+      ORDER BY last_name ASC, first_name ASC
     `).all() as { member_id: string; first_name: string | null; last_name: string | null }[];
     db.close();
     const list = rows.map((r) => ({

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
 import { ensurePTSlotTables, getPTCreditBalance, reservedMinutes } from "../../../../lib/pt-slots";
+import { ensureTrainerClient } from "../../../../lib/trainer-clients";
 import { getBlocksInRange, getFreeIntervals, getBookingsForBlock } from "../../../../lib/pt-availability";
 import { timeToMinutes } from "../../../../lib/pt-slots";
 import { sendStaffEmail, sendMemberEmail } from "../../../../lib/email";
@@ -76,6 +77,9 @@ export async function POST(request: NextRequest) {
     db.prepare(
       "INSERT INTO pt_block_bookings (trainer_availability_id, occurrence_date, start_time, session_duration_minutes, reserved_minutes, member_id, payment_type) VALUES (?, ?, ?, ?, ?, ?, ?)"
     ).run(trainer_availability_id, occurrence_date, start_time, session_duration_minutes, reserved_minutes, member_id, use_credit ? "credit" : "paid");
+
+    const trainerMemberId = (block.trainer_member_id ?? "").trim();
+    if (trainerMemberId) ensureTrainerClient(db, trainerMemberId, member_id);
 
     const newBalance = use_credit ? getPTCreditBalance(db, member_id, session_duration_minutes) : undefined;
 

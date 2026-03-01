@@ -218,9 +218,18 @@ function MemberBookPTContent() {
             <div className="mb-6">
               <h2 className="text-lg font-semibold text-stone-800 mb-2">Choose a trainer</h2>
               <p className="text-sm text-stone-600 mb-3">
-                View a trainer’s schedule to see when they’re available, then pick a time to book.
+                View a trainer’s schedule to see when they’re available, or choose No Preference to see all available times.
               </p>
               <ul className="space-y-2">
+                <li>
+                  <Link
+                    href={selectedProductId != null ? `/schedule?product=${selectedProductId}` : "/schedule"}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-white px-4 py-3 text-left hover:border-brand-300 hover:bg-brand-50/50 transition-colors"
+                  >
+                    <span className="font-medium text-stone-800">No Preference</span>
+                    <span className="text-sm text-brand-600 font-medium">View all availability →</span>
+                  </Link>
+                </li>
                 {trainers.map((t) => {
                   const scheduleHref = selectedProductId != null
                     ? `/schedule?trainer=${encodeURIComponent(t.member_id)}&product=${selectedProductId}`
@@ -239,10 +248,11 @@ function MemberBookPTContent() {
                 })}
               </ul>
               <p className="text-sm text-stone-500 mt-3">
-                Or see{" "}
+                Or go to the{" "}
                 <Link href={selectedProductId != null ? `/schedule?product=${selectedProductId}` : "/schedule"} className="text-brand-600 hover:underline">
-                  all trainers on the Schedule
-                </Link>.
+                  Schedule
+                </Link>{" "}
+                and use &quot;No Preference&quot; or a specific trainer there.
               </p>
             </div>
           )}

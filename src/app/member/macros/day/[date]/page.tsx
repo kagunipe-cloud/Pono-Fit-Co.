@@ -229,7 +229,7 @@ function sumMacros(entries: Entry[]) {
   );
 }
 
-/** Pono plate tracker: circular plate (like pono-plate.png) with colored "water" filling the ring from the bottom. Over goal = red overflow. */
+/** Pono plate tracker: circular plate (like pono-plate.png) with colored "water" filling the ring from the bottom. Over goal = fill caps at 100% (no red). */
 function PonoPlateTracker({
   label,
   current,
@@ -245,8 +245,6 @@ function PonoPlateTracker({
 }) {
   const hasGoal = goal > 0;
   const fillPct = hasGoal ? Math.min(100, (current / goal) * 100) : 0;
-  const isOver = hasGoal && current > goal;
-  const overflowPct = hasGoal && goal > 0 ? Math.min(40, ((current - goal) / goal) * 100) : 0;
 
   return (
     <div className="flex flex-col items-center">
@@ -258,19 +256,6 @@ function PonoPlateTracker({
         </span>
       </div>
       <div className="relative w-full max-w-[120px] mx-auto" style={{ aspectRatio: "1" }}>
-        {/* Red overflow "spill" when over goal */}
-        {isOver && overflowPct > 0 && (
-          <div
-            className="absolute left-1/2 -translate-x-1/2 rounded-full border-2 border-red-600 bg-red-500 shadow-lg transition-all z-10"
-            style={{
-              bottom: "100%",
-              width: "45%",
-              aspectRatio: "1",
-              marginBottom: -2,
-            }}
-            title={`${Math.round(current - goal)} ${unit} over`}
-          />
-        )}
         {/* Ring + water: full ring always visible (dark), colored fill from bottom; plate on top shows branding */}
         <div
           className="absolute inset-0 rounded-full overflow-hidden"
@@ -281,11 +266,11 @@ function PonoPlateTracker({
         >
           {/* Unfilled part of ring: dark so outline is always visible */}
           <div className="absolute inset-0 bg-stone-900" />
-          {/* Filled part: macro color from bottom up */}
+          {/* Filled part: macro color from bottom up; caps at 100% when over goal */}
           <div
-            className={`absolute inset-x-0 bottom-0 transition-all duration-500 ${isOver ? "bg-red-500" : fillColorClass}`}
+            className={`absolute inset-x-0 bottom-0 transition-all duration-500 ${fillColorClass}`}
             style={{
-              height: `${isOver ? 100 : fillPct}%`,
+              height: `${fillPct}%`,
             }}
           />
         </div>
@@ -342,6 +327,10 @@ export default function MemberMacrosDayPage() {
   const [sharing, setSharing] = useState(false);
   const [shareResult, setShareResult] = useState<{ ok: boolean; message?: string } | null>(null);
   const [showShare, setShowShare] = useState(false);
+  const [weighIn, setWeighIn] = useState<number | null>(null);
+  const [weighInEditing, setWeighInEditing] = useState(false);
+  const [weighInDraft, setWeighInDraft] = useState("");
+  const [weighInSaving, setWeighInSaving] = useState(false);
 
   const AI_PORTION_UNITS = [
     { value: "", label: "—" },
@@ -388,6 +377,14 @@ export default function MemberMacrosDayPage() {
       .then((g) => g && setGoals(g))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+    fetch(`/api/member/weigh-ins?date=${date}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { weight: number | null } | null) => setWeighIn(data?.weight ?? null))
+      .catch(() => setWeighIn(null));
+  }, [date]);
 
   useEffect(() => {
     if (addFoodMealId != null) {
@@ -945,6 +942,79 @@ export default function MemberMacrosDayPage() {
         <Link href="/member/book-pt" className="shrink-0 px-3 py-1.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700">
           Book a session →
         </Link>
+      </div>
+
+      {/* Daily Weigh-In — show after save unless Edit or Clear */}
+      <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-white">
+        <h3 className="font-semibold text-stone-800 mb-2">Daily Weigh-In</h3>
+        {weighIn != null && !weighInEditing ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-stone-700"><span className="font-medium text-stone-600">Weight:</span> {weighIn} lbs</span>
+            <button type="button" onClick={() => { setWeighInDraft(String(weighIn)); setWeighInEditing(true); }} className="text-sm text-brand-600 hover:underline font-medium">
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setWeighInSaving(true);
+                fetch("/api/member/weigh-ins", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ date, weight: null }),
+                })
+                  .then((r) => { if (r.ok) setWeighIn(null); setWeighInEditing(false); setWeighInDraft(""); })
+                  .finally(() => setWeighInSaving(false));
+              }}
+              disabled={weighInSaving}
+              className="text-sm text-stone-500 hover:text-stone-700"
+            >
+              Clear
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="number"
+              step="0.1"
+              min="0"
+              value={weighInDraft}
+              onChange={(e) => setWeighInDraft(e.target.value)}
+              placeholder="Weight (lbs)"
+              className="px-3 py-2 rounded-lg border border-stone-200 text-sm w-28"
+            />
+            <span className="text-stone-500 text-sm">lbs</span>
+            <button
+              type="button"
+              onClick={() => {
+                const w = weighInDraft.trim() ? parseFloat(weighInDraft) : null;
+                if (w == null || Number.isNaN(w) || w <= 0) return;
+                setWeighInSaving(true);
+                fetch("/api/member/weigh-ins", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ date, weight: w }),
+                })
+                  .then((r) => {
+                    if (r.ok) {
+                      setWeighIn(w);
+                      setWeighInEditing(false);
+                      setWeighInDraft("");
+                    }
+                  })
+                  .finally(() => setWeighInSaving(false));
+              }}
+              disabled={weighInSaving || !weighInDraft.trim()}
+              className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+            >
+              {weighInSaving ? "Saving…" : "Save"}
+            </button>
+            {weighInEditing && (
+              <button type="button" onClick={() => { setWeighInEditing(false); setWeighInDraft(""); }} className="px-4 py-2 rounded-lg border border-stone-200 text-stone-600 text-sm hover:bg-stone-50">
+                Cancel
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {!day ? (

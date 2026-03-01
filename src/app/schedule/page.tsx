@@ -34,7 +34,7 @@ function ScheduleContent() {
             onClick={() => setSelectedTrainerId(null)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium ${selectedTrainerId === null ? "bg-brand-600 text-white" : "bg-stone-100 text-stone-700 hover:bg-stone-200"}`}
           >
-            All
+            No Preference
           </button>
           {trainers.map((t) => (
             <button
@@ -47,7 +47,10 @@ function ScheduleContent() {
             </button>
           ))}
           {selectedTrainerId === null && (
-            <span className="text-sm text-stone-500 ml-1">— select one to see only their availability</span>
+            <span className="text-sm text-stone-500 ml-1">— see all availability</span>
+          )}
+          {selectedTrainerId !== null && (
+            <span className="text-sm text-stone-500 ml-1">— only this trainer’s availability</span>
           )}
         </div>
       )}

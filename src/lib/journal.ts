@@ -73,6 +73,27 @@ export function ensureJournalTables(db: ReturnType<typeof import("./db").getDb>)
       carbs_pct REAL
     );
   `);
+
+  const goalCols = db.prepare("PRAGMA table_info(member_macro_goals)").all() as { name: string }[];
+  if (goalCols.every((c) => c.name !== "weight_goal")) {
+    try {
+      db.prepare("ALTER TABLE member_macro_goals ADD COLUMN weight_goal REAL").run();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS member_weigh_ins (
+      member_id TEXT NOT NULL,
+      date TEXT NOT NULL,
+      weight REAL NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (member_id, date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_member_weigh_ins_member ON member_weigh_ins(member_id);
+    CREATE INDEX IF NOT EXISTS idx_member_weigh_ins_date ON member_weigh_ins(member_id, date);
+  `);
 }
 
 /** Monday of the week containing date (YYYY-MM-DD). */

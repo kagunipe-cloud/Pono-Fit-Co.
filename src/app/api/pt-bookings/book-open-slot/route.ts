@@ -5,6 +5,7 @@ import { hasClassAtSlot } from "../../../../lib/schedule-conflicts";
 import { getUnavailableInRange } from "../../../../lib/pt-availability";
 import { timeToMinutes } from "../../../../lib/pt-slots";
 import { sendStaffEmail, sendMemberEmail } from "../../../../lib/email";
+import { ensureTrainerClient, getTrainerMemberIdByDisplayName } from "../../../../lib/trainer-clients";
 
 export const dynamic = "force-dynamic";
 
@@ -103,6 +104,10 @@ export async function POST(request: NextRequest) {
     db.prepare(
       "INSERT INTO pt_open_bookings (member_id, occurrence_date, start_time, duration_minutes, pt_session_id, payment_type) VALUES (?, ?, ?, ?, ?, 'credit')"
     ).run(member_id, occurrence_date, start_time, duration_minutes, pt_session_id);
+
+    const trainerName = (session.trainer ?? "").trim();
+    const trainerMemberId = trainerName ? getTrainerMemberIdByDisplayName(db, trainerName) : null;
+    if (trainerMemberId) ensureTrainerClient(db, trainerMemberId, member_id);
 
     const newBalance = getPTCreditBalance(db, member_id, duration_minutes);
 

@@ -7,7 +7,7 @@ import { formatDateOnlyInAppTz, formatInAppTz, formatWeekdayShortInAppTz, todayI
 import { useAppTimezone } from "@/lib/settings-context";
 
 type JournalDay = { id: number; member_id: string; date: string; created_at: string };
-type MacroGoals = { calories_goal: number | null; protein_pct: number | null; fat_pct: number | null; carbs_pct: number | null };
+type MacroGoals = { calories_goal: number | null; protein_pct: number | null; fat_pct: number | null; carbs_pct: number | null; weight_goal: number | null };
 type DaySummary = { cal: number; p: number; f: number; c: number };
 
 function weekLabel(monday: string, tz: string): string {
@@ -31,10 +31,13 @@ export default function MemberMacrosPage() {
   const [loading, setLoading] = useState(true);
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
 
-  const [goals, setGoals] = useState<MacroGoals>({ calories_goal: null, protein_pct: null, fat_pct: null, carbs_pct: null });
-  const [goalsDraft, setGoalsDraft] = useState<MacroGoals>({ calories_goal: null, protein_pct: null, fat_pct: null, carbs_pct: null });
+  const [goals, setGoals] = useState<MacroGoals>({ calories_goal: null, protein_pct: null, fat_pct: null, carbs_pct: null, weight_goal: null });
+  const [goalsDraft, setGoalsDraft] = useState<MacroGoals>({ calories_goal: null, protein_pct: null, fat_pct: null, carbs_pct: null, weight_goal: null });
+  const [goalsEditing, setGoalsEditing] = useState(false);
   const [savingGoals, setSavingGoals] = useState(false);
   const [weekSummary, setWeekSummary] = useState<Record<string, DaySummary> | null>(null);
+  const [weighIns, setWeighIns] = useState<{ date: string; weight: number }[]>([]);
+  const [weightChartRange, setWeightChartRange] = useState<"week" | "month" | "3m" | "6m" | "1y">("1y");
 
   const today = todayInAppTz(tz);
   const thisWeekMonday = weekStartInAppTz(today);
@@ -63,8 +66,9 @@ export default function MemberMacrosPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((g: MacroGoals | null) => {
         if (g) {
-          setGoals(g);
-          setGoalsDraft(g);
+          const withWeight = { ...g, weight_goal: g.weight_goal ?? null };
+          setGoals(withWeight);
+          setGoalsDraft(withWeight);
         }
       })
       .catch(() => {});
@@ -78,10 +82,35 @@ export default function MemberMacrosPage() {
       body: JSON.stringify(goalsDraft),
     })
       .then((r) => {
-        if (r.ok) setGoals(goalsDraft);
+        if (r.ok) {
+          setGoals(goalsDraft);
+          setGoalsEditing(false);
+        }
       })
       .finally(() => setSavingGoals(false));
   }
+
+  function clearGoals() {
+    setSavingGoals(true);
+    const cleared = { calories_goal: null, protein_pct: null, fat_pct: null, carbs_pct: null, weight_goal: null };
+    fetch("/api/member/macro-goals", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(cleared),
+    })
+      .then((r) => {
+        if (r.ok) {
+          setGoals(cleared);
+          setGoalsDraft(cleared);
+          setGoalsEditing(false);
+        }
+      })
+      .finally(() => setSavingGoals(false));
+  }
+
+  const hasAnyGoal = (goals.calories_goal != null && goals.calories_goal > 0) ||
+    goals.protein_pct != null || goals.fat_pct != null || goals.carbs_pct != null ||
+    (goals.weight_goal != null && goals.weight_goal > 0);
 
   function fetchDaysForWeek(weekStart: string) {
     fetch(`/api/member/journal/days?week=${weekStart}`)
@@ -104,6 +133,19 @@ export default function MemberMacrosPage() {
     }
   }, [selectedWeek]);
 
+  const toDate = today;
+  const fromDateByRange: Record<typeof weightChartRange, number> = { week: 7, month: 30, "3m": 90, "6m": 180, "1y": 365 };
+  useEffect(() => {
+    const days = fromDateByRange[weightChartRange];
+    const from = new Date(toDate + "T12:00:00Z");
+    from.setUTCDate(from.getUTCDate() - days);
+    const fromStr = from.toISOString().slice(0, 10);
+    fetch(`/api/member/weigh-ins?from=${fromStr}&to=${toDate}`)
+      .then((r) => (r.ok ? r.json() : { weigh_ins: [] }))
+      .then((data: { weigh_ins?: { date: string; weight: number }[] }) => setWeighIns(Array.isArray(data.weigh_ins) ? data.weigh_ins : []))
+      .catch(() => setWeighIns([]));
+  }, [weightChartRange, toDate]);
+
   if (loading) return <div className="p-8 text-center text-stone-500">Loading…</div>;
 
   const pctSum = (goalsDraft.protein_pct ?? 0) + (goalsDraft.fat_pct ?? 0) + (goalsDraft.carbs_pct ?? 0);
@@ -125,74 +167,166 @@ export default function MemberMacrosPage() {
         </Link>
       </div>
 
-      {/* Daily macro goals */}
-      <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-white">
-        <h2 className="font-semibold text-stone-800 mb-3">Daily macro goals</h2>
-        <p className="text-xs text-stone-500 mb-3">Set your daily calorie target and target percentages for protein, fat, and carbs. Used to chart progress on each day and in the weekly view.</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-stone-500 mb-1">Calories</label>
-            <input
-              type="number"
-              min="0"
-              step="50"
-              value={goalsDraft.calories_goal ?? ""}
-              onChange={(e) => setGoalsDraft((g) => ({ ...g, calories_goal: e.target.value === "" ? null : parseInt(e.target.value, 10) || 0 }))}
-              placeholder="e.g. 2000"
-              className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-stone-500 mb-1">Protein %</label>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              step="5"
-              value={goalsDraft.protein_pct ?? ""}
-              onChange={(e) => setGoalsDraft((g) => ({ ...g, protein_pct: e.target.value === "" ? null : parseFloat(e.target.value) || 0 }))}
-              placeholder="30"
-              className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-stone-500 mb-1">Fat %</label>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              step="5"
-              value={goalsDraft.fat_pct ?? ""}
-              onChange={(e) => setGoalsDraft((g) => ({ ...g, fat_pct: e.target.value === "" ? null : parseFloat(e.target.value) || 0 }))}
-              placeholder="30"
-              className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-stone-500 mb-1">Carbs %</label>
-            <input
-              type="number"
-              min="0"
-              max="100"
-              step="5"
-              value={goalsDraft.carbs_pct ?? ""}
-              onChange={(e) => setGoalsDraft((g) => ({ ...g, carbs_pct: e.target.value === "" ? null : parseFloat(e.target.value) || 0 }))}
-              placeholder="40"
-              className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
-            />
-          </div>
+      {/* Weight chart — data from daily weigh-ins in journal */}
+      <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-white">
+        <h2 className="font-semibold text-stone-800 mb-2">Weight</h2>
+        <p className="text-xs text-stone-500 mb-3">From your daily weigh-ins in the journal. Toggle the range below.</p>
+        <div className="flex flex-wrap gap-2 mb-3">
+          {(["week", "month", "3m", "6m", "1y"] as const).map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => setWeightChartRange(r)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium ${weightChartRange === r ? "bg-brand-600 text-white" : "bg-stone-100 text-stone-600 hover:bg-stone-200"}`}
+            >
+              {r === "3m" ? "3 months" : r === "6m" ? "6 months" : r === "1y" ? "1 year" : r === "month" ? "Month" : "Week"}
+            </button>
+          ))}
         </div>
-        {pctSum > 0 && pctSum !== 100 && (
-          <p className="text-xs text-amber-600 mt-2">P+F+C = {pctSum}%. Tip: set two and leave carbs blank to auto-fill (100 − P − F).</p>
+        {weighIns.length < 2 ? (
+          <p className="text-sm text-stone-500">Log weight on at least two days in your journal to see the chart.</p>
+        ) : (
+          <div className="h-48 w-full">
+            <svg viewBox="0 0 400 180" className="w-full h-full block" preserveAspectRatio="xMidYMid meet">
+              {(() => {
+                const pts = weighIns.map((w) => ({ x: w.date, y: w.weight }));
+                const minY = Math.min(...pts.map((p) => p.y));
+                const maxY = Math.max(...pts.map((p) => p.y));
+                const range = maxY - minY || 1;
+                const padding = 24;
+                const w = 400;
+                const h = 180;
+                const xs = pts.map((_, i) => padding + (i / Math.max(1, pts.length - 1)) * (w - padding * 2));
+                const ys = pts.map((p) => h - padding - ((p.y - minY) / range) * (h - padding * 2));
+                const poly = pts.map((_, i) => `${xs[i]},${ys[i]}`).join(" ");
+                return (
+                  <>
+                    <polyline points={poly} fill="none" stroke="var(--brand-600, #0d9488)" strokeWidth="2" />
+                    {pts.map((p, i) => (
+                      <circle key={p.x} cx={xs[i]} cy={ys[i]} r="3" fill="var(--brand-600)" />
+                    ))}
+                  </>
+                );
+              })()}
+            </svg>
+          </div>
         )}
-        <button
-          type="button"
-          onClick={saveGoals}
-          disabled={savingGoals}
-          className="mt-3 px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
-        >
-          {savingGoals ? "Saving…" : "Save goals"}
-        </button>
+      </div>
+
+      {/* Daily macro goals + weight goal — show after save unless Edit or Clear */}
+      <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-white">
+        <h2 className="font-semibold text-stone-800 mb-3">Daily macro goals & weight goal</h2>
+        {hasAnyGoal && !goalsEditing ? (
+          <div>
+            <p className="text-xs text-stone-500 mb-3">Shown until you click Edit or Clear.</p>
+            <div className="flex flex-wrap gap-4 items-center text-sm">
+              {goals.calories_goal != null && goals.calories_goal > 0 && (
+                <span className="text-stone-700"><span className="font-medium text-stone-600">Calories:</span> {goals.calories_goal}</span>
+              )}
+              {goals.protein_pct != null && <span className="text-stone-700"><span className="font-medium text-stone-600">Protein:</span> {goals.protein_pct}%</span>}
+              {goals.fat_pct != null && <span className="text-stone-700"><span className="font-medium text-stone-600">Fat:</span> {goals.fat_pct}%</span>}
+              {goals.carbs_pct != null && <span className="text-stone-700"><span className="font-medium text-stone-600">Carbs:</span> {goals.carbs_pct}%</span>}
+              {goals.weight_goal != null && goals.weight_goal > 0 && (
+                <span className="text-stone-700"><span className="font-medium text-stone-600">Weight goal:</span> {goals.weight_goal} lbs</span>
+              )}
+              <div className="flex gap-2">
+                <button type="button" onClick={() => { setGoalsDraft(goals); setGoalsEditing(true); }} className="text-brand-600 hover:underline font-medium">
+                  Edit
+                </button>
+                <button type="button" onClick={clearGoals} disabled={savingGoals} className="text-stone-500 hover:text-stone-700">
+                  Clear
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <p className="text-xs text-stone-500 mb-3">Set your daily calorie target, macro percentages, and optional weight goal. Used to chart progress.</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Calories</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="50"
+                  value={goalsDraft.calories_goal ?? ""}
+                  onChange={(e) => setGoalsDraft((g) => ({ ...g, calories_goal: e.target.value === "" ? null : parseInt(e.target.value, 10) || 0 }))}
+                  placeholder="e.g. 2000"
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Protein %</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={goalsDraft.protein_pct ?? ""}
+                  onChange={(e) => setGoalsDraft((g) => ({ ...g, protein_pct: e.target.value === "" ? null : parseFloat(e.target.value) || 0 }))}
+                  placeholder="30"
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Fat %</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={goalsDraft.fat_pct ?? ""}
+                  onChange={(e) => setGoalsDraft((g) => ({ ...g, fat_pct: e.target.value === "" ? null : parseFloat(e.target.value) || 0 }))}
+                  placeholder="30"
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Carbs %</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={goalsDraft.carbs_pct ?? ""}
+                  onChange={(e) => setGoalsDraft((g) => ({ ...g, carbs_pct: e.target.value === "" ? null : parseFloat(e.target.value) || 0 }))}
+                  placeholder="40"
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Weight goal (lbs)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={goalsDraft.weight_goal ?? ""}
+                  onChange={(e) => setGoalsDraft((g) => ({ ...g, weight_goal: e.target.value === "" ? null : parseFloat(e.target.value) || 0 }))}
+                  placeholder="e.g. 150"
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                />
+              </div>
+            </div>
+            {pctSum > 0 && pctSum !== 100 && (
+              <p className="text-xs text-amber-600 mt-2">P+F+C = {pctSum}%. Tip: set two and leave carbs blank to auto-fill (100 − P − F).</p>
+            )}
+            <div className="flex gap-2 mt-3">
+              <button
+                type="button"
+                onClick={saveGoals}
+                disabled={savingGoals}
+                className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+              >
+                {savingGoals ? "Saving…" : "Save goals"}
+              </button>
+              {goalsEditing && (
+                <button type="button" onClick={() => { setGoalsDraft(goals); setGoalsEditing(false); }} className="px-4 py-2 rounded-lg border border-stone-200 text-stone-600 text-sm hover:bg-stone-50">
+                  Cancel
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="mb-8">

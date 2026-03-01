@@ -7,7 +7,7 @@ import { formatDateInAppTz } from "@/lib/app-timezone";
 import { getWeightComparisonWithArticle } from "@/lib/workout-congrats";
 import { useAppTimezone } from "@/lib/settings-context";
 
-type Workout = { id: number; member_id: string; started_at: string; finished_at: string | null; total_volume?: number; assigned_by_admin?: number; name?: string | null };
+type Workout = { id: number; member_id: string; started_at: string; finished_at: string | null; total_volume?: number; assigned_by_admin?: number; assigned_by_trainer_member_id?: string | null; name?: string | null };
 
 function getWorkoutDateInTz(w: Workout, tz: string): string {
   const raw = w.finished_at ?? w.started_at ?? "";
@@ -77,21 +77,23 @@ export default function MemberWorkoutsPage() {
   if (loading) return <div className="p-8 text-center text-stone-500">Loading…</div>;
 
   const openWorkout = workouts.find((w) => !w.finished_at);
-  const pastWorkouts = workouts.filter((w) => w.finished_at).sort((a, b) => (b.finished_at ?? "").localeCompare(a.finished_at ?? ""));
+  const pastWorkouts = workouts.filter((w) => w.finished_at && !(w.assigned_by_trainer_member_id != null && w.assigned_by_trainer_member_id !== "")).sort((a, b) => (b.finished_at ?? "").localeCompare(a.finished_at ?? ""));
+  const fromTrainerWorkouts = workouts.filter((w) => w.assigned_by_trainer_member_id != null && w.assigned_by_trainer_member_id !== "").sort((a, b) => (b.started_at ?? "").localeCompare(a.started_at ?? ""));
+  const fromTrainerFinished = fromTrainerWorkouts.filter((w) => w.finished_at);
 
   const now = new Date();
   const thisYear = now.toLocaleDateString("en-CA", { timeZone: tz }).slice(0, 4);
   const thisMonth = now.toLocaleDateString("en-CA", { timeZone: tz }).slice(0, 7);
-  const volumeThisMonth = pastWorkouts
+  const volumeThisMonth = [...pastWorkouts, ...fromTrainerFinished]
     .filter((w) => getWorkoutDateInTz(w, tz).startsWith(thisMonth))
     .reduce((sum, w) => sum + (w.total_volume ?? 0), 0);
-  const volumeThisYear = pastWorkouts
+  const volumeThisYear = [...pastWorkouts, ...fromTrainerFinished]
     .filter((w) => getWorkoutDateInTz(w, tz).startsWith(thisYear))
     .reduce((sum, w) => sum + (w.total_volume ?? 0), 0);
 
   const byMonth = new Map<string, number>();
   const byYear = new Map<string, number>();
-  for (const w of pastWorkouts) {
+  for (const w of [...pastWorkouts, ...fromTrainerFinished]) {
     const dateStr = getWorkoutDateInTz(w, tz);
     if (!dateStr) continue;
     const vol = w.total_volume ?? 0;
@@ -191,6 +193,36 @@ export default function MemberWorkoutsPage() {
           </ul>
         </div>
       )}
+      <h2 className="text-sm font-medium text-stone-500 mb-3">Workouts from My Trainer</h2>
+      {fromTrainerWorkouts.length === 0 ? (
+        <p className="text-stone-500 text-sm mb-6">No workouts from your trainer yet.</p>
+      ) : (
+        <ul className="space-y-2 mb-6">
+          {fromTrainerWorkouts.map((w) => (
+            <li key={w.id}>
+              <Link
+                href={`/member/workouts/${w.id}`}
+                className="block p-4 rounded-xl border border-stone-200 bg-white hover:border-brand-300 hover:bg-brand-50/30 transition-colors"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-stone-800">{w.name?.trim() || "Workout from trainer"}</span>
+                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-brand-100 text-brand-800">From trainer</span>
+                  {!w.finished_at && (
+                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">Not started — click to start</span>
+                  )}
+                </div>
+                <span className="text-stone-500 ml-0 block mt-0.5 sm:ml-2 sm:inline sm:mt-0">{formatDateInAppTz(w.finished_at ?? w.started_at)}</span>
+                {w.finished_at && (w.total_volume ?? 0) > 0 && (
+                  <span className="ml-0 block sm:ml-2 text-sm font-medium text-brand-600 mt-0.5 sm:mt-0 sm:inline">
+                    · {Number(w.total_volume).toLocaleString()} lbs total volume
+                  </span>
+                )}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
       <h2 className="text-sm font-medium text-stone-500 mb-3">Past Workouts</h2>
       {pastWorkouts.length === 0 ? (
         <p className="text-stone-500">No past workouts yet. Start one above to track your lifts and cardio.</p>

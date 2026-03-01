@@ -5,6 +5,7 @@ import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../lib/
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
 import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
+import { ensureTrainerClient, getTrainerMemberIdByDisplayName } from "../../../../lib/trainer-clients";
 import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz } from "../../../../lib/app-timezone";
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { getAdminMemberId } from "../../../../lib/admin";
@@ -135,7 +136,7 @@ export async function POST(request: NextRequest) {
           }
         } else if (it.product_type === "pt_session") {
           ensurePTSlotTables(db);
-          const session = db.prepare("SELECT * FROM pt_sessions WHERE id = ?").get(it.product_id) as { id: number; price: string; product_id: string; duration_minutes?: number } | undefined;
+          const session = db.prepare("SELECT * FROM pt_sessions WHERE id = ?").get(it.product_id) as { id: number; price: string; product_id: string; duration_minutes?: number; trainer?: string | null } | undefined;
           if (session) {
             grand_total += parsePrice(session.price) * it.quantity;
             let slot: { date: string; start_time: string; duration_minutes: number } | null = null;
@@ -153,6 +154,9 @@ export async function POST(request: NextRequest) {
               db.prepare(
                 "INSERT INTO pt_open_bookings (member_id, occurrence_date, start_time, duration_minutes, pt_session_id, payment_type) VALUES (?, ?, ?, ?, ?, 'paid')"
               ).run(member_id, slot.date, slot.start_time, slot.duration_minutes, session.id);
+              const trainerName = (session.trainer ?? "").trim();
+              const trainerMemberId = trainerName ? getTrainerMemberIdByDisplayName(db, trainerName) : null;
+              if (trainerMemberId) ensureTrainerClient(db, trainerMemberId, member_id);
             } else {
               const pt_booking_id = randomUUID().slice(0, 8);
               try {
@@ -168,6 +172,9 @@ export async function POST(request: NextRequest) {
               } catch {
                 /* already booked */
               }
+              const trainerName = (session.trainer ?? "").trim();
+              const trainerMemberId = trainerName ? getTrainerMemberIdByDisplayName(db, trainerName) : null;
+              if (trainerMemberId) ensureTrainerClient(db, trainerMemberId, member_id);
             }
           }
         } else if (it.product_type === "class") {

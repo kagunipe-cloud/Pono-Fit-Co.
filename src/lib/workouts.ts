@@ -58,6 +58,30 @@ export function ensureWorkoutTables(db: ReturnType<typeof getDb>) {
       /* ignore */
     }
   }
+  const colsAfterAdmin = db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[];
+  if (colsAfterAdmin.every((c) => c.name !== "assigned_by_trainer_member_id")) {
+    try {
+      db.prepare("ALTER TABLE workouts ADD COLUMN assigned_by_trainer_member_id TEXT").run();
+    } catch {
+      /* ignore */
+    }
+  }
+  const colsAfterTrainer = db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[];
+  if (colsAfterTrainer.every((c) => c.name !== "trainer_notes")) {
+    try {
+      db.prepare("ALTER TABLE workouts ADD COLUMN trainer_notes TEXT").run();
+    } catch {
+      /* ignore */
+    }
+  }
+  const colsAfterTrainerNotes = db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[];
+  if (colsAfterTrainerNotes.every((c) => c.name !== "client_completion_notes")) {
+    try {
+      db.prepare("ALTER TABLE workouts ADD COLUMN client_completion_notes TEXT").run();
+    } catch {
+      /* ignore */
+    }
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS exercises (

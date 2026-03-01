@@ -2,6 +2,9 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 import { ensureTrainersTable } from "./trainers";
+import { ensureTrainerClientsTable } from "./trainer-clients";
+import { ensureBodyCompositionTable } from "./body-composition";
+import { ensureClientGoalsTable } from "./client-goals";
 
 const dbPath = path.join(process.cwd(), "data", "the-fox-says.db");
 const restorePendingPath = path.join(process.cwd(), "data", "restore-pending.db");
@@ -125,6 +128,9 @@ export function getDb() {
   ensurePaymentFailuresTable(db);
   ensureMembersMemberIdUnique(db);
   ensureTrainersTable(db);
+  ensureTrainerClientsTable(db);
+  ensureBodyCompositionTable(db);
+  ensureClientGoalsTable(db);
   return db;
 }
 

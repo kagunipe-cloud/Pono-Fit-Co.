@@ -249,12 +249,14 @@ function NavList({
         </li>
       )}
       {isTrainer && (
-        <li>{link("/trainer", "My schedule", pathname === "/trainer" || pathname?.startsWith("/trainer/"))}</li>
+        <li>{link("/trainer", "My Schedule", pathname === "/trainer" || (pathname != null && pathname.startsWith("/trainer/") && !pathname.startsWith("/trainer/my-clients")))}</li>
+      )}
+      {isTrainer && (
+        <li>{link("/trainer/my-clients", "My Clients", pathname === "/trainer/my-clients")}</li>
       )}
       {!isAdmin && <li>{link("/schedule", "Schedule", pathname === "/schedule" || pathname?.startsWith("/schedule/"))}</li>}
       {isAdmin && <li>{link("/master-schedule", "Master Schedule")}</li>}
       {isAdmin && <li>{link("/admin/trainers", "Trainers")}</li>}
-      {isAdmin && <li>{link("/admin/create-workout-for-member", "Create Workout for Member")}</li>}
       {isAdmin && <li>{link("/admin/settings", "Settings")}</li>}
       {isAdmin && <li>{link("/admin/email-members", "Email all members")}</li>}
       {mainSections.map((s) => (

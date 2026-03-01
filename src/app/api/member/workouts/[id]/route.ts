@@ -7,11 +7,17 @@ export const dynamic = "force-dynamic";
 
 async function getWorkoutWithExercises(db: ReturnType<typeof getDb>, workoutId: number, memberId: string) {
   const hasName = (db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[]).some((c) => c.name === "name");
+  const hasTrainer = (db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[]).some((c) => c.name === "assigned_by_trainer_member_id");
+  const hasTrainerNotes = (db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[]).some((c) => c.name === "trainer_notes");
+  const hasClientNotes = (db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[]).some((c) => c.name === "client_completion_notes");
   const cols = ["id", "member_id", "started_at", "finished_at", "source_workout_id", "assigned_by_admin"];
   if (hasName) cols.push("name");
+  if (hasTrainer) cols.push("assigned_by_trainer_member_id");
+  if (hasTrainerNotes) cols.push("trainer_notes");
+  if (hasClientNotes) cols.push("client_completion_notes");
   const workout = db
     .prepare(`SELECT ${cols.join(", ")} FROM workouts WHERE id = ? AND member_id = ?`)
-    .get(workoutId, memberId) as { id: number; member_id: string; started_at: string; finished_at: string | null; source_workout_id: number | null; assigned_by_admin: number; name?: string | null } | undefined;
+    .get(workoutId, memberId) as { id: number; member_id: string; started_at: string; finished_at: string | null; source_workout_id: number | null; assigned_by_admin: number; name?: string | null; assigned_by_trainer_member_id?: string | null; trainer_notes?: string | null; client_completion_notes?: string | null } | undefined;
   if (!workout) return null;
   const exercises = db
     .prepare(
@@ -83,6 +89,11 @@ export async function PATCH(
     const hasName = (db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[]).some((c) => c.name === "name");
     if (body.finish === true) {
       db.prepare("UPDATE workouts SET finished_at = datetime('now') WHERE id = ?").run(id);
+      const clientNotes = typeof body.client_completion_notes === "string" ? body.client_completion_notes.trim() || null : null;
+      const hasClientNotesCol = (db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[]).some((c) => c.name === "client_completion_notes");
+      if (hasClientNotesCol && clientNotes !== undefined) {
+        db.prepare("UPDATE workouts SET client_completion_notes = ? WHERE id = ? AND member_id = ?").run(clientNotes, id, memberId);
+      }
     }
     if (hasName && (typeof body.name === "string" || body.name === null)) {
       const name = body.name === null ? null : (String(body.name).trim() || null);

@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 type ExercisePayload = {
   type: "lift" | "cardio";
+  exercise_id?: number;
   exercise_name: string;
   muscle_group?: string;
   primary_muscles?: string;
@@ -51,6 +52,7 @@ export async function POST(request: NextRequest) {
     const workoutId = Number(workoutResult.lastInsertRowid);
 
     const getOrCreateExercise = db.prepare("SELECT id FROM exercises WHERE name = ? AND type = ? LIMIT 1");
+    const getExerciseById = db.prepare("SELECT id FROM exercises WHERE id = ? LIMIT 1");
     const insertExercise = db.prepare(
       "INSERT INTO exercises (name, type, primary_muscles, secondary_muscles, equipment, muscle_group, instructions) VALUES (?, ?, ?, ?, ?, ?, ?)"
     );
@@ -72,13 +74,19 @@ export async function POST(request: NextRequest) {
       const instructions = instructionsArr.length > 0 ? JSON.stringify(instructionsArr.map(String)) : "";
 
       let exerciseId: number | null = null;
-      const existing = getOrCreateExercise.get(exercise_name, type) as { id: number } | undefined;
-      if (existing) {
-        exerciseId = existing.id;
-      } else {
-        insertExercise.run(exercise_name, type, primary_muscles, "", equipment, muscle_group, instructions);
-        const row = db.prepare("SELECT last_insert_rowid() AS id").get() as { id: number };
-        exerciseId = row.id;
+      if (typeof ex.exercise_id === "number" && ex.exercise_id > 0) {
+        const row = getExerciseById.get(ex.exercise_id) as { id: number } | undefined;
+        if (row) exerciseId = ex.exercise_id;
+      }
+      if (exerciseId == null) {
+        const existing = getOrCreateExercise.get(exercise_name, type) as { id: number } | undefined;
+        if (existing) {
+          exerciseId = existing.id;
+        } else {
+          insertExercise.run(exercise_name, type, primary_muscles, "", equipment, muscle_group, instructions);
+          const row = db.prepare("SELECT last_insert_rowid() AS id").get() as { id: number };
+          exerciseId = row.id;
+        }
       }
 
       const exResult = insertEx.run(workoutId, type, exercise_name, i, exerciseId);
