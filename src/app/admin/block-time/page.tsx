@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
@@ -17,7 +17,7 @@ type UnavailableBlock = {
   description: string;
 };
 
-export default function AdminBlockTimePage() {
+function BlockTimeContent() {
   const searchParams = useSearchParams();
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [blocks, setBlocks] = useState<UnavailableBlock[]>([]);
@@ -201,5 +201,13 @@ export default function AdminBlockTimePage() {
         </ul>
       )}
     </div>
+  );
+}
+
+export default function AdminBlockTimePage() {
+  return (
+    <Suspense fallback={<div className="max-w-2xl p-8 text-stone-500">Loading…</div>}>
+      <BlockTimeContent />
+    </Suspense>
   );
 }
