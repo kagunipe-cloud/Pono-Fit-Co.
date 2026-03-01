@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 /**
  * GET ?exercise_id=123 — history for one official exercise for the logged-in member.
  * Returns points for charting: { date, volume_lbs?, max_weight_lbs?, reps?, time_seconds?, distance_km? }.
+ * max_weight_lbs = estimated 1RM from Brzycki formula using reps at the highest weight for that workout.
  * Only includes workouts that are finished and where the exercise was linked to this exercise_id.
  */
 export async function GET(request: NextRequest) {
@@ -47,19 +48,35 @@ export async function GET(request: NextRequest) {
 
       if (ex.type === "lift") {
         let volume = 0;
-        let maxWeight: number | null = null;
         let totalReps = 0;
+        // Find highest weight in this workout; use reps at that weight for Brzycki estimated 1RM.
+        let bestWeight: number | null = null;
+        let repsAtBestWeight = 0;
         for (const s of sets) {
           const reps = s.reps ?? 0;
-          const w = s.weight_kg ?? 0; // stored as kg in DB but we display lbs in UI - assume stored as lbs for now or convert
+          const w = s.weight_kg ?? 0;
           volume += reps * w;
-          if (s.weight_kg != null && (maxWeight == null || s.weight_kg > maxWeight)) maxWeight = s.weight_kg;
           totalReps += reps;
+          if (s.weight_kg == null || s.weight_kg <= 0) continue;
+          const r = Math.min(36, Math.max(0, reps)); // cap for Brzycki: 37 - r >= 1
+          if (bestWeight == null || s.weight_kg > bestWeight) {
+            bestWeight = s.weight_kg;
+            repsAtBestWeight = r;
+          } else if (s.weight_kg === bestWeight && (reps ?? 0) > repsAtBestWeight) {
+            repsAtBestWeight = r; // same weight, more reps → use higher reps for 1RM estimate
+          }
+        }
+        // Brzycki: 1RM = w * (36 / (37 - r)); same unit as stored weight (assumed lbs for display).
+        let estimated1RM: number | null = null;
+        if (bestWeight != null && bestWeight > 0) {
+          const denom = 37 - repsAtBestWeight;
+          if (denom > 0) estimated1RM = bestWeight * (36 / denom);
+          else estimated1RM = bestWeight;
         }
         points.push({
           date,
           ...(volume > 0 && { volume_lbs: Math.round(volume) }),
-          ...(maxWeight != null && { max_weight_lbs: maxWeight }),
+          ...(estimated1RM != null && { max_weight_lbs: Math.round(estimated1RM * 10) / 10 }),
           ...(totalReps > 0 && { reps: totalReps }),
         });
       } else {

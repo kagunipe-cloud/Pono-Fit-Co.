@@ -92,7 +92,7 @@ export default function MemberWorkoutProgressPage() {
                       {chartData.exercise.type === "lift" && (
                         <>
                           <th className="text-right p-3 font-medium text-stone-600">Volume (lbs)</th>
-                          <th className="text-right p-3 font-medium text-stone-600">Max (lbs)</th>
+                          <th className="text-right p-3 font-medium text-stone-600">Est. 1RM (lbs)</th>
                         </>
                       )}
                       {chartData.exercise.type === "cardio" && (
