@@ -551,7 +551,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
               </li>
               {selectedSlot.item.type === "unavailable" && (
                 <li>
-                  <button type="button" onClick={() => { handleRemoveUnavailable(selectedSlot.item.id); setSelectedSlot(null); }} className="text-red-600 hover:underline">
+                  <button type="button" onClick={() => { if (selectedSlot.item.type === "unavailable") { handleRemoveUnavailable(selectedSlot.item.id); setSelectedSlot(null); } }} className="text-red-600 hover:underline">
                     Remove this block
                   </button>
                 </li>
@@ -569,7 +569,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                     </li>
                   )}
                   <li>
-                    <button type="button" onClick={() => handleDeleteClassOccurrence(selectedSlot.item.id)} className="text-red-600 hover:underline">
+                    <button type="button" onClick={() => { if (selectedSlot.item.type === "class") { handleDeleteClassOccurrence(selectedSlot.item.id); setSelectedSlot(null); } }} className="text-red-600 hover:underline">
                       Delete this occurrence
                     </button>
                   </li>
@@ -584,14 +584,14 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
               )}
               {selectedSlot.item.type === "pt_segment" && selectedSlot.item.booked && selectedSlot.item.booking_id != null && (
                 <li>
-                  <button type="button" onClick={() => handleCancelBlockBooking(selectedSlot.item.booking_id!)} className="text-red-600 hover:underline">
+                  <button type="button" onClick={() => { if (selectedSlot.item.type === "pt_segment" && selectedSlot.item.booking_id != null) { handleCancelBlockBooking(selectedSlot.item.booking_id); setSelectedSlot(null); } }} className="text-red-600 hover:underline">
                     Cancel PT for client
                   </button>
                 </li>
               )}
               {selectedSlot.item.type === "open_booked" && selectedSlot.item.id != null && (
                 <li>
-                  <button type="button" onClick={() => handleCancelOpenBooking(selectedSlot.item.id)} className="text-red-600 hover:underline">
+                  <button type="button" onClick={() => { if (selectedSlot.item.type === "open_booked" && selectedSlot.item.id != null) { handleCancelOpenBooking(selectedSlot.item.id); setSelectedSlot(null); } }} className="text-red-600 hover:underline">
                     Cancel PT for client
                   </button>
                 </li>
