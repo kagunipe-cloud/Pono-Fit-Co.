@@ -1,0 +1,28 @@
+body type,standard
+gender,female
+age,34
+height,"5'5"""
+weight,197.21
+bmi,32.8
+fat%,48.60%
+bmr,1660
+impedance,672
+fat mass,95.81
+ffm,101.41
+tbw,74.21
+hydration%,"""=B12/B5"""
+,11/28
+GOAL Weight,69 lbs
+Goal Body Fat,
+,0.25
+Conversion,
+X= FM-FP(FM)-FP(FFM),
+"""=B10-B17*B10-B17*B11""",
+,
+100% Fat,
+X=(FM-FP(W)/(1-FP),
+"""=(B10-B17*B5)/(1-B17)""",
+,
+90/10 Fat Loss,
+X=(FM-FP(FM)-FP(FFM))/(0.9-FP),
+"""=(B10-B17*B10-B17*B11)/(0.9-B17)""",
