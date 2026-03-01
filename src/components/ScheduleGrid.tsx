@@ -83,12 +83,12 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
   const [openBookings, setOpenBookings] = useState<{ id?: number; occurrence_date: string; start_time: string; duration_minutes: number; member_name?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const bookPtQuery = productId ? `&product=${encodeURIComponent(productId)}` : "";
-  const trainerQuery = variant === "member" && effectiveTrainerId && trainerDisplayName
-    ? `&trainer=${encodeURIComponent(effectiveTrainerId)}&trainer_name=${encodeURIComponent(trainerDisplayName)}`
-    : "";
   const isMaster = variant === "master";
   const isTrainer = variant === "trainer";
   const effectiveTrainerId = trainerMemberId ?? null;
+  const trainerQuery = variant === "member" && effectiveTrainerId && trainerDisplayName
+    ? `&trainer=${encodeURIComponent(effectiveTrainerId)}&trainer_name=${encodeURIComponent(trainerDisplayName)}`
+    : "";
   const [unavailableDeletingId, setUnavailableDeletingId] = useState<number | null>(null);
   const [localRefreshKey, setLocalRefreshKey] = useState(0);
   const refreshKey = scheduleRefreshKey ?? localRefreshKey;
