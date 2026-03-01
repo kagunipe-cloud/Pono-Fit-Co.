@@ -27,11 +27,11 @@ export default function RootLayout({
 }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-stone-100 text-stone-900 antialiased">
+      <body className="min-h-screen bg-gradient-to-r from-white to-brand-200 text-stone-900 antialiased">
         <SettingsProvider>
         <div className="flex min-h-screen">
           <Sidebar />
-          <main className="flex-1 overflow-auto bg-stone-100 p-4 pt-14 md:p-6 md:pt-6">
+          <main className="flex-1 overflow-auto bg-gradient-to-r from-white to-brand-200 p-4 pt-14 md:p-6 md:pt-6">
             {children}
           </main>
         </div>

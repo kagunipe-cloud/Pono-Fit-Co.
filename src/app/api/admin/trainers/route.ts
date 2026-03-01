@@ -82,8 +82,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(row);
   } catch (err) {
     console.error("[POST /api/admin/trainers]", err);
-    const message = err instanceof Error ? err.message : "Failed to create trainer";
-    return NextResponse.json({ error: "Failed to create trainer", detail: message }, { status: 500 });
+    const message =
+      err instanceof Error
+        ? err.message
+        : typeof err === "string"
+          ? err
+          : err && typeof err === "object" && "message" in err
+            ? String((err as { message: unknown }).message)
+            : String(err);
+    return NextResponse.json({ error: "Failed to create trainer", detail: message || "Unknown error" }, { status: 500 });
   } finally {
     if (db) db.close();
   }

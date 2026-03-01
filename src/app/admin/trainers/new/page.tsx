@@ -72,7 +72,12 @@ export default function NewTrainerPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
+      let data: { error?: string; detail?: string };
+      try {
+        data = await res.json();
+      } catch {
+        data = { error: `Request failed (${res.status})`, detail: await res.text().catch(() => "") };
+      }
       if (res.ok) {
         router.push("/admin/block-time");
       } else {

@@ -119,8 +119,8 @@ function NavList({
     return (
       <Link
         href={href}
-        className={`block px-3 py-2 rounded-lg text-sm font-medium ${
-          isActive ? "bg-brand-50 text-brand-800" : "text-brand-600 hover:bg-stone-100"
+        className={`block px-3 py-2 rounded-lg text-sm font-medium text-white ${
+          isActive ? "bg-brand-gray-100 text-brand-500" : "hover:bg-brand-gray-100 hover:text-brand-500"
         }`}
       >
         {label}
@@ -145,14 +145,14 @@ function NavList({
         <li>
           <Link
             href="/schedule"
-            className={`block px-3 py-2 rounded-lg text-sm font-medium ${
+            className={`block px-3 py-2 rounded-lg text-sm font-medium text-white ${
               pathname === "/schedule" || pathname?.startsWith("/schedule/")
-                ? "bg-brand-50 text-brand-800"
-                : "text-brand-600 hover:bg-stone-100"
+                ? "bg-brand-gray-100 text-brand-500"
+                : "hover:bg-brand-gray-100 hover:text-brand-500"
             }`}
           >
             <span className="block">Schedule</span>
-            <span className="block text-xs font-normal text-stone-500 mt-0.5">Book Classes & PT</span>
+            <span className="block text-xs font-normal text-white/80 mt-0.5">Book Classes & PT</span>
           </Link>
         </li>
         <li ref={bookingsRef} className="relative">
@@ -160,7 +160,7 @@ function NavList({
             ref={bookingsButtonRef}
             type="button"
             onClick={() => setBookingsOpen((open) => !open)}
-            className="w-full text-left block px-3 py-2 rounded-lg text-sm font-medium text-brand-600 hover:bg-stone-100"
+            className="w-full text-left block px-3 py-2 rounded-lg text-sm font-medium text-white hover:bg-brand-gray-100 hover:text-brand-500"
           >
             <span className="flex items-center justify-between gap-1">
               Bookings
@@ -207,8 +207,8 @@ function NavList({
         <li>{link("/member/workouts", "My Workouts", pathname?.startsWith("/member/workouts"))}</li>
         <li>{link("/member/macros", "My Macros", pathname?.startsWith("/member/macros"))}</li>
         <li>{link("/rec-leagues", "Rec Leagues", pathname?.startsWith("/rec-leagues"))}</li>
-        <li className="pt-2 mt-2 border-t border-stone-100">
-          <span className="block px-3 py-1 text-xs font-medium text-stone-400">Purchase</span>
+        <li className="pt-2 mt-2 border-t border-white/20">
+          <span className="block px-3 py-1 text-xs font-medium text-white/80">Purchase</span>
         </li>
         <li>{link("/member/classes", "Browse Classes")}</li>
         <li>{link("/member/pt-sessions", "Browse PT Sessions")}</li>
@@ -217,18 +217,18 @@ function NavList({
         <li>{link("/member/memberships", "Memberships")}</li>
         <li>{link("/member/cart", "Cart")}</li>
         {!isMember && (
-          <li className="pt-2 mt-2 border-t border-stone-100">
-            <Link href="/login" className="block px-3 py-2 rounded-lg text-sm font-medium text-brand-600 hover:bg-brand-50">
+          <li className="pt-2 mt-2 border-t border-white/20">
+            <Link href="/login" className="block px-3 py-2 rounded-lg text-sm font-medium text-white hover:bg-brand-gray-100 hover:text-brand-500">
               Log in
             </Link>
           </li>
         )}
         {isMember && (
-          <li className="pt-2 mt-2 border-t border-stone-100">
+          <li className="pt-2 mt-2 border-t border-white/20">
             <button
               type="button"
               onClick={onLogout}
-              className="block w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-brand-600 hover:bg-stone-100"
+              className="block w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-white hover:bg-brand-gray-100 hover:text-brand-500"
             >
               Log Out
             </button>
@@ -243,7 +243,7 @@ function NavList({
       <li>{link("/", "Home", pathname === "/")}</li>
       {!isMember && (
         <li>
-          <Link href="/login" className="block px-3 py-2 rounded-lg text-sm font-medium text-brand-600 hover:bg-brand-50">
+          <Link href="/login" className="block px-3 py-2 rounded-lg text-sm font-medium text-white hover:bg-brand-gray-100 hover:text-brand-500">
             Login
           </Link>
         </li>
@@ -266,8 +266,8 @@ function NavList({
                 ref={bookingsButtonRef}
                 type="button"
                 onClick={() => setBookingsOpen((open) => !open)}
-                className={`w-full text-left block px-3 py-2 rounded-lg text-sm font-medium text-brand-600 hover:bg-stone-100 ${
-                  isOnBookingsPage ? "bg-brand-50 text-brand-800" : ""
+                className={`w-full text-left block px-3 py-2 rounded-lg text-sm font-medium text-white hover:bg-brand-gray-100 hover:text-brand-500 ${
+                  isOnBookingsPage ? "bg-brand-gray-100 text-brand-500" : ""
                 }`}
               >
                 <span className="flex items-center justify-between gap-1">
@@ -297,7 +297,7 @@ function NavList({
                         key={slug}
                         href={`/${slug}`}
                         className={`block px-3 py-2 text-sm font-medium ${
-                          pathname === `/${slug}` ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                          pathname === `/${slug}` ? "bg-brand-gray-100 text-brand-500" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
                         }`}
                         role="menuitem"
                         onClick={() => setBookingsOpen(false)}
@@ -316,8 +316,8 @@ function NavList({
                 ref={servicesButtonRef}
                 type="button"
                 onClick={() => setServicesOpen((open) => !open)}
-                className={`w-full text-left block px-3 py-2 rounded-lg text-sm font-medium text-brand-600 hover:bg-stone-100 ${
-                  isOnServicesPage ? "bg-brand-50 text-brand-800" : ""
+                className={`w-full text-left block px-3 py-2 rounded-lg text-sm font-medium text-white hover:bg-brand-gray-100 hover:text-brand-500 ${
+                  isOnServicesPage ? "bg-brand-gray-100 text-brand-500" : ""
                 }`}
               >
                 <span className="flex items-center justify-between gap-1">
@@ -355,7 +355,7 @@ function NavList({
                         href={href}
                         className={`block px-3 py-2 text-sm font-medium ${
                           pathname === href || pathname?.startsWith(href + "/")
-                            ? "bg-brand-50 text-brand-800"
+                            ? "bg-brand-gray-100 text-brand-500"
                             : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
                         }`}
                         role="menuitem"
@@ -376,8 +376,8 @@ function NavList({
           ref={reportsButtonRef}
           type="button"
           onClick={() => setReportsOpen((open) => !open)}
-          className={`w-full text-left block px-3 py-2 rounded-lg text-sm font-medium text-brand-600 hover:bg-stone-100 ${
-            isOnReportPage ? "bg-brand-50 text-brand-800" : ""
+          className={`w-full text-left block px-3 py-2 rounded-lg text-sm font-medium text-white hover:bg-brand-gray-100 hover:text-brand-500 ${
+            isOnReportPage ? "bg-brand-gray-100 text-brand-500" : ""
           }`}
         >
           <span className="flex items-center justify-between gap-1">
@@ -406,9 +406,9 @@ function NavList({
                 <Link
                   key={slug}
                   href={`/${slug}`}
-                  className={`block px-3 py-2 text-sm font-medium ${
-                    pathname === `/${slug}` ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
-                  }`}
+                className={`block px-3 py-2 text-sm font-medium ${
+                  pathname === `/${slug}` ? "bg-brand-gray-100 text-brand-500" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                }`}
                   role="menuitem"
                   onClick={() => setReportsOpen(false)}
                 >
@@ -418,7 +418,7 @@ function NavList({
               <Link
                 href="/admin/usage"
                 className={`block px-3 py-2 text-sm font-medium ${
-                  pathname === "/admin/usage" || pathname?.startsWith("/admin/usage/") ? "bg-brand-50 text-brand-800" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                  pathname === "/admin/usage" || pathname?.startsWith("/admin/usage/") ? "bg-brand-gray-100 text-brand-500" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
                 }`}
                 role="menuitem"
                 onClick={() => setReportsOpen(false)}
@@ -431,17 +431,17 @@ function NavList({
       </li>
       {isAdmin && (
         <>
-          <li className="pt-2 mt-2 border-t border-stone-100">
-            <span className="block px-3 py-1 text-xs font-medium text-stone-400">Member area</span>
+          <li className="pt-2 mt-2 border-t border-white/20">
+            <span className="block px-3 py-1 text-xs font-medium text-white/80">Member area</span>
           </li>
           <li>{link("/member", "Member home", pathname === "/member")}</li>
           <li>{link("/member/workouts", "My Workouts", pathname?.startsWith("/member/workouts"))}</li>
           <li>{link("/member/macros", "My Macros", pathname?.startsWith("/member/macros"))}</li>
-          <li className="pt-2 mt-2 border-t border-stone-100">
+          <li className="pt-2 mt-2 border-t border-white/20">
             <button
               type="button"
               onClick={onLogout}
-              className="block w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-brand-600 hover:bg-stone-100"
+              className="block w-full text-left px-3 py-2 rounded-lg text-sm font-medium text-white hover:bg-brand-gray-100 hover:text-brand-500"
             >
               Log Out
             </button>
@@ -520,13 +520,13 @@ export default function Sidebar() {
             onClick={() => setMobileMenuOpen(false)}
             aria-hidden
           />
-          <div className="md:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-white shadow-xl flex flex-col overflow-hidden border-r border-stone-200">
-            <div className="p-4 border-b border-stone-100 shrink-0">
+          <div className="md:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-brand-gray shadow-xl flex flex-col overflow-hidden border-r border-white/20">
+            <div className="p-4 border-b border-white/20 shrink-0">
               <Link href={logoHref} className="block rounded-lg overflow-hidden" onClick={() => setMobileMenuOpen(false)}>
                 <img src="/Logo-w-gray.svg" alt={BRAND.name} className="w-full h-auto block" />
               </Link>
               {isMember && member && (
-                <p className="text-xs text-brand-600 mt-1 truncate" title={member.email ?? undefined}>{member.name}</p>
+                <p className="text-xs text-white mt-1 truncate" title={member.email ?? undefined}>{member.name}</p>
               )}
             </div>
             <nav className="p-2 flex-1 overflow-y-auto">
@@ -537,13 +537,13 @@ export default function Sidebar() {
       )}
 
       {/* Desktop: sidebar */}
-      <aside className="hidden md:flex w-56 shrink-0 border-r border-stone-200 bg-white flex-col">
-      <div className="p-4 border-b border-stone-100">
+      <aside className="hidden md:flex w-56 shrink-0 border-r border-white/20 bg-brand-gray flex-col">
+      <div className="p-4 border-b border-white/20">
         <Link href={logoHref} className="block rounded-lg overflow-hidden" aria-label={BRAND.name}>
           <img src="/Logo-w-gray.svg" alt={BRAND.name} className="w-full h-auto block" />
         </Link>
         {isMember && member && (
-          <p className="text-xs text-brand-600 mt-1 truncate" title={member.email ?? undefined}>{member.name}</p>
+          <p className="text-xs text-white mt-1 truncate" title={member.email ?? undefined}>{member.name}</p>
         )}
       </div>
       <nav className="p-2 flex-1 overflow-y-auto">

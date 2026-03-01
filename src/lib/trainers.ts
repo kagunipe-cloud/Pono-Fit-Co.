@@ -15,8 +15,7 @@ export function ensureTrainersTable(db: ReturnType<typeof getDb>) {
       form_i9_received_at TEXT,
       exempt_from_tax_forms INTEGER NOT NULL DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now')),
-      FOREIGN KEY (member_id) REFERENCES members(member_id)
+      updated_at TEXT DEFAULT (datetime('now'))
     )
   `);
   try {

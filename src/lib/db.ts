@@ -123,6 +123,7 @@ export function getDb() {
   ensureMembersWaiverColumns(db);
   ensureMembersPhoneColumn(db);
   ensurePaymentFailuresTable(db);
+  ensureMembersMemberIdUnique(db);
   ensureTrainersTable(db);
   return db;
 }
@@ -184,6 +185,15 @@ export function ensureMembersPhoneColumn(db: ReturnType<typeof getDb>) {
     db.exec("ALTER TABLE members ADD COLUMN phone TEXT");
   } catch {
     // Column already exists
+  }
+}
+
+/** Ensure members.member_id has a UNIQUE index so trainers FK (trainers.member_id → members.member_id) is valid. */
+export function ensureMembersMemberIdUnique(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_members_member_id ON members(member_id)");
+  } catch {
+    // Index already exists or duplicates exist (caller may need to fix data)
   }
 }
 
