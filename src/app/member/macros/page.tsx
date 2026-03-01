@@ -186,30 +186,149 @@ export default function MemberMacrosPage() {
         {weighIns.length < 2 ? (
           <p className="text-sm text-stone-500">Log weight on at least two days in your journal to see the chart.</p>
         ) : (
-          <div className="h-48 w-full">
-            <svg viewBox="0 0 400 180" className="w-full h-full block" preserveAspectRatio="xMidYMid meet">
+          <>
+          <div className="w-full relative" style={{ minHeight: "380px", height: "380px" }}>
+            <svg viewBox="0 0 500 320" className="w-full h-full block" preserveAspectRatio="xMidYMid meet">
               {(() => {
                 const pts = weighIns.map((w) => ({ x: w.date, y: w.weight }));
-                const minY = Math.min(...pts.map((p) => p.y));
-                const maxY = Math.max(...pts.map((p) => p.y));
+                const goalWeight = goals.weight_goal != null && goals.weight_goal > 0 ? goals.weight_goal : null;
+                const minY = goalWeight != null
+                  ? Math.min(...pts.map((p) => p.y), goalWeight)
+                  : Math.min(...pts.map((p) => p.y));
+                const maxY = goalWeight != null
+                  ? Math.max(...pts.map((p) => p.y), goalWeight)
+                  : Math.max(...pts.map((p) => p.y));
                 const range = maxY - minY || 1;
-                const padding = 24;
-                const w = 400;
-                const h = 180;
-                const xs = pts.map((_, i) => padding + (i / Math.max(1, pts.length - 1)) * (w - padding * 2));
-                const ys = pts.map((p) => h - padding - ((p.y - minY) / range) * (h - padding * 2));
+                const chartLeft = 52;
+                const chartRight = 456;
+                const chartTop = 18;
+                const chartBottom = 288;
+                const chartWidth = chartRight - chartLeft;
+                const chartHeight = chartBottom - chartTop;
+                const yToPx = (value: number) => chartBottom - ((value - minY) / range) * chartHeight;
+                const xs = pts.map((_, i) => chartLeft + (i / Math.max(1, pts.length - 1)) * chartWidth);
+                const ys = pts.map((p) => yToPx(p.y));
                 const poly = pts.map((_, i) => `${xs[i]},${ys[i]}`).join(" ");
+
+                const goalLineY = goalWeight != null ? yToPx(goalWeight) : null;
+                const goalStripHeight = 72;
+
+                // Y-axis ticks (weight labels)
+                const yTicks = 5;
+                const yTickValues: number[] = [];
+                for (let i = 0; i <= yTicks; i++) {
+                  yTickValues.push(minY + (range * i) / yTicks);
+                }
+
+                // X-axis: first, last, and optionally middle date
+                const xTickIndices = pts.length <= 3
+                  ? pts.map((_, i) => i)
+                  : [0, Math.floor(pts.length / 2), pts.length - 1];
+
                 return (
                   <>
+                    {/* Y-axis line */}
+                    <line x1={chartLeft} y1={chartTop} x2={chartLeft} y2={chartBottom} stroke="#e5e7eb" strokeWidth="1" />
+                    {/* Y-axis labels */}
+                    {yTickValues.map((v, i) => {
+                      const y = yToPx(v);
+                      return (
+                        <g key={i}>
+                          <line x1={chartLeft} y1={y} x2={chartLeft - 4} y2={y} stroke="#d1d5db" strokeWidth="1" />
+                          <text x={chartLeft - 8} y={y + 4} textAnchor="end" fontSize="10" fill="#6b7280" fontFamily="system-ui, sans-serif">
+                            {Math.round(v)}
+                          </text>
+                        </g>
+                      );
+                    })}
+                    {/* X-axis line */}
+                    <line x1={chartLeft} y1={chartBottom} x2={chartRight} y2={chartBottom} stroke="#e5e7eb" strokeWidth="1" />
+                    {/* X-axis labels (dates) */}
+                    {xTickIndices.map((i) => {
+                      const d = pts[i].x;
+                      const shortDate = d.length >= 10 ? `${d.slice(5, 7)}/${d.slice(8, 10)}` : d;
+                      return (
+                        <text key={i} x={xs[i]} y={chartBottom + 16} textAnchor="middle" fontSize="10" fill="#6b7280" fontFamily="system-ui, sans-serif">
+                          {shortDate}
+                        </text>
+                      );
+                    })}
                     <polyline points={poly} fill="none" stroke="var(--brand-600, #0d9488)" strokeWidth="2" />
-                    {pts.map((p, i) => (
-                      <circle key={p.x} cx={xs[i]} cy={ys[i]} r="3" fill="var(--brand-600)" />
-                    ))}
+                    {pts.map((p, i) => {
+                      const isLast = i === pts.length - 1;
+                      return (
+                        <g key={p.x}>
+                          {isLast ? (
+                            <image
+                              href="/seaplane.png"
+                              x={xs[i] - 28}
+                              y={ys[i] - 44}
+                              width={56}
+                              height={44}
+                              preserveAspectRatio="xMidYMax meet"
+                              style={{ pointerEvents: "none" }}
+                            />
+                          ) : (
+                            <circle cx={xs[i]} cy={ys[i]} r="3" fill="var(--brand-600)" />
+                          )}
+                          {/* Weight label at each point */}
+                          <text
+                            x={xs[i]}
+                            y={isLast ? ys[i] - 50 : ys[i] - 10}
+                            textAnchor="middle"
+                            fontSize="11"
+                            fontWeight="600"
+                            fill="var(--brand-700, #0f766e)"
+                            fontFamily="system-ui, sans-serif"
+                          >
+                            {p.y}
+                          </text>
+                        </g>
+                      );
+                    })}
+                    {/* Goal weight: full-width strip demarked by top of goal-ocean.png + label */}
+                    {goalLineY != null && goalWeight != null && (
+                      <g>
+                        <line
+                          x1={chartLeft}
+                          y1={goalLineY}
+                          x2={chartRight}
+                          y2={goalLineY}
+                          stroke="rgba(6, 95, 70, 0.5)"
+                          strokeWidth="1.5"
+                          strokeDasharray="6 3"
+                        />
+                        <image
+                          href="/goal-ocean.png"
+                          x={chartLeft}
+                          y={goalLineY}
+                          width={chartWidth}
+                          height={goalStripHeight}
+                          preserveAspectRatio="none"
+                          opacity={1}
+                        />
+                        <text
+                          x={chartRight - 8}
+                          y={goalLineY + goalStripHeight / 2 + 4}
+                          textAnchor="end"
+                          fontSize="11"
+                          fontWeight="600"
+                          fill="var(--brand-700, #0f766e)"
+                          fontFamily="system-ui, sans-serif"
+                        >
+                          Goal: {goalWeight} lbs
+                        </text>
+                      </g>
+                    )}
                   </>
                 );
               })()}
             </svg>
           </div>
+          {goals.weight_goal == null || goals.weight_goal <= 0 ? (
+            <p className="text-xs text-stone-500 mt-2">Set a weight goal in the goals section below to show your goal line on the chart.</p>
+          ) : null}
+          </>
         )}
       </div>
 
