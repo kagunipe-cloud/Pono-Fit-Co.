@@ -76,7 +76,8 @@ export default function NewTrainerPage() {
       if (res.ok) {
         router.push("/admin/block-time");
       } else {
-        setError(data.error ?? "Failed to create trainer");
+        const msg = [data.error, data.detail].filter(Boolean).join(" — ");
+        setError(msg || "Failed to create trainer");
       }
     } finally {
       setSubmitting(false);

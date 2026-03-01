@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "../../../../lib/db";
+import { getDb, ensureMembersPhoneColumn } from "../../../../lib/db";
 import { ensureTrainersTable } from "../../../../lib/trainers";
 import { getAdminMemberId } from "../../../../lib/admin";
 import { randomUUID } from "crypto";
@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
     const formI9At = (body.form_i9_received_at ?? "").trim() || null;
 
     db = getDb();
+    ensureMembersPhoneColumn(db);
     ensureTrainersTable(db);
 
     let memberId: string;
