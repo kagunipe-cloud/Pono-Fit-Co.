@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
  * If existing member has role Admin, exempt_from_tax_forms is set and 1099/I-9 are not required.
  */
 export async function POST(request: NextRequest) {
+  let db: ReturnType<typeof getDb> | null = null;
   try {
     const adminId = await getAdminMemberId(request);
     if (!adminId) {
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
     const form1099At = (body.form_1099_received_at ?? "").trim() || null;
     const formI9At = (body.form_i9_received_at ?? "").trim() || null;
 
-    const db = getDb();
+    db = getDb();
     ensureTrainersTable(db);
 
     let memberId: string;
@@ -40,12 +41,10 @@ export async function POST(request: NextRequest) {
     if (existingMemberId) {
       const member = db.prepare("SELECT member_id, role FROM members WHERE member_id = ?").get(existingMemberId) as { member_id: string; role: string | null } | undefined;
       if (!member) {
-        db.close();
         return NextResponse.json({ error: "Member not found" }, { status: 404 });
       }
       const existingTrainer = db.prepare("SELECT 1 FROM trainers WHERE member_id = ?").get(existingMemberId);
       if (existingTrainer) {
-        db.close();
         return NextResponse.json({ error: "Member is already a trainer" }, { status: 400 });
       }
       memberId = member.member_id;
@@ -59,7 +58,6 @@ export async function POST(request: NextRequest) {
       }
       const existing = db.prepare("SELECT member_id FROM members WHERE LOWER(TRIM(email)) = ?").get(email) as { member_id: string } | undefined;
       if (existing) {
-        db.close();
         return NextResponse.json({ error: "A member with this email already exists; use existing member instead" }, { status: 400 });
       }
       memberId = randomUUID().slice(0, 8);
@@ -80,10 +78,12 @@ export async function POST(request: NextRequest) {
       exempt
     );
     const row = db.prepare("SELECT * FROM trainers WHERE member_id = ?").get(memberId);
-    db.close();
     return NextResponse.json(row);
   } catch (err) {
-    console.error(err);
-    return NextResponse.json({ error: "Failed to create trainer" }, { status: 500 });
+    console.error("[POST /api/admin/trainers]", err);
+    const message = err instanceof Error ? err.message : "Failed to create trainer";
+    return NextResponse.json({ error: "Failed to create trainer", detail: message }, { status: 500 });
+  } finally {
+    if (db) db.close();
   }
 }
