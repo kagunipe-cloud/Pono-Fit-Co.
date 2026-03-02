@@ -183,8 +183,8 @@ export default function MemberMacrosPage() {
             </button>
           ))}
         </div>
-        {weighIns.length < 2 ? (
-          <p className="text-sm text-stone-500">Log weight on at least two days in your journal to see the chart.</p>
+        {weighIns.length === 0 ? (
+          <p className="text-sm text-stone-500">Log a weight in your journal to see the chart.</p>
         ) : (
           <>
           <div className="w-full relative" style={{ minHeight: "380px", height: "380px" }}>
@@ -210,8 +210,10 @@ export default function MemberMacrosPage() {
                 const ys = pts.map((p) => yToPx(p.y));
                 const poly = pts.map((_, i) => `${xs[i]},${ys[i]}`).join(" ");
 
-                const goalLineY = goalWeight != null ? yToPx(goalWeight) : null;
-                const goalStripHeight = 72;
+                const lastRecordedWeight = pts.length > 0 ? pts[pts.length - 1].y : null;
+                const isGainGoal = goalWeight != null && lastRecordedWeight != null && goalWeight > lastRecordedWeight;
+                const goalStripHeight = chartHeight * (isGainGoal ? 0.75 : 0.25);
+                const goalTopY = chartBottom - goalStripHeight; // bottom on x-axis, strip rises up
 
                 // Y-axis ticks (weight labels)
                 const yTicks = 5;
@@ -256,7 +258,6 @@ export default function MemberMacrosPage() {
                     <polyline points={poly} fill="none" stroke="var(--brand-600, #0d9488)" strokeWidth="2" />
                     {pts.map((p, i) => {
                       const isLast = i === pts.length - 1;
-                      const lastRecordedWeight = pts.length > 0 ? pts[pts.length - 1].y : null;
                       const useSubmarine = isLast && goalWeight != null && lastRecordedWeight != null && goalWeight > lastRecordedWeight;
                       return (
                         <g key={p.x}>
@@ -288,14 +289,14 @@ export default function MemberMacrosPage() {
                         </g>
                       );
                     })}
-                    {/* Goal weight: full-width strip demarked by top of goal-ocean.png + label */}
-                    {goalLineY != null && goalWeight != null && (
+                    {/* Goal weight: full-width strip from x-axis up, height depends on gain vs loss goal */}
+                    {goalWeight != null && (
                       <g>
                         <line
                           x1={chartLeft}
-                          y1={goalLineY}
+                          y1={goalTopY}
                           x2={chartRight}
-                          y2={goalLineY}
+                          y2={goalTopY}
                           stroke="rgba(6, 95, 70, 0.5)"
                           strokeWidth="1.5"
                           strokeDasharray="6 3"
@@ -303,7 +304,7 @@ export default function MemberMacrosPage() {
                         <image
                           href="/goal-ocean.png"
                           x={chartLeft}
-                          y={goalLineY}
+                          y={goalTopY}
                           width={chartWidth}
                           height={goalStripHeight}
                           preserveAspectRatio="none"
@@ -311,7 +312,7 @@ export default function MemberMacrosPage() {
                         />
                         <text
                           x={chartRight - 8}
-                          y={goalLineY + goalStripHeight / 2 + 4}
+                          y={goalTopY + goalStripHeight / 2 + 4}
                           textAnchor="end"
                           fontSize="11"
                           fontWeight="600"

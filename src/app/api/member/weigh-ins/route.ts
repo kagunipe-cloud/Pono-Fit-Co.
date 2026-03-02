@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { getDb, getAppTimezone } from "@/lib/db";
 import { getMemberIdFromSession } from "@/lib/session";
 import { ensureJournalTables } from "@/lib/journal";
+import { todayInAppTz } from "@/lib/app-timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -49,20 +50,29 @@ export async function PATCH(request: NextRequest) {
     const memberId = await getMemberIdFromSession();
     if (!memberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
 
+    const db = getDb();
+    ensureJournalTables(db);
+
+    const tz = getAppTimezone(db);
+
     const body = await request.json().catch(() => ({}));
     const date = typeof body.date === "string" ? body.date.trim() : "";
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      db.close();
       return NextResponse.json({ error: "date (YYYY-MM-DD) required" }, { status: 400 });
+    }
+    const today = todayInAppTz(tz);
+    if (date > today) {
+      db.close();
+      return NextResponse.json({ error: "You can't log a future weigh-in yet." }, { status: 400 });
     }
     const weight = body.weight === null || body.weight === undefined
       ? null
       : typeof body.weight === "number" && body.weight > 0 ? body.weight : Number(body.weight);
     if (weight !== null && (typeof weight !== "number" || Number.isNaN(weight) || weight <= 0)) {
+      db.close();
       return NextResponse.json({ error: "weight must be a positive number or null to clear" }, { status: 400 });
     }
-
-    const db = getDb();
-    ensureJournalTables(db);
 
     if (weight == null) {
       db.prepare("DELETE FROM member_weigh_ins WHERE member_id = ? AND date = ?").run(memberId, date);
