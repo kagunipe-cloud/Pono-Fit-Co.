@@ -4,11 +4,14 @@ import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const trainer_member_id = request.nextUrl.searchParams.get("trainer_member_id")?.trim() || null;
     const db = getDb();
     ensurePTSlotTables(db);
-    const rows = db.prepare("SELECT * FROM trainer_availability ORDER BY day_of_week, start_time").all();
+    const rows = trainer_member_id
+      ? db.prepare("SELECT * FROM trainer_availability WHERE trainer_member_id = ? ORDER BY day_of_week, start_time").all(trainer_member_id)
+      : db.prepare("SELECT * FROM trainer_availability ORDER BY day_of_week, start_time").all();
     db.close();
     return NextResponse.json(rows);
   } catch (err) {

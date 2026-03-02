@@ -65,12 +65,12 @@ export async function PATCH(
 
 /** DELETE — remove an availability block (only if current user owns it or is admin). */
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const memberId = await getTrainerMemberId();
-    const isAdmin = !!(await getAdminMemberId());
+    const memberId = await getTrainerMemberId(request);
+    const isAdmin = !!(await getAdminMemberId(request));
     if (!memberId && !isAdmin) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

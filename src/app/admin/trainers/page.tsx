@@ -4,12 +4,34 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import ScheduleGrid from "@/components/ScheduleGrid";
 
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 type Trainer = { member_id: string; display_name: string };
+
+type AvailabilityBlock = {
+  id: number;
+  trainer: string;
+  trainer_member_id: string | null;
+  day_of_week: number;
+  days_of_week: string | null;
+  start_time: string;
+  end_time: string;
+  description: string | null;
+};
 
 export default function AdminTrainersPage() {
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [availabilityBlocks, setAvailabilityBlocks] = useState<AvailabilityBlock[]>([]);
+  const [scheduleRefreshKey, setScheduleRefreshKey] = useState(0);
+  const [showAdd, setShowAdd] = useState(false);
+  const [addDay, setAddDay] = useState(1);
+  const [addStart, setAddStart] = useState("09:00");
+  const [addEnd, setAddEnd] = useState("17:00");
+  const [addDesc, setAddDesc] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/trainers")
@@ -25,7 +47,83 @@ export default function AdminTrainersPage() {
       .finally(() => setLoading(false));
   }, [selectedId]);
 
+  useEffect(() => {
+    if (!selectedId) {
+      setAvailabilityBlocks([]);
+      return;
+    }
+    fetch(`/api/offerings/trainer-availability?trainer_member_id=${encodeURIComponent(selectedId)}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: AvailabilityBlock[]) => setAvailabilityBlocks(Array.isArray(data) ? data : []))
+      .catch(() => setAvailabilityBlocks([]));
+  }, [selectedId]);
+
   const selected = trainers.find((t) => t.member_id === selectedId) || null;
+
+  async function handleAddAvailability(e: React.FormEvent) {
+    e.preventDefault();
+    if (!selectedId) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/trainer-availability", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trainer_member_id: selectedId,
+          day_of_week: addDay,
+          start_time: addStart,
+          end_time: addEnd,
+          description: addDesc.trim() || null,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setAvailabilityBlocks((prev) => [...prev, data]);
+        setScheduleRefreshKey((k) => k + 1);
+        setShowAdd(false);
+        setAddDesc("");
+      } else {
+        alert(data.error ?? "Failed to add");
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDeleteAvailability(id: number) {
+    if (!confirm("Remove this availability block? Existing PT bookings in this block will be removed.")) return;
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/trainer/availability/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setAvailabilityBlocks((prev) => prev.filter((b) => b.id !== id));
+        setScheduleRefreshKey((k) => k + 1);
+      } else {
+        const data = await res.json();
+        alert(data.error ?? "Failed to delete");
+      }
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  function formatDays(days_of_week: string | null, day_of_week: number): string {
+    if (days_of_week && days_of_week.trim()) {
+      return days_of_week
+        .split(",")
+        .map((d) => DAY_NAMES[parseInt(d.trim(), 10)] ?? "?")
+        .join(", ");
+    }
+    return DAY_NAMES[day_of_week] ?? "?";
+  }
+
+  function handleAddAvailabilityForSlot(dayOfWeek: number, startTime: string, endTime: string) {
+    setAddDay(dayOfWeek);
+    setAddStart(startTime);
+    setAddEnd(endTime);
+    setShowAdd(true);
+    setTimeout(() => document.getElementById("add-availability")?.scrollIntoView({ behavior: "smooth" }), 100);
+  }
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -100,7 +198,107 @@ export default function AdminTrainersPage() {
                     trainerMemberId={selected.member_id}
                     trainerDisplayName={selected.display_name}
                     allowAdminEdit
+                    scheduleRefreshKey={scheduleRefreshKey}
+                    onAddAvailabilityForSlot={handleAddAvailabilityForSlot}
                   />
+                </div>
+                <div id="add-availability" className="bg-white border border-stone-200 rounded-xl p-4">
+                  <h2 className="text-lg font-semibold text-stone-800 mb-3">Recurring availability</h2>
+                  <p className="text-sm text-stone-500 mb-3">
+                    Add or remove when this trainer is available for PT each week. This controls which slots appear as bookable on the schedule.
+                  </p>
+                  {availabilityBlocks.length === 0 && !showAdd && (
+                    <p className="text-sm text-stone-500 mb-3">No recurring blocks yet.</p>
+                  )}
+                  <ul className="space-y-2 mb-4">
+                    {availabilityBlocks.map((b) => (
+                      <li key={b.id} className="flex items-center justify-between gap-4 py-2 px-3 rounded-lg bg-stone-50 border border-stone-200">
+                        <span className="text-sm text-stone-700">
+                          {formatDays(b.days_of_week, b.day_of_week)} {b.start_time}–{b.end_time}
+                          {b.description ? ` · ${b.description}` : ""}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteAvailability(b.id)}
+                          disabled={deletingId === b.id}
+                          className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                        >
+                          {deletingId === b.id ? "Removing…" : "Remove"}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  {!showAdd ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowAdd(true)}
+                      className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700"
+                    >
+                      Add availability block
+                    </button>
+                  ) : (
+                    <form onSubmit={handleAddAvailability} className="p-4 rounded-xl border border-stone-200 bg-stone-50 space-y-3">
+                      <h3 className="font-medium text-stone-800">New block</h3>
+                      <div className="flex flex-wrap gap-3 items-end">
+                        <div>
+                          <label className="block text-xs font-medium text-stone-500 mb-1">Day</label>
+                          <select
+                            value={addDay}
+                            onChange={(e) => setAddDay(parseInt(e.target.value, 10))}
+                            className="px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                          >
+                            {DAY_NAMES.map((name, i) => (
+                              <option key={i} value={i}>
+                                {name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-stone-500 mb-1">Start</label>
+                          <input
+                            type="time"
+                            value={addStart}
+                            onChange={(e) => setAddStart(e.target.value)}
+                            className="px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-stone-500 mb-1">End</label>
+                          <input
+                            type="time"
+                            value={addEnd}
+                            onChange={(e) => setAddEnd(e.target.value)}
+                            className="px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-stone-500 mb-1">Description (optional)</label>
+                          <input
+                            type="text"
+                            value={addDesc}
+                            onChange={(e) => setAddDesc(e.target.value)}
+                            placeholder="e.g. Main floor"
+                            className="px-3 py-2 rounded-lg border border-stone-200 text-sm min-w-[120px]"
+                          />
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={submitting}
+                          className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+                        >
+                          {submitting ? "Adding…" : "Add"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowAdd(false)}
+                          className="px-4 py-2 rounded-lg border border-stone-200 text-sm text-stone-700 hover:bg-stone-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  )}
                 </div>
               </>
             ) : (
