@@ -36,8 +36,8 @@ export default function CameraBarcodeScanner({ onScan, onClose, cooldownMs = 250
     onDecodeResult(result) {
       handleDecode(result);
     },
-    onError(err) {
-      setError(err?.message ?? "Camera error");
+    onError(err: unknown) {
+      setError(err instanceof Error ? err.message : "Camera error");
     },
     constraints: {
       video: {

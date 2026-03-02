@@ -256,11 +256,13 @@ export default function MemberMacrosPage() {
                     <polyline points={poly} fill="none" stroke="var(--brand-600, #0d9488)" strokeWidth="2" />
                     {pts.map((p, i) => {
                       const isLast = i === pts.length - 1;
+                      const lastRecordedWeight = pts.length > 0 ? pts[pts.length - 1].y : null;
+                      const useSubmarine = isLast && goalWeight != null && lastRecordedWeight != null && goalWeight > lastRecordedWeight;
                       return (
                         <g key={p.x}>
                           {isLast ? (
                             <image
-                              href="/seaplane.png"
+                              href={useSubmarine ? "/submarine.png" : "/seaplane.png"}
                               x={xs[i] - 28}
                               y={ys[i] - 44}
                               width={56}
