@@ -14,6 +14,7 @@ type ExercisePayload = {
   primary_muscles?: string;
   equipment?: string;
   instructions?: string[];
+  use_for_my_1rm?: boolean;
   sets: { reps?: number; weight_kg?: number }[] | { time_seconds?: number; distance_km?: number }[];
 };
 
@@ -68,9 +69,10 @@ export async function POST(request: NextRequest) {
     const insertExercise = db.prepare(
       "INSERT INTO exercises (name, type, primary_muscles, secondary_muscles, equipment, muscle_group, instructions) VALUES (?, ?, ?, ?, ?, ?, ?)"
     );
-    const insertEx = db.prepare(
-      "INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id) VALUES (?, ?, ?, ?, ?)"
-    );
+    const hasUseForMy1rm = (db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[]).some((c) => c.name === "use_for_my_1rm");
+    const insertEx = hasUseForMy1rm
+      ? db.prepare("INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id, use_for_my_1rm) VALUES (?, ?, ?, ?, ?, ?)")
+      : db.prepare("INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id) VALUES (?, ?, ?, ?, ?)");
     const insertSet = db.prepare(
       "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order) VALUES (?, ?, ?, ?, ?, ?)"
     );
@@ -101,8 +103,14 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const exResult = insertEx.run(workoutId, type, exercise_name, i, exerciseId);
+      const useForMy1rm = !!(ex as ExercisePayload).use_for_my_1rm && type === "lift" && exerciseId != null;
+      const exResult = hasUseForMy1rm
+        ? insertEx.run(workoutId, type, exercise_name, i, exerciseId, useForMy1rm ? 1 : 0)
+        : insertEx.run(workoutId, type, exercise_name, i, exerciseId);
       const workoutExerciseId = Number(exResult.lastInsertRowid);
+      if (useForMy1rm) {
+        db.prepare("INSERT OR REPLACE INTO member_1rm_settings (member_id, exercise_id) VALUES (?, ?)").run(member.member_id, exerciseId);
+      }
       const sets = Array.isArray(ex.sets) ? ex.sets : [];
 
       for (let j = 0; j < sets.length; j++) {

@@ -132,6 +132,8 @@ export default function MemberWorkoutDetailPage() {
   const [shareResult, setShareResult] = useState<{ ok: boolean; message?: string } | null>(null);
   const [showShare, setShowShare] = useState(false);
   const [clientCompletionNotes, setClientCompletionNotes] = useState("");
+  const [useForMy1rm, setUseForMy1rm] = useState(false);
+  const [my1rmList, setMy1rmList] = useState<{ exercise_name: string; current_1rm_lbs: number }[]>([]);
 
   /** Map of source workout sets by a stable exercise key so \"last time\" stays attached even if you delete/reorder exercises. */
   const sourceSetsByExerciseKey = useMemo(() => {
@@ -164,6 +166,16 @@ export default function MemberWorkoutDetailPage() {
   }, [id]);
 
   useEffect(() => {
+    fetch("/api/member/workouts/my-1rm")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const list = Array.isArray(d?.exercises) ? d.exercises : [];
+        setMy1rmList(list.filter((e: { exercise_name?: string }) => e?.exercise_name));
+      })
+      .catch(() => setMy1rmList([]));
+  }, [workout?.id, workout?.finished_at]);
+
+  useEffect(() => {
     if (!workout?.source_workout_id || workout.finished_at) {
       setSourceWorkout(null);
       return;
@@ -181,6 +193,7 @@ export default function MemberWorkoutDetailPage() {
     setShowCustomNameReminder(false);
     setExerciseSuggestions([]);
     setSets([{ reps: "", weight: "", drops: [] }]);
+    setUseForMy1rm(false);
   }
 
   function startAddCardio() {
@@ -232,6 +245,7 @@ export default function MemberWorkoutDetailPage() {
         type: mode === "lift" ? "lift" : "cardio",
         exercise_name: exerciseName.trim(),
         ...(selectedOfficialId != null && { exercise_id: selectedOfficialId }),
+        ...(mode === "lift" && useForMy1rm && selectedOfficialId != null && { use_for_my_1rm: true }),
       };
       const body =
         mode === "lift"
@@ -683,6 +697,17 @@ export default function MemberWorkoutDetailPage() {
                 Using a custom name is fine — it just won&apos;t be available for progress charts. Pick one from the list above to track over time.
               </p>
             )}
+            {mode === "lift" && selectedOfficialId != null && exerciseName.trim() && (
+              <label className="mt-3 flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={useForMy1rm}
+                  onChange={(e) => setUseForMy1rm(e.target.checked)}
+                  className="rounded border-stone-300 text-brand-600"
+                />
+                <span className="text-sm text-stone-700">Use for My 1RM Calculation</span>
+              </label>
+            )}
           </div>
 
           {exerciseName.trim() && (
@@ -882,6 +907,17 @@ export default function MemberWorkoutDetailPage() {
         </div>
       )}
 
+      {my1rmList.length > 0 && (
+        <div className="mb-4 p-3 rounded-lg bg-brand-50 border border-brand-100 space-y-1">
+          <p className="text-xs font-medium text-brand-800 uppercase tracking-wide">My 1RM</p>
+          {my1rmList.map((e, i) => (
+            <p key={i} className="text-sm text-brand-800">
+              <span className="font-semibold">{e.current_1rm_lbs != null ? `${e.current_1rm_lbs} lbs` : "—"}</span> — {e.exercise_name}
+            </p>
+          ))}
+          <p className="text-xs text-brand-700 mt-0.5">Finish a workout with a designated exercise to update.</p>
+        </div>
+      )}
       <h2 className="text-sm font-medium text-stone-500 mb-2">{isOpen ? "Open Workout" : "Exercises"}</h2>
       {workout.exercises.length === 0 ? (
         <p className="text-stone-500 mb-6">No exercises yet. Add a lift or cardio above.</p>

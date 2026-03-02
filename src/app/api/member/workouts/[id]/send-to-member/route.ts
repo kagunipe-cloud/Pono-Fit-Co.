@@ -51,7 +51,12 @@ export async function POST(
       return NextResponse.json({ error: "You cannot send a workout to yourself" }, { status: 400 });
     }
 
-    const exercises = db.prepare("SELECT id, type, exercise_name, sort_order, exercise_id FROM workout_exercises WHERE workout_id = ? ORDER BY sort_order, id").all(workoutId) as { id: number; type: string; exercise_name: string; sort_order: number; exercise_id: number | null }[];
+    const hasUseForMy1rm = (db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[]).some((c) => c.name === "use_for_my_1rm");
+    const exercises = db.prepare(
+      hasUseForMy1rm
+        ? "SELECT id, type, exercise_name, sort_order, exercise_id, use_for_my_1rm FROM workout_exercises WHERE workout_id = ? ORDER BY sort_order, id"
+        : "SELECT id, type, exercise_name, sort_order, exercise_id FROM workout_exercises WHERE workout_id = ? ORDER BY sort_order, id"
+    ).all(workoutId) as { id: number; type: string; exercise_name: string; sort_order: number; exercise_id: number | null; use_for_my_1rm?: number }[];
     if (exercises.length === 0) {
       db.close();
       return NextResponse.json({ error: "This workout has no exercises to share" }, { status: 400 });
@@ -62,7 +67,9 @@ export async function POST(
 
     const workoutName = workout.name?.trim() || null;
     const insertWorkout = db.prepare("INSERT INTO workouts (member_id, started_at, finished_at, assigned_by_admin, name) VALUES (?, datetime('now'), datetime('now'), 0, ?)");
-    const insertEx = db.prepare("INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id) VALUES (?, ?, ?, ?, ?)");
+    const insertEx = hasUseForMy1rm
+      ? db.prepare("INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id, use_for_my_1rm) VALUES (?, ?, ?, ?, ?, ?)")
+      : db.prepare("INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id) VALUES (?, ?, ?, ?, ?)");
     const insertSet = db.prepare("INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index) VALUES (?, ?, ?, ?, ?, ?, ?)");
 
     insertWorkout.run(recipient.member_id, workoutName);
@@ -71,7 +78,15 @@ export async function POST(
 
     for (const ex of exercises) {
       const type = ex.type === "cardio" ? "cardio" : "lift";
-      insertEx.run(newId, type, ex.exercise_name, ex.sort_order, ex.exercise_id);
+      const useForMy1rm = hasUseForMy1rm && type === "lift" && ex.exercise_id != null && (ex.use_for_my_1rm ?? 0) === 1;
+      if (hasUseForMy1rm) {
+        insertEx.run(newId, type, ex.exercise_name, ex.sort_order, ex.exercise_id, useForMy1rm ? 1 : 0);
+      } else {
+        insertEx.run(newId, type, ex.exercise_name, ex.sort_order, ex.exercise_id);
+      }
+      if (useForMy1rm) {
+        db.prepare("INSERT OR REPLACE INTO member_1rm_settings (member_id, exercise_id) VALUES (?, ?)").run(recipient.member_id, ex.exercise_id);
+      }
       const newExRow = db.prepare("SELECT last_insert_rowid() AS id").get() as { id: number };
       const newExId = newExRow.id;
       const sets = db.prepare("SELECT reps, weight_kg, time_seconds, distance_km, set_order, drop_index FROM workout_sets WHERE workout_exercise_id = ? ORDER BY set_order, id").all(ex.id) as { reps: number | null; weight_kg: number | null; time_seconds: number | null; distance_km: number | null; set_order: number; drop_index?: number }[];

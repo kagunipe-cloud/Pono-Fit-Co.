@@ -13,6 +13,7 @@ type ExerciseEntry = {
   primary_muscles?: string;
   equipment?: string;
   instructions?: string;
+  use_for_my_1rm?: boolean;
   sets: SetRow[];
 };
 type OfficialExercise = { id: number; name: string; type: string; primary_muscles?: string; muscle_group?: string; equipment?: string };
@@ -41,6 +42,7 @@ export default function TrainerCreateWorkoutForClientPage() {
   const [newExInstructions, setNewExInstructions] = useState("");
   const [savingNewEx, setSavingNewEx] = useState(false);
   const [newExError, setNewExError] = useState<string | null>(null);
+  const [useForMy1rm, setUseForMy1rm] = useState(false);
 
   useEffect(() => {
     if (!mode || !exerciseName.trim()) {
@@ -100,6 +102,7 @@ export default function TrainerCreateWorkoutForClientPage() {
         muscle_group: picked?.muscle_group ?? undefined,
         primary_muscles: picked?.primary_muscles ?? undefined,
         equipment: picked?.equipment ?? undefined,
+        use_for_my_1rm: mode === "lift" && useForMy1rm && selectedOfficialId != null,
         sets: [...sets],
       },
     ]);
@@ -107,6 +110,7 @@ export default function TrainerCreateWorkoutForClientPage() {
     setExerciseName("");
     setSelectedOfficialId(null);
     setExerciseSuggestions([]);
+    setUseForMy1rm(false);
     setSets([{ reps: "", weight: "" }]);
   }
 
@@ -176,6 +180,7 @@ export default function TrainerCreateWorkoutForClientPage() {
               type: "lift" as const,
               exercise_id: ex.exercise_id ?? undefined,
               exercise_name: ex.exercise_name,
+              use_for_my_1rm: ex.use_for_my_1rm,
               muscle_group: ex.muscle_group,
               primary_muscles: ex.primary_muscles,
               equipment: ex.equipment,
@@ -189,6 +194,7 @@ export default function TrainerCreateWorkoutForClientPage() {
               type: "cardio" as const,
               exercise_id: ex.exercise_id ?? undefined,
               exercise_name: ex.exercise_name,
+              use_for_my_1rm: false,
               muscle_group: ex.muscle_group,
               primary_muscles: ex.primary_muscles,
               equipment: ex.equipment,
@@ -267,6 +273,12 @@ export default function TrainerCreateWorkoutForClientPage() {
                       </li>
                     ))}
                   </ul>
+                )}
+                {mode === "lift" && selectedOfficialId != null && exerciseName.trim() && (
+                  <label className="mt-3 flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={useForMy1rm} onChange={(e) => setUseForMy1rm(e.target.checked)} className="rounded border-stone-300 text-brand-600" />
+                    <span className="text-sm text-stone-700">Use for My 1RM Calculation</span>
+                  </label>
                 )}
               </div>
 

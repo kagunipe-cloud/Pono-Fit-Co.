@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
-import { ensureWorkoutTables } from "@/lib/workouts";
+import { ensureWorkoutTables, estimate1RM } from "@/lib/workouts";
 import { getMuscleGroup } from "@/lib/muscle-groups";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +14,7 @@ type ExercisePayload = {
   primary_muscles?: string;
   equipment?: string;
   instructions?: string[];
+  use_for_my_1rm?: boolean;
   sets: { reps?: number; weight_kg?: number }[] | { time_seconds?: number; distance_km?: number }[];
 };
 
@@ -56,9 +57,10 @@ export async function POST(request: NextRequest) {
     const insertExercise = db.prepare(
       "INSERT INTO exercises (name, type, primary_muscles, secondary_muscles, equipment, muscle_group, instructions) VALUES (?, ?, ?, ?, ?, ?, ?)"
     );
-    const insertEx = db.prepare(
-      "INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id) VALUES (?, ?, ?, ?, ?)"
-    );
+    const hasUseForMy1rm = (db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[]).some((c) => c.name === "use_for_my_1rm");
+    const insertEx = hasUseForMy1rm
+      ? db.prepare("INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id, use_for_my_1rm) VALUES (?, ?, ?, ?, ?, ?)")
+      : db.prepare("INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id) VALUES (?, ?, ?, ?, ?)");
     const insertSet = db.prepare(
       "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order) VALUES (?, ?, ?, ?, ?, ?)"
     );
@@ -89,8 +91,14 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      const exResult = insertEx.run(workoutId, type, exercise_name, i, exerciseId);
+      const useForMy1rm = !!(ex as ExercisePayload).use_for_my_1rm && type === "lift" && exerciseId != null;
+      const exResult = hasUseForMy1rm
+        ? insertEx.run(workoutId, type, exercise_name, i, exerciseId, useForMy1rm ? 1 : 0)
+        : insertEx.run(workoutId, type, exercise_name, i, exerciseId);
       const workoutExerciseId = Number(exResult.lastInsertRowid);
+      if (useForMy1rm) {
+        db.prepare("INSERT OR REPLACE INTO member_1rm_settings (member_id, exercise_id) VALUES (?, ?)").run(member.member_id, exerciseId);
+      }
       const sets = Array.isArray(ex.sets) ? ex.sets : [];
 
       for (let j = 0; j < sets.length; j++) {
@@ -100,6 +108,34 @@ export async function POST(request: NextRequest) {
         const time_seconds = type === "cardio" ? (typeof (s as { time_seconds?: number }).time_seconds === "number" ? (s as { time_seconds: number }).time_seconds : parseInt(String((s as { time_seconds?: number }).time_seconds ?? 0), 10) || null) : null;
         const distance_km = type === "cardio" ? (typeof (s as { distance_km?: number }).distance_km === "number" ? (s as { distance_km: number }).distance_km : parseFloat(String((s as { distance_km?: number }).distance_km ?? 0)) || null) : null;
         insertSet.run(workoutExerciseId, reps, weight_kg, time_seconds, distance_km, j);
+      }
+    }
+
+    // Update My 1RM for each designated exercise present in this workout (admin creates finished workout)
+    const settings = db.prepare("SELECT exercise_id FROM member_1rm_settings WHERE member_id = ?").all(member.member_id) as { exercise_id: number }[];
+    const startedAt = db.prepare("SELECT started_at FROM workouts WHERE id = ?").get(workoutId) as { started_at: string };
+    const recordedAt = (startedAt?.started_at ?? new Date().toISOString()).slice(0, 19);
+    for (const { exercise_id } of settings) {
+      const exRows = db.prepare(
+        "SELECT id FROM workout_exercises WHERE workout_id = ? AND exercise_id = ? AND type = 'lift'"
+      ).all(workoutId, exercise_id) as { id: number }[];
+      if (exRows.length === 0) continue;
+      let best1RM: number | null = null;
+      for (const { id: exId } of exRows) {
+        const sets = db.prepare("SELECT reps, weight_kg FROM workout_sets WHERE workout_exercise_id = ?").all(exId) as { reps: number | null; weight_kg: number | null }[];
+        for (const s of sets) {
+          const reps = s.reps ?? 0;
+          const w = s.weight_kg ?? 0;
+          if (w > 0 && reps > 0) {
+            const est = estimate1RM(w, Math.min(36, reps));
+            if (est != null && (best1RM == null || est > best1RM)) best1RM = est;
+          }
+        }
+      }
+      if (best1RM != null && best1RM > 0) {
+        db.prepare(
+          "INSERT INTO member_1rm_records (member_id, workout_id, exercise_id, recorded_at, estimated_1rm_lbs) VALUES (?, ?, ?, ?, ?)"
+        ).run(member.member_id, workoutId, exercise_id, recordedAt, best1RM);
       }
     }
 

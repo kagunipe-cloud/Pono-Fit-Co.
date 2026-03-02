@@ -156,4 +156,52 @@ export function ensureWorkoutTables(db: ReturnType<typeof getDb>) {
       /* ignore */
     }
   }
+
+  const weCols = db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[];
+  if (weCols.every((c) => c.name !== "use_for_my_1rm")) {
+    try {
+      db.prepare("ALTER TABLE workout_exercises ADD COLUMN use_for_my_1rm INTEGER NOT NULL DEFAULT 0").run();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  try {
+    const tableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='member_1rm_settings'").get() as { sql?: string } | undefined;
+    if (tableSql?.sql?.includes("member_id TEXT PRIMARY KEY")) {
+      db.exec(`
+        CREATE TABLE member_1rm_settings_new (member_id TEXT NOT NULL, exercise_id INTEGER NOT NULL, PRIMARY KEY (member_id, exercise_id));
+        INSERT INTO member_1rm_settings_new (member_id, exercise_id) SELECT member_id, exercise_id FROM member_1rm_settings;
+        DROP TABLE member_1rm_settings;
+        ALTER TABLE member_1rm_settings_new RENAME TO member_1rm_settings;
+      `);
+    }
+  } catch {
+    /* ignore */
+  }
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS member_1rm_settings (
+      member_id TEXT NOT NULL,
+      exercise_id INTEGER NOT NULL,
+      PRIMARY KEY (member_id, exercise_id)
+    );
+    CREATE TABLE IF NOT EXISTS member_1rm_records (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      member_id TEXT NOT NULL,
+      workout_id INTEGER NOT NULL,
+      exercise_id INTEGER NOT NULL,
+      recorded_at TEXT NOT NULL,
+      estimated_1rm_lbs REAL NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_member_1rm_records_member ON member_1rm_records(member_id);
+  `);
+}
+
+/** Brzycki: 1RM = w * (36 / (37 - r)). Returns null if invalid. */
+export function estimate1RM(weight: number, reps: number): number | null {
+  if (weight <= 0) return null;
+  const r = Math.min(36, Math.max(0, reps));
+  const denom = 37 - r;
+  if (denom <= 0) return weight;
+  return weight * (36 / denom);
 }

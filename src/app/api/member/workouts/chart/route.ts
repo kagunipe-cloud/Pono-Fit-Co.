@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 /**
  * GET ?exercise_id=123 — history for one official exercise for the logged-in member.
  * Returns points for charting: { date, volume_lbs?, max_weight_lbs?, reps?, time_seconds?, distance_km? }.
- * max_weight_lbs = estimated 1RM from Brzycki formula using reps at the highest weight for that workout.
+ * max_weight_lbs = Auto-Implied 1RM from Brzycki formula using reps at the highest weight for that workout.
  * Only includes workouts that are finished and where the exercise was linked to this exercise_id.
  */
 export async function GET(request: NextRequest) {

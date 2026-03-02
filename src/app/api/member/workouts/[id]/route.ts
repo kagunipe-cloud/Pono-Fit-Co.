@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../../lib/db";
 import { getMemberIdFromSession } from "../../../../../lib/session";
-import { ensureWorkoutTables } from "../../../../../lib/workouts";
+import { ensureWorkoutTables, estimate1RM } from "../../../../../lib/workouts";
 
 export const dynamic = "force-dynamic";
 
@@ -93,6 +93,33 @@ export async function PATCH(
       const hasClientNotesCol = (db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[]).some((c) => c.name === "client_completion_notes");
       if (hasClientNotesCol && clientNotes !== undefined) {
         db.prepare("UPDATE workouts SET client_completion_notes = ? WHERE id = ? AND member_id = ?").run(clientNotes, id, memberId);
+      }
+      // Update My 1RM for each designated exercise present in this workout
+      const settings = db.prepare("SELECT exercise_id FROM member_1rm_settings WHERE member_id = ?").all(memberId) as { exercise_id: number }[];
+      const startedAt = db.prepare("SELECT started_at FROM workouts WHERE id = ?").get(id) as { started_at: string };
+      const recordedAt = (startedAt?.started_at ?? new Date().toISOString()).slice(0, 19);
+      for (const { exercise_id } of settings) {
+        const exRows = db.prepare(
+          "SELECT we.id FROM workout_exercises we WHERE we.workout_id = ? AND we.exercise_id = ? AND we.type = 'lift'"
+        ).all(id, exercise_id) as { id: number }[];
+        if (exRows.length === 0) continue;
+        let best1RM: number | null = null;
+        for (const { id: exId } of exRows) {
+          const sets = db.prepare("SELECT reps, weight_kg FROM workout_sets WHERE workout_exercise_id = ?").all(exId) as { reps: number | null; weight_kg: number | null }[];
+          for (const s of sets) {
+            const reps = s.reps ?? 0;
+            const w = s.weight_kg ?? 0;
+            if (w > 0 && reps > 0) {
+              const est = estimate1RM(w, Math.min(36, reps));
+              if (est != null && (best1RM == null || est > best1RM)) best1RM = est;
+            }
+          }
+        }
+        if (best1RM != null && best1RM > 0) {
+          db.prepare(
+            "INSERT INTO member_1rm_records (member_id, workout_id, exercise_id, recorded_at, estimated_1rm_lbs) VALUES (?, ?, ?, ?, ?)"
+          ).run(memberId, id, exercise_id, recordedAt, best1RM);
+        }
       }
     }
     if (hasName && (typeof body.name === "string" || body.name === null)) {

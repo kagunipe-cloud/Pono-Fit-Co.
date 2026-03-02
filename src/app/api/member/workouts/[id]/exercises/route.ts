@@ -5,7 +5,7 @@ import { ensureWorkoutTables } from "../../../../../../lib/workouts";
 
 export const dynamic = "force-dynamic";
 
-/** POST body: { type, exercise_name, exercise_id? (optional; when set, enables chart history), sets } */
+/** POST body: { type, exercise_name, exercise_id?, use_for_my_1rm? (optional; when true, designates this exercise for My 1RM tracking), sets } */
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -21,6 +21,7 @@ export async function POST(
     const type = body.type === "cardio" ? "cardio" : "lift";
     const exercise_name = String(body.exercise_name ?? "").trim() || "Exercise";
     const exercise_id = typeof body.exercise_id === "number" && body.exercise_id > 0 ? body.exercise_id : null;
+    const use_for_my_1rm = !!body.use_for_my_1rm;
     const sets = Array.isArray(body.sets) ? body.sets : [];
 
     const db = getDb();
@@ -34,9 +35,12 @@ export async function POST(
     const maxOrder = db.prepare("SELECT COALESCE(MAX(sort_order), -1) AS m FROM workout_exercises WHERE workout_id = ?").get(workoutId) as { m: number };
     const sort_order = (maxOrder?.m ?? -1) + 1;
 
-    const exResult = db
-      .prepare("INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id) VALUES (?, ?, ?, ?, ?)")
-      .run(workoutId, type, exercise_name, sort_order, exercise_id);
+    const hasUseForMy1rm = (db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[]).some((c) => c.name === "use_for_my_1rm");
+    const exResult = hasUseForMy1rm
+      ? db.prepare("INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id, use_for_my_1rm) VALUES (?, ?, ?, ?, ?, ?)")
+          .run(workoutId, type, exercise_name, sort_order, exercise_id, use_for_my_1rm ? 1 : 0)
+      : db.prepare("INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id) VALUES (?, ?, ?, ?, ?)")
+          .run(workoutId, type, exercise_name, sort_order, exercise_id);
     const exerciseId = exResult.lastInsertRowid as number;
 
     const tableCols = (db.prepare("PRAGMA table_info(workout_sets)").all() as { name: string }[]).map((c) => c.name);
@@ -73,6 +77,10 @@ export async function POST(
         if (hasDropIndex) insertSetStmt.run(exerciseId, reps, weight_kg, time_seconds, distance_km, i, 0);
         else insertSetStmt.run(exerciseId, reps, weight_kg, time_seconds, distance_km, i);
       }
+    }
+
+    if (use_for_my_1rm && type === "lift" && exercise_id != null) {
+      db.prepare("INSERT OR REPLACE INTO member_1rm_settings (member_id, exercise_id) VALUES (?, ?)").run(memberId, exercise_id);
     }
 
     const exercise = db.prepare("SELECT * FROM workout_exercises WHERE id = ?").get(exerciseId) as Record<string, unknown>;

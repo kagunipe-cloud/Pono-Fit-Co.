@@ -14,6 +14,8 @@ export default function MemberWorkoutProgressPage() {
   const [chartData, setChartData] = useState<{ exercise: { id: number; name: string; type: string }; points: ChartPoint[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingChart, setLoadingChart] = useState(false);
+  const [my1rmList, setMy1rmList] = useState<{ exercise_name: string; current_1rm_lbs: number | null }[]>([]);
+  const [prs, setPrs] = useState<{ weight_lbs: number; pr_reps: number }[]>([]);
 
   useEffect(() => {
     fetch("/api/member/workouts/chart-exercises")
@@ -33,8 +35,19 @@ export default function MemberWorkoutProgressPage() {
   }, [router]);
 
   useEffect(() => {
+    fetch("/api/member/workouts/my-1rm")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const list = Array.isArray(d?.exercises) ? d.exercises : [];
+        setMy1rmList(list.filter((e: { exercise_name?: string }) => e?.exercise_name));
+      })
+      .catch(() => setMy1rmList([]));
+  }, []);
+
+  useEffect(() => {
     if (selectedId == null) {
       setChartData(null);
+      setPrs([]);
       return;
     }
     setLoadingChart(true);
@@ -44,6 +57,18 @@ export default function MemberWorkoutProgressPage() {
       .catch(() => setChartData(null))
       .finally(() => setLoadingChart(false));
   }, [selectedId]);
+
+  useEffect(() => {
+    const ex = exercises.find((e) => e.exercise_id === selectedId);
+    if (selectedId == null || ex?.type !== "lift") {
+      setPrs([]);
+      return;
+    }
+    fetch(`/api/member/workouts/prs?exercise_id=${selectedId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setPrs(Array.isArray(d?.prs) ? d.prs : []))
+      .catch(() => setPrs([]));
+  }, [selectedId, exercises]);
 
   if (loading) return <div className="p-8 text-center text-stone-500">Loading…</div>;
 
@@ -56,6 +81,18 @@ export default function MemberWorkoutProgressPage() {
       <p className="text-stone-600 text-sm mb-6">
         See how an exercise has improved over time. Only exercises you logged from the official list show up here.
       </p>
+
+      {my1rmList.length > 0 && (
+        <div className="mb-6 p-4 rounded-xl border border-brand-200 bg-brand-50 space-y-1">
+          <p className="text-xs font-medium text-brand-800 uppercase tracking-wide">My 1RM</p>
+          {my1rmList.map((e, i) => (
+            <p key={i} className="text-sm text-brand-800">
+              <span className="font-semibold">{e.current_1rm_lbs != null ? `${e.current_1rm_lbs} lbs` : "—"}</span> — {e.exercise_name}
+            </p>
+          ))}
+          <p className="text-xs text-brand-700 mt-0.5">From your designated exercises. Finish a workout with one to update.</p>
+        </div>
+      )}
 
       {exercises.length === 0 ? (
         <div className="p-6 rounded-xl border border-stone-200 bg-stone-50">
@@ -92,7 +129,7 @@ export default function MemberWorkoutProgressPage() {
                       {chartData.exercise.type === "lift" && (
                         <>
                           <th className="text-right p-3 font-medium text-stone-600">Volume (lbs)</th>
-                          <th className="text-right p-3 font-medium text-stone-600">Est. 1RM (lbs)</th>
+                          <th className="text-right p-3 font-medium text-stone-600">Auto-Implied 1RM (lbs)</th>
                         </>
                       )}
                       {chartData.exercise.type === "cardio" && (
@@ -127,6 +164,32 @@ export default function MemberWorkoutProgressPage() {
             </div>
           ) : (
             <p className="text-stone-500">No data yet for this exercise. Log it in a finished workout to see progress.</p>
+          )}
+
+          {exercises.find((e) => e.exercise_id === selectedId)?.type === "lift" && prs.length > 0 && (
+            <div className="mt-6 rounded-xl border border-stone-200 overflow-hidden">
+              <div className="p-3 bg-stone-50 border-b border-stone-200 font-medium text-stone-800">
+                PRs by weight — {exercises.find((e) => e.exercise_id === selectedId)?.name ?? "Exercise"}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-stone-200 bg-stone-50/50">
+                      <th className="text-left p-3 font-medium text-stone-600">Weight (lbs)</th>
+                      <th className="text-right p-3 font-medium text-stone-600">PR reps</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {prs.map((p, i) => (
+                      <tr key={i} className="border-b border-stone-100">
+                        <td className="p-3 text-stone-800">{p.weight_lbs}</td>
+                        <td className="p-3 text-right text-stone-700 font-medium">{p.pr_reps}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
         </>
       )}
