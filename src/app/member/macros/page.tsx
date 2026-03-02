@@ -213,9 +213,9 @@ export default function MemberMacrosPage() {
                 const poly = pts.map((_, i) => `${xs[i]},${ys[i]}`).join(" ");
 
                 const lastRecordedWeight = pts.length > 0 ? pts[pts.length - 1].y : null;
-                const isGainGoal = goalWeight != null && lastRecordedWeight != null && goalWeight > lastRecordedWeight;
-                const goalStripHeight = chartHeight * (isGainGoal ? 0.75 : 0.25);
-                const goalTopY = chartBottom - goalStripHeight; // bottom on x-axis, strip rises up
+                const goalLineY = goalWeight != null ? yToPx(goalWeight) : null;
+                const goalStripHeight = goalLineY != null ? chartBottom - goalLineY : 0;
+                const goalTopY = goalLineY;
 
                 // Y-axis ticks (weight labels)
                 const yTicks = 5;
@@ -257,8 +257,8 @@ export default function MemberMacrosPage() {
                         </text>
                       );
                     })}
-                    {/* Goal weight: full-width strip from x-axis up, height depends on gain vs loss goal */}
-                    {goalWeight != null && (
+                    {/* Goal weight: full-width strip from x-axis up; top = goal weight on Y-axis */}
+                    {goalWeight != null && goalTopY != null && goalStripHeight > 0 && (
                       <g>
                         <line
                           x1={chartLeft}
@@ -487,13 +487,14 @@ export default function MemberMacrosPage() {
               {selectedWeek === monday && (
                 <>
                   {weekSummary && (() => {
-                    const weekDays = [];
+                    const weekDays: string[] = [];
                     for (let i = 0; i < 7; i++) {
                       const d = new Date(monday + "T12:00:00Z");
                       d.setUTCDate(d.getUTCDate() + i);
                       weekDays.push(d.toISOString().slice(0, 10));
                     }
-                    const totals = weekDays.reduce((acc, d) => {
+                    const pastAndToday = weekDays.filter((d) => d <= today);
+                    const totals = pastAndToday.reduce((acc, d) => {
                       const s = weekSummary[d];
                       if (s) {
                         acc.cal += s.cal;
@@ -526,13 +527,14 @@ export default function MemberMacrosPage() {
                       (() => {
                         const days = daysByWeek[monday] ?? [];
                         const daySet = new Set(days.map((d) => d.date));
-                        const weekDays = [];
+                        const weekDays: string[] = [];
                         for (let i = 0; i < 7; i++) {
                           const d = new Date(monday + "T12:00:00Z");
                           d.setUTCDate(d.getUTCDate() + i);
                           weekDays.push(d.toISOString().slice(0, 10));
                         }
-                        return weekDays.map((date) => {
+                        const pastAndToday = weekDays.filter((d) => d <= today);
+                        return pastAndToday.map((date) => {
                           const s = weekSummary?.[date];
                           const calStr = s && s.cal > 0 ? ` · ${Math.round(s.cal).toLocaleString()} cal` : "";
                           const pctStr = s && s.cal > 0 && (s.p + s.f + s.c) > 0
