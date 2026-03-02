@@ -206,7 +206,9 @@ export default function MemberMacrosPage() {
                 const chartWidth = chartRight - chartLeft;
                 const chartHeight = chartBottom - chartTop;
                 const yToPx = (value: number) => chartBottom - ((value - minY) / range) * chartHeight;
-                const xs = pts.map((_, i) => chartLeft + (i / Math.max(1, pts.length - 1)) * chartWidth);
+                const xMaxIndex = Math.max(1, pts.length - 1);
+                const xSpan = chartWidth * 0.75; // last point at 3/4 of width from y-axis
+                const xs = pts.map((_, i) => chartLeft + (i / xMaxIndex) * xSpan);
                 const ys = pts.map((p) => yToPx(p.y));
                 const poly = pts.map((_, i) => `${xs[i]},${ys[i]}`).join(" ");
 
@@ -255,40 +257,6 @@ export default function MemberMacrosPage() {
                         </text>
                       );
                     })}
-                    <polyline points={poly} fill="none" stroke="var(--brand-600, #0d9488)" strokeWidth="2" />
-                    {pts.map((p, i) => {
-                      const isLast = i === pts.length - 1;
-                      const useSubmarine = isLast && goalWeight != null && lastRecordedWeight != null && goalWeight > lastRecordedWeight;
-                      return (
-                        <g key={p.x}>
-                          {isLast ? (
-                            <image
-                              href={useSubmarine ? "/submarine.png" : "/seaplane.png"}
-                              x={xs[i] - 28}
-                              y={ys[i] - 44}
-                              width={56}
-                              height={44}
-                              preserveAspectRatio="xMidYMax meet"
-                              style={{ pointerEvents: "none" }}
-                            />
-                          ) : (
-                            <circle cx={xs[i]} cy={ys[i]} r="3" fill="var(--brand-600)" />
-                          )}
-                          {/* Weight label at each point */}
-                          <text
-                            x={xs[i]}
-                            y={isLast ? ys[i] - 50 : ys[i] - 10}
-                            textAnchor="middle"
-                            fontSize="11"
-                            fontWeight="600"
-                            fill="var(--brand-700, #0f766e)"
-                            fontFamily="system-ui, sans-serif"
-                          >
-                            {p.y}
-                          </text>
-                        </g>
-                      );
-                    })}
                     {/* Goal weight: full-width strip from x-axis up, height depends on gain vs loss goal */}
                     {goalWeight != null && (
                       <g>
@@ -323,6 +291,41 @@ export default function MemberMacrosPage() {
                         </text>
                       </g>
                     )}
+                    {/* Weight polyline + points on top of goal ocean */}
+                    <polyline points={poly} fill="none" stroke="var(--brand-600, #0d9488)" strokeWidth="2" />
+                    {pts.map((p, i) => {
+                      const isLast = i === pts.length - 1;
+                      const useSubmarine = isLast && goalWeight != null && lastRecordedWeight != null && goalWeight > lastRecordedWeight;
+                      return (
+                        <g key={p.x}>
+                          {isLast ? (
+                            <image
+                              href={useSubmarine ? "/submarine.png" : "/seaplane.png"}
+                              x={xs[i] - 28}
+                              y={ys[i] - 44}
+                              width={56}
+                              height={44}
+                              preserveAspectRatio="xMidYMax meet"
+                              style={{ pointerEvents: "none" }}
+                            />
+                          ) : (
+                            <circle cx={xs[i]} cy={ys[i]} r="3" fill="var(--brand-600)" />
+                          )}
+                          {/* Weight label at each point */}
+                          <text
+                            x={xs[i]}
+                            y={isLast ? ys[i] - 50 : ys[i] - 10}
+                            textAnchor="middle"
+                            fontSize="11"
+                            fontWeight="600"
+                            fill="var(--brand-700, #0f766e)"
+                            fontFamily="system-ui, sans-serif"
+                          >
+                            {p.y}
+                          </text>
+                        </g>
+                      );
+                    })}
                   </>
                 );
               })()}
