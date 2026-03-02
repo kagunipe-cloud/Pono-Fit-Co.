@@ -53,6 +53,48 @@ function totalWorkoutVolume(exercises: Exercise[]): number {
     .reduce((sum, e) => sum + liftVolume(e.sets), 0);
 }
 
+type PRInfoProps = {
+  exerciseId: number | null;
+  exerciseName: string;
+  weight: string;
+  excludeWorkoutId: number | null;
+};
+
+function PRInfo({ exerciseId, exerciseName, weight, excludeWorkoutId }: PRInfoProps) {
+  const [data, setData] = useState<{ pr_reps: number | null; last_session_reps: number | null; last_session_date: string | null } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const weightNum = parseFloat(weight);
+  const valid = (exerciseId != null || exerciseName.trim()) && !Number.isNaN(weightNum) && weightNum > 0;
+
+  useEffect(() => {
+    if (!valid) {
+      setData(null);
+      return;
+    }
+    const t = setTimeout(() => {
+      setLoading(true);
+      const params = new URLSearchParams({ weight: String(weightNum) });
+      if (excludeWorkoutId != null) params.set("exclude_workout_id", String(excludeWorkoutId));
+      if (exerciseId != null) params.set("exercise_id", String(exerciseId));
+      else params.set("exercise_name", exerciseName.trim());
+      fetch(`/api/member/workouts/pr?${params}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then(setData)
+        .catch(() => setData(null))
+        .finally(() => setLoading(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [exerciseId, exerciseName, weight, excludeWorkoutId, valid]);
+
+  if (!valid || (data?.pr_reps == null && data?.last_session_reps == null && !loading)) return null;
+  if (loading) return <span className="text-xs text-stone-400">Loading PR…</span>;
+  const parts: string[] = [];
+  if (data?.pr_reps != null) parts.push(`PR: ${data.pr_reps} reps`);
+  if (data?.last_session_reps != null) parts.push(`Last: ${data.last_session_reps} reps`);
+  if (parts.length === 0) return null;
+  return <span className="text-xs text-brand-600 font-medium">{parts.join(" · ")}</span>;
+}
+
 export default function MemberWorkoutDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -710,6 +752,12 @@ export default function MemberWorkoutDetailPage() {
                         }
                         className="w-24 px-2 py-1.5 rounded border border-stone-200"
                       />
+                      <PRInfo
+                        exerciseId={selectedOfficialId}
+                        exerciseName={exerciseName.trim()}
+                        weight={row.weight}
+                        excludeWorkoutId={workout?.id ?? null}
+                      />
                       {(row.drops ?? []).map((drop, di) => (
                         <span key={di} className="flex items-center gap-1">
                           <span className="text-stone-400">↓</span>
@@ -902,6 +950,12 @@ export default function MemberWorkoutDetailPage() {
                                     )
                                   }
                                   className="w-24 px-2 py-1.5 rounded border border-stone-200"
+                                />
+                                <PRInfo
+                                  exerciseId={editingExId != null ? workout?.exercises.find((e) => e.id === editingExId)?.exercise_id ?? null : null}
+                                  exerciseName={editName}
+                                  weight={row.weight}
+                                  excludeWorkoutId={workout?.id ?? null}
                                 />
                                 {(row.drops ?? []).map((drop, di) => (
                                   <span key={di} className="flex items-center gap-1">
@@ -1157,6 +1211,17 @@ export default function MemberWorkoutDetailPage() {
                                     }
                                     className="w-24 px-2 py-1.5 rounded border border-stone-200"
                                   />
+                                  {addSetsForExId != null && (() => {
+                                    const ex = workout?.exercises.find((e) => e.id === addSetsForExId);
+                                    return ex ? (
+                                      <PRInfo
+                                        exerciseId={ex.exercise_id ?? null}
+                                        exerciseName={ex.exercise_name}
+                                        weight={row.weight}
+                                        excludeWorkoutId={workout?.id ?? null}
+                                      />
+                                    ) : null;
+                                  })()}
                                   {(row.drops ?? []).map((drop, di) => (
                                     <span key={di} className="flex items-center gap-1">
                                       <span className="text-stone-400">↓</span>
