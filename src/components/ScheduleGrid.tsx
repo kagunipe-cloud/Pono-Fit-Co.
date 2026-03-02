@@ -70,9 +70,9 @@ function slotOverlaps(slotMin: number, startMin: number, endMin: number): boolea
   return startMin < slotEnd && endMin > slotMin;
 }
 
-type ScheduleGridProps = { variant: "member" | "master" | "trainer"; trainerMemberId?: string | null; trainerDisplayName?: string | null; /** When this changes (e.g. after trainer adds/removes availability), grid refetches. */ scheduleRefreshKey?: number; /** When true (e.g. admin viewing trainer on Trainers page), show Block time link and allow removing unavailable blocks. */ allowAdminEdit?: boolean; /** When admin clicks a slot on trainer view, can request to add availability for that slot (dayOfWeek 0-6, startTime, endTime). */ onAddAvailabilityForSlot?: (dayOfWeek: number, startTime: string, endTime: string) => void };
+type ScheduleGridProps = { variant: "member" | "master" | "trainer"; trainerMemberId?: string | null; trainerDisplayName?: string | null; /** When this changes (e.g. after trainer adds/removes availability), grid refetches. */ scheduleRefreshKey?: number; /** When true (e.g. admin viewing trainer on Trainers page), show Block time link and allow removing unavailable blocks. */ allowAdminEdit?: boolean; /** When admin or trainer clicks a slot on trainer view, can request to add availability for that slot (dayOfWeek 0-6, startTime, endTime). */ onAddAvailabilityForSlot?: (dayOfWeek: number, startTime: string, endTime: string) => void; /** Called after an availability block is deleted from the grid (e.g. so parent can refetch list). */ onAvailabilityChange?: () => void };
 
-export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayName, scheduleRefreshKey, allowAdminEdit, onAddAvailabilityForSlot }: ScheduleGridProps) {
+export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayName, scheduleRefreshKey, allowAdminEdit, onAddAvailabilityForSlot, onAvailabilityChange }: ScheduleGridProps) {
   const searchParams = useSearchParams();
   const tz = useAppTimezone();
   const productId = searchParams.get("product")?.trim() || null;
@@ -90,6 +90,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
     ? `&trainer=${encodeURIComponent(effectiveTrainerId)}&trainer_name=${encodeURIComponent(trainerDisplayName)}`
     : "";
   const [unavailableDeletingId, setUnavailableDeletingId] = useState<number | null>(null);
+  const [availabilityDeletingId, setAvailabilityDeletingId] = useState<number | null>(null);
   const [localRefreshKey, setLocalRefreshKey] = useState(0);
   const refreshKey = scheduleRefreshKey ?? localRefreshKey;
   type SelectedSlot = { date: string; slotMin: number; timeStr: string; item: CellItem };
@@ -203,34 +204,69 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
           map.set(key, { type: "open_booked", ...(openBookingAtSlot.id != null && { id: openBookingAtSlot.id }), ...(openBookingAtSlot.member_name != null && { member_name: openBookingAtSlot.member_name }) });
           continue;
         }
+        const memberWithTrainerFilter = variant === "member" && effectiveTrainerId != null;
         let ptItem: CellItem | null = null;
-        for (const block of ptBlocks) {
-          if (block.date !== date || !block.segments) continue;
-          for (const seg of block.segments) {
-            const startMin = parseTimeToMinutes(seg.start_time);
-            const endMin = parseTimeToMinutes(seg.end_time);
-            if (slotOverlaps(slotMin, startMin, endMin)) {
-              ptItem = {
-                type: "pt_segment",
-                blockId: block.id,
-                trainer: seg.trainer,
-                start_time: seg.start_time,
-                end_time: seg.end_time,
-                booked: seg.booked,
-                ...(seg.member_name != null && { member_name: seg.member_name }),
-                ...(seg.booking_id != null && { booking_id: seg.booking_id }),
-              };
-              break;
+        if (memberWithTrainerFilter) {
+          // One trainer selected: first matching segment wins (API already filtered to that trainer).
+          for (const block of ptBlocks) {
+            if (block.date !== date || !block.segments) continue;
+            for (const seg of block.segments) {
+              const startMin = parseTimeToMinutes(seg.start_time);
+              const endMin = parseTimeToMinutes(seg.end_time);
+              if (slotOverlaps(slotMin, startMin, endMin)) {
+                ptItem = {
+                  type: "pt_segment",
+                  blockId: block.id,
+                  trainer: seg.trainer,
+                  start_time: seg.start_time,
+                  end_time: seg.end_time,
+                  booked: seg.booked,
+                  ...(seg.member_name != null && { member_name: seg.member_name }),
+                  ...(seg.booking_id != null && { booking_id: seg.booking_id }),
+                };
+                break;
+              }
+            }
+            if (ptItem) break;
+          }
+        } else {
+          // No trainer selected (member): slot is "available" if ANY trainer has an open segment; else show "Booked" if all are booked.
+          const segmentsAtSlot: { seg: BlockSegment; block: PtBlockWithSegments }[] = [];
+          for (const block of ptBlocks) {
+            if (block.date !== date || !block.segments) continue;
+            for (const seg of block.segments) {
+              const startMin = parseTimeToMinutes(seg.start_time);
+              const endMin = parseTimeToMinutes(seg.end_time);
+              if (slotOverlaps(slotMin, startMin, endMin)) {
+                segmentsAtSlot.push({ seg, block });
+                break;
+              }
             }
           }
-          if (ptItem) break;
+          if (segmentsAtSlot.length > 0) {
+            const anyAvailable = segmentsAtSlot.some(({ seg }) => !seg.booked);
+            if (anyAvailable) {
+              map.set(key, { type: "available" });
+              continue;
+            }
+            const first = segmentsAtSlot[0];
+            ptItem = {
+              type: "pt_segment",
+              blockId: first.block.id,
+              trainer: first.seg.trainer,
+              start_time: first.seg.start_time,
+              end_time: first.seg.end_time,
+              booked: true,
+              ...(first.seg.member_name != null && { member_name: first.seg.member_name }),
+              ...(first.seg.booking_id != null && { booking_id: first.seg.booking_id }),
+            };
+          }
         }
         if (ptItem) {
           map.set(key, ptItem);
           continue;
         }
         // When member has a trainer selected, only show "available" inside that trainer's blocks; otherwise show trainer_not_available
-        const memberWithTrainerFilter = variant === "member" && effectiveTrainerId != null;
         map.set(key, memberWithTrainerFilter ? { type: "trainer_not_available" } : { type: "available" });
       }
     }
@@ -282,6 +318,24 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
       }
     } finally {
       setUnavailableDeletingId(null);
+    }
+  }
+
+  async function handleRemoveAvailabilityBlock(blockId: number) {
+    if (!confirm("Remove this availability block? Existing PT bookings in this block will be removed.")) return;
+    setAvailabilityDeletingId(blockId);
+    try {
+      const res = await fetch(`/api/trainer/availability/${blockId}`, { method: "DELETE" });
+      if (res.ok) {
+        setLocalRefreshKey((k) => k + 1);
+        onAvailabilityChange?.();
+        setSelectedSlot(null);
+      } else {
+        const data = await res.json();
+        alert(data.error ?? "Failed to remove");
+      }
+    } finally {
+      setAvailabilityDeletingId(null);
     }
   }
 
@@ -428,12 +482,12 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                           key={date}
                           rowSpan={item.type === "class" ? item.spanSlots : undefined}
                           className="align-top p-1 min-w-[100px] sm:min-w-[120px] border-r border-stone-100 last:border-r-0"
-                          onClick={isMaster || (isTrainer && allowAdminEdit) ? (e) => {
+                          onClick={isMaster || isTrainer ? (e) => {
                             if ((e.target as HTMLElement).closest("a, button")) return;
                             setSelectedSlot({ date, slotMin, timeStr, item });
                           } : undefined}
-                          role={isMaster || (isTrainer && allowAdminEdit) ? "button" : undefined}
-                          style={isMaster || (isTrainer && allowAdminEdit) ? { cursor: "pointer" } : undefined}
+                          role={isMaster || isTrainer ? "button" : undefined}
+                          style={isMaster || isTrainer ? { cursor: "pointer" } : undefined}
                         >
                           {item.type === "class" && (
                             <div className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 hover:bg-blue-100/80 hover:border-blue-300 transition-colors">
@@ -450,12 +504,12 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                           {item.type === "unavailable" && (
                             <div
                               className="rounded-lg bg-stone-400 min-h-[2.5rem] flex items-center justify-between gap-1 px-2 py-1.5 text-stone-100"
-                              title={isMaster || allowAdminEdit ? item.description : "Unavailable"}
+                              title={isMaster || isTrainer || allowAdminEdit ? item.description : "Unavailable"}
                             >
-                              {(isMaster || allowAdminEdit) && item.description ? (
+                              {(isMaster || isTrainer || allowAdminEdit) && item.description ? (
                                 <span className="text-xs truncate flex-1 min-w-0" title={item.description}>{item.description}</span>
                               ) : null}
-                              {allowAdminEdit && (
+                              {(isMaster || allowAdminEdit) && (
                                 <button
                                   type="button"
                                   onClick={(e) => { e.stopPropagation(); handleRemoveUnavailable(item.id); }}
@@ -536,7 +590,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
         </p>
       )}
 
-      {(isMaster || (isTrainer && allowAdminEdit)) && selectedSlot && (
+      {(isMaster || isTrainer) && selectedSlot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setSelectedSlot(null)}>
           <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-semibold text-stone-800">Slot: {selectedSlot.date} at {selectedSlot.timeStr}</h3>
@@ -548,17 +602,17 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                     : `/admin/block-time?day=${getDayOfWeek(selectedSlot.date)}&start=${selectedSlot.timeStr}&end=${timeMinutesToTimeString(parseTimeToMinutes(selectedSlot.timeStr) + SLOT_MINUTES)}`}
                   className="text-brand-600 hover:underline block"
                 >
-                  Add block time (unavailable)
+                  Add blocked time (unavailable)
                 </Link>
               </li>
-              {selectedSlot.item.type === "unavailable" && (
+              {selectedSlot.item.type === "unavailable" && (isMaster || allowAdminEdit) && (
                 <li>
                   <button type="button" onClick={() => { if (selectedSlot.item.type === "unavailable") { handleRemoveUnavailable(selectedSlot.item.id); setSelectedSlot(null); } }} className="text-red-600 hover:underline">
                     Remove this block
                   </button>
                 </li>
               )}
-              {selectedSlot.item.type === "class" && (
+              {selectedSlot.item.type === "class" && (isMaster || allowAdminEdit) && (
                 <>
                   {selectedSlot.item.class_id != null && (
                     <li>
@@ -577,35 +631,47 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                   </li>
                 </>
               )}
-              {selectedSlot.item.type === "pt_segment" && !selectedSlot.item.booked && (
+              {selectedSlot.item.type === "pt_segment" && !selectedSlot.item.booked && (isMaster || allowAdminEdit) && (
                 <li>
                   <Link href={`/admin/book-pt-for-member?block=${selectedSlot.item.blockId}&date=${selectedSlot.date}&time=${selectedSlot.item.start_time}`} className="text-brand-600 hover:underline block">
                     Assign PT (book for member)
                   </Link>
                 </li>
               )}
-              {selectedSlot.item.type === "pt_segment" && selectedSlot.item.booked && selectedSlot.item.booking_id != null && (
+              {selectedSlot.item.type === "pt_segment" && selectedSlot.item.booked && selectedSlot.item.booking_id != null && (isMaster || allowAdminEdit) && (
                 <li>
                   <button type="button" onClick={() => { if (selectedSlot.item.type === "pt_segment" && selectedSlot.item.booking_id != null) { handleCancelBlockBooking(selectedSlot.item.booking_id); setSelectedSlot(null); } }} className="text-red-600 hover:underline">
                     Cancel PT for client
                   </button>
                 </li>
               )}
-              {selectedSlot.item.type === "open_booked" && selectedSlot.item.id != null && (
+              {selectedSlot.item.type === "open_booked" && selectedSlot.item.id != null && (isMaster || allowAdminEdit) && (
                 <li>
                   <button type="button" onClick={() => { if (selectedSlot.item.type === "open_booked" && selectedSlot.item.id != null) { handleCancelOpenBooking(selectedSlot.item.id); setSelectedSlot(null); } }} className="text-red-600 hover:underline">
                     Cancel PT for client
                   </button>
                 </li>
               )}
-              {selectedSlot.item.type === "available" && (
+              {selectedSlot.item.type === "available" && (isMaster || allowAdminEdit) && (
                 <li>
                   <Link href={`/admin/book-pt-for-member?date=${selectedSlot.date}&time=${selectedSlot.timeStr}`} className="text-brand-600 hover:underline block">
                     Book PT (no preference)
                   </Link>
                 </li>
               )}
-              {isTrainer && allowAdminEdit && onAddAvailabilityForSlot && (
+              {selectedSlot.item.type === "pt_segment" && !selectedSlot.item.booked && isTrainer && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => { if (selectedSlot.item.type === "pt_segment") { handleRemoveAvailabilityBlock(selectedSlot.item.blockId); } }}
+                    disabled={availabilityDeletingId === (selectedSlot.item.type === "pt_segment" ? selectedSlot.item.blockId : null)}
+                    className="text-red-600 hover:underline disabled:opacity-50"
+                  >
+                    {availabilityDeletingId === (selectedSlot.item.type === "pt_segment" ? selectedSlot.item.blockId : null) ? "Removing…" : "Remove this availability block"}
+                  </button>
+                </li>
+              )}
+              {isTrainer && onAddAvailabilityForSlot && (selectedSlot.item.type === "available" || allowAdminEdit) && (
                 <li>
                   <button
                     type="button"

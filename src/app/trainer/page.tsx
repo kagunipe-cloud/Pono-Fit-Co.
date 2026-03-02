@@ -94,6 +94,23 @@ export default function TrainerSchedulePage() {
     }
   }
 
+  function handleAddAvailabilityForSlot(dayOfWeek: number, startTime: string, endTime: string) {
+    setAddDay(dayOfWeek);
+    setAddStart(startTime);
+    setAddEnd(endTime);
+    setShowAdd(true);
+    setTimeout(() => document.getElementById("add-availability")?.scrollIntoView({ behavior: "smooth" }), 100);
+  }
+
+  function handleAvailabilityChange() {
+    if (!member) return;
+    fetch("/api/trainer/availability")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: AvailabilityBlock[]) => setBlocks(Array.isArray(data) ? data : []))
+      .catch(() => setBlocks([]));
+    setScheduleRefreshKey((k) => k + 1);
+  }
+
   if (loading || !member) {
     return <div className="p-8 text-center text-stone-500">Loading…</div>;
   }
@@ -110,9 +127,11 @@ export default function TrainerSchedulePage() {
         trainerMemberId={member.member_id}
         trainerDisplayName={displayName}
         scheduleRefreshKey={scheduleRefreshKey}
+        onAddAvailabilityForSlot={handleAddAvailabilityForSlot}
+        onAvailabilityChange={handleAvailabilityChange}
       />
 
-      <div className="mt-10 max-w-2xl">
+      <div id="add-availability" className="mt-10 max-w-2xl">
         <h2 className="text-lg font-semibold text-stone-800 mb-3">Recurring availability</h2>
         {blocks.length === 0 && !showAdd && (
           <p className="text-sm text-stone-500 mb-3">No recurring blocks yet. Add when you’re available for PT each week.</p>

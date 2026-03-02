@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, lazy, Suspense } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { formatDateOnlyInAppTz } from "@/lib/app-timezone";
 import { useAppTimezone } from "@/lib/settings-context";
 import { getUnitType, MEASUREMENT_OPTIONS, getServingMeasurementOptions, formatPortionLabel, formatServingForDisplay, unitToGrams } from "@/lib/food-units";
 import { validateMacros } from "@/lib/food-quality";
+
+const CameraBarcodeScanner = lazy(() => import("@/components/CameraBarcodeScanner"));
 
 type Food = { id: number; name: string; calories: number | null; protein_g: number | null; fat_g: number | null; carbs_g: number | null; fiber_g: number | null; serving_size?: number | null; serving_size_unit?: string | null; serving_description?: string | null; nutrients_per_100g?: number | null; source?: string };
 type USDAFoodNutrient = { nutrientId?: number; nutrient?: { id?: number }; nutrientName?: string; unitName?: string; value?: number; amount?: number };
@@ -331,6 +333,12 @@ export default function MemberMacrosDayPage() {
   const [weighInEditing, setWeighInEditing] = useState(false);
   const [weighInDraft, setWeighInDraft] = useState("");
   const [weighInSaving, setWeighInSaving] = useState(false);
+  const [barcodeInput, setBarcodeInput] = useState("");
+  const [barcodeLookupLoading, setBarcodeLookupLoading] = useState(false);
+  const [barcodeNotFound, setBarcodeNotFound] = useState(false);
+  const [showCameraScanner, setShowCameraScanner] = useState(false);
+  const [selectedDbFood, setSelectedDbFood] = useState<Food | null>(null);
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const AI_PORTION_UNITS = [
     { value: "", label: "—" },
@@ -392,6 +400,8 @@ export default function MemberMacrosDayPage() {
         .then((r) => (r.ok ? r.json() : []))
         .then((list: Favorite[]) => setFavorites(Array.isArray(list) ? list : []))
         .catch(() => setFavorites([]));
+      const t = setTimeout(() => barcodeInputRef.current?.focus(), 100);
+      return () => clearTimeout(t);
     }
   }, [addFoodMealId]);
 
@@ -511,6 +521,56 @@ export default function MemberMacrosDayPage() {
     }
   }
 
+  async function handleBarcodeLookup() {
+    const code = barcodeInput.trim();
+    if (!code) return;
+    setBarcodeNotFound(false);
+    setBarcodeLookupLoading(true);
+    try {
+      const res = await fetch(`/api/foods/by-barcode?barcode=${encodeURIComponent(code)}`);
+      if (res.ok) {
+        const data = (await res.json()) as Food;
+        setSelectedDbFood(data);
+        setSelectedUsdaFood(null);
+        setSelectedOffFood(null);
+        setSelectedFavoriteId(null);
+        setBarcodeInput("");
+      } else {
+        setSelectedDbFood(null);
+        setBarcodeNotFound(true);
+      }
+    } catch {
+      setBarcodeNotFound(true);
+      setSelectedDbFood(null);
+    } finally {
+      setBarcodeLookupLoading(false);
+    }
+  }
+
+  async function handleBarcodeScannedFromCamera(barcode: string) {
+    setBarcodeNotFound(false);
+    setBarcodeLookupLoading(true);
+    try {
+      const res = await fetch(`/api/foods/by-barcode?barcode=${encodeURIComponent(barcode)}`);
+      if (res.ok) {
+        const data = (await res.json()) as Food;
+        setSelectedDbFood(data);
+        setSelectedUsdaFood(null);
+        setSelectedOffFood(null);
+        setSelectedFavoriteId(null);
+        setShowCameraScanner(false);
+      } else {
+        setSelectedDbFood(null);
+        setBarcodeNotFound(true);
+      }
+    } catch {
+      setBarcodeNotFound(true);
+      setSelectedDbFood(null);
+    } finally {
+      setBarcodeLookupLoading(false);
+    }
+  }
+
   async function handleAddEntry() {
     if (addFoodMealId == null) return;
     const meal = day?.meals.find((m) => m.id === addFoodMealId);
@@ -527,8 +587,33 @@ export default function MemberMacrosDayPage() {
           setAddFoodMealId(null);
           setSelectedUsdaFood(null);
           setSelectedFavoriteId(null);
+          setSelectedDbFood(null);
           setFoodSearch("");
           setAddAmount("1");
+          fetchDay();
+        }
+        return;
+      }
+      if (selectedDbFood != null) {
+        const num = parseFloat(addAmount) || 0;
+        if (num <= 0) {
+          setAddingEntry(false);
+          return;
+        }
+        const entryRes = await fetch(`/api/member/journal/meals/${addFoodMealId}/entries`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ food_id: selectedDbFood.id, quantity: num, measurement: addMeasurement }),
+        });
+        if (entryRes.ok) {
+          setAddFoodMealId(null);
+          setSelectedUsdaFood(null);
+          setSelectedOffFood(null);
+          setSelectedDbFood(null);
+          setSelectedFavoriteId(null);
+          setFoodSearch("");
+          setAddAmount("1");
+          setAddMeasurement("servings");
           fetchDay();
         }
         return;
@@ -653,7 +738,11 @@ export default function MemberMacrosDayPage() {
     setSelectedUsdaPortions(null);
     setSelectedOffFood(null);
     setSelectedFavoriteId(null);
+    setSelectedDbFood(null);
     setFoodSearch("");
+    setBarcodeInput("");
+    setBarcodeNotFound(false);
+    setShowCameraScanner(false);
     setAddAmount("1");
     setAddMeasurement("servings");
     setMergedSearchResults([]);
@@ -755,20 +844,22 @@ export default function MemberMacrosDayPage() {
     }
   }
 
-  /** Unit type for the currently selected food (USDA, OFF, or favorite). */
+  /** Unit type for the currently selected food (USDA, OFF, DB barcode, or favorite). */
   const addFoodUnitType = selectedUsdaFood != null
     ? getUnitType(selectedUsdaFood.servingSizeUnit)
     : selectedOffFood != null
       ? getUnitType(selectedOffFood.serving_size_unit)
-      : selectedFavoriteId != null
-        ? "serving"
-        : null;
+      : selectedDbFood != null
+        ? getUnitType(selectedDbFood.serving_size_unit ?? null)
+        : selectedFavoriteId != null
+          ? "serving"
+          : null;
   /** Measurement options: for serving-type use slice/slices etc. when from USDA/OFF; otherwise fixed list. USDA-only: add tbsp/cup when we have portion data. */
   const addFoodMeasurementOptions = (() => {
     if (addFoodUnitType == null) return [];
     const base =
-      addFoodUnitType === "serving" && (selectedUsdaFood?.servingSizeUnit ?? selectedOffFood?.serving_size_unit)
-        ? getServingMeasurementOptions(selectedUsdaFood?.servingSizeUnit ?? selectedOffFood?.serving_size_unit ?? null)
+      addFoodUnitType === "serving" && (selectedUsdaFood?.servingSizeUnit ?? selectedOffFood?.serving_size_unit ?? selectedDbFood?.serving_size_unit)
+        ? getServingMeasurementOptions(selectedUsdaFood?.servingSizeUnit ?? selectedOffFood?.serving_size_unit ?? selectedDbFood?.serving_size_unit ?? null)
         : MEASUREMENT_OPTIONS[addFoodUnitType];
     if (!selectedUsdaFood || !selectedUsdaPortions) return base;
     const extra: { value: string; label: string }[] = [];
@@ -1235,6 +1326,70 @@ export default function MemberMacrosDayPage() {
             </div>
             <div className="p-4 overflow-y-auto space-y-4">
               <div>
+                <label className="block text-sm font-medium text-stone-600 mb-1">Scan or enter barcode</label>
+                <p className="text-xs text-stone-400 mb-1">If the food is in our database, it will auto-fill below. Use the camera or type the barcode.</p>
+                {showCameraScanner ? (
+                  <Suspense fallback={<div className="py-8 text-center text-stone-500 text-sm">Loading camera…</div>}>
+                    <CameraBarcodeScanner
+                      onScan={handleBarcodeScannedFromCamera}
+                      onClose={() => setShowCameraScanner(false)}
+                    />
+                  </Suspense>
+                ) : (
+                  <>
+                    <div className="flex gap-2 mb-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowCameraScanner(true)}
+                        className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700"
+                      >
+                        <span aria-hidden>📷</span>
+                        Scan with camera
+                      </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        ref={barcodeInputRef}
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        value={barcodeInput}
+                        onChange={(e) => {
+                          setBarcodeInput(e.target.value);
+                          setBarcodeNotFound(false);
+                          setSelectedDbFood(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            handleBarcodeLookup();
+                          }
+                        }}
+                        placeholder="Or type barcode (e.g. 012345678901)"
+                        className="flex-1 px-3 py-2 rounded-lg border border-stone-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleBarcodeLookup}
+                        disabled={barcodeLookupLoading || !barcodeInput.trim()}
+                        className="px-4 py-2 rounded-lg bg-stone-700 text-white text-sm font-medium hover:bg-stone-800 disabled:opacity-50"
+                      >
+                        {barcodeLookupLoading ? "Looking up…" : "Look up"}
+                      </button>
+                    </div>
+                  </>
+                )}
+                {barcodeNotFound && !showCameraScanner && (
+                  <p className="mt-1 text-sm text-amber-600">Not in our database. Search above or add from Open Food Facts.</p>
+                )}
+                {barcodeNotFound && showCameraScanner && (
+                  <p className="mt-2 text-sm text-amber-600">Not in our database. Try another barcode or cancel and search above.</p>
+                )}
+                {selectedDbFood != null && (
+                  <p className="mt-1 text-sm text-emerald-600 font-medium">Found: {selectedDbFood.name}</p>
+                )}
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-stone-600 mb-1">Search USDA + Open Food Facts</label>
                 <p className="text-xs text-stone-400 mb-1">Include the brand name (e.g. Nabisco Oreo) for more specific results.</p>
                 <input
@@ -1246,6 +1401,7 @@ export default function MemberMacrosDayPage() {
                     setSelectedUsdaPortions(null);
                     setSelectedOffFood(null);
                     setSelectedFavoriteId(null);
+                    setSelectedDbFood(null);
                   }}
                   placeholder="e.g. cereal, chicken breast, Nutella"
                   className="w-full px-3 py-2 rounded-lg border border-stone-200"
@@ -1289,6 +1445,7 @@ export default function MemberMacrosDayPage() {
                                   setSelectedUsdaFood(f);
                                   setSelectedOffFood(null);
                                   setSelectedFavoriteId(null);
+                                  setSelectedDbFood(null);
                                   setSelectedUsdaPortions(null);
                                   fetch(`/api/foods/fetch-usda?fdcId=${f.fdcId}`)
                                     .then((r) => (r.ok ? r.json() : null))
@@ -1341,7 +1498,7 @@ export default function MemberMacrosDayPage() {
                           <li key={key}>
                             <button
                               type="button"
-                              onClick={() => { setSelectedOffFood(f); setSelectedUsdaFood(null); setSelectedFavoriteId(null); }}
+                              onClick={() => { setSelectedOffFood(f); setSelectedUsdaFood(null); setSelectedFavoriteId(null); setSelectedDbFood(null); }}
                               className={`w-full text-left px-3 py-2.5 text-sm ${isSelected ? "bg-brand-100 text-brand-800" : "text-stone-700 hover:bg-stone-50"}`}
                             >
                               <span className="flex items-baseline gap-2 flex-wrap">
@@ -1379,7 +1536,7 @@ export default function MemberMacrosDayPage() {
                       <li key={fav.id}>
                         <button
                           type="button"
-                          onClick={() => { setSelectedFavoriteId(fav.id); setSelectedUsdaFood(null); setSelectedOffFood(null); }}
+                          onClick={() => { setSelectedFavoriteId(fav.id); setSelectedUsdaFood(null); setSelectedOffFood(null); setSelectedDbFood(null); }}
                           className={`w-full text-left px-3 py-2 text-sm ${selectedFavoriteId === fav.id ? "bg-brand-100 text-brand-800" : "text-stone-700 hover:bg-stone-50"}`}
                         >
                           {fav.name}
@@ -1444,7 +1601,7 @@ export default function MemberMacrosDayPage() {
                 )}
               </div>
             </div>
-            {(selectedUsdaFood != null || selectedOffFood != null || selectedFavoriteId != null) && (
+            {(selectedUsdaFood != null || selectedOffFood != null || selectedFavoriteId != null || selectedDbFood != null) && (
               <div className="px-4 py-3 border-t border-stone-200 bg-stone-50 space-y-3">
                 <div>
                   <label className="block text-sm font-medium text-stone-600 mb-1">Quantity</label>
@@ -1475,7 +1632,7 @@ export default function MemberMacrosDayPage() {
               <button
                 type="button"
                 onClick={handleAddEntry}
-                disabled={addingEntry || (selectedUsdaFood == null && selectedOffFood == null && selectedFavoriteId == null)}
+                disabled={addingEntry || (selectedUsdaFood == null && selectedOffFood == null && selectedFavoriteId == null && selectedDbFood == null)}
                 className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
               >
                 {addingEntry ? "Adding…" : "Add"}

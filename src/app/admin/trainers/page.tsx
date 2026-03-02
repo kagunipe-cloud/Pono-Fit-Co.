@@ -125,6 +125,15 @@ export default function AdminTrainersPage() {
     setTimeout(() => document.getElementById("add-availability")?.scrollIntoView({ behavior: "smooth" }), 100);
   }
 
+  function handleAvailabilityChange() {
+    if (!selectedId) return;
+    fetch(`/api/offerings/trainer-availability?trainer_member_id=${encodeURIComponent(selectedId)}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: AvailabilityBlock[]) => setAvailabilityBlocks(Array.isArray(data) ? data : []))
+      .catch(() => setAvailabilityBlocks([]));
+    setScheduleRefreshKey((k) => k + 1);
+  }
+
   return (
     <div className="max-w-6xl mx-auto">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -200,6 +209,7 @@ export default function AdminTrainersPage() {
                     allowAdminEdit
                     scheduleRefreshKey={scheduleRefreshKey}
                     onAddAvailabilityForSlot={handleAddAvailabilityForSlot}
+                    onAvailabilityChange={handleAvailabilityChange}
                   />
                 </div>
                 <div id="add-availability" className="bg-white border border-stone-200 rounded-xl p-4">
