@@ -49,30 +49,20 @@ export async function GET(request: NextRequest) {
       if (ex.type === "lift") {
         let volume = 0;
         let totalReps = 0;
-        // Find highest weight in this workout; use reps at that weight for Brzycki estimated 1RM.
-        let bestWeight: number | null = null;
-        let repsAtBestWeight = 0;
+        // Compute Brzycki 1RM for every set; use the highest calculated 1RM in this session.
+        let bestEstimated1RM: number | null = null;
         for (const s of sets) {
           const reps = s.reps ?? 0;
           const w = s.weight_kg ?? 0;
           volume += reps * w;
           totalReps += reps;
-          if (s.weight_kg == null || s.weight_kg <= 0) continue;
+          if (s.weight_kg == null || s.weight_kg <= 0 || (s.reps ?? 0) <= 0) continue;
           const r = Math.min(36, Math.max(0, reps)); // cap for Brzycki: 37 - r >= 1
-          if (bestWeight == null || s.weight_kg > bestWeight) {
-            bestWeight = s.weight_kg;
-            repsAtBestWeight = r;
-          } else if (s.weight_kg === bestWeight && (reps ?? 0) > repsAtBestWeight) {
-            repsAtBestWeight = r; // same weight, more reps → use higher reps for 1RM estimate
-          }
+          const denom = 37 - r;
+          const est = denom > 0 ? w * (36 / denom) : w;
+          if (bestEstimated1RM == null || est > bestEstimated1RM) bestEstimated1RM = est;
         }
-        // Brzycki: 1RM = w * (36 / (37 - r)); same unit as stored weight (assumed lbs for display).
-        let estimated1RM: number | null = null;
-        if (bestWeight != null && bestWeight > 0) {
-          const denom = 37 - repsAtBestWeight;
-          if (denom > 0) estimated1RM = bestWeight * (36 / denom);
-          else estimated1RM = bestWeight;
-        }
+        const estimated1RM = bestEstimated1RM;
         points.push({
           date,
           ...(volume > 0 && { volume_lbs: Math.round(volume) }),

@@ -95,6 +95,23 @@ function PRInfo({ exerciseId, exerciseName, weight, excludeWorkoutId }: PRInfoPr
   return <span className="text-xs text-brand-600 font-medium">{parts.join(" · ")}</span>;
 }
 
+function autoImplied1RM(weight: number, reps: number): number | null {
+  if (weight <= 0 || reps <= 0) return null;
+  const r = Math.min(36, Math.max(0, reps));
+  const denom = 37 - r;
+  if (denom <= 0) return weight;
+  return Math.round(weight * (36 / denom) * 10) / 10;
+}
+
+function AutoImplied1RMDisplay({ reps, weight }: { reps: string; weight: string }) {
+  const repsNum = parseInt(reps, 10);
+  const weightNum = parseFloat(weight);
+  const valid = !Number.isNaN(repsNum) && repsNum > 0 && !Number.isNaN(weightNum) && weightNum > 0;
+  const est = valid ? autoImplied1RM(weightNum, repsNum) : null;
+  if (est == null) return null;
+  return <span className="text-xs text-stone-500">~{est} 1RM</span>;
+}
+
 export default function MemberWorkoutDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -783,6 +800,7 @@ export default function MemberWorkoutDetailPage() {
                         weight={row.weight}
                         excludeWorkoutId={workout?.id ?? null}
                       />
+                      <AutoImplied1RMDisplay reps={row.reps} weight={row.weight} />
                       {(row.drops ?? []).map((drop, di) => (
                         <span key={di} className="flex items-center gap-1">
                           <span className="text-stone-400">↓</span>
@@ -820,6 +838,7 @@ export default function MemberWorkoutDetailPage() {
                             }
                             className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
                           />
+                          <AutoImplied1RMDisplay reps={drop.reps} weight={drop.weight} />
                         </span>
                       ))}
                       {(row.drops?.length ?? 0) < 2 && (
@@ -993,6 +1012,7 @@ export default function MemberWorkoutDetailPage() {
                                   weight={row.weight}
                                   excludeWorkoutId={workout?.id ?? null}
                                 />
+                                <AutoImplied1RMDisplay reps={row.reps} weight={row.weight} />
                                 {(row.drops ?? []).map((drop, di) => (
                                   <span key={di} className="flex items-center gap-1">
                                     <span className="text-stone-400">↓</span>
@@ -1030,6 +1050,7 @@ export default function MemberWorkoutDetailPage() {
                                       }
                                       className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
                                     />
+                                    <AutoImplied1RMDisplay reps={drop.reps} weight={drop.weight} />
                                   </span>
                                 ))}
                                 {(row.drops?.length ?? 0) < 2 && (
@@ -1258,6 +1279,7 @@ export default function MemberWorkoutDetailPage() {
                                       />
                                     ) : null;
                                   })()}
+                                  <AutoImplied1RMDisplay reps={row.reps} weight={row.weight} />
                                   {(row.drops ?? []).map((drop, di) => (
                                     <span key={di} className="flex items-center gap-1">
                                       <span className="text-stone-400">↓</span>
@@ -1295,6 +1317,7 @@ export default function MemberWorkoutDetailPage() {
                                         }
                                         className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
                                       />
+                                      <AutoImplied1RMDisplay reps={drop.reps} weight={drop.weight} />
                                     </span>
                                   ))}
                                   {(row.drops?.length ?? 0) < 2 && (
