@@ -70,9 +70,9 @@ function slotOverlaps(slotMin: number, startMin: number, endMin: number): boolea
   return startMin < slotEnd && endMin > slotMin;
 }
 
-type ScheduleGridProps = { variant: "member" | "master" | "trainer"; trainerMemberId?: string | null; trainerDisplayName?: string | null; /** When this changes (e.g. after trainer adds/removes availability), grid refetches. */ scheduleRefreshKey?: number; /** When true (e.g. admin viewing trainer on Trainers page), show Block time link and allow removing unavailable blocks. */ allowAdminEdit?: boolean };
+type ScheduleGridProps = { variant: "member" | "master" | "trainer"; trainerMemberId?: string | null; trainerDisplayName?: string | null; /** When this changes (e.g. after trainer adds/removes availability), grid refetches. */ scheduleRefreshKey?: number; /** When true (e.g. admin viewing trainer on Trainers page), show Block time link and allow removing unavailable blocks. */ allowAdminEdit?: boolean; /** When admin clicks a slot on trainer view, can request to add availability for that slot (dayOfWeek 0-6, startTime, endTime). */ onAddAvailabilityForSlot?: (dayOfWeek: number, startTime: string, endTime: string) => void };
 
-export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayName, scheduleRefreshKey, allowAdminEdit }: ScheduleGridProps) {
+export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayName, scheduleRefreshKey, allowAdminEdit, onAddAvailabilityForSlot }: ScheduleGridProps) {
   const searchParams = useSearchParams();
   const tz = useAppTimezone();
   const productId = searchParams.get("product")?.trim() || null;
@@ -428,12 +428,12 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                           key={date}
                           rowSpan={item.type === "class" ? item.spanSlots : undefined}
                           className="align-top p-1 min-w-[100px] sm:min-w-[120px] border-r border-stone-100 last:border-r-0"
-                          onClick={isMaster ? (e) => {
+                          onClick={isMaster || (isTrainer && allowAdminEdit) ? (e) => {
                             if ((e.target as HTMLElement).closest("a, button")) return;
                             setSelectedSlot({ date, slotMin, timeStr, item });
                           } : undefined}
-                          role={isMaster ? "button" : undefined}
-                          style={isMaster ? { cursor: "pointer" } : undefined}
+                          role={isMaster || (isTrainer && allowAdminEdit) ? "button" : undefined}
+                          style={isMaster || (isTrainer && allowAdminEdit) ? { cursor: "pointer" } : undefined}
                         >
                           {item.type === "class" && (
                             <div className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 hover:bg-blue-100/80 hover:border-blue-300 transition-colors">
@@ -510,8 +510,8 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                             </div>
                           )}
                           {item.type === "trainer_not_available" && (
-                            <div className="rounded-lg border border-stone-200 bg-stone-100 min-h-[2.5rem] flex items-center justify-center px-2 py-1.5">
-                              <span className="text-xs text-stone-400">—</span>
+                            <div className="rounded-lg border border-stone-400 bg-stone-300 min-h-[2.5rem] flex items-center justify-center px-2 py-1.5">
+                              <span className="text-xs text-stone-500">Unavailable</span>
                             </div>
                           )}
                         </td>
@@ -536,14 +536,16 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
         </p>
       )}
 
-      {isMaster && selectedSlot && (
+      {(isMaster || (isTrainer && allowAdminEdit)) && selectedSlot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setSelectedSlot(null)}>
           <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-semibold text-stone-800">Slot: {selectedSlot.date} at {selectedSlot.timeStr}</h3>
             <ul className="space-y-2 text-sm">
               <li>
                 <Link
-                  href={`/admin/block-time?day=${getDayOfWeek(selectedSlot.date)}&start=${selectedSlot.timeStr}&end=${timeMinutesToTimeString(parseTimeToMinutes(selectedSlot.timeStr) + SLOT_MINUTES)}`}
+                  href={isTrainer && trainerDisplayName
+                    ? `/admin/block-time?trainer=${encodeURIComponent(trainerDisplayName)}&day=${getDayOfWeek(selectedSlot.date)}&start=${selectedSlot.timeStr}&end=${timeMinutesToTimeString(parseTimeToMinutes(selectedSlot.timeStr) + SLOT_MINUTES)}`
+                    : `/admin/block-time?day=${getDayOfWeek(selectedSlot.date)}&start=${selectedSlot.timeStr}&end=${timeMinutesToTimeString(parseTimeToMinutes(selectedSlot.timeStr) + SLOT_MINUTES)}`}
                   className="text-brand-600 hover:underline block"
                 >
                   Add block time (unavailable)
@@ -601,6 +603,20 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                   <Link href={`/admin/book-pt-for-member?date=${selectedSlot.date}&time=${selectedSlot.timeStr}`} className="text-brand-600 hover:underline block">
                     Book PT (no preference)
                   </Link>
+                </li>
+              )}
+              {isTrainer && allowAdminEdit && onAddAvailabilityForSlot && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onAddAvailabilityForSlot(getDayOfWeek(selectedSlot.date), selectedSlot.timeStr, timeMinutesToTimeString(parseTimeToMinutes(selectedSlot.timeStr) + SLOT_MINUTES));
+                      setSelectedSlot(null);
+                    }}
+                    className="text-brand-600 hover:underline"
+                  >
+                    Add availability for this slot
+                  </button>
                 </li>
               )}
             </ul>

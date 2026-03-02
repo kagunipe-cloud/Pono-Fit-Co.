@@ -1,12 +1,13 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import ScheduleGrid from "@/components/ScheduleGrid";
 
 type Trainer = { member_id: string; display_name: string };
 
 function ScheduleContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const trainerFromUrl = searchParams.get("trainer")?.trim() || null;
   const [trainers, setTrainers] = useState<Trainer[]>([]);
@@ -19,10 +20,15 @@ function ScheduleContent() {
       .catch(() => setTrainers([]));
   }, []);
 
-  // Sync selection with URL when opening a link from Trainer schedules (e.g. /schedule?trainer=xxx)
+  // Sync selection with URL when opening a link (e.g. /schedule?trainer=xxx)
   useEffect(() => {
     if (trainerFromUrl !== null) setSelectedTrainerId(trainerFromUrl);
   }, [trainerFromUrl]);
+
+  function selectTrainer(id: string | null) {
+    setSelectedTrainerId(id);
+    router.replace(id ? `/schedule?trainer=${encodeURIComponent(id)}` : "/schedule");
+  }
 
   return (
     <div>
@@ -31,7 +37,7 @@ function ScheduleContent() {
           <span className="text-sm font-medium text-stone-600">PT trainer:</span>
           <button
             type="button"
-            onClick={() => setSelectedTrainerId(null)}
+            onClick={() => selectTrainer(null)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium ${selectedTrainerId === null ? "bg-brand-600 text-white" : "bg-stone-100 text-stone-700 hover:bg-stone-200"}`}
           >
             No Preference
@@ -40,7 +46,7 @@ function ScheduleContent() {
             <button
               key={t.member_id}
               type="button"
-              onClick={() => setSelectedTrainerId(t.member_id)}
+              onClick={() => selectTrainer(t.member_id)}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium ${selectedTrainerId === t.member_id ? "bg-brand-600 text-white" : "bg-stone-100 text-stone-700 hover:bg-stone-200"}`}
             >
               {t.display_name}
