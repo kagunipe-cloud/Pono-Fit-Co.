@@ -19,11 +19,14 @@ async function getWorkoutWithExercises(db: ReturnType<typeof getDb>, workoutId: 
     .prepare(`SELECT ${cols.join(", ")} FROM workouts WHERE id = ? AND member_id = ?`)
     .get(workoutId, memberId) as { id: number; member_id: string; started_at: string; finished_at: string | null; source_workout_id: number | null; assigned_by_admin: number; name?: string | null; assigned_by_trainer_member_id?: string | null; trainer_notes?: string | null; client_completion_notes?: string | null } | undefined;
   if (!workout) return null;
+  const hasUseForMy1rm = (db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[]).some((c) => c.name === "use_for_my_1rm");
+  const exerciseCols = ["id", "workout_id", "type", "exercise_name", "sort_order", "exercise_id"];
+  if (hasUseForMy1rm) exerciseCols.push("use_for_my_1rm");
   const exercises = db
     .prepare(
-      "SELECT id, workout_id, type, exercise_name, sort_order, exercise_id FROM workout_exercises WHERE workout_id = ? ORDER BY sort_order, id"
+      `SELECT ${exerciseCols.join(", ")} FROM workout_exercises WHERE workout_id = ? ORDER BY sort_order, id`
     )
-    .all(workoutId) as { id: number; workout_id: number; type: string; exercise_name: string; sort_order: number; exercise_id: number | null }[];
+    .all(workoutId) as { id: number; workout_id: number; type: string; exercise_name: string; sort_order: number; exercise_id: number | null; use_for_my_1rm?: number }[];
   const setCols = (db.prepare("PRAGMA table_info(workout_sets)").all() as { name: string }[]).map((c) => c.name);
   const hasDropIndex = setCols.includes("drop_index");
   const setSelect = hasDropIndex

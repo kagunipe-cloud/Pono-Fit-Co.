@@ -14,6 +14,7 @@ type Exercise = {
   type: string;
   exercise_name: string;
   exercise_id?: number | null;
+  use_for_my_1rm?: number;
   sets: { id: number; reps: number | null; weight_kg: number | null; time_seconds: number | null; distance_km: number | null; set_order: number; drop_index?: number }[];
 };
 type OfficialExercise = { id: number; name: string; type: string };
@@ -103,6 +104,19 @@ function autoImplied1RM(weight: number, reps: number): number | null {
   return Math.round(weight * (36 / denom) * 10) / 10;
 }
 
+function maxAutoImplied1RM(sets: Exercise["sets"]): number | null {
+  let best: number | null = null;
+  for (const s of sets) {
+    const w = s.weight_kg ?? 0;
+    const r = s.reps ?? 0;
+    if (w > 0 && r > 0) {
+      const est = autoImplied1RM(w, r);
+      if (est != null && (best == null || est > best)) best = est;
+    }
+  }
+  return best;
+}
+
 function AutoImplied1RMDisplay({ reps, weight }: { reps: string; weight: string }) {
   const repsNum = parseInt(reps, 10);
   const weightNum = parseFloat(weight);
@@ -150,6 +164,7 @@ export default function MemberWorkoutDetailPage() {
   const [showShare, setShowShare] = useState(false);
   const [clientCompletionNotes, setClientCompletionNotes] = useState("");
   const [useForMy1rm, setUseForMy1rm] = useState(false);
+  const [useForMy1rmEdit, setUseForMy1rmEdit] = useState(false);
   const [my1rmList, setMy1rmList] = useState<{ exercise_name: string; current_1rm_lbs: number }[]>([]);
 
   /** Map of source workout sets by a stable exercise key so \"last time\" stays attached even if you delete/reorder exercises. */
@@ -182,7 +197,7 @@ export default function MemberWorkoutDetailPage() {
     fetchWorkout();
   }, [id]);
 
-  useEffect(() => {
+  function fetchMy1rm() {
     fetch("/api/member/workouts/my-1rm")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
@@ -190,6 +205,10 @@ export default function MemberWorkoutDetailPage() {
         setMy1rmList(list.filter((e: { exercise_name?: string }) => e?.exercise_name));
       })
       .catch(() => setMy1rmList([]));
+  }
+
+  useEffect(() => {
+    fetchMy1rm();
   }, [workout?.id, workout?.finished_at]);
 
   useEffect(() => {
@@ -292,6 +311,7 @@ export default function MemberWorkoutDetailPage() {
       if (res.ok) {
         setMode(null);
         fetchWorkout();
+        fetchMy1rm();
       } else if (res.status === 404) {
         setMode(null);
         const refetch = await fetch(`/api/member/workouts/${id}`);
@@ -400,6 +420,7 @@ export default function MemberWorkoutDetailPage() {
     setEditName(ex.exercise_name);
     const type = ex.type === "cardio" ? "cardio" : "lift";
     setEditType(type);
+    setUseForMy1rmEdit((ex.use_for_my_1rm ?? 0) === 1);
     if (ex.sets.length > 0) {
       setEditSets(
         type === "lift"
@@ -426,10 +447,16 @@ export default function MemberWorkoutDetailPage() {
     if (editingExId == null) return;
     setSavingEdit(true);
     try {
+      const ex = workout?.exercises.find((e) => e.id === editingExId);
       const res = await fetch(`/api/member/workouts/${id}/exercises/${editingExId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ exercise_name: editName.trim() || "Exercise", type: editType }),
+        body: JSON.stringify({
+          exercise_name: editName.trim() || "Exercise",
+          type: editType,
+          exercise_id: ex?.exercise_id ?? undefined,
+          ...(editType === "lift" && ex?.exercise_id != null && { use_for_my_1rm: useForMy1rmEdit }),
+        }),
       });
       if (!res.ok) {
         setSavingEdit(false);
@@ -458,6 +485,7 @@ export default function MemberWorkoutDetailPage() {
       if (setsRes.ok) {
         setEditingExId(null);
         fetchWorkout();
+        fetchMy1rm();
       }
     } finally {
       setSavingEdit(false);
@@ -774,17 +802,6 @@ export default function MemberWorkoutDetailPage() {
                       <span className="text-sm text-stone-500 w-10">Set {i + 1}</span>
                       <input
                         type="text"
-                        placeholder="Reps"
-                        value={row.reps}
-                        onChange={(e) =>
-                          setSets((s) =>
-                            s.map((row, ri) => (ri === i ? { ...(row as LiftSetRow), reps: e.target.value } : row))
-                          )
-                        }
-                        className="w-20 px-2 py-1.5 rounded border border-stone-200"
-                      />
-                      <input
-                        type="text"
                         placeholder="Weight (lbs)"
                         value={row.weight}
                         onChange={(e) =>
@@ -793,6 +810,17 @@ export default function MemberWorkoutDetailPage() {
                           )
                         }
                         className="w-24 px-2 py-1.5 rounded border border-stone-200"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Reps"
+                        value={row.reps}
+                        onChange={(e) =>
+                          setSets((s) =>
+                            s.map((row, ri) => (ri === i ? { ...(row as LiftSetRow), reps: e.target.value } : row))
+                          )
+                        }
+                        className="w-20 px-2 py-1.5 rounded border border-stone-200"
                       />
                       <PRInfo
                         exerciseId={selectedOfficialId}
@@ -806,23 +834,6 @@ export default function MemberWorkoutDetailPage() {
                           <span className="text-stone-400">↓</span>
                           <input
                             type="text"
-                            placeholder="Reps"
-                            value={drop.reps}
-                            onChange={(e) =>
-                              setSets((s) =>
-                                s.map((row, ri) => {
-                                  if (ri !== i) return row;
-                                  const r = row as LiftSetRow;
-                                  const drops = [...(r.drops ?? [])];
-                                  drops[di] = { ...drops[di]!, reps: e.target.value };
-                                  return { ...r, drops };
-                                })
-                              )
-                            }
-                            className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
-                          />
-                          <input
-                            type="text"
                             placeholder="lbs"
                             value={drop.weight}
                             onChange={(e) =>
@@ -832,6 +843,23 @@ export default function MemberWorkoutDetailPage() {
                                   const r = row as LiftSetRow;
                                   const drops = [...(r.drops ?? [])];
                                   drops[di] = { ...drops[di]!, weight: e.target.value };
+                                  return { ...r, drops };
+                                })
+                              )
+                            }
+                            className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Reps"
+                            value={drop.reps}
+                            onChange={(e) =>
+                              setSets((s) =>
+                                s.map((row, ri) => {
+                                  if (ri !== i) return row;
+                                  const r = row as LiftSetRow;
+                                  const drops = [...(r.drops ?? [])];
+                                  drops[di] = { ...drops[di]!, reps: e.target.value };
                                   return { ...r, drops };
                                 })
                               )
@@ -971,6 +999,7 @@ export default function MemberWorkoutDetailPage() {
                         onChange={(e) => {
                           const newType = e.target.value === "cardio" ? "cardio" : "lift";
                           setEditType(newType);
+                          if (newType === "cardio") setUseForMy1rmEdit(false);
                           setEditSets(newType === "lift" ? [{ reps: "", weight: "", drops: [] }] : [{ time: "", distance: "" }]);
                         }}
                         className="px-3 py-2 rounded-lg border border-stone-200 text-stone-800"
@@ -978,23 +1007,23 @@ export default function MemberWorkoutDetailPage() {
                         <option value="lift">Lift</option>
                         <option value="cardio">Cardio</option>
                       </select>
+                      {editType === "lift" && workout?.exercises.find((e) => e.id === editingExId)?.exercise_id != null && (
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={useForMy1rmEdit}
+                            onChange={(e) => setUseForMy1rmEdit(e.target.checked)}
+                            className="rounded border-stone-300 text-brand-600"
+                          />
+                          <span className="text-sm text-stone-700">Use for My 1RM Calculation</span>
+                        </label>
+                      )}
                       <div className="space-y-2">
                         <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Sets</p>
                         {editType === "lift"
                           ? (editSets as LiftSetRow[]).map((row, i) => (
                               <div key={i} className="flex flex-wrap items-center gap-2">
                                 <span className="text-sm text-stone-500 w-10">Set {i + 1}</span>
-                                <input
-                                  type="text"
-                                  placeholder="Reps"
-                                  value={row.reps}
-                                  onChange={(e) =>
-                                    setEditSets((s) =>
-                                      s.map((r, ri) => (ri === i ? { ...(r as LiftSetRow), reps: e.target.value } : r))
-                                    )
-                                  }
-                                  className="w-20 px-2 py-1.5 rounded border border-stone-200"
-                                />
                                 <input
                                   type="text"
                                   placeholder="Weight (lbs)"
@@ -1005,6 +1034,17 @@ export default function MemberWorkoutDetailPage() {
                                     )
                                   }
                                   className="w-24 px-2 py-1.5 rounded border border-stone-200"
+                                />
+                                <input
+                                  type="text"
+                                  placeholder="Reps"
+                                  value={row.reps}
+                                  onChange={(e) =>
+                                    setEditSets((s) =>
+                                      s.map((r, ri) => (ri === i ? { ...(r as LiftSetRow), reps: e.target.value } : r))
+                                    )
+                                  }
+                                  className="w-20 px-2 py-1.5 rounded border border-stone-200"
                                 />
                                 <PRInfo
                                   exerciseId={editingExId != null ? workout?.exercises.find((e) => e.id === editingExId)?.exercise_id ?? null : null}
@@ -1018,23 +1058,6 @@ export default function MemberWorkoutDetailPage() {
                                     <span className="text-stone-400">↓</span>
                                     <input
                                       type="text"
-                                      placeholder="Reps"
-                                      value={drop.reps}
-                                      onChange={(e) =>
-                                        setEditSets((s) =>
-                                          s.map((r, ri) => {
-                                            if (ri !== i) return r;
-                                            const row = r as LiftSetRow;
-                                            const drops = [...(row.drops ?? [])];
-                                            drops[di] = { ...drops[di]!, reps: e.target.value };
-                                            return { ...row, drops };
-                                          })
-                                        )
-                                      }
-                                      className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
-                                    />
-                                    <input
-                                      type="text"
                                       placeholder="lbs"
                                       value={drop.weight}
                                       onChange={(e) =>
@@ -1044,6 +1067,23 @@ export default function MemberWorkoutDetailPage() {
                                             const row = r as LiftSetRow;
                                             const drops = [...(row.drops ?? [])];
                                             drops[di] = { ...drops[di]!, weight: e.target.value };
+                                            return { ...row, drops };
+                                          })
+                                        )
+                                      }
+                                      className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                                    />
+                                    <input
+                                      type="text"
+                                      placeholder="Reps"
+                                      value={drop.reps}
+                                      onChange={(e) =>
+                                        setEditSets((s) =>
+                                          s.map((r, ri) => {
+                                            if (ri !== i) return r;
+                                            const row = r as LiftSetRow;
+                                            const drops = [...(row.drops ?? [])];
+                                            drops[di] = { ...drops[di]!, reps: e.target.value };
                                             return { ...row, drops };
                                           })
                                         )
@@ -1132,6 +1172,9 @@ export default function MemberWorkoutDetailPage() {
                       <p className="font-medium text-stone-800">
                         {ex.exercise_name}
                         <span className="ml-2 text-xs font-normal text-stone-500 capitalize">({ex.type})</span>
+                        {(ex.use_for_my_1rm ?? 0) === 1 && (
+                          <span className="ml-2 text-xs font-medium text-brand-600">Used for My 1RM</span>
+                        )}
                         {vol > 0 && (
                           <span className="ml-2 text-xs font-medium text-brand-600">
                             {vol.toLocaleString()} lbs volume
@@ -1199,7 +1242,7 @@ export default function MemberWorkoutDetailPage() {
                                 Set {i + 1}: {group.map((s, j) => (
                                   <span key={j}>
                                     {j > 0 && " ↓ "}
-                                    {s.reps ?? "—"} reps, {s.weight_kg != null ? s.weight_kg + " lbs" : "—"}
+                                    {s.weight_kg != null ? s.weight_kg + " lbs" : "—"} × {s.reps ?? "—"} reps
                                   </span>
                                 ))}
                               </li>
@@ -1217,25 +1260,33 @@ export default function MemberWorkoutDetailPage() {
                   <div className="mt-2">
                     {isRepeatMode && <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">This time</p>}
                     {ex.sets.length > 0 ? (
-                      <ul className="mt-0.5 space-y-0.5 text-sm text-stone-600">
-                        {ex.type === "lift"
-                          ? groupLiftSets(ex.sets).map((group, i) => (
-                              <li key={i}>
-                                Set {i + 1}: {group.map((s, j) => (
-                                  <span key={s.id ?? j}>
-                                    {j > 0 && " ↓ "}
-                                    {s.reps ?? "—"} reps, {s.weight_kg != null ? s.weight_kg + " lbs" : "—"}
-                                  </span>
-                                ))}
-                              </li>
-                            ))
-                          : ex.sets.map((s, i) => (
-                              <li key={s.id}>
-                                Set {i + 1}: {s.time_seconds != null ? Math.round(s.time_seconds / 60) + " min" : "—"}
-                                {s.distance_km != null ? ", " + s.distance_km + " km" : ""}
-                              </li>
-                            ))}
-                      </ul>
+                      <>
+                        <ul className="mt-0.5 space-y-0.5 text-sm text-stone-600">
+                          {ex.type === "lift"
+                            ? groupLiftSets(ex.sets).map((group, i) => (
+                                <li key={i}>
+                                  Set {i + 1}: {group.map((s, j) => (
+                                    <span key={s.id ?? j}>
+                                      {j > 0 && " ↓ "}
+                                      {s.weight_kg != null ? s.weight_kg + " lbs" : "—"} × {s.reps ?? "—"} reps
+                                    </span>
+                                  ))}
+                                </li>
+                              ))
+                            : ex.sets.map((s, i) => (
+                                <li key={s.id}>
+                                  Set {i + 1}: {s.time_seconds != null ? Math.round(s.time_seconds / 60) + " min" : "—"}
+                                  {s.distance_km != null ? ", " + s.distance_km + " km" : ""}
+                                </li>
+                              ))}
+                        </ul>
+                        {ex.type === "lift" && (() => {
+                          const best = maxAutoImplied1RM(ex.sets);
+                          return best != null ? (
+                            <p className="mt-1 text-xs text-brand-600 font-medium">Auto-Implied 1RM: ~{best} lbs</p>
+                          ) : null;
+                        })()}
+                      </>
                     ) : isRepeatMode && !isAddingSets && (
                       <p className="mt-0.5 text-sm text-stone-400">No sets logged yet.</p>
                     )}
@@ -1248,17 +1299,6 @@ export default function MemberWorkoutDetailPage() {
                                   <span className="text-sm text-stone-500 w-8">Set {i + 1}</span>
                                   <input
                                     type="text"
-                                    placeholder="Reps"
-                                    value={row.reps}
-                                    onChange={(e) =>
-                                      setAddSetsRows((s) =>
-                                        s.map((r, ri) => (ri === i ? { ...(r as LiftSetRow), reps: e.target.value } : r))
-                                      )
-                                    }
-                                    className="w-20 px-2 py-1.5 rounded border border-stone-200"
-                                  />
-                                  <input
-                                    type="text"
                                     placeholder="Weight (lbs)"
                                     value={row.weight}
                                     onChange={(e) =>
@@ -1267,6 +1307,17 @@ export default function MemberWorkoutDetailPage() {
                                       )
                                     }
                                     className="w-24 px-2 py-1.5 rounded border border-stone-200"
+                                  />
+                                  <input
+                                    type="text"
+                                    placeholder="Reps"
+                                    value={row.reps}
+                                    onChange={(e) =>
+                                      setAddSetsRows((s) =>
+                                        s.map((r, ri) => (ri === i ? { ...(r as LiftSetRow), reps: e.target.value } : r))
+                                      )
+                                    }
+                                    className="w-20 px-2 py-1.5 rounded border border-stone-200"
                                   />
                                   {addSetsForExId != null && (() => {
                                     const ex = workout?.exercises.find((e) => e.id === addSetsForExId);
@@ -1285,23 +1336,6 @@ export default function MemberWorkoutDetailPage() {
                                       <span className="text-stone-400">↓</span>
                                       <input
                                         type="text"
-                                        placeholder="Reps"
-                                        value={drop.reps}
-                                        onChange={(e) =>
-                                          setAddSetsRows((s) =>
-                                            s.map((r, ri) => {
-                                              if (ri !== i) return r;
-                                              const row = r as LiftSetRow;
-                                              const drops = [...(row.drops ?? [])];
-                                              drops[di] = { ...drops[di]!, reps: e.target.value };
-                                              return { ...row, drops };
-                                            })
-                                          )
-                                        }
-                                        className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
-                                      />
-                                      <input
-                                        type="text"
                                         placeholder="lbs"
                                         value={drop.weight}
                                         onChange={(e) =>
@@ -1311,6 +1345,23 @@ export default function MemberWorkoutDetailPage() {
                                               const row = r as LiftSetRow;
                                               const drops = [...(row.drops ?? [])];
                                               drops[di] = { ...drops[di]!, weight: e.target.value };
+                                              return { ...row, drops };
+                                            })
+                                          )
+                                        }
+                                        className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                                      />
+                                      <input
+                                        type="text"
+                                        placeholder="Reps"
+                                        value={drop.reps}
+                                        onChange={(e) =>
+                                          setAddSetsRows((s) =>
+                                            s.map((r, ri) => {
+                                              if (ri !== i) return r;
+                                              const row = r as LiftSetRow;
+                                              const drops = [...(row.drops ?? [])];
+                                              drops[di] = { ...drops[di]!, reps: e.target.value };
                                               return { ...row, drops };
                                             })
                                           )

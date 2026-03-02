@@ -5,7 +5,7 @@ import { ensureWorkoutTables } from "@/lib/workouts";
 
 export const dynamic = "force-dynamic";
 
-/** PATCH body: { exercise_name?, type?, exercise_id? }. Allowed for open or finished workouts. */
+/** PATCH body: { exercise_name?, type?, exercise_id?, use_for_my_1rm? }. Allowed for open or finished workouts. */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; exId: string }> }
@@ -49,9 +49,27 @@ export async function PATCH(
           ? body.exercise_id
           : null;
 
-    db.prepare(
-      "UPDATE workout_exercises SET exercise_name = ?, type = ?, exercise_id = ? WHERE id = ? AND workout_id = ?"
-    ).run(exercise_name, type, exercise_id, exId, workoutId);
+    const use_for_my_1rm = body.use_for_my_1rm === true;
+    const effectiveExId = exercise_id ?? row.exercise_id;
+    const hasUseForMy1rm = (db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[]).some((c) => c.name === "use_for_my_1rm");
+
+    if (hasUseForMy1rm) {
+      db.prepare(
+        "UPDATE workout_exercises SET exercise_name = ?, type = ?, exercise_id = ?, use_for_my_1rm = ? WHERE id = ? AND workout_id = ?"
+      ).run(exercise_name, type, exercise_id, use_for_my_1rm ? 1 : 0, exId, workoutId);
+    } else {
+      db.prepare(
+        "UPDATE workout_exercises SET exercise_name = ?, type = ?, exercise_id = ? WHERE id = ? AND workout_id = ?"
+      ).run(exercise_name, type, exercise_id, exId, workoutId);
+    }
+
+    if (type === "lift" && effectiveExId != null) {
+      if (use_for_my_1rm) {
+        db.prepare("INSERT OR REPLACE INTO member_1rm_settings (member_id, exercise_id) VALUES (?, ?)").run(memberId, effectiveExId);
+      } else {
+        db.prepare("DELETE FROM member_1rm_settings WHERE member_id = ? AND exercise_id = ?").run(memberId, effectiveExId);
+      }
+    }
     const updated = db
       .prepare("SELECT id, workout_id, type, exercise_name, sort_order, exercise_id FROM workout_exercises WHERE id = ?")
       .get(exId) as Record<string, unknown>;
