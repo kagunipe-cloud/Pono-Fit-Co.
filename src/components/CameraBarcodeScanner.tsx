@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useCallback, useState } from "react";
+import type { RefObject } from "react";
 import { useZxing } from "react-zxing";
 
 type CameraBarcodeScannerProps = {
@@ -53,7 +54,7 @@ export default function CameraBarcodeScanner({ onScan, onClose, cooldownMs = 250
     <div className="rounded-xl overflow-hidden border border-stone-200 bg-black">
       <div className="relative aspect-[4/3] max-h-[50vh] w-full">
         <video
-          ref={ref}
+          ref={ref as RefObject<HTMLVideoElement>}
           className="absolute inset-0 h-full w-full object-cover"
           playsInline
           muted
