@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { kmToMiles } from "@/lib/workouts";
 
 type ChartExercise = { exercise_id: number; name: string; type: string };
 type ChartPoint = { date: string; volume_lbs?: number; max_weight_lbs?: number; reps?: number; time_seconds?: number; distance_km?: number };
@@ -153,7 +154,7 @@ export default function MemberWorkoutProgressPage() {
                         {chartData.exercise.type === "cardio" && (
                           <>
                             <td className="p-3 text-right text-stone-700">{p.time_seconds != null ? `${Math.round(p.time_seconds / 60)} min` : "—"}</td>
-                            <td className="p-3 text-right text-stone-700">{p.distance_km != null ? `${p.distance_km} km` : "—"}</td>
+                            <td className="p-3 text-right text-stone-700">{p.distance_km != null ? `${kmToMiles(p.distance_km).toFixed(1)} mi` : "—"}</td>
                           </>
                         )}
                       </tr>

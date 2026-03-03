@@ -197,6 +197,15 @@ export function ensureWorkoutTables(db: ReturnType<typeof getDb>) {
   `);
 }
 
+/** Cardio distance: DB stores km; UI uses miles. */
+export const KM_PER_MILE = 1.609344;
+export function milesToKm(miles: number): number {
+  return miles * KM_PER_MILE;
+}
+export function kmToMiles(km: number): number {
+  return km / KM_PER_MILE;
+}
+
 /** Brzycki: 1RM = w * (36 / (37 - r)). Returns null if invalid. */
 export function estimate1RM(weight: number, reps: number): number | null {
   if (weight <= 0) return null;

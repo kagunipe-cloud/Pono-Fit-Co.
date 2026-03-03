@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { kmToMiles } from "@/lib/workouts";
 import { useParams } from "next/navigation";
 
 type BookingItem = { type: string; sortKey: string; label: string; trainer?: string };
@@ -531,7 +532,7 @@ export default function ClientPTDashboardPage() {
                               Set {si + 1}:{" "}
                               {ex.type === "lift"
                                 ? `${s.reps ?? "—"} reps × ${s.weight_kg != null ? `${s.weight_kg} kg` : "—"}`
-                                : `${s.time_seconds != null ? `${Math.round(s.time_seconds / 60)} min` : "—"}${s.distance_km != null ? ` · ${s.distance_km} km` : ""}`}
+                                : `${s.time_seconds != null ? `${Math.round(s.time_seconds / 60)} min` : "—"}${s.distance_km != null ? ` · ${kmToMiles(s.distance_km).toFixed(1)} mi` : ""}`}
                             </li>
                           ))}
                         </ul>

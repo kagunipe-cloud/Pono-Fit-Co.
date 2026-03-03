@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { milesToKm } from "@/lib/workouts";
 
 type SetRow = { reps: string; weight: string } | { time: string; distance: string };
 type ExerciseEntry = {
@@ -200,7 +201,7 @@ export default function AdminCreateWorkoutForMemberPage() {
               instructions: ex.instructions ? ex.instructions.split("\n").map((s) => s.trim()).filter(Boolean) : undefined,
               sets: (ex.sets as { time: string; distance: string }[]).map((s) => ({
                 time_seconds: parseInt(s.time, 10) ? parseInt(s.time, 10) * 60 : null,
-                distance_km: parseFloat(s.distance) || null,
+                distance_km: parseFloat(s.distance) ? milesToKm(parseFloat(s.distance)) : null,
               })),
             }
       ),
@@ -357,7 +358,7 @@ export default function AdminCreateWorkoutForMemberPage() {
                         />
                         <input
                           type="text"
-                          placeholder="Distance (km)"
+                          placeholder="Distance (mi)"
                           value={row.distance}
                           onChange={(e) => {
                             const next = [...sets];
@@ -369,7 +370,7 @@ export default function AdminCreateWorkoutForMemberPage() {
                       </div>
                     ))
                   )}
-                  {mode === "cardio" && <p className="text-xs text-stone-500">Time in minutes; distance in km.</p>}
+                  {mode === "cardio" && <p className="text-xs text-stone-500">Time in minutes; distance in miles.</p>}
                   <div className="flex gap-2 flex-wrap">
                     <button
                       type="button"

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { milesToKm } from "@/lib/workouts";
 import { useParams, useRouter } from "next/navigation";
 
 type SetRow = { reps: string; weight: string } | { time: string; distance: string };
@@ -201,7 +202,7 @@ export default function TrainerCreateWorkoutForClientPage() {
               instructions: ex.instructions ? ex.instructions.split("\n").map((s) => s.trim()).filter(Boolean) : undefined,
               sets: (ex.sets as { time: string; distance: string }[]).map((s) => ({
                 time_seconds: parseInt(s.time, 10) ? parseInt(s.time, 10) * 60 : null,
-                distance_km: parseFloat(s.distance) || null,
+                distance_km: parseFloat(s.distance) ? milesToKm(parseFloat(s.distance)) : null,
               })),
             }
       ),
@@ -301,11 +302,11 @@ export default function TrainerCreateWorkoutForClientPage() {
                       <div key={i} className="flex gap-2 flex-wrap items-center">
                         <span className="text-sm text-stone-500 w-10">Set {i + 1}</span>
                         <input type="text" placeholder="Time (min)" value={row.time} onChange={(e) => { const next = [...sets]; (next[i] as { time: string; distance: string }).time = e.target.value; setSets(next); }} className="w-24 px-2 py-1.5 rounded border border-stone-200" />
-                        <input type="text" placeholder="Distance (km)" value={row.distance} onChange={(e) => { const next = [...sets]; (next[i] as { time: string; distance: string }).distance = e.target.value; setSets(next); }} className="w-24 px-2 py-1.5 rounded border border-stone-200" />
+                        <input type="text" placeholder="Distance (mi)" value={row.distance} onChange={(e) => { const next = [...sets]; (next[i] as { time: string; distance: string }).distance = e.target.value; setSets(next); }} className="w-24 px-2 py-1.5 rounded border border-stone-200" />
                       </div>
                     ))
                   )}
-                  {mode === "cardio" && <p className="text-xs text-stone-500">Time in minutes; distance in km.</p>}
+                  {mode === "cardio" && <p className="text-xs text-stone-500">Time in minutes; distance in miles.</p>}
                   <div className="flex gap-2 flex-wrap">
                     <button type="button" onClick={saveExercise} disabled={!exerciseName.trim()} className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50">Add to workout</button>
                     <button type="button" onClick={addSet} className="px-4 py-2 rounded-lg border border-stone-200 bg-white font-medium hover:bg-stone-50">Add set</button>

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { getWeightComparisonWithArticle } from "@/lib/workout-congrats";
+import { milesToKm, kmToMiles } from "@/lib/workouts";
 import { PRBadge } from "@/components/PRBadge";
 
 type LiftSetRow = { reps: string; weight: string; drops?: { reps: string; weight: string }[] };
@@ -319,7 +320,7 @@ export default function MemberWorkoutDetailPage() {
                 const row = s as { time: string; distance: string };
                 return {
                   time_seconds: parseInt(row.time, 10) ? parseInt(row.time, 10) * 60 : parseInt(row.time, 10) || null,
-                  distance_km: parseFloat(row.distance) || null,
+                  distance_km: parseFloat(row.distance) ? milesToKm(parseFloat(row.distance)) : null,
                 };
               }),
             };
@@ -422,7 +423,7 @@ export default function MemberWorkoutDetailPage() {
           : {
               sets: (addSetsRows as { time: string; distance: string }[]).map((r) => ({
                 time_seconds: parseInt(r.time, 10) ? parseInt(r.time, 10) * 60 : null,
-                distance_km: parseFloat(r.distance) || null,
+                distance_km: parseFloat(r.distance) ? milesToKm(parseFloat(r.distance)) : null,
               })),
             };
       const res = await fetch(`/api/member/workouts/${id}/exercises/${addSetsForExId}/sets`, {
@@ -455,7 +456,7 @@ export default function MemberWorkoutDetailPage() {
             })
           : ex.sets.map((s) => ({
               time: s.time_seconds != null ? String(Math.round(s.time_seconds / 60)) : "",
-              distance: String(s.distance_km ?? ""),
+              distance: s.distance_km != null ? String(kmToMiles(s.distance_km)) : "",
             }))
       );
     } else {
@@ -498,7 +499,7 @@ export default function MemberWorkoutDetailPage() {
           : {
               sets: (editSets as { time: string; distance: string }[]).map((r) => ({
                 time_seconds: parseInt(r.time, 10) ? parseInt(r.time, 10) * 60 : null,
-                distance_km: parseFloat(r.distance) || null,
+                distance_km: parseFloat(r.distance) ? milesToKm(parseFloat(r.distance)) : null,
               })),
             };
       const setsRes = await fetch(`/api/member/workouts/${id}/exercises/${editingExId}/sets`, {
@@ -931,7 +932,7 @@ export default function MemberWorkoutDetailPage() {
                       />
                       <input
                         type="text"
-                        placeholder="Distance (km)"
+                        placeholder="Distance (mi)"
                         value={row.distance}
                         onChange={(e) =>
                           setSets((s) => {
@@ -947,7 +948,7 @@ export default function MemberWorkoutDetailPage() {
                 )}
               </div>
               {mode === "cardio" && (
-                <p className="mt-1 text-xs text-stone-500">Time in minutes; distance in km.</p>
+                <p className="mt-1 text-xs text-stone-500">Time in minutes; distance in miles.</p>
               )}
               <div className="flex flex-wrap gap-2 mt-4">
                 <button
@@ -1152,7 +1153,7 @@ export default function MemberWorkoutDetailPage() {
                                 />
                                 <input
                                   type="text"
-                                  placeholder="Distance (km)"
+                                  placeholder="Distance (mi)"
                                   value={row.distance}
                                   onChange={(e) =>
                                     setEditSets((s) => {
@@ -1281,7 +1282,7 @@ export default function MemberWorkoutDetailPage() {
                           : (lastTimeSets as Exercise["sets"]).map((s: Exercise["sets"][0], i: number) => (
                               <li key={i}>
                                 Set {i + 1}: {s.time_seconds != null ? Math.round(s.time_seconds / 60) + " min" : "—"}
-                                {s.distance_km != null ? ", " + s.distance_km + " km" : ""}
+                                {s.distance_km != null ? ", " + kmToMiles(s.distance_km).toFixed(1) + " mi" : ""}
                               </li>
                             ))}
                       </ul>
@@ -1307,7 +1308,7 @@ export default function MemberWorkoutDetailPage() {
                             : ex.sets.map((s, i) => (
                                 <li key={s.id}>
                                   Set {i + 1}: {s.time_seconds != null ? Math.round(s.time_seconds / 60) + " min" : "—"}
-                                  {s.distance_km != null ? ", " + s.distance_km + " km" : ""}
+                                  {s.distance_km != null ? ", " + kmToMiles(s.distance_km).toFixed(1) + " mi" : ""}
                                 </li>
                               ))}
                         </ul>
@@ -1435,7 +1436,7 @@ export default function MemberWorkoutDetailPage() {
                                   />
                                   <input
                                     type="text"
-                                    placeholder="Distance (km)"
+                                    placeholder="Distance (mi)"
                                     value={row.distance}
                                     onChange={(e) => {
                                       const next = [...addSetsRows];
