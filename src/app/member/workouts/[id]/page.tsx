@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { getWeightComparisonWithArticle } from "@/lib/workout-congrats";
+import { PRBadge } from "@/components/PRBadge";
 
 type LiftSetRow = { reps: string; weight: string; drops?: { reps: string; weight: string }[] };
 type CardioSetRow = { time: string; distance: string };
@@ -158,6 +159,7 @@ export default function MemberWorkoutDetailPage() {
   const [workoutNameValue, setWorkoutNameValue] = useState("");
   const [savingWorkoutName, setSavingWorkoutName] = useState(false);
   const [congratsMessage, setCongratsMessage] = useState<string | null>(null);
+  const [congratsPrCount, setCongratsPrCount] = useState<number>(0);
   const [shareEmail, setShareEmail] = useState("");
   const [sharing, setSharing] = useState(false);
   const [shareResult, setShareResult] = useState<{ ok: boolean; message?: string } | null>(null);
@@ -166,6 +168,7 @@ export default function MemberWorkoutDetailPage() {
   const [useForMy1rm, setUseForMy1rm] = useState(false);
   const [useForMy1rmEdit, setUseForMy1rmEdit] = useState(false);
   const [my1rmList, setMy1rmList] = useState<{ exercise_name: string; current_1rm_lbs: number }[]>([]);
+  const [prBadgesByEx, setPrBadgesByEx] = useState<Record<number, ("Reps" | "Auto 1RM" | "My 1RM")[]>>({});
 
   /** Map of source workout sets by a stable exercise key so \"last time\" stays attached even if you delete/reorder exercises. */
   const sourceSetsByExerciseKey = useMemo(() => {
@@ -210,6 +213,23 @@ export default function MemberWorkoutDetailPage() {
   useEffect(() => {
     fetchMy1rm();
   }, [workout?.id, workout?.finished_at]);
+
+  useEffect(() => {
+    if (!workout?.finished_at || !id) {
+      setPrBadgesByEx({});
+      return;
+    }
+    fetch(`/api/member/workouts/${id}/pr-badges`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const map: Record<number, ("Reps" | "Auto 1RM" | "My 1RM")[]> = {};
+        for (const ex of d?.exercises ?? []) {
+          if (ex?.id != null && Array.isArray(ex.badges)) map[ex.id] = ex.badges;
+        }
+        setPrBadgesByEx(map);
+      })
+      .catch(() => setPrBadgesByEx({}));
+  }, [workout?.id, workout?.finished_at, id]);
 
   useEffect(() => {
     if (!workout?.source_workout_id || workout.finished_at) {
@@ -343,8 +363,12 @@ export default function MemberWorkoutDetailPage() {
       if (res.ok) {
         const volume = totalWorkoutVolume(workout.exercises);
         const phrase = volume > 0 ? getWeightComparisonWithArticle(volume) : null;
-        if (phrase) {
+        const prRes = await fetch(`/api/member/workouts/${id}/pr-badges`);
+        const prData = prRes.ok ? await prRes.json() : null;
+        const prCount = Array.isArray(prData?.workoutBadges) ? prData.workoutBadges.length : 0;
+        if (phrase || prCount > 0) {
           setCongratsMessage(phrase);
+          setCongratsPrCount(prCount);
         } else {
           router.push("/member/workouts");
         }
@@ -1175,6 +1199,13 @@ export default function MemberWorkoutDetailPage() {
                         {(ex.use_for_my_1rm ?? 0) === 1 && (
                           <span className="ml-2 text-xs font-medium text-brand-600">Used for My 1RM</span>
                         )}
+                        {(prBadgesByEx[ex.id] ?? []).length > 0 && (
+                          <span className="ml-2 inline-flex flex-wrap items-center gap-1.5">
+                            {(prBadgesByEx[ex.id] ?? []).map((b) => (
+                              <PRBadge key={b} type={b} size="sm" />
+                            ))}
+                          </span>
+                        )}
                         {vol > 0 && (
                           <span className="ml-2 text-xs font-medium text-brand-600">
                             {vol.toLocaleString()} lbs volume
@@ -1525,7 +1556,7 @@ export default function MemberWorkoutDetailPage() {
         <p className="mt-1 text-xs text-stone-500">Permanently remove this workout. Cannot be undone.</p>
       </div>
 
-      {congratsMessage && (
+      {(congratsMessage || congratsPrCount > 0) && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
           role="dialog"
@@ -1536,16 +1567,37 @@ export default function MemberWorkoutDetailPage() {
             className="bg-white rounded-xl shadow-lg max-w-sm w-full p-6 text-center"
             onClick={(e) => e.stopPropagation()}
           >
+            {congratsPrCount > 0 && (
+              <div className="mb-4 flex flex-col items-center">
+                <img
+                  src="/PR_Badge.png"
+                  alt="PR Badge"
+                  className="w-24 h-24 object-contain"
+                />
+                <p className="text-xl font-bold text-stone-800 mt-2">
+                  CHEE HOO!
+                </p>
+                <p className="text-stone-600 font-medium">
+                  {congratsPrCount === 1
+                    ? "You made a PR today!"
+                    : `You made ${congratsPrCount} PRs today!`}
+                </p>
+              </div>
+            )}
             <h2 id="congrats-title" className="text-xl font-semibold text-stone-800 mb-2">
               Workout saved!
             </h2>
-            <p className="text-stone-600 mb-6">
-              Congrats — today you lifted <span className="font-semibold text-brand-700">{congratsMessage}</span>!
-            </p>
+            {congratsMessage && (
+              <p className="text-stone-600 mb-6">
+                Congrats — today you lifted <span className="font-semibold text-brand-700">{congratsMessage}</span>!
+              </p>
+            )}
+            {!congratsMessage && congratsPrCount > 0 && <div className="mb-6" />}
             <button
               type="button"
               onClick={() => {
                 setCongratsMessage(null);
+                setCongratsPrCount(0);
                 router.push("/member/workouts");
               }}
               className="w-full px-4 py-3 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700"

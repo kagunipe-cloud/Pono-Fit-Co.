@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { formatDateInAppTz } from "@/lib/app-timezone";
 import { getWeightComparisonWithArticle } from "@/lib/workout-congrats";
 import { useAppTimezone } from "@/lib/settings-context";
+import { PRBadge } from "@/components/PRBadge";
 
 type Workout = { id: number; member_id: string; started_at: string; finished_at: string | null; total_volume?: number; assigned_by_admin?: number; assigned_by_trainer_member_id?: string | null; name?: string | null };
 
@@ -26,6 +27,7 @@ export default function MemberWorkoutsPage() {
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [prBadgesByWorkout, setPrBadgesByWorkout] = useState<Record<number, ("Reps" | "Auto 1RM" | "My 1RM")[]>>({});
 
   function fetchWorkouts() {
     fetch("/api/member/workouts")
@@ -44,6 +46,25 @@ export default function MemberWorkoutsPage() {
   useEffect(() => {
     fetchWorkouts();
   }, [router]);
+
+  useEffect(() => {
+    const finishedIds = workouts.filter((w) => w.finished_at).map((w) => w.id);
+    if (finishedIds.length === 0) {
+      setPrBadgesByWorkout({});
+      return;
+    }
+    fetch(`/api/member/workouts/pr-badges?ids=${finishedIds.join(",")}`)
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((data: Record<string, ("Reps" | "Auto 1RM" | "My 1RM")[]>) => {
+        const map: Record<number, ("Reps" | "Auto 1RM" | "My 1RM")[]> = {};
+        for (const [k, v] of Object.entries(data)) {
+          const id = parseInt(k, 10);
+          if (!Number.isNaN(id) && Array.isArray(v)) map[id] = v;
+        }
+        setPrBadgesByWorkout(map);
+      })
+      .catch(() => setPrBadgesByWorkout({}));
+  }, [workouts]);
 
   async function handleStartWorkout() {
     setError(null);
@@ -207,6 +228,13 @@ export default function MemberWorkoutsPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium text-stone-800">{w.name?.trim() || "Workout from trainer"}</span>
                   <span className="px-2 py-0.5 rounded text-xs font-medium bg-brand-100 text-brand-800">From trainer</span>
+                  {(prBadgesByWorkout[w.id] ?? []).length > 0 && (
+                    <span className="inline-flex flex-wrap items-center gap-1">
+                      {(prBadgesByWorkout[w.id] ?? []).map((b) => (
+                        <PRBadge key={b} type={b} size="sm" />
+                      ))}
+                    </span>
+                  )}
                   {!w.finished_at && (
                     <span className="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">Not started — click to start</span>
                   )}
@@ -240,6 +268,13 @@ export default function MemberWorkoutsPage() {
                     <span className="px-2 py-0.5 rounded text-xs font-medium bg-brand-100 text-brand-800">From trainer</span>
                   ) : (
                     <span className="px-2 py-0.5 rounded text-xs font-medium bg-stone-100 text-stone-600">My workout</span>
+                  )}
+                  {(prBadgesByWorkout[w.id] ?? []).length > 0 && (
+                    <span className="inline-flex flex-wrap items-center gap-1">
+                      {(prBadgesByWorkout[w.id] ?? []).map((b) => (
+                        <PRBadge key={b} type={b} size="sm" />
+                      ))}
+                    </span>
                   )}
                 </div>
                 <span className="text-stone-500 ml-0 block mt-0.5 sm:ml-2 sm:inline sm:mt-0">{formatDateInAppTz(w.finished_at)}</span>

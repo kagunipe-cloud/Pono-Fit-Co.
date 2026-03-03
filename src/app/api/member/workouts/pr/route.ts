@@ -73,11 +73,14 @@ export async function GET(request: NextRequest) {
 
     db.close();
 
-    // PR: max reps across all sessions
-    const pr_reps = rows.length > 0 ? Math.max(...rows.map((r) => r.reps)) : null;
+    // When exclude_workout_id is provided, exclude that workout from PR so we show "previous best"
+    const excludeId = exclude_workout_id != null && exclude_workout_id !== "" ? parseInt(exclude_workout_id, 10) : null;
+    const rowsForPr = excludeId != null ? rows.filter((r) => r.workout_id !== excludeId) : rows;
+
+    // PR: max reps across all sessions (or excluding current workout when exclude_workout_id is provided)
+    const pr_reps = rowsForPr.length > 0 ? Math.max(...rowsForPr.map((r) => r.reps)) : null;
 
     // Last session: most recent session (by started_at) excluding current workout
-    const excludeId = exclude_workout_id != null && exclude_workout_id !== "" ? parseInt(exclude_workout_id, 10) : null;
     const byWorkout = new Map<number, { maxReps: number; started_at: string }>();
     for (const r of rows) {
       if (excludeId != null && r.workout_id === excludeId) continue;
