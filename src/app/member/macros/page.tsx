@@ -169,7 +169,7 @@ export default function MemberMacrosPage() {
 
       {/* Weight chart — data from daily weigh-ins in journal */}
       <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-white">
-        <h2 className="font-semibold text-stone-800 mb-2">Weight</h2>
+        <h2 className="font-semibold text-stone-800 mb-2">My Weight Management Odyssey</h2>
         <p className="text-xs text-stone-500 mb-3">From your daily weigh-ins in the journal. Toggle the range below.</p>
         <div className="flex flex-wrap gap-2 mb-3">
           {(["week", "month", "3m", "6m", "1y"] as const).map((r) => (
@@ -192,12 +192,15 @@ export default function MemberMacrosPage() {
               {(() => {
                 const pts = weighIns.map((w) => ({ x: w.date, y: w.weight }));
                 const goalWeight = goals.weight_goal != null && goals.weight_goal > 0 ? goals.weight_goal : null;
-                const minY = goalWeight != null
-                  ? Math.min(...pts.map((p) => p.y), goalWeight)
-                  : Math.min(...pts.map((p) => p.y));
-                const maxY = goalWeight != null
-                  ? Math.max(...pts.map((p) => p.y), goalWeight)
-                  : Math.max(...pts.map((p) => p.y));
+                const dataMin = pts.length > 0 ? Math.min(...pts.map((p) => p.y)) : 0;
+                const dataMax = pts.length > 0 ? Math.max(...pts.map((p) => p.y)) : 0;
+                let minY = goalWeight != null ? Math.min(dataMin, goalWeight) : dataMin;
+                let maxY = goalWeight != null ? Math.max(dataMax, goalWeight) : dataMax;
+                // When goal is at or below min (losing weight), add padding below so the ocean strip has room
+                if (goalWeight != null && goalWeight <= minY && pts.length > 0) {
+                  const padding = Math.max(5, (maxY - minY) * 0.15);
+                  minY = goalWeight - padding;
+                }
                 const range = maxY - minY || 1;
                 const chartLeft = 52;
                 const chartRight = 456;
