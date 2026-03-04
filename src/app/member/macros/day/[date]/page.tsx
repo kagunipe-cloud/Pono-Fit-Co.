@@ -12,6 +12,9 @@ const CameraBarcodeScanner = lazy(() => import("@/components/CameraBarcodeScanne
 
 const ADD_FOOD_FETCH_TIMEOUT_MS = 25_000;
 
+/** Set to true to show USDA + OFF search and Favorites. When false, only barcode + AI are shown. */
+const SHOW_FOOD_SEARCH = false;
+
 /** Fetch with timeout to avoid getting stuck when APIs (USDA, OFF) are slow or hang. */
 async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
   const controller = new AbortController();
@@ -190,15 +193,16 @@ function wouldShowImpossiblePerServingCal(hit: SearchHit): boolean {
   return grams == null;
 }
 
-function entryMacros(e: Entry): { cal: number; p: number; f: number; c: number } {
+function entryMacros(e: Entry): { cal: number; p: number; f: number; c: number; fiber: number } {
   const f = e.food;
-  if (!f) return { cal: 0, p: 0, f: 0, c: 0 };
+  if (!f) return { cal: 0, p: 0, f: 0, c: 0, fiber: 0 };
   const a = e.amount;
   return {
     cal: (f.calories ?? 0) * a,
     p: (f.protein_g ?? 0) * a,
     f: (f.fat_g ?? 0) * a,
     c: (f.carbs_g ?? 0) * a,
+    fiber: (f.fiber_g ?? 0) * a,
   };
 }
 
@@ -239,13 +243,14 @@ function sumMacros(entries: Entry[]) {
       acc.p += m.p;
       acc.f += m.f;
       acc.c += m.c;
+      acc.fiber += m.fiber;
       return acc;
     },
-    { cal: 0, p: 0, f: 0, c: 0 }
+    { cal: 0, p: 0, f: 0, c: 0, fiber: 0 }
   );
 }
 
-/** Pono plate tracker: circular plate (like pono-plate.png) with colored "water" filling the ring from the bottom. Over goal = fill caps at 100% (no red). */
+/** Pono plate tracker: circular plate with colored "water" filling the ring from the bottom. Over goal = fill caps at 100%. */
 function PonoPlateTracker({
   label,
   current,
@@ -272,7 +277,6 @@ function PonoPlateTracker({
         </span>
       </div>
       <div className="relative w-full max-w-[120px] mx-auto" style={{ aspectRatio: "1" }}>
-        {/* Ring + water: full ring always visible (dark), colored fill from bottom; plate on top shows branding */}
         <div
           className="absolute inset-0 rounded-full overflow-hidden"
           style={{
@@ -280,17 +284,12 @@ function PonoPlateTracker({
             WebkitMaskImage: "radial-gradient(circle at center, transparent 8%, black 8%)",
           }}
         >
-          {/* Unfilled part of ring: dark so outline is always visible */}
           <div className="absolute inset-0 bg-stone-900" />
-          {/* Filled part: macro color from bottom up; caps at 100% when over goal */}
           <div
             className={`absolute inset-x-0 bottom-0 transition-all duration-500 ${fillColorClass}`}
-            style={{
-              height: `${fillPct}%`,
-            }}
+            style={{ height: `${fillPct}%` }}
           />
         </div>
-        {/* Plate image on top; screen blend so black shows ring/fill, neon green stays visible */}
         <div
           className="absolute inset-0 rounded-full bg-cover bg-center bg-no-repeat mix-blend-screen pointer-events-none"
           style={{ backgroundImage: "url(/pono-plate.png)" }}
@@ -332,13 +331,11 @@ export default function MemberMacrosDayPage() {
   const [saveFavFromMealId, setSaveFavFromMealId] = useState<number | null>(null);
   const [deletingDay, setDeletingDay] = useState(false);
   const [aiFood, setAiFood] = useState("");
-  const [aiPortionValue, setAiPortionValue] = useState("1");
-  const [aiPortionUnit, setAiPortionUnit] = useState("");
   const [aiCalculating, setAiCalculating] = useState(false);
   const [aiResult, setAiResult] = useState<{ calories: number; protein_g: number; fat_g: number; carbs_g: number } | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [addingAiEntry, setAddingAiEntry] = useState(false);
-  const [goals, setGoals] = useState<{ calories_goal: number | null; protein_pct: number | null; fat_pct: number | null; carbs_pct: number | null }>({ calories_goal: null, protein_pct: null, fat_pct: null, carbs_pct: null });
+  const [goals, setGoals] = useState<{ calories_goal: number | null; protein_pct: number | null; fat_pct: number | null; carbs_pct: number | null; fiber_goal: number | null }>({ calories_goal: null, protein_pct: null, fat_pct: null, carbs_pct: null, fiber_goal: null });
   const [shareEmail, setShareEmail] = useState("");
   const [sharing, setSharing] = useState(false);
   const [shareResult, setShareResult] = useState<{ ok: boolean; message?: string } | null>(null);
@@ -353,17 +350,10 @@ export default function MemberMacrosDayPage() {
   const [showCameraScanner, setShowCameraScanner] = useState(false);
   const [selectedDbFood, setSelectedDbFood] = useState<Food | null>(null);
   const [barcodeResultPending, setBarcodeResultPending] = useState<OFFSearchFood | null>(null);
+  const [favoritesSearch, setFavoritesSearch] = useState("");
+  const [addFoodFavoritesSearch, setAddFoodFavoritesSearch] = useState("");
+  const [addingFavoriteToMeal, setAddingFavoriteToMeal] = useState<{ favId: number; mealId: number } | null>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
-
-  const AI_PORTION_UNITS = [
-    { value: "", label: "—" },
-    { value: "serving", label: "serving(s)" },
-    { value: "tablespoon", label: "tablespoon(s)" },
-    { value: "teaspoon", label: "teaspoon(s)" },
-    { value: "cup", label: "cup(s)" },
-    { value: "gram", label: "gram(s)" },
-    { value: "oz", label: "oz" },
-  ];
 
   const fetchDay = useCallback(() => {
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
@@ -419,6 +409,16 @@ export default function MemberMacrosDayPage() {
       return () => clearTimeout(t);
     }
   }, [addFoodMealId]);
+
+  // Fetch favorites for My Favorites card when day is loaded
+  useEffect(() => {
+    if (day != null) {
+      fetch("/api/member/favorites")
+        .then((r) => (r.ok ? r.json() : []))
+        .then((list: Favorite[]) => setFavorites(Array.isArray(list) ? list : []))
+        .catch(() => setFavorites([]));
+    }
+  }, [day?.id]);
 
   /** Merge USDA + OFF lists, filter, score, sort. Used so we can show results as each source arrives. */
   function mergeAndSortHits(usdaList: USDAFoodHit[], offList: OFFSearchFood[], query: string): SearchHit[] {
@@ -781,12 +781,11 @@ export default function MemberMacrosDayPage() {
     setBarcodeNotFound(false);
     setBarcodeResultPending(null);
     setShowCameraScanner(false);
+    setAddFoodFavoritesSearch("");
     setAddAmount("1");
     setAddMeasurement("servings");
     setMergedSearchResults([]);
     setAiFood("");
-    setAiPortionValue("1");
-    setAiPortionUnit("");
     setAiResult(null);
     setAiError(null);
   }
@@ -794,12 +793,7 @@ export default function MemberMacrosDayPage() {
   async function handleAiCalculate() {
     const food = aiFood.trim();
     if (!food) {
-      setAiError("Enter a food name");
-      return;
-    }
-    const val = parseFloat(aiPortionValue) || 1;
-    if (val <= 0) {
-      setAiError("Portion must be greater than 0");
+      setAiError("Enter a food or meal");
       return;
     }
     setAiError(null);
@@ -809,7 +803,7 @@ export default function MemberMacrosDayPage() {
       const res = await fetch("/api/ai/calculate-macros", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ food, portionValue: val, portionUnit: aiPortionUnit }),
+        body: JSON.stringify({ food, portionValue: 1, portionUnit: "" }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -832,9 +826,7 @@ export default function MemberMacrosDayPage() {
     const meal = day?.meals.find((m) => m.id === addFoodMealId);
     if (!meal) return;
     const foodName = aiFood.trim() || "AI food";
-    const val = parseFloat(aiPortionValue) || 1;
-    const unit = aiPortionUnit || "serving";
-    const portionText = val === 1 ? `1 ${unit}` : `${val} ${unit}s`;
+    const portionText = foodName;
     setAddingAiEntry(true);
     try {
       const createRes = await fetchWithTimeout("/api/foods", {
@@ -869,8 +861,6 @@ export default function MemberMacrosDayPage() {
         setAddFoodMealId(null);
         setAiResult(null);
         setAiFood("");
-        setAiPortionValue("1");
-        setAiPortionUnit("");
         setAiError(null);
         fetchDay();
       } else {
@@ -1008,7 +998,7 @@ export default function MemberMacrosDayPage() {
   if (loading && !day) return <div className="p-8 text-center text-stone-500">Loading…</div>;
 
   const dateLabel = formatDateOnlyInAppTz(date, undefined, tz);
-  const dayTotal = day ? sumMacros(day.meals.flatMap((m) => m.entries)) : { cal: 0, p: 0, f: 0, c: 0 };
+  const dayTotal = day ? sumMacros(day.meals.flatMap((m) => m.entries)) : { cal: 0, p: 0, f: 0, c: 0, fiber: 0 };
 
   return (
     <div className="max-w-2xl mx-auto p-6">
@@ -1173,52 +1163,6 @@ export default function MemberMacrosDayPage() {
             </button>
           </div>
 
-          {/* Today's progress: Pono plate — fill with colored "water" per macro; over goal = red overflow */}
-          {(goals.calories_goal != null && goals.calories_goal > 0) && (() => {
-            const calGoal = goals.calories_goal ?? 0;
-            const pPct = (goals.protein_pct ?? 0) / 100;
-            const fPct = (goals.fat_pct ?? 0) / 100;
-            const cPct = (goals.carbs_pct ?? 0) / 100;
-            const goalP = calGoal > 0 ? (pPct * calGoal) / 4 : 0;
-            const goalF = calGoal > 0 ? (fPct * calGoal) / 9 : 0;
-            const goalC = calGoal > 0 ? (cPct * calGoal) / 4 : 0;
-            return (
-              <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-white">
-                <p className="font-semibold text-stone-800 mb-4">Today&apos;s progress</p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
-                  <PonoPlateTracker
-                    label="Calories"
-                    current={dayTotal.cal}
-                    goal={calGoal}
-                    unit="cal"
-                    fillColorClass="bg-brand-500"
-                  />
-                  <PonoPlateTracker
-                    label="Protein"
-                    current={dayTotal.p}
-                    goal={goalP}
-                    unit="g"
-                    fillColorClass="bg-blue-500"
-                  />
-                  <PonoPlateTracker
-                    label="Fat"
-                    current={dayTotal.f}
-                    goal={goalF}
-                    unit="g"
-                    fillColorClass="bg-amber-500"
-                  />
-                  <PonoPlateTracker
-                    label="Carbs"
-                    current={dayTotal.c}
-                    goal={goalC}
-                    unit="g"
-                    fillColorClass="bg-emerald-500"
-                  />
-                </div>
-              </div>
-            );
-          })()}
-
           {/* Meals */}
           <div className="space-y-6 mb-8">
             {day.meals.map((meal) => {
@@ -1280,7 +1224,7 @@ export default function MemberMacrosDayPage() {
                             <span className="text-stone-400 text-xs">
                               {(() => {
                                 const m = entryMacros(e);
-                                return `${Math.round(m.cal)} cal · P ${m.p.toFixed(0)}g · F ${m.f.toFixed(0)}g · C ${m.c.toFixed(0)}g`;
+                                return `${Math.round(m.cal)} cal · P ${m.p.toFixed(0)}g · F ${m.f.toFixed(0)}g · C ${m.c.toFixed(0)}g${m.fiber > 0 ? ` · Fiber ${m.fiber.toFixed(0)}g` : ""}`;
                               })()}
                             </span>
                             <span className="flex gap-1">
@@ -1302,7 +1246,7 @@ export default function MemberMacrosDayPage() {
                     ))}
                   </ul>
                   <div className="mt-2 pt-2 border-t border-stone-100 text-xs font-medium text-stone-500">
-                    Meal total: {Math.round(mealMacros.cal)} cal · P {mealMacros.p.toFixed(0)}g · F {mealMacros.f.toFixed(0)}g · C {mealMacros.c.toFixed(0)}g
+                    Meal total: {Math.round(mealMacros.cal)} cal · P {mealMacros.p.toFixed(0)}g · F {mealMacros.f.toFixed(0)}g · C {mealMacros.c.toFixed(0)}g{mealMacros.fiber > 0 ? ` · Fiber ${mealMacros.fiber.toFixed(0)}g` : ""}
                   </div>
                   <button
                     type="button"
@@ -1316,36 +1260,209 @@ export default function MemberMacrosDayPage() {
             })}
           </div>
 
-          {/* Day total + How you did */}
-          <div className="p-4 rounded-xl border-2 border-stone-200 bg-stone-50 mb-8 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-            <div>
-              <p className="font-semibold text-stone-800">Day total</p>
-              <p className="text-stone-600 text-sm">
-                {Math.round(dayTotal.cal)} cal · Protein {dayTotal.p.toFixed(0)}g · Fat {dayTotal.f.toFixed(0)}g · Carbs {dayTotal.c.toFixed(0)}g
-              </p>
-            </div>
-            {(goals.calories_goal != null && goals.calories_goal > 0) && (
-              <div className="sm:text-right border-t sm:border-t-0 sm:border-l border-stone-200 pt-4 sm:pt-0 sm:pl-4">
-                <p className="font-semibold text-stone-800 text-sm">How you did</p>
-                <p className="text-stone-600 text-sm">
-                  Calories: {Math.round(dayTotal.cal).toLocaleString()} / {goals.calories_goal.toLocaleString()}
-                  {dayTotal.cal <= goals.calories_goal ? " ✓" : " (over)"}
-                </p>
-                {dayTotal.cal > 0 && (goals.protein_pct != null || goals.fat_pct != null || goals.carbs_pct != null) && (
-                  <p className="text-stone-500 text-xs mt-1">
-                    {[
-                      goals.protein_pct != null && `P ${((dayTotal.p * 4) / dayTotal.cal * 100).toFixed(0)}% (goal ${goals.protein_pct}%)`,
-                      goals.fat_pct != null && `F ${((dayTotal.f * 9) / dayTotal.cal * 100).toFixed(0)}% (goal ${goals.fat_pct}%)`,
-                      goals.carbs_pct != null && `C ${((dayTotal.c * 4) / dayTotal.cal * 100).toFixed(0)}% (goal ${goals.carbs_pct}%)`,
-                    ].filter(Boolean).join(" · ")}
-                  </p>
+          {/* Today's progress: Pono plate trackers */}
+          {(goals.calories_goal != null && goals.calories_goal > 0) && (() => {
+            const calGoal = goals.calories_goal ?? 0;
+            const pPct = (goals.protein_pct ?? 0) / 100;
+            const fPct = (goals.fat_pct ?? 0) / 100;
+            const cPct = (goals.carbs_pct ?? 0) / 100;
+            const goalP = calGoal > 0 ? (pPct * calGoal) / 4 : 0;
+            const goalF = calGoal > 0 ? (fPct * calGoal) / 9 : 0;
+            const goalC = calGoal > 0 ? (cPct * calGoal) / 4 : 0;
+            return (
+              <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-white">
+                <p className="font-semibold text-stone-800 mb-4">Today&apos;s progress</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
+                  <PonoPlateTracker label="Calories" current={dayTotal.cal} goal={calGoal} unit="cal" fillColorClass="bg-brand-500" />
+                  <PonoPlateTracker label="Protein" current={dayTotal.p} goal={goalP} unit="g" fillColorClass="bg-blue-500" />
+                  <PonoPlateTracker label="Fat" current={dayTotal.f} goal={goalF} unit="g" fillColorClass="bg-amber-500" />
+                  <PonoPlateTracker label="Carbs" current={dayTotal.c} goal={goalC} unit="g" fillColorClass="bg-emerald-500" />
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Day totals table + pie charts */}
+          {(() => {
+            const calGoal = goals.calories_goal ?? 0;
+            const pPct = (goals.protein_pct ?? 0) / 100;
+            const fPct = (goals.fat_pct ?? 0) / 100;
+            const cPct = (goals.carbs_pct ?? 0) / 100;
+            const goalP = calGoal > 0 ? (pPct * calGoal) / 4 : 0;
+            const goalF = calGoal > 0 ? (fPct * calGoal) / 9 : 0;
+            const goalC = calGoal > 0 ? (cPct * calGoal) / 4 : 0;
+            const fiberGoal = goals.fiber_goal ?? 0;
+            const fmt = (n: number) => (n >= 1000 ? Math.round(n).toLocaleString() : n.toFixed(0));
+            const remaining = (val: number, goal: number) => (goal > 0 ? goal - val : null);
+            // Pie chart: P/F/C as % of calories. P=4cal/g, F=9cal/g, C=4cal/g
+            const pCal = dayTotal.p * 4;
+            const fCal = dayTotal.f * 9;
+            const cCal = dayTotal.c * 4;
+            const totalMacroCal = pCal + fCal + cCal;
+            const currentPct = totalMacroCal > 0
+              ? { p: (pCal / totalMacroCal) * 100, f: (fCal / totalMacroCal) * 100, c: (cCal / totalMacroCal) * 100 }
+              : { p: 0, f: 0, c: 0 };
+            const goalPct = { p: goals.protein_pct ?? 0, f: goals.fat_pct ?? 0, c: goals.carbs_pct ?? 0 };
+            const totalGoalPct = goalPct.p + goalPct.f + goalPct.c;
+            const normGoal = totalGoalPct > 0 ? { p: goalPct.p / totalGoalPct * 100, f: goalPct.f / totalGoalPct * 100, c: goalPct.c / totalGoalPct * 100 } : { p: 33.33, f: 33.33, c: 33.34 };
+
+            function PieChart({ pct }: { pct: { p: number; f: number; c: number } }) {
+              const size = 100;
+              const r = size / 2;
+              const pDeg = (pct.p / 100) * 360;
+              const fDeg = (pct.f / 100) * 360;
+              const cDeg = (pct.c / 100) * 360;
+              const toArc = (start: number, sweep: number) => {
+                if (sweep <= 0) return "";
+                const end = start + sweep;
+                const x1 = r + r * Math.cos((start * Math.PI) / 180);
+                const y1 = r - r * Math.sin((start * Math.PI) / 180);
+                const x2 = r + r * Math.cos((end * Math.PI) / 180);
+                const y2 = r - r * Math.sin((end * Math.PI) / 180);
+                const large = sweep > 180 ? 1 : 0;
+                return `M ${r} ${r} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
+              };
+              return (
+                <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[120px] mx-auto" style={{ aspectRatio: "1" }}>
+                  <path d={toArc(0, pDeg)} fill="#3b82f6" />
+                  <path d={toArc(pDeg, fDeg)} fill="#f59e0b" />
+                  <path d={toArc(pDeg + fDeg, cDeg)} fill="#10b981" />
+                </svg>
+              );
+            }
+
+            return (
+              <div className="mb-8 p-4 rounded-xl border-2 border-stone-200 bg-stone-50">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-stone-200">
+                        <th className="text-left py-2 pr-4 font-medium text-stone-600"></th>
+                        <th className="text-right py-2 px-2 font-medium text-stone-600">Calories</th>
+                        <th className="text-right py-2 px-2 font-medium text-stone-600">Protein</th>
+                        <th className="text-right py-2 px-2 font-medium text-stone-600">Fat</th>
+                        <th className="text-right py-2 px-2 font-medium text-stone-600">Carbs</th>
+                        <th className="text-right py-2 px-2 font-medium text-stone-600">Fiber</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-stone-100">
+                        <td className="py-2 pr-4 font-medium text-stone-700">Total So Far</td>
+                        <td className="text-right py-2 px-2">{fmt(dayTotal.cal)}</td>
+                        <td className="text-right py-2 px-2">{dayTotal.p.toFixed(0)}g</td>
+                        <td className="text-right py-2 px-2">{dayTotal.f.toFixed(0)}g</td>
+                        <td className="text-right py-2 px-2">{dayTotal.c.toFixed(0)}g</td>
+                        <td className="text-right py-2 px-2">{dayTotal.fiber.toFixed(0)}g</td>
+                      </tr>
+                      <tr className="border-b border-stone-100">
+                        <td className="py-2 pr-4 font-medium text-stone-700">Daily Goal</td>
+                        <td className="text-right py-2 px-2">{calGoal > 0 ? fmt(calGoal) : "—"}</td>
+                        <td className="text-right py-2 px-2">{goalP > 0 ? `${goalP.toFixed(0)}g` : "—"}</td>
+                        <td className="text-right py-2 px-2">{goalF > 0 ? `${goalF.toFixed(0)}g` : "—"}</td>
+                        <td className="text-right py-2 px-2">{goalC > 0 ? `${goalC.toFixed(0)}g` : "—"}</td>
+                        <td className="text-right py-2 px-2">{fiberGoal > 0 ? `${fiberGoal.toFixed(0)}g` : "—"}</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 pr-4 font-medium text-stone-700">Remaining</td>
+                        <td className="text-right py-2 px-2">
+                          {remaining(dayTotal.cal, calGoal) != null ? (
+                            <span className={remaining(dayTotal.cal, calGoal)! >= 0 ? "text-emerald-600" : "text-amber-600"}>
+                              {remaining(dayTotal.cal, calGoal)! >= 0 ? "+" : ""}{fmt(remaining(dayTotal.cal, calGoal)!)}
+                            </span>
+                          ) : "—"}
+                        </td>
+                        <td className="text-right py-2 px-2">
+                          {remaining(dayTotal.p, goalP) != null ? `${remaining(dayTotal.p, goalP)! >= 0 ? "+" : ""}${remaining(dayTotal.p, goalP)!.toFixed(0)}g` : "—"}
+                        </td>
+                        <td className="text-right py-2 px-2">
+                          {remaining(dayTotal.f, goalF) != null ? `${remaining(dayTotal.f, goalF)! >= 0 ? "+" : ""}${remaining(dayTotal.f, goalF)!.toFixed(0)}g` : "—"}
+                        </td>
+                        <td className="text-right py-2 px-2">
+                          {remaining(dayTotal.c, goalC) != null ? `${remaining(dayTotal.c, goalC)! >= 0 ? "+" : ""}${remaining(dayTotal.c, goalC)!.toFixed(0)}g` : "—"}
+                        </td>
+                        <td className="text-right py-2 px-2">
+                          {remaining(dayTotal.fiber, fiberGoal) != null ? `${remaining(dayTotal.fiber, fiberGoal)! >= 0 ? "+" : ""}${remaining(dayTotal.fiber, fiberGoal)!.toFixed(0)}g` : "—"}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                {(goals.protein_pct != null || goals.fat_pct != null || goals.carbs_pct != null) && (
+                  <div className="mt-4 pt-4 border-t border-stone-200 flex flex-wrap gap-6 items-center justify-center">
+                    <div className="text-center">
+                      <p className="text-xs font-medium text-stone-500 mb-1">Today&apos;s ratio</p>
+                      <PieChart pct={currentPct} />
+                      <p className="text-xs text-stone-400 mt-1">P {currentPct.p.toFixed(0)}% · F {currentPct.f.toFixed(0)}% · C {currentPct.c.toFixed(0)}%</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-xs font-medium text-stone-500 mb-1">Goal ratio</p>
+                      <PieChart pct={normGoal} />
+                      <p className="text-xs text-stone-400 mt-1">P {normGoal.p.toFixed(0)}% · F {normGoal.f.toFixed(0)}% · C {normGoal.c.toFixed(0)}%</p>
+                    </div>
+                  </div>
                 )}
               </div>
+            );
+          })()}
+
+          {/* My Favorites card */}
+          <div className="mt-8 p-4 rounded-xl border border-stone-200 bg-white">
+            <h2 className="font-semibold text-stone-800 mb-2">My Favorites</h2>
+            <input
+              type="text"
+              value={favoritesSearch}
+              onChange={(e) => setFavoritesSearch(e.target.value)}
+              placeholder="Search favorites…"
+              className="w-full mb-3 px-3 py-2 rounded-lg border border-stone-200 text-sm"
+            />
+            {favorites.filter((f) => !favoritesSearch.trim() || f.name.toLowerCase().includes(favoritesSearch.toLowerCase())).length === 0 ? (
+              <p className="text-stone-500 text-sm mb-2">
+                {favoritesSearch.trim() ? "No favorites match." : "No favorites yet."}
+              </p>
+            ) : (
+              <ul className="space-y-2 mb-3">
+                {favorites
+                  .filter((f) => !favoritesSearch.trim() || f.name.toLowerCase().includes(favoritesSearch.toLowerCase()))
+                  .map((fav) => (
+                    <li key={fav.id} className="flex items-center justify-between gap-2 py-1.5">
+                      <span className="text-sm text-stone-700 truncate">{fav.name}</span>
+                      <div className="flex flex-wrap gap-1 shrink-0 justify-end">
+                        {day?.meals.map((meal) => (
+                          <button
+                            key={meal.id}
+                            type="button"
+                            onClick={async () => {
+                              setAddingFavoriteToMeal({ favId: fav.id, mealId: meal.id });
+                              try {
+                                const res = await fetch(`/api/member/journal/meals/${meal.id}/entries`, {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ favorite_id: fav.id }),
+                                });
+                                if (res.ok) fetchDay();
+                                else alert("Failed to add");
+                              } finally {
+                                setAddingFavoriteToMeal(null);
+                              }
+                            }}
+                            disabled={addingFavoriteToMeal?.favId === fav.id && addingFavoriteToMeal?.mealId === meal.id}
+                            className="px-2 py-0.5 rounded text-xs font-medium bg-brand-100 text-brand-800 hover:bg-brand-200 disabled:opacity-50"
+                          >
+                            {addingFavoriteToMeal?.favId === fav.id && addingFavoriteToMeal?.mealId === meal.id ? "…" : meal.name}
+                          </button>
+                        ))}
+                      </div>
+                    </li>
+                  ))}
+              </ul>
             )}
+            <Link href="/member/macros/favorites" className="text-brand-600 hover:underline text-sm font-medium">
+              Manage Favorites →
+            </Link>
           </div>
 
           {/* Delete day */}
-          <div className="pt-4 border-t border-stone-200">
+          <div className="pt-4 border-t border-stone-200 mt-6">
             <button
               type="button"
               onClick={handleDeleteDay}
@@ -1422,10 +1539,10 @@ export default function MemberMacrosDayPage() {
                   </>
                 )}
                 {barcodeNotFound && !showCameraScanner && (
-                  <p className="mt-1 text-sm text-amber-600">Not found in Open Food Facts. Try another barcode or search above.</p>
+                  <p className="mt-1 text-sm text-amber-600">Not found in Open Food Facts. Try another barcode or use the AI lookup below.</p>
                 )}
                 {barcodeNotFound && showCameraScanner && (
-                  <p className="mt-2 text-sm text-amber-600">Not found in Open Food Facts. Try another barcode or cancel and search above.</p>
+                  <p className="mt-2 text-sm text-amber-600">Not found in Open Food Facts. Try another barcode or use the AI lookup below.</p>
                 )}
                 {selectedDbFood != null && (
                   <p className="mt-1 text-sm text-emerald-600 font-medium">Found: {selectedDbFood.name}</p>
@@ -1464,6 +1581,7 @@ export default function MemberMacrosDayPage() {
                   </div>
                 )}
               </div>
+              {SHOW_FOOD_SEARCH && (
               <div>
                 <label className="block text-sm font-medium text-stone-600 mb-1">Search USDA + Open Food Facts</label>
                 <p className="text-xs text-stone-400 mb-1">Include the brand name (e.g. Nabisco Oreo) for more specific results.</p>
@@ -1601,59 +1719,57 @@ export default function MemberMacrosDayPage() {
                   </>
                 )}
               </div>
+              )}
               <div>
-                <label className="block text-sm font-medium text-stone-600 mb-1">Or pick from Favorites</label>
+                <label className="block text-sm font-medium text-stone-600 mb-1">My Favorites</label>
+                <input
+                  type="text"
+                  value={addFoodFavoritesSearch}
+                  onChange={(e) => setAddFoodFavoritesSearch(e.target.value)}
+                  placeholder="Search favorites…"
+                  className="w-full mb-2 px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                />
                 {favorites.length === 0 ? (
-                  <p className="text-stone-400 text-sm">No favorites yet. Save foods or meals from the journal.</p>
+                  <p className="text-stone-400 text-sm">No favorites yet. <Link href="/member/macros/favorites" className="text-brand-600 hover:underline">Manage Favorites</Link> to add some.</p>
                 ) : (
                   <ul className="border border-stone-200 rounded-lg divide-y max-h-40 overflow-y-auto">
-                    {favorites.map((fav) => (
-                      <li key={fav.id}>
-                        <button
-                          type="button"
-                          onClick={() => { setSelectedFavoriteId(fav.id); setSelectedUsdaFood(null); setSelectedOffFood(null); setSelectedDbFood(null); }}
-                          className={`w-full text-left px-3 py-2 text-sm ${selectedFavoriteId === fav.id ? "bg-brand-100 text-brand-800" : "text-stone-700 hover:bg-stone-50"}`}
-                        >
-                          {fav.name}
-                          {fav.items?.length > 0 && <span className="text-stone-400 ml-1">({fav.items.length} items)</span>}
-                        </button>
-                      </li>
-                    ))}
+                    {favorites
+                      .filter((f) => !addFoodFavoritesSearch.trim() || f.name.toLowerCase().includes(addFoodFavoritesSearch.toLowerCase()))
+                      .map((fav) => (
+                        <li key={fav.id}>
+                          <button
+                            type="button"
+                            onClick={() => { setSelectedFavoriteId(fav.id); setSelectedUsdaFood(null); setSelectedOffFood(null); setSelectedDbFood(null); }}
+                            className={`w-full text-left px-3 py-2 text-sm ${selectedFavoriteId === fav.id ? "bg-brand-100 text-brand-800" : "text-stone-700 hover:bg-stone-50"}`}
+                          >
+                            {fav.name}
+                            {fav.items?.length > 0 && <span className="text-stone-400 ml-1">({fav.items.length} items)</span>}
+                          </button>
+                        </li>
+                      ))}
                   </ul>
+                )}
+                {favorites.length > 0 && (
+                  <Link href="/member/macros/favorites" className="text-brand-600 hover:underline text-xs mt-1 inline-block">Manage Favorites →</Link>
                 )}
               </div>
               <div>
                 <label className="block text-sm font-medium text-stone-600 mb-1">Or calculate macros</label>
-                <div className="flex flex-wrap gap-2 items-end">
+                <p className="text-xs text-stone-400 mb-1">Type anything — food, brand, or meal. Include amounts if you want (e.g. 2 bars, 1 cup rice).</p>
+                <div className="flex gap-2">
                   <input
                     type="text"
                     value={aiFood}
                     onChange={(e) => { setAiFood(e.target.value); setAiError(null); }}
-                    placeholder="e.g. honey, peanut butter"
-                    className="flex-1 min-w-[120px] px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm"
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAiCalculate(); } }}
+                    placeholder="e.g. musashi high protein bar, 2 cups rice, 1 banana"
+                    className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm"
                   />
-                  <input
-                    type="number"
-                    step="0.25"
-                    min="0.1"
-                    value={aiPortionValue}
-                    onChange={(e) => setAiPortionValue(e.target.value)}
-                    className="w-16 px-2 py-2 rounded-lg border border-stone-200 bg-white text-sm"
-                  />
-                  <select
-                    value={aiPortionUnit}
-                    onChange={(e) => setAiPortionUnit(e.target.value)}
-                    className="px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm"
-                  >
-                    {AI_PORTION_UNITS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
                   <button
                     type="button"
                     onClick={handleAiCalculate}
                     disabled={aiCalculating}
-                    className="px-3 py-2 rounded-lg bg-stone-700 text-white text-sm font-medium hover:bg-stone-800 disabled:opacity-50"
+                    className="px-4 py-2 rounded-lg bg-stone-700 text-white text-sm font-medium hover:bg-stone-800 disabled:opacity-50 shrink-0"
                   >
                     {aiCalculating ? "Calculating…" : "Calculate"}
                   </button>

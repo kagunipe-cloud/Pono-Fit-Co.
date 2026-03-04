@@ -82,6 +82,13 @@ export function ensureJournalTables(db: ReturnType<typeof import("./db").getDb>)
       /* ignore */
     }
   }
+  if (goalCols.every((c) => c.name !== "fiber_goal")) {
+    try {
+      db.prepare("ALTER TABLE member_macro_goals ADD COLUMN fiber_goal REAL").run();
+    } catch {
+      /* ignore */
+    }
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS member_weigh_ins (

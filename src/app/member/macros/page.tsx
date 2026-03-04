@@ -7,7 +7,7 @@ import { formatDateOnlyInAppTz, formatInAppTz, formatWeekdayShortInAppTz, todayI
 import { useAppTimezone } from "@/lib/settings-context";
 
 type JournalDay = { id: number; member_id: string; date: string; created_at: string };
-type MacroGoals = { calories_goal: number | null; protein_pct: number | null; fat_pct: number | null; carbs_pct: number | null; weight_goal: number | null };
+type MacroGoals = { calories_goal: number | null; protein_pct: number | null; fat_pct: number | null; carbs_pct: number | null; weight_goal: number | null; fiber_goal: number | null };
 type DaySummary = { cal: number; p: number; f: number; c: number };
 
 function weekLabel(monday: string, tz: string): string {
@@ -31,8 +31,8 @@ export default function MemberMacrosPage() {
   const [loading, setLoading] = useState(true);
   const [selectedWeek, setSelectedWeek] = useState<string | null>(null);
 
-  const [goals, setGoals] = useState<MacroGoals>({ calories_goal: null, protein_pct: null, fat_pct: null, carbs_pct: null, weight_goal: null });
-  const [goalsDraft, setGoalsDraft] = useState<MacroGoals>({ calories_goal: null, protein_pct: null, fat_pct: null, carbs_pct: null, weight_goal: null });
+  const [goals, setGoals] = useState<MacroGoals>({ calories_goal: null, protein_pct: null, fat_pct: null, carbs_pct: null, weight_goal: null, fiber_goal: null });
+  const [goalsDraft, setGoalsDraft] = useState<MacroGoals>({ calories_goal: null, protein_pct: null, fat_pct: null, carbs_pct: null, weight_goal: null, fiber_goal: null });
   const [goalsEditing, setGoalsEditing] = useState(false);
   const [savingGoals, setSavingGoals] = useState(false);
   const [weekSummary, setWeekSummary] = useState<Record<string, DaySummary> | null>(null);
@@ -66,9 +66,9 @@ export default function MemberMacrosPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((g: MacroGoals | null) => {
         if (g) {
-          const withWeight = { ...g, weight_goal: g.weight_goal ?? null };
-          setGoals(withWeight);
-          setGoalsDraft(withWeight);
+          const withExtras = { ...g, weight_goal: g.weight_goal ?? null, fiber_goal: g.fiber_goal ?? null };
+          setGoals(withExtras);
+          setGoalsDraft(withExtras);
         }
       })
       .catch(() => {});
@@ -92,7 +92,7 @@ export default function MemberMacrosPage() {
 
   function clearGoals() {
     setSavingGoals(true);
-    const cleared = { calories_goal: null, protein_pct: null, fat_pct: null, carbs_pct: null, weight_goal: null };
+    const cleared = { calories_goal: null, protein_pct: null, fat_pct: null, carbs_pct: null, weight_goal: null, fiber_goal: null };
     fetch("/api/member/macro-goals", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -110,7 +110,8 @@ export default function MemberMacrosPage() {
 
   const hasAnyGoal = (goals.calories_goal != null && goals.calories_goal > 0) ||
     goals.protein_pct != null || goals.fat_pct != null || goals.carbs_pct != null ||
-    (goals.weight_goal != null && goals.weight_goal > 0);
+    (goals.weight_goal != null && goals.weight_goal > 0) ||
+    (goals.fiber_goal != null && goals.fiber_goal > 0);
 
   function fetchDaysForWeek(weekStart: string) {
     fetch(`/api/member/journal/days?week=${weekStart}`)
@@ -357,6 +358,9 @@ export default function MemberMacrosPage() {
               {goals.weight_goal != null && goals.weight_goal > 0 && (
                 <span className="text-stone-700"><span className="font-medium text-stone-600">Weight goal:</span> {goals.weight_goal} lbs</span>
               )}
+              {goals.fiber_goal != null && goals.fiber_goal > 0 && (
+                <span className="text-stone-700"><span className="font-medium text-stone-600">Fiber:</span> {goals.fiber_goal}g</span>
+              )}
               <div className="flex gap-2">
                 <button type="button" onClick={() => { setGoalsDraft(goals); setGoalsEditing(true); }} className="text-brand-600 hover:underline font-medium">
                   Edit
@@ -431,6 +435,18 @@ export default function MemberMacrosPage() {
                   value={goalsDraft.weight_goal ?? ""}
                   onChange={(e) => setGoalsDraft((g) => ({ ...g, weight_goal: e.target.value === "" ? null : parseFloat(e.target.value) || 0 }))}
                   placeholder="e.g. 150"
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Fiber goal (g)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={goalsDraft.fiber_goal ?? ""}
+                  onChange={(e) => setGoalsDraft((g) => ({ ...g, fiber_goal: e.target.value === "" ? null : parseFloat(e.target.value) || 0 }))}
+                  placeholder="e.g. 25"
                   className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
                 />
               </div>
