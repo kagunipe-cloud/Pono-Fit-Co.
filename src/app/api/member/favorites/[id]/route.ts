@@ -44,7 +44,7 @@ export async function PATCH(
     if (items != null) {
       db.prepare("DELETE FROM member_favorite_items WHERE member_favorite_id = ?").run(id);
       const insertItem = db.prepare("INSERT INTO member_favorite_items (member_favorite_id, food_id, amount, sort_order) VALUES (?, ?, ?, ?)");
-      items.forEach((it, i) => insertItem.run(id, it.food_id, it.amount, i));
+      items.forEach((it: { food_id: number; amount: number }, i: number) => insertItem.run(id, it.food_id, it.amount, i));
     }
 
     db.close();
