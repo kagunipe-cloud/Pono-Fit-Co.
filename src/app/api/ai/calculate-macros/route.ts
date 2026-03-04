@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getDb } from "@/lib/db";
+import { getCachedMacros, setCachedMacros } from "@/lib/ai-macros-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +12,7 @@ const DEFAULT_MODEL = "gemini-2.0-flash";
 // Serper: Google search API for grounding. 2,500 free queries. https://serper.dev
 const SERPER_BASE = "https://google.serper.dev";
 
-// Gemini free tier: ~10 RPM, 250 RPD for 2.0 Flash. Cache identical requests to avoid burning quota.
-// https://ai.google.dev/gemini-api/docs/rate-limits
-const MACROS_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
-const MACROS_CACHE_MAX = 500;
-
-type CachedMacros = { calories: number; protein_g: number; fat_g: number; carbs_g: number };
+// Gemini free tier: ~10 RPM, 250 RPD for 2.0 Flash. https://ai.google.dev/gemini-api/docs/rate-limits
 
 type SerperOrganic = { title?: string; link?: string; snippet?: string; position?: number };
 type SerperResponse = {
@@ -24,38 +21,6 @@ type SerperResponse = {
   answerBox?: { title?: string; answer?: string; snippet?: string };
   peopleAlsoAsk?: Array<{ question?: string; snippet?: string }>;
 };
-const macrosCache = new Map<string, { result: CachedMacros; expires: number }>();
-
-function cacheKey(food: string, portionValue: number, portionUnit: string): string {
-  const u = portionUnit.toLowerCase().trim();
-  const unit = u === "servings" || u === "serving" || u === "" ? "serving" : u;
-  return `${food.toLowerCase()}|${portionValue}|${unit}`;
-}
-
-function getCached(key: string): CachedMacros | null {
-  const now = Date.now();
-  const entry = macrosCache.get(key);
-  if (!entry || entry.expires < now) {
-    if (entry) macrosCache.delete(key);
-    return null;
-  }
-  return entry.result;
-}
-
-function setCached(key: string, result: CachedMacros) {
-  if (macrosCache.size >= MACROS_CACHE_MAX) {
-    const now = Date.now();
-    for (const [k, v] of macrosCache) {
-      if (v.expires < now) macrosCache.delete(k);
-    }
-    if (macrosCache.size >= MACROS_CACHE_MAX) {
-      const first = macrosCache.keys().next().value;
-      if (first != null) macrosCache.delete(first);
-    }
-  }
-  macrosCache.set(key, { result, expires: Date.now() + MACROS_CACHE_TTL_MS });
-}
-
 type CalculateBody = { food: string; portionValue: number; portionUnit: string };
 
 /**
@@ -64,7 +29,6 @@ type CalculateBody = { food: string; portionValue: number; portionUnit: string }
  * Requires GEMINI_API_KEY in env.
  * Optional SERPER_API_KEY: when set, searches the web first and grounds Gemini with real results
  *   (better accuracy for branded products). Get free key at https://serper.dev
- * Identical requests are cached 24h to stay within Gemini free tier (10 RPM, 250 RPD).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -88,13 +52,12 @@ export async function POST(request: NextRequest) {
       .replace(/\s+(macros?|nutrition\s*facts?|calories?)\s*$/i, "")
       .trim() || food;
 
-    const key = cacheKey(foodCleaned, portionValue, portionUnit);
-    const cached = getCached(key);
-    if (cached) {
-      return NextResponse.json(cached);
-    }
+    let db: ReturnType<typeof getDb> | null = getDb();
+    try {
+      const cached = getCachedMacros(db, foodCleaned, portionValue, portionUnit);
+      if (cached) return NextResponse.json(cached);
 
-    // When unit is null/blank: search exactly what's in the food bar (e.g. "7 nilla wafers"). When unit is set: "macros for 4 servings of oreos".
+      // When unit is null/blank: search exactly what's in the food bar (e.g. "7 nilla wafers"). When unit is set: "macros for 4 servings of oreos".
     const query = portionUnit
       ? (() => {
           const unitWord = portionValue === 1 ? portionUnit : portionUnit === "oz" ? "oz" : portionUnit + "s";
@@ -121,6 +84,7 @@ RULES:
 1. Extract calories, protein_g, fat_g, carbs_g from the search results above. Prefer official product labels and retailer pages (e.g. Amazon, brand sites).
 2. The numbers must be the TOTAL for the entire amount requested. If the user asks for "7 nilla wafers", return the sum for all 7. If no portion/count is given, return per 1 unit/serving (e.g. per 1 bar).
 3. Use the EXACT numbers from the search results when available. Do not estimate or substitute.
+4. When values are given as RANGES (e.g. 60-70 calories, 16g-17g carbs), use the LOW end of the range. Most labels report the low end.
 
 Request: "${query}"
 
@@ -132,6 +96,7 @@ Rules:
 1. The numbers must be the TOTAL for the entire amount requested. If the user asks for "7 nilla wafers", return the sum for all 7 wafers (e.g. ~122 cal), NOT for 1 wafer and NOT per 100g. Always multiply per-unit nutrition by the number of units when a count is given.
 2. For BRANDED PRODUCTS (e.g. "Musashi High Protein Bar", "Quest Bar", "Clif Bar"): Use the OFFICIAL nutrition facts from the product label. Do not estimate or substitute generic values. If you know the real nutrition from the brand's packaging or website, use those exact numbers. Branded products have specific formulations that differ from generic versions.
 3. When no portion/count is given, return nutrition per 1 unit/serving (e.g. per 1 bar, per 1 cup) as stated on the label.
+4. When values are given as RANGES (e.g. 60-70 calories, 16g-17g carbs), use the LOW end of the range. Most labels report the low end.
 
 Request: "${query}"
 
@@ -191,14 +156,17 @@ Respond with exactly this format (numbers only, USDA-style):
       return NextResponse.json({ error: "Could not parse nutrition from response" }, { status: 502 });
     }
 
-    const result: CachedMacros = {
+    const result = {
       calories: calories ?? 0,
       protein_g: protein_g ?? 0,
       fat_g: fat_g ?? 0,
       carbs_g: carbs_g ?? 0,
     };
-    setCached(key, result);
+    setCachedMacros(db, foodCleaned, portionValue, portionUnit, result);
     return NextResponse.json(result);
+    } finally {
+      db?.close();
+    }
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: "Failed to calculate macros" }, { status: 500 });

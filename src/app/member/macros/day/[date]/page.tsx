@@ -206,6 +206,16 @@ function entryMacros(e: Entry): { cal: number; p: number; f: number; c: number; 
   };
 }
 
+/** First-letter capitalization for display (e.g. "smuckers sugar free jelly" → "Smuckers Sugar Free Jelly"). */
+function capitalizeWords(s: string): string {
+  if (!s?.trim()) return s ?? "";
+  return s
+    .trim()
+    .split(/\s+/)
+    .map((word) => (word.length > 0 ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase() : word))
+    .join(" ");
+}
+
 /** Format measurement for diary display (e.g. "tbsp" → "tbsp", "servings" → "serving(s)"). */
 function formatMeasurementLabel(measurement: string): string {
   const m = measurement.toLowerCase().trim().replace(/s$/, "");
@@ -228,10 +238,14 @@ function entryPortionLabel(e: Entry): string {
     const word = e.amount === 1 ? "serving" : "serving(s)";
     return ` × ${e.amount} ${word}`;
   }
-  // AI/calculated foods: amount=1 with serving_description (e.g. "4 oz") — show that for display
+  // AI/calculated foods: amount=1 with serving_description (e.g. "4 oz") — show that for display, unless it duplicates the name
   if (e.amount === 1 && f.serving_description?.trim()) {
-    return ` — ${f.serving_description.trim()}`;
+    const desc = f.serving_description.trim();
+    if (desc === (f.name?.trim() ?? "")) return ""; // Avoid redundant "X — X"
+    return ` — ${desc}`;
   }
+  // AI foods with no serving_description: name already includes portion (e.g. "2 tbsp"), skip "× 1 serving"
+  if (e.amount === 1 && f.source === "gemini") return "";
   return formatPortionLabel(e.amount, f.serving_size ?? null, f.serving_size_unit ?? null);
 }
 
@@ -334,6 +348,8 @@ export default function MemberMacrosDayPage() {
   const [aiCalculating, setAiCalculating] = useState(false);
   const [aiResult, setAiResult] = useState<{ calories: number; protein_g: number; fat_g: number; carbs_g: number } | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [aiSuggestions, setAiSuggestions] = useState<Array<{ food: string; calories: number; protein_g: number; fat_g: number; carbs_g: number }>>([]);
+  const [aiSuggestionsLoading, setAiSuggestionsLoading] = useState(false);
   const [addingAiEntry, setAddingAiEntry] = useState(false);
   const [goals, setGoals] = useState<{ calories_goal: number | null; protein_pct: number | null; fat_pct: number | null; carbs_pct: number | null; fiber_goal: number | null }>({ calories_goal: null, protein_pct: null, fat_pct: null, carbs_pct: null, fiber_goal: null });
   const [shareEmail, setShareEmail] = useState("");
@@ -354,6 +370,7 @@ export default function MemberMacrosDayPage() {
   const [addFoodFavoritesSearch, setAddFoodFavoritesSearch] = useState("");
   const [addingFavoriteToMeal, setAddingFavoriteToMeal] = useState<{ favId: number; mealId: number } | null>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
+  const addingAiEntryRef = useRef(false);
 
   const fetchDay = useCallback(() => {
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
@@ -409,6 +426,26 @@ export default function MemberMacrosDayPage() {
       return () => clearTimeout(t);
     }
   }, [addFoodMealId]);
+
+  // Debounced AI macros suggest (cached results) — minimizes API spend
+  useEffect(() => {
+    const q = aiFood.trim();
+    if (q.length < 2 || aiResult != null) {
+      setAiSuggestions([]);
+      return;
+    }
+    const t = setTimeout(() => {
+      setAiSuggestionsLoading(true);
+      fetch(`/api/ai/macros-suggest?q=${encodeURIComponent(q)}`)
+        .then((r) => (r.ok ? r.json() : []))
+        .then((list: Array<{ food: string; calories: number; protein_g: number; fat_g: number; carbs_g: number }>) =>
+          setAiSuggestions(Array.isArray(list) ? list : [])
+        )
+        .catch(() => setAiSuggestions([]))
+        .finally(() => setAiSuggestionsLoading(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [aiFood, aiResult]);
 
   // Fetch favorites for My Favorites card when day is loaded
   useEffect(() => {
@@ -823,10 +860,11 @@ export default function MemberMacrosDayPage() {
 
   async function handleAddAiEntry() {
     if (addFoodMealId == null || !aiResult) return;
+    if (addingAiEntryRef.current) return; // Prevent double-add
     const meal = day?.meals.find((m) => m.id === addFoodMealId);
     if (!meal) return;
     const foodName = aiFood.trim() || "AI food";
-    const portionText = foodName;
+    addingAiEntryRef.current = true;
     setAddingAiEntry(true);
     try {
       const createRes = await fetchWithTimeout("/api/foods", {
@@ -838,7 +876,7 @@ export default function MemberMacrosDayPage() {
           protein_g: aiResult.protein_g,
           fat_g: aiResult.fat_g,
           carbs_g: aiResult.carbs_g,
-          serving_description: portionText,
+          serving_description: null, // Name already includes portion (e.g. "2 tbsp"); avoid redundant display
           source: "gemini",
         }),
       });
@@ -872,6 +910,7 @@ export default function MemberMacrosDayPage() {
       const isAbort = msg.includes("abort") || err instanceof DOMException;
       alert(isAbort ? "Request timed out. Please check your connection and try again." : `Something went wrong: ${msg}`);
     } finally {
+      addingAiEntryRef.current = false;
       setAddingAiEntry(false);
     }
   }
@@ -1220,7 +1259,7 @@ export default function MemberMacrosDayPage() {
                           </span>
                         ) : (
                           <>
-                            <span>{e.food?.name ?? "—"}{entryPortionLabel(e)}</span>
+                            <span>{capitalizeWords(e.food?.name ?? "") || "—"}{entryPortionLabel(e)}</span>
                             <span className="text-stone-400 text-xs">
                               {(() => {
                                 const m = entryMacros(e);
@@ -1423,7 +1462,7 @@ export default function MemberMacrosDayPage() {
                   .filter((f) => !favoritesSearch.trim() || f.name.toLowerCase().includes(favoritesSearch.toLowerCase()))
                   .map((fav) => (
                     <li key={fav.id} className="flex items-center justify-between gap-2 py-1.5">
-                      <span className="text-sm text-stone-700 truncate">{fav.name}</span>
+                      <span className="text-sm text-stone-700 truncate">{capitalizeWords(fav.name)}</span>
                       <div className="flex flex-wrap gap-1 shrink-0 justify-end">
                         {day?.meals.map((meal) => (
                           <button
@@ -1721,15 +1760,53 @@ export default function MemberMacrosDayPage() {
               <div>
                 <label className="block text-sm font-medium text-stone-600 mb-1">Or Calculate Macros</label>
                 <p className="text-xs text-stone-400 mb-1">Type anything — food, brand, or meal. Include amounts if you want (e.g. 2 bars, 1 cup rice).</p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={aiFood}
-                    onChange={(e) => { setAiFood(e.target.value); setAiError(null); }}
-                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAiCalculate(); } }}
-                    placeholder="e.g. musashi high protein bar, 2 cups rice, 1 banana"
-                    className="flex-1 min-w-0 px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm"
-                  />
+                <div className="relative flex gap-2">
+                  <div className="flex-1 min-w-0 relative">
+                    <input
+                      type="text"
+                      value={aiFood}
+                      onChange={(e) => { setAiFood(e.target.value); setAiError(null); setAiResult(null); }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (aiSuggestions.length > 0) {
+                            const first = aiSuggestions[0];
+                            setAiFood(first.food);
+                            setAiResult({ calories: first.calories, protein_g: first.protein_g, fat_g: first.fat_g, carbs_g: first.carbs_g });
+                            setAiSuggestions([]);
+                          } else {
+                            handleAiCalculate();
+                          }
+                        }
+                        if (e.key === "Escape") setAiSuggestions([]);
+                      }}
+                      placeholder="e.g. musashi high protein bar, 2 cups rice, 1 banana"
+                      className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm"
+                    />
+                    {aiSuggestionsLoading && aiSuggestions.length === 0 && aiFood.trim().length >= 2 && (
+                      <div className="absolute top-full left-0 right-0 mt-1 px-3 py-2 text-xs text-stone-500 bg-stone-50 border border-stone-200 rounded-lg">Searching cache…</div>
+                    )}
+                    {aiSuggestions.length > 0 && (
+                      <ul className="absolute top-full left-0 right-0 mt-1 z-10 border border-stone-200 rounded-lg bg-white shadow-lg divide-y divide-stone-100 max-h-48 overflow-y-auto">
+                        {aiSuggestions.map((s, i) => (
+                          <li key={`${s.food}-${i}`}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAiFood(s.food);
+                                setAiResult({ calories: s.calories, protein_g: s.protein_g, fat_g: s.fat_g, carbs_g: s.carbs_g });
+                                setAiSuggestions([]);
+                              }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-stone-50 flex justify-between items-center gap-2"
+                            >
+                              <span className="text-stone-800 truncate">{capitalizeWords(s.food)}</span>
+                              <span className="text-stone-500 text-xs shrink-0">{s.calories} cal · P {s.protein_g}g · F {s.fat_g}g · C {s.carbs_g}g</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                   <button
                     type="button"
                     onClick={handleAiCalculate}
@@ -1778,7 +1855,7 @@ export default function MemberMacrosDayPage() {
                             onClick={() => { setSelectedFavoriteId(fav.id); setSelectedUsdaFood(null); setSelectedOffFood(null); setSelectedDbFood(null); }}
                             className={`w-full text-left px-3 py-2 text-sm ${selectedFavoriteId === fav.id ? "bg-brand-100 text-brand-800" : "text-stone-700 hover:bg-stone-50"}`}
                           >
-                            {fav.name}
+                            {capitalizeWords(fav.name)}
                             {fav.items?.length > 0 && <span className="text-stone-400 ml-1">({fav.items.length} items)</span>}
                           </button>
                         </li>
