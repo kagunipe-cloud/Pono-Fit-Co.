@@ -1307,27 +1307,25 @@ export default function MemberMacrosDayPage() {
             const normGoal = totalGoalPct > 0 ? { p: goalPct.p / totalGoalPct * 100, f: goalPct.f / totalGoalPct * 100, c: goalPct.c / totalGoalPct * 100 } : { p: 33.33, f: 33.33, c: 33.34 };
 
             function PieChart({ pct }: { pct: { p: number; f: number; c: number } }) {
-              const size = 100;
-              const r = size / 2;
-              const pDeg = (pct.p / 100) * 360;
-              const fDeg = (pct.f / 100) * 360;
-              const cDeg = (pct.c / 100) * 360;
-              const toArc = (start: number, sweep: number) => {
-                if (sweep <= 0) return "";
-                const end = start + sweep;
-                const x1 = r + r * Math.cos((start * Math.PI) / 180);
-                const y1 = r - r * Math.sin((start * Math.PI) / 180);
-                const x2 = r + r * Math.cos((end * Math.PI) / 180);
-                const y2 = r - r * Math.sin((end * Math.PI) / 180);
-                const large = sweep > 180 ? 1 : 0;
-                return `M ${r} ${r} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
-              };
+              const p = Math.max(0, Math.min(100, pct.p));
+              const f = Math.max(0, Math.min(100, pct.f));
+              const c = Math.max(0, Math.min(100, pct.c));
+              const total = p + f + c;
+              const scale = total > 0 ? 100 / total : 1;
+              const pEnd = p * scale;
+              const fEnd = pEnd + f * scale;
               return (
-                <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[120px] mx-auto" style={{ aspectRatio: "1" }}>
-                  <path d={toArc(0, pDeg)} fill="#3b82f6" />
-                  <path d={toArc(pDeg, fDeg)} fill="#f59e0b" />
-                  <path d={toArc(pDeg + fDeg, cDeg)} fill="#10b981" />
-                </svg>
+                <div
+                  className="w-full max-w-[120px] mx-auto rounded-full"
+                  style={{
+                    aspectRatio: "1",
+                    background: `conic-gradient(
+                      #3b82f6 0% ${pEnd}%,
+                      #f59e0b ${pEnd}% ${fEnd}%,
+                      #10b981 ${fEnd}% 100%
+                    )`,
+                  }}
+                />
               );
             }
 
