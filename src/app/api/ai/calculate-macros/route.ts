@@ -7,12 +7,23 @@ const GEMINI_VERSION = process.env.GEMINI_API_VERSION?.trim() || "v1beta";
 const GEMINI_BASE = `https://generativelanguage.googleapis.com/${GEMINI_VERSION}`;
 const DEFAULT_MODEL = "gemini-2.0-flash";
 
+// Serper: Google search API for grounding. 2,500 free queries. https://serper.dev
+const SERPER_BASE = "https://google.serper.dev";
+
 // Gemini free tier: ~10 RPM, 250 RPD for 2.0 Flash. Cache identical requests to avoid burning quota.
 // https://ai.google.dev/gemini-api/docs/rate-limits
 const MACROS_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
 const MACROS_CACHE_MAX = 500;
 
 type CachedMacros = { calories: number; protein_g: number; fat_g: number; carbs_g: number };
+
+type SerperOrganic = { title?: string; link?: string; snippet?: string; position?: number };
+type SerperResponse = {
+  organic?: SerperOrganic[];
+  knowledgeGraph?: { title?: string; description?: string; attributes?: Record<string, string> };
+  answerBox?: { title?: string; answer?: string; snippet?: string };
+  peopleAlsoAsk?: Array<{ question?: string; snippet?: string }>;
+};
 const macrosCache = new Map<string, { result: CachedMacros; expires: number }>();
 
 function cacheKey(food: string, portionValue: number, portionUnit: string): string {
@@ -51,6 +62,8 @@ type CalculateBody = { food: string; portionValue: number; portionUnit: string }
  * POST — get nutrition (calories, protein_g, fat_g, carbs_g) for a food + portion via Gemini.
  * Body: { food: string, portionValue: number, portionUnit: string }.
  * Requires GEMINI_API_KEY in env.
+ * Optional SERPER_API_KEY: when set, searches the web first and grounds Gemini with real results
+ *   (better accuracy for branded products). Get free key at https://serper.dev
  * Identical requests are cached 24h to stay within Gemini free tier (10 RPM, 250 RPD).
  */
 export async function POST(request: NextRequest) {
@@ -69,7 +82,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "food is required" }, { status: 400 });
     }
 
-    const key = cacheKey(food, portionValue, portionUnit);
+    // Strip trailing meta-words that users often type (e.g. "musashi high protein bar macros")
+    // Avoid stripping words that may be part of product names (e.g. "protein" in "High Protein Bar")
+    const foodCleaned = food
+      .replace(/\s+(macros?|nutrition\s*facts?|calories?)\s*$/i, "")
+      .trim() || food;
+
+    const key = cacheKey(foodCleaned, portionValue, portionUnit);
     const cached = getCached(key);
     if (cached) {
       return NextResponse.json(cached);
@@ -79,13 +98,40 @@ export async function POST(request: NextRequest) {
     const query = portionUnit
       ? (() => {
           const unitWord = portionValue === 1 ? portionUnit : portionUnit === "oz" ? "oz" : portionUnit + "s";
-          return `macros for ${portionValue} ${unitWord} of ${food}`;
+          return `macros for ${portionValue} ${unitWord} of ${foodCleaned}`;
         })()
-      : `macros for ${food}`;
+      : `macros for ${foodCleaned}`;
 
-    const prompt = `You are a nutrition calculator. Return ONLY a valid JSON object, no other text.
+    // Step 1: Search the web for nutrition data (grounding). Uses Serper if SERPER_API_KEY is set.
+    const searchQuery = `${foodCleaned} nutrition facts calories protein carbs`;
+    const serperData = await searchWeb(searchQuery);
+    const searchContext = serperData ? buildSearchContext(serperData) : "";
 
-Rule: The numbers must be the TOTAL for the entire amount requested. If the user asks for "7 nilla wafers", return the sum for all 7 wafers (e.g. ~122 cal), NOT for 1 wafer and NOT per 100g. Always multiply per-unit nutrition by the number of units when a count is given.
+    const hasGrounding = searchContext.length > 0;
+
+    const prompt = hasGrounding
+      ? `You are a nutrition calculator. Use the WEB SEARCH RESULTS below to find accurate nutrition. Return ONLY a valid JSON object, no other text.
+
+WEB SEARCH RESULTS:
+---
+${searchContext}
+---
+
+RULES:
+1. Extract calories, protein_g, fat_g, carbs_g from the search results above. Prefer official product labels and retailer pages (e.g. Amazon, brand sites).
+2. The numbers must be the TOTAL for the entire amount requested. If the user asks for "7 nilla wafers", return the sum for all 7. If no portion/count is given, return per 1 unit/serving (e.g. per 1 bar).
+3. Use the EXACT numbers from the search results when available. Do not estimate or substitute.
+
+Request: "${query}"
+
+Respond with exactly this format (numbers only):
+{"calories": <number>, "protein_g": <number>, "fat_g": <number>, "carbs_g": <number>}`
+      : `You are a nutrition calculator. Return ONLY a valid JSON object, no other text.
+
+Rules:
+1. The numbers must be the TOTAL for the entire amount requested. If the user asks for "7 nilla wafers", return the sum for all 7 wafers (e.g. ~122 cal), NOT for 1 wafer and NOT per 100g. Always multiply per-unit nutrition by the number of units when a count is given.
+2. For BRANDED PRODUCTS (e.g. "Musashi High Protein Bar", "Quest Bar", "Clif Bar"): Use the OFFICIAL nutrition facts from the product label. Do not estimate or substitute generic values. If you know the real nutrition from the brand's packaging or website, use those exact numbers. Branded products have specific formulations that differ from generic versions.
+3. When no portion/count is given, return nutrition per 1 unit/serving (e.g. per 1 bar, per 1 cup) as stated on the label.
 
 Request: "${query}"
 
@@ -164,4 +210,50 @@ function num(v: unknown): number | null {
   if (typeof v === "number" && !Number.isNaN(v)) return v;
   const n = parseFloat(String(v));
   return Number.isNaN(n) ? null : n;
+}
+
+/** Fetch Google search results via Serper. Returns null if not configured or fails. */
+async function searchWeb(query: string): Promise<SerperResponse | null> {
+  const apiKey = process.env.SERPER_API_KEY?.trim();
+  if (!apiKey) return null;
+  try {
+    const res = await fetch(`${SERPER_BASE}/search`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Api-Key": apiKey,
+      },
+      body: JSON.stringify({ q: query, num: 10 }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json().catch(() => null)) as SerperResponse | null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/** Build context string from Serper results for Gemini to use. */
+function buildSearchContext(serper: SerperResponse): string {
+  const parts: string[] = [];
+  if (serper.answerBox?.answer || serper.answerBox?.snippet) {
+    parts.push(`Answer box: ${serper.answerBox.answer ?? serper.answerBox.snippet ?? ""}`);
+  }
+  if (serper.knowledgeGraph?.description) {
+    parts.push(`Knowledge: ${serper.knowledgeGraph.description}`);
+  }
+  if (serper.knowledgeGraph?.attributes) {
+    const attrs = Object.entries(serper.knowledgeGraph.attributes)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join("; ");
+    if (attrs) parts.push(`Attributes: ${attrs}`);
+  }
+  for (const o of serper.organic ?? []) {
+    const snip = o.snippet?.trim();
+    if (snip) parts.push(`[${o.title ?? "Result"}]: ${snip}`);
+  }
+  for (const pa of serper.peopleAlsoAsk ?? []) {
+    if (pa.snippet) parts.push(`Q: ${pa.question ?? ""} A: ${pa.snippet}`);
+  }
+  return parts.length > 0 ? parts.join("\n\n") : "";
 }

@@ -352,6 +352,7 @@ export default function MemberMacrosDayPage() {
   const [barcodeNotFound, setBarcodeNotFound] = useState(false);
   const [showCameraScanner, setShowCameraScanner] = useState(false);
   const [selectedDbFood, setSelectedDbFood] = useState<Food | null>(null);
+  const [barcodeResultPending, setBarcodeResultPending] = useState<OFFSearchFood | null>(null);
   const barcodeInputRef = useRef<HTMLInputElement>(null);
 
   const AI_PORTION_UNITS = [
@@ -544,7 +545,8 @@ export default function MemberMacrosDayPage() {
       const res = await fetchWithTimeout(`/api/foods/off-product?barcode=${encodeURIComponent(code)}`);
       if (res.ok) {
         const data = (await res.json()) as OFFSearchFood;
-        setSelectedOffFood(data);
+        setBarcodeResultPending(data);
+        setSelectedOffFood(null);
         setSelectedDbFood(null);
         setSelectedUsdaFood(null);
         setSelectedFavoriteId(null);
@@ -570,10 +572,10 @@ export default function MemberMacrosDayPage() {
       const res = await fetchWithTimeout(`/api/foods/off-product?barcode=${encodeURIComponent(barcode)}`);
       if (res.ok) {
         const data = (await res.json()) as OFFSearchFood;
-        setSelectedOffFood(data);
+        setBarcodeResultPending(data);
+        setSelectedOffFood(null);
         setSelectedDbFood(null);
         setSelectedUsdaFood(null);
-        setSelectedFavoriteId(null);
         setShowCameraScanner(false);
       } else {
         setSelectedOffFood(null);
@@ -777,6 +779,7 @@ export default function MemberMacrosDayPage() {
     setFoodSearch("");
     setBarcodeInput("");
     setBarcodeNotFound(false);
+    setBarcodeResultPending(null);
     setShowCameraScanner(false);
     setAddAmount("1");
     setAddMeasurement("servings");
@@ -1357,11 +1360,11 @@ export default function MemberMacrosDayPage() {
 
       {/* Add Food modal */}
       {addFoodMealId != null && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => setAddFoodMealId(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50" onClick={() => { setAddFoodMealId(null); setBarcodeResultPending(null); }}>
           <div className="bg-white rounded-xl shadow-lg max-w-md w-full max-h-[85vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="p-4 border-b border-stone-200 flex justify-between items-center">
               <h2 className="font-semibold text-stone-800">Add Food / Drink</h2>
-              <button type="button" onClick={() => setAddFoodMealId(null)} className="p-1 text-stone-500 hover:bg-stone-100 rounded">✕</button>
+              <button type="button" onClick={() => { setAddFoodMealId(null); setBarcodeResultPending(null); }} className="p-1 text-stone-500 hover:bg-stone-100 rounded">✕</button>
             </div>
             <div className="p-4 overflow-y-auto space-y-4">
               <div>
@@ -1426,6 +1429,39 @@ export default function MemberMacrosDayPage() {
                 )}
                 {selectedDbFood != null && (
                   <p className="mt-1 text-sm text-emerald-600 font-medium">Found: {selectedDbFood.name}</p>
+                )}
+                {barcodeResultPending != null && (
+                  <div className="mt-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200">
+                    <p className="text-sm font-medium text-emerald-800 mb-1">Found!</p>
+                    <p className="text-sm text-stone-700">{barcodeResultPending.name}</p>
+                    <p className="text-xs text-stone-500 mt-0.5">
+                      {barcodeResultPending.calories != null ? `${barcodeResultPending.calories} cal` : ""}
+                      {barcodeResultPending.protein_g != null ? ` · P ${barcodeResultPending.protein_g}g` : ""}
+                      {barcodeResultPending.fat_g != null ? ` F ${barcodeResultPending.fat_g}g` : ""}
+                      {barcodeResultPending.carbs_g != null ? ` C ${barcodeResultPending.carbs_g}g` : ""}
+                    </p>
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedOffFood(barcodeResultPending);
+                          setBarcodeResultPending(null);
+                          setAddAmount("1");
+                          setAddMeasurement(barcodeResultPending.serving_size_unit ?? "servings");
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700"
+                      >
+                        Add to meal
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBarcodeResultPending(null)}
+                        className="px-3 py-1.5 rounded-lg border border-stone-200 text-stone-600 text-sm hover:bg-stone-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
                 )}
               </div>
               <div>
@@ -1676,7 +1712,7 @@ export default function MemberMacrosDayPage() {
               >
                 {addingEntry ? "Adding…" : "Add"}
               </button>
-              <button type="button" onClick={() => setAddFoodMealId(null)} className="px-4 py-2 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50">
+              <button type="button" onClick={() => { setAddFoodMealId(null); setBarcodeResultPending(null); }} className="px-4 py-2 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50">
                 Cancel
               </button>
             </div>

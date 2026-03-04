@@ -44,7 +44,8 @@ In Railway → your service → **Variables**, add every variable from `.env.loc
 - `BRAND_NAME`
 - `ADMIN_EMAIL`
 - `FDC_API_KEY`
-- `GEMINI_API_KEY` (if you use it)
+- `GEMINI_API_KEY` (for AI macro calculation)
+- `SERPER_API_KEY` (optional; for grounded web search — better accuracy for branded products like Musashi bars; get free key at [serper.dev](https://serper.dev))
 - `NEXT_PUBLIC_APP_URL` → set to your Railway URL, e.g. `https://your-app.up.railway.app`
 - `CRON_SECRET` (optional; same secret you’d use if you ever call cron APIs from outside; e.g. `openssl rand -hex 24`)
 
