@@ -10,6 +10,20 @@ import { validateMacros } from "@/lib/food-quality";
 
 const CameraBarcodeScanner = lazy(() => import("@/components/CameraBarcodeScanner"));
 
+const ADD_FOOD_FETCH_TIMEOUT_MS = 25_000;
+
+/** Fetch with timeout to avoid getting stuck when APIs (USDA, OFF) are slow or hang. */
+async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), ADD_FOOD_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 type Food = { id: number; name: string; calories: number | null; protein_g: number | null; fat_g: number | null; carbs_g: number | null; fiber_g: number | null; serving_size?: number | null; serving_size_unit?: string | null; serving_description?: string | null; nutrients_per_100g?: number | null; source?: string };
 type USDAFoodNutrient = { nutrientId?: number; nutrient?: { id?: number }; nutrientName?: string; unitName?: string; value?: number; amount?: number };
 type USDAFoodHit = { fdcId: number; description?: string; foodNutrients?: USDAFoodNutrient[]; servingSize?: number; servingSizeUnit?: string; dataType?: string };
@@ -527,20 +541,22 @@ export default function MemberMacrosDayPage() {
     setBarcodeNotFound(false);
     setBarcodeLookupLoading(true);
     try {
-      const res = await fetch(`/api/foods/by-barcode?barcode=${encodeURIComponent(code)}`);
+      const res = await fetchWithTimeout(`/api/foods/off-product?barcode=${encodeURIComponent(code)}`);
       if (res.ok) {
-        const data = (await res.json()) as Food;
-        setSelectedDbFood(data);
+        const data = (await res.json()) as OFFSearchFood;
+        setSelectedOffFood(data);
+        setSelectedDbFood(null);
         setSelectedUsdaFood(null);
-        setSelectedOffFood(null);
         setSelectedFavoriteId(null);
         setBarcodeInput("");
       } else {
+        setSelectedOffFood(null);
         setSelectedDbFood(null);
         setBarcodeNotFound(true);
       }
     } catch {
       setBarcodeNotFound(true);
+      setSelectedOffFood(null);
       setSelectedDbFood(null);
     } finally {
       setBarcodeLookupLoading(false);
@@ -551,20 +567,22 @@ export default function MemberMacrosDayPage() {
     setBarcodeNotFound(false);
     setBarcodeLookupLoading(true);
     try {
-      const res = await fetch(`/api/foods/by-barcode?barcode=${encodeURIComponent(barcode)}`);
+      const res = await fetchWithTimeout(`/api/foods/off-product?barcode=${encodeURIComponent(barcode)}`);
       if (res.ok) {
-        const data = (await res.json()) as Food;
-        setSelectedDbFood(data);
+        const data = (await res.json()) as OFFSearchFood;
+        setSelectedOffFood(data);
+        setSelectedDbFood(null);
         setSelectedUsdaFood(null);
-        setSelectedOffFood(null);
         setSelectedFavoriteId(null);
         setShowCameraScanner(false);
       } else {
+        setSelectedOffFood(null);
         setSelectedDbFood(null);
         setBarcodeNotFound(true);
       }
     } catch {
       setBarcodeNotFound(true);
+      setSelectedOffFood(null);
       setSelectedDbFood(null);
     } finally {
       setBarcodeLookupLoading(false);
@@ -578,7 +596,7 @@ export default function MemberMacrosDayPage() {
     setAddingEntry(true);
     try {
       if (selectedFavoriteId != null) {
-        const res = await fetch(`/api/member/journal/meals/${addFoodMealId}/entries`, {
+        const res = await fetchWithTimeout(`/api/member/journal/meals/${addFoodMealId}/entries`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ favorite_id: selectedFavoriteId }),
@@ -591,6 +609,9 @@ export default function MemberMacrosDayPage() {
           setFoodSearch("");
           setAddAmount("1");
           fetchDay();
+        } else {
+          const err = await res.json().catch(() => ({}));
+          alert((err as { error?: string }).error ?? "Failed to add food. Please try again.");
         }
         return;
       }
@@ -600,7 +621,7 @@ export default function MemberMacrosDayPage() {
           setAddingEntry(false);
           return;
         }
-        const entryRes = await fetch(`/api/member/journal/meals/${addFoodMealId}/entries`, {
+        const entryRes = await fetchWithTimeout(`/api/member/journal/meals/${addFoodMealId}/entries`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ food_id: selectedDbFood.id, quantity: num, measurement: addMeasurement }),
@@ -615,6 +636,9 @@ export default function MemberMacrosDayPage() {
           setAddAmount("1");
           setAddMeasurement("servings");
           fetchDay();
+        } else {
+          const err = await entryRes.json().catch(() => ({}));
+          alert((err as { error?: string }).error ?? "Failed to add food. Please try again.");
         }
         return;
       }
@@ -622,7 +646,7 @@ export default function MemberMacrosDayPage() {
         // Get full details so we save complete nutrients (search often returns abridged)
         let usdaFood: USDAFoodHit = selectedUsdaFood;
         let portionsFromFetch: USDAVolumePortions | null = null;
-        const fetchRes = await fetch(`/api/foods/fetch-usda?fdcId=${selectedUsdaFood.fdcId}`);
+        const fetchRes = await fetchWithTimeout(`/api/foods/fetch-usda?fdcId=${selectedUsdaFood.fdcId}`);
         if (fetchRes.ok) {
           const full = await fetchRes.json() as { fdcId?: number; foodPortions?: USDAFoodPortion[] };
           if (full?.fdcId != null) usdaFood = full as USDAFoodHit;
@@ -653,13 +677,14 @@ export default function MemberMacrosDayPage() {
           servingGrams = 21;
         }
         const saveBody = servingGrams != null ? { ...usdaFood, serving_grams: servingGrams } : usdaFood;
-        const saveRes = await fetch("/api/foods/save-from-usda", {
+        const saveRes = await fetchWithTimeout("/api/foods/save-from-usda", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(saveBody),
         });
         if (!saveRes.ok) {
-          setAddingEntry(false);
+          const err = await saveRes.json().catch(() => ({}));
+          alert((err as { error?: string }).error ?? "Failed to save food. Please try again.");
           return;
         }
         const { id: foodId } = await saveRes.json() as { id: number };
@@ -674,7 +699,7 @@ export default function MemberMacrosDayPage() {
         const entryBody = usdaPortion && "gramWeight" in usdaPortion
           ? { food_id: foodId, portion_grams: num * usdaPortion.gramWeight, quantity: num, measurement: addMeasurement }
           : { food_id: foodId, quantity: num, measurement: addMeasurement };
-        const entryRes = await fetch(`/api/member/journal/meals/${addFoodMealId}/entries`, {
+        const entryRes = await fetchWithTimeout(`/api/member/journal/meals/${addFoodMealId}/entries`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(entryBody),
@@ -689,11 +714,14 @@ export default function MemberMacrosDayPage() {
           setAddAmount("1");
           setAddMeasurement("servings");
           fetchDay();
+        } else {
+          const err = await entryRes.json().catch(() => ({}));
+          alert((err as { error?: string }).error ?? "Failed to add food. Please try again.");
         }
         return;
       }
       if (selectedOffFood != null) {
-        const saveRes = await fetch("/api/foods/save-from-off", {
+        const saveRes = await fetchWithTimeout("/api/foods/save-from-off", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ barcode: selectedOffFood.barcode }),
@@ -710,7 +738,7 @@ export default function MemberMacrosDayPage() {
           setAddingEntry(false);
           return;
         }
-        const entryRes = await fetch(`/api/member/journal/meals/${addFoodMealId}/entries`, {
+        const entryRes = await fetchWithTimeout(`/api/member/journal/meals/${addFoodMealId}/entries`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ food_id: foodId, quantity: num, measurement: addMeasurement }),
@@ -724,9 +752,16 @@ export default function MemberMacrosDayPage() {
           setAddAmount("1");
           setAddMeasurement("servings");
           fetchDay();
+        } else {
+          const err = await entryRes.json().catch(() => ({}));
+          alert((err as { error?: string }).error ?? "Failed to add food. Please try again.");
         }
         return;
       }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const isAbort = msg.includes("abort") || err instanceof DOMException;
+      alert(isAbort ? "Request timed out. Please check your connection and try again." : `Something went wrong: ${msg}`);
     } finally {
       setAddingEntry(false);
     }
@@ -799,7 +834,7 @@ export default function MemberMacrosDayPage() {
     const portionText = val === 1 ? `1 ${unit}` : `${val} ${unit}s`;
     setAddingAiEntry(true);
     try {
-      const createRes = await fetch("/api/foods", {
+      const createRes = await fetchWithTimeout("/api/foods", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -819,7 +854,7 @@ export default function MemberMacrosDayPage() {
       }
       const { id: foodId } = (await createRes.json()) as { id: number };
       // AI result is already the total for the full portion (e.g. 4 oz = 136 cal). Store amount 1 so we don't double-multiply.
-      const entryRes = await fetch(`/api/member/journal/meals/${addFoodMealId}/entries`, {
+      const entryRes = await fetchWithTimeout(`/api/member/journal/meals/${addFoodMealId}/entries`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -837,8 +872,12 @@ export default function MemberMacrosDayPage() {
         fetchDay();
       } else {
         const err = await entryRes.json().catch(() => ({}));
-        alert((err.error as string) ?? "Failed to add to meal");
+        alert((err as { error?: string }).error ?? "Failed to add to meal");
       }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const isAbort = msg.includes("abort") || err instanceof DOMException;
+      alert(isAbort ? "Request timed out. Please check your connection and try again." : `Something went wrong: ${msg}`);
     } finally {
       setAddingAiEntry(false);
     }
@@ -1327,7 +1366,7 @@ export default function MemberMacrosDayPage() {
             <div className="p-4 overflow-y-auto space-y-4">
               <div>
                 <label className="block text-sm font-medium text-stone-600 mb-1">Scan or enter barcode</label>
-                <p className="text-xs text-stone-400 mb-1">If the food is in our database, it will auto-fill below. Use the camera or type the barcode.</p>
+                <p className="text-xs text-stone-400 mb-1">Searches Open Food Facts (packaged foods worldwide). Use the camera or type the barcode.</p>
                 {showCameraScanner ? (
                   <Suspense fallback={<div className="py-8 text-center text-stone-500 text-sm">Loading camera…</div>}>
                     <CameraBarcodeScanner
@@ -1380,10 +1419,10 @@ export default function MemberMacrosDayPage() {
                   </>
                 )}
                 {barcodeNotFound && !showCameraScanner && (
-                  <p className="mt-1 text-sm text-amber-600">Not in our database. Search above or add from Open Food Facts.</p>
+                  <p className="mt-1 text-sm text-amber-600">Not found in Open Food Facts. Try another barcode or search above.</p>
                 )}
                 {barcodeNotFound && showCameraScanner && (
-                  <p className="mt-2 text-sm text-amber-600">Not in our database. Try another barcode or cancel and search above.</p>
+                  <p className="mt-2 text-sm text-amber-600">Not found in Open Food Facts. Try another barcode or cancel and search above.</p>
                 )}
                 {selectedDbFood != null && (
                   <p className="mt-1 text-sm text-emerald-600 font-medium">Found: {selectedDbFood.name}</p>
