@@ -1175,7 +1175,7 @@ export default function MemberMacrosDayPage() {
                       <button
                         type="button"
                         onClick={() => { setSaveFavFromMealId(meal.id); setSaveFavFromEntry(null); setSaveFavName(meal.name); }}
-                        className="text-xs text-brand-600 hover:underline"
+                        className="text-sm font-medium text-brand-600 hover:underline"
                       >
                         Save to Favorites
                       </button>
@@ -1185,14 +1185,14 @@ export default function MemberMacrosDayPage() {
                           const n = prompt("Rename meal", meal.name);
                           if (n != null) handleEditMeal(meal.id, n);
                         }}
-                        className="text-xs text-stone-500 hover:underline"
+                        className="text-sm font-medium text-stone-500 hover:underline"
                       >
                         Edit
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDeleteMeal(meal.id)}
-                        className="text-xs text-red-600 hover:underline"
+                        className="text-sm font-medium text-red-600 hover:underline"
                       >
                         Delete
                       </button>
@@ -1211,8 +1211,8 @@ export default function MemberMacrosDayPage() {
                                 onChange={(ev) => setEditAmount(ev.target.value)}
                                 className="w-20 px-2 py-1 border rounded"
                               />
-                              <button type="button" onClick={() => handleUpdateEntryAmount(e.id)} className="text-brand-600 text-xs">Save</button>
-                              <button type="button" onClick={() => setEditEntryId(null)} className="text-stone-400 text-xs">Cancel</button>
+                              <button type="button" onClick={() => handleUpdateEntryAmount(e.id)} className="text-brand-600 text-sm font-medium">Save</button>
+                              <button type="button" onClick={() => setEditEntryId(null)} className="text-stone-400 text-sm">Cancel</button>
                             </span>
                             {e.amount === 1 && e.food?.serving_description?.trim() && (
                               <span className="text-xs text-stone-400">1 = full portion ({e.food.serving_description.trim()}). Use 2 only to add another same portion.</span>
@@ -1228,13 +1228,13 @@ export default function MemberMacrosDayPage() {
                               })()}
                             </span>
                             <span className="flex gap-1">
-                              <button type="button" onClick={() => { setEditEntryId(e.id); setEditAmount(String(e.amount)); }} className="text-stone-500 hover:underline text-xs">Edit</button>
-                              <button type="button" onClick={() => handleDeleteEntry(e.id)} className="text-red-500 hover:underline text-xs">Delete</button>
+                              <button type="button" onClick={() => { setEditEntryId(e.id); setEditAmount(String(e.amount)); }} className="text-stone-500 hover:underline text-sm font-medium">Edit</button>
+                              <button type="button" onClick={() => handleDeleteEntry(e.id)} className="text-red-500 hover:underline text-sm font-medium">Delete</button>
                               {e.food && (
                                 <button
                                   type="button"
                                   onClick={() => { setSaveFavFromEntry({ food_id: e.food!.id, amount: e.amount }); setSaveFavName(e.food!.name); }}
-                                  className="text-brand-600 hover:underline text-xs"
+                                  className="text-brand-600 hover:underline text-sm font-medium"
                                 >
                                   Save to Favorites
                                 </button>
@@ -1251,7 +1251,7 @@ export default function MemberMacrosDayPage() {
                   <button
                     type="button"
                     onClick={() => openAddFood(meal.id)}
-                    className="mt-2 text-sm text-brand-600 hover:underline"
+                    className="mt-2 text-base font-medium text-brand-600 hover:underline"
                   >
                     + Add Food / Drink
                   </button>
@@ -1446,7 +1446,7 @@ export default function MemberMacrosDayPage() {
                             disabled={addingFavoriteToMeal?.favId === fav.id && addingFavoriteToMeal?.mealId === meal.id}
                             className="px-2 py-0.5 rounded text-xs font-medium bg-brand-100 text-brand-800 hover:bg-brand-200 disabled:opacity-50"
                           >
-                            {addingFavoriteToMeal?.favId === fav.id && addingFavoriteToMeal?.mealId === meal.id ? "…" : meal.name}
+                            {addingFavoriteToMeal?.favId === fav.id && addingFavoriteToMeal?.mealId === meal.id ? "…" : `+ ${meal.name}`}
                           </button>
                         ))}
                       </div>
@@ -1483,7 +1483,7 @@ export default function MemberMacrosDayPage() {
             </div>
             <div className="p-4 overflow-y-auto space-y-4">
               <div>
-                <label className="block text-sm font-medium text-stone-600 mb-1">Scan or enter barcode</label>
+                <label className="block text-sm font-medium text-stone-600 mb-1">Scan Or Enter Barcode</label>
                 <p className="text-xs text-stone-400 mb-1">Searches Open Food Facts (packaged foods worldwide). Use the camera or type the barcode.</p>
                 {showCameraScanner ? (
                   <Suspense fallback={<div className="py-8 text-center text-stone-500 text-sm">Loading camera…</div>}>
@@ -1719,40 +1719,7 @@ export default function MemberMacrosDayPage() {
               </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-stone-600 mb-1">My Favorites</label>
-                <input
-                  type="text"
-                  value={addFoodFavoritesSearch}
-                  onChange={(e) => setAddFoodFavoritesSearch(e.target.value)}
-                  placeholder="Search favorites…"
-                  className="w-full mb-2 px-3 py-2 rounded-lg border border-stone-200 text-sm"
-                />
-                {favorites.length === 0 ? (
-                  <p className="text-stone-400 text-sm">No favorites yet. <Link href="/member/macros/favorites" className="text-brand-600 hover:underline">Manage Favorites</Link> to add some.</p>
-                ) : (
-                  <ul className="border border-stone-200 rounded-lg divide-y max-h-40 overflow-y-auto">
-                    {favorites
-                      .filter((f) => !addFoodFavoritesSearch.trim() || f.name.toLowerCase().includes(addFoodFavoritesSearch.toLowerCase()))
-                      .map((fav) => (
-                        <li key={fav.id}>
-                          <button
-                            type="button"
-                            onClick={() => { setSelectedFavoriteId(fav.id); setSelectedUsdaFood(null); setSelectedOffFood(null); setSelectedDbFood(null); }}
-                            className={`w-full text-left px-3 py-2 text-sm ${selectedFavoriteId === fav.id ? "bg-brand-100 text-brand-800" : "text-stone-700 hover:bg-stone-50"}`}
-                          >
-                            {fav.name}
-                            {fav.items?.length > 0 && <span className="text-stone-400 ml-1">({fav.items.length} items)</span>}
-                          </button>
-                        </li>
-                      ))}
-                  </ul>
-                )}
-                {favorites.length > 0 && (
-                  <Link href="/member/macros/favorites" className="text-brand-600 hover:underline text-xs mt-1 inline-block">Manage Favorites →</Link>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-stone-600 mb-1">Or calculate macros</label>
+                <label className="block text-sm font-medium text-stone-600 mb-1">Or Calculate Macros</label>
                 <p className="text-xs text-stone-400 mb-1">Type anything — food, brand, or meal. Include amounts if you want (e.g. 2 bars, 1 cup rice).</p>
                 <div className="flex gap-2">
                   <input
@@ -1787,6 +1754,39 @@ export default function MemberMacrosDayPage() {
                       {addingAiEntry ? "Adding…" : "Add to meal"}
                     </button>
                   </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-600 mb-1">Add From Favorites</label>
+                <input
+                  type="text"
+                  value={addFoodFavoritesSearch}
+                  onChange={(e) => setAddFoodFavoritesSearch(e.target.value)}
+                  placeholder="Search favorites…"
+                  className="w-full mb-2 px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                />
+                {favorites.length === 0 ? (
+                  <p className="text-stone-400 text-sm">No favorites yet. <Link href="/member/macros/favorites" className="text-brand-600 hover:underline">Manage Favorites</Link> to add some.</p>
+                ) : (
+                  <ul className="border border-stone-200 rounded-lg divide-y max-h-40 overflow-y-auto">
+                    {favorites
+                      .filter((f) => !addFoodFavoritesSearch.trim() || f.name.toLowerCase().includes(addFoodFavoritesSearch.toLowerCase()))
+                      .map((fav) => (
+                        <li key={fav.id}>
+                          <button
+                            type="button"
+                            onClick={() => { setSelectedFavoriteId(fav.id); setSelectedUsdaFood(null); setSelectedOffFood(null); setSelectedDbFood(null); }}
+                            className={`w-full text-left px-3 py-2 text-sm ${selectedFavoriteId === fav.id ? "bg-brand-100 text-brand-800" : "text-stone-700 hover:bg-stone-50"}`}
+                          >
+                            {fav.name}
+                            {fav.items?.length > 0 && <span className="text-stone-400 ml-1">({fav.items.length} items)</span>}
+                          </button>
+                        </li>
+                      ))}
+                  </ul>
+                )}
+                {favorites.length > 0 && (
+                  <Link href="/member/macros/favorites" className="text-brand-600 hover:underline text-xs mt-1 inline-block">Manage Favorites →</Link>
                 )}
               </div>
             </div>

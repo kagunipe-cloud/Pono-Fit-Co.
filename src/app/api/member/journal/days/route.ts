@@ -57,6 +57,9 @@ export async function POST(request: NextRequest) {
     }
     const result = db.prepare("INSERT INTO journal_days (member_id, date) VALUES (?, ?)").run(memberId, date);
     const id = result.lastInsertRowid as number;
+    const defaultMeals = ["Breakfast", "Lunch", "Dinner", "Snack"];
+    const insertMeal = db.prepare("INSERT INTO journal_meals (journal_day_id, name, sort_order) VALUES (?, ?, ?)");
+    defaultMeals.forEach((name, i) => insertMeal.run(id, name, i));
     db.close();
     return NextResponse.json({ id, date });
   } catch (err) {
