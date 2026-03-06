@@ -11,16 +11,15 @@ export async function POST(
 ) {
   try {
     const id = (await params).id;
-    const numericId = parseInt(id, 10);
-    const isNumeric = !Number.isNaN(numericId);
+    const isPurelyNumeric = /^\d+$/.test(id);
 
     const stripeSecret = process.env.STRIPE_SECRET_KEY;
     if (!stripeSecret) return NextResponse.json({ error: "Stripe is not configured" }, { status: 500 });
 
     const db = getDb();
     ensureMembersStripeColumn(db);
-    let row = (isNumeric
-      ? db.prepare("SELECT member_id, email, stripe_customer_id FROM members WHERE id = ?").get(numericId)
+    let row = (isPurelyNumeric
+      ? db.prepare("SELECT member_id, email, stripe_customer_id FROM members WHERE id = ?").get(parseInt(id, 10))
       : null
     ) as { member_id: string; email: string | null; stripe_customer_id: string | null } | undefined;
     if (!row) {

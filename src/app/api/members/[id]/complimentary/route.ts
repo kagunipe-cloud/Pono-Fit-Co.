@@ -34,12 +34,11 @@ export async function POST(
   }
 
   const memberParam = (await params).id;
-  const numericId = parseInt(memberParam, 10);
-  const isNumeric = !Number.isNaN(numericId);
+  const isPurelyNumeric = /^\d+$/.test(memberParam);
 
   const db = getDb();
-  const member = (isNumeric
-    ? db.prepare("SELECT member_id FROM members WHERE id = ?").get(numericId)
+  const member = (isPurelyNumeric
+    ? db.prepare("SELECT member_id FROM members WHERE id = ?").get(parseInt(memberParam, 10))
     : db.prepare("SELECT member_id FROM members WHERE member_id = ?").get(memberParam)) as { member_id: string } | undefined;
   if (!member) {
     db.close();

@@ -28,8 +28,12 @@ async function getGmailAccessToken(): Promise<string | null> {
       grant_type: "refresh_token",
     }),
   });
-  const data = (await res.json().catch(() => ({}))) as { access_token?: string };
-  return data.access_token ?? null;
+  const data = (await res.json().catch(() => ({}))) as { access_token?: string; error?: string; error_description?: string };
+  if (!data.access_token) {
+    console.error("[email] Gmail token exchange failed:", res.status, data.error ?? "", data.error_description ?? "");
+    return null;
+  }
+  return data.access_token;
 }
 
 /** Send one email via Gmail API (HTTPS). Uses port 443 so it works when SMTP is blocked. */

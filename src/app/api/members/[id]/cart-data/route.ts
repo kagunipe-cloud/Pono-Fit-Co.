@@ -28,14 +28,13 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const id = (await params).id;
-  const numericId = parseInt(id, 10);
-  const isNumeric = !Number.isNaN(numericId);
+  const isPurelyNumeric = /^\d+$/.test(id);
   try {
     const db = getDb();
     ensureMembersStripeColumn(db);
 
-    let member = (isNumeric
-      ? db.prepare("SELECT id, member_id, first_name, last_name, stripe_customer_id FROM members WHERE id = ?").get(numericId)
+    let member = (isPurelyNumeric
+      ? db.prepare("SELECT id, member_id, first_name, last_name, stripe_customer_id FROM members WHERE id = ?").get(parseInt(id, 10))
       : null
     ) as { member_id: string; first_name: string; last_name: string; stripe_customer_id: string | null } | undefined;
     if (!member) {

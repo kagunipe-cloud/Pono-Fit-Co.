@@ -27,10 +27,9 @@ export async function POST(
 
     const db = getDb();
     ensureMembersStripeColumn(db);
-    const numericId = parseInt(id, 10);
-    const isNumeric = !Number.isNaN(numericId);
-    const member = (isNumeric
-      ? db.prepare("SELECT member_id FROM members WHERE id = ?").get(numericId)
+    const isPurelyNumeric = /^\d+$/.test(id);
+    const member = (isPurelyNumeric
+      ? db.prepare("SELECT member_id FROM members WHERE id = ?").get(parseInt(id, 10))
       : null
     ) as { member_id: string } | undefined;
     const memberByStr = db.prepare("SELECT member_id FROM members WHERE member_id = ?").get(id) as { member_id: string } | undefined;
