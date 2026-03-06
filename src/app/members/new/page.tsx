@@ -28,7 +28,7 @@ export default function NewMemberPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to create member");
-      router.push(`/members/${data.id}`);
+      router.push(`/members/${data.member_id}`);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");

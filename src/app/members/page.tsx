@@ -202,7 +202,7 @@ export default function MembersPage() {
                     className="border-t border-stone-100 hover:bg-brand-50/30 transition-colors"
                   >
                     <td className="py-3 px-4 font-medium text-stone-800">
-                      <Link href={`/members/${m.id}`} className="hover:text-brand-700 hover:underline">
+                      <Link href={`/members/${m.member_id}`} className="hover:text-brand-700 hover:underline">
                         {[m.first_name, m.last_name].filter(Boolean).join(" ") || "—"}
                       </Link>
                       {m.active && (
@@ -240,7 +240,7 @@ export default function MembersPage() {
                     <td className="py-3 px-4 text-stone-400 text-sm font-mono">{m.member_id}</td>
                     <td className="py-3 px-4">
                       <Link
-                        href={`/members/${m.id}`}
+                        href={`/members/${m.member_id}`}
                         className="text-brand-600 hover:underline text-sm font-medium"
                       >
                         View →

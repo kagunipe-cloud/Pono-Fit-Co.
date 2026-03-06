@@ -22,6 +22,9 @@ export default function AdminEmailMembersPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sendingSelected, setSendingSelected] = useState(false);
   const [selectedResult, setSelectedResult] = useState<{ sent: number; total: number; failed: number; errors?: string[] } | null>(null);
+  const [waiverMemberId, setWaiverMemberId] = useState("");
+  const [sendingWaiver, setSendingWaiver] = useState(false);
+  const [waiverResult, setWaiverResult] = useState<{ message: string; url?: string } | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/email-all-members")
@@ -151,6 +154,30 @@ export default function AdminEmailMembersPage() {
     }
   }
 
+  async function handleSendWaiver() {
+    const mid = waiverMemberId.trim();
+    if (!mid) return;
+    setWaiverResult(null);
+    setSendingWaiver(true);
+    try {
+      const res = await fetch("/api/waiver/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ member_id: mid }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setWaiverResult({ message: json.message, url: json.waiver_url });
+      } else {
+        setWaiverResult({ message: json.error ?? "Failed to send waiver." });
+      }
+    } catch {
+      setWaiverResult({ message: "Failed to send waiver." });
+    } finally {
+      setSendingWaiver(false);
+    }
+  }
+
   return (
     <div className="max-w-2xl mx-auto">
       <Link href="/members" className="text-stone-500 hover:text-stone-700 text-sm mb-4 inline-block">← Members</Link>
@@ -158,6 +185,40 @@ export default function AdminEmailMembersPage() {
       <p className="text-stone-500 text-sm mb-6">
         Send one email to every member who has an address on file. Uses your configured email (SMTP or Gmail API).
       </p>
+
+      <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50">
+        <h2 className="font-semibold text-stone-800 mb-1">Send liability waiver link</h2>
+        <p className="text-sm text-stone-600 mb-3">
+          Send a waiver link to a member (resets their signed state so you can test). Enter Member ID (e.g. 33330562).
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="text"
+            placeholder="Member ID"
+            value={waiverMemberId}
+            onChange={(e) => setWaiverMemberId(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-stone-200 text-sm w-40 font-mono"
+          />
+          <button
+            type="button"
+            onClick={handleSendWaiver}
+            disabled={sendingWaiver || !waiverMemberId.trim()}
+            className="px-4 py-2 rounded-lg border border-stone-300 bg-white font-medium hover:bg-stone-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {sendingWaiver ? "Sending…" : "Send waiver link"}
+          </button>
+        </div>
+        {waiverResult && (
+          <p className="mt-3 text-sm text-stone-700">
+            {waiverResult.message}
+            {waiverResult.url && (
+              <a href={waiverResult.url} target="_blank" rel="noopener noreferrer" className="ml-2 text-brand-600 hover:underline">
+                Open waiver link
+              </a>
+            )}
+          </p>
+        )}
+      </div>
 
       {recipientCount !== null && recipientCount > 0 && smtpConfigured && (
         <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50">

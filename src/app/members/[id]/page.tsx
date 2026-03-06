@@ -41,6 +41,8 @@ export default function MemberDetailPage() {
   const [compFreeMonths, setCompFreeMonths] = useState<number | "">("");
   const [compSubmitting, setCompSubmitting] = useState(false);
   const [compMessage, setCompMessage] = useState<string | null>(null);
+  const [sendingWaiver, setSendingWaiver] = useState(false);
+  const [waiverResult, setWaiverResult] = useState<{ message: string; url?: string } | null>(null);
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -145,6 +147,30 @@ export default function MemberDetailPage() {
       setUnlockMessage("Unlock failed.");
     } finally {
       setUnlocking(false);
+    }
+  }
+
+  async function handleSendWaiver() {
+    const mid = data?.member?.member_id as string;
+    if (!mid) return;
+    setWaiverResult(null);
+    setSendingWaiver(true);
+    try {
+      const res = await fetch("/api/waiver/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ member_id: mid }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setWaiverResult({ message: json.message, url: json.waiver_url });
+      } else {
+        setWaiverResult({ message: json.error ?? "Failed to send waiver." });
+      }
+    } catch {
+      setWaiverResult({ message: "Failed to send waiver." });
+    } finally {
+      setSendingWaiver(false);
     }
   }
 
@@ -377,6 +403,27 @@ export default function MemberDetailPage() {
             </button>
             {unlockMessage && (
               <span className="text-sm text-stone-600">{unlockMessage}</span>
+            )}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={handleSendWaiver}
+                disabled={sendingWaiver}
+                className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium disabled:opacity-50"
+                title="Send liability waiver link (resets signed state for testing)"
+              >
+                {sendingWaiver ? "Sending…" : "Send waiver link"}
+              </button>
+            )}
+            {waiverResult && (
+              <span className="text-sm text-stone-600">
+                {waiverResult.message}
+                {waiverResult.url && (
+                  <a href={waiverResult.url} target="_blank" rel="noopener noreferrer" className="ml-2 text-brand-600 hover:underline">
+                    Open waiver link
+                  </a>
+                )}
+              </span>
             )}
             {editing ? (
               <>
