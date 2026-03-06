@@ -41,7 +41,7 @@ function isMemberPath(pathname: string): boolean {
 }
 
 function isPublicPath(pathname: string): boolean {
-  const publicPaths = ["/login", "/set-password", "/bootstrap", "/install", "/schedule", "/unlock", "/privacy", "/terms"];
+  const publicPaths = ["/login", "/set-password", "/bootstrap", "/install", "/schedule", "/unlock", "/privacy", "/terms", "/sign-waiver"];
   if (publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))) return true;
   if (pathname.startsWith("/rec-leagues")) return true;
   if (pathname.startsWith("/api/")) return true;

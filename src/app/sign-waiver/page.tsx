@@ -99,6 +99,15 @@ function SignWaiverContent() {
             Open the waiver (PDF)
           </a>
         </p>
+        <p className="text-stone-600 text-sm mb-4">
+          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline font-medium">
+            Privacy Policy
+          </a>
+          {" · "}
+          <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline font-medium">
+            Terms of Service
+          </a>
+        </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <label className="flex items-start gap-3 cursor-pointer">
             <input
@@ -108,7 +117,7 @@ function SignWaiverContent() {
               className="mt-1 rounded border-stone-300 text-brand-600 focus:ring-brand-500"
             />
             <span className="text-stone-700 text-sm">
-              I have read the waiver and agree to its terms.
+              I have read the waiver, <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline">Privacy Policy</a>, and <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline">Terms of Service</a>, and agree to them.
             </span>
           </label>
           {error && <p className="text-red-600 text-sm">{error}</p>}
