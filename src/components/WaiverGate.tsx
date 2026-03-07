@@ -9,7 +9,7 @@ export function WaiverGate({ children }: { children: React.ReactNode }) {
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    if (pathname === "/sign-waiver-required") {
+    if (pathname === "/sign-waiver-required" || pathname === "/sign-waiver") {
       setChecked(true);
       return;
     }
