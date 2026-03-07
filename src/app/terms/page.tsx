@@ -17,7 +17,7 @@ export default function TermsOfServicePage() {
         <section>
           <h2 className="text-lg font-semibold text-stone-800 mt-6 mb-2">1. Agreement to Terms</h2>
           <p>
-            By accessing or using the services of {BRAND.name} (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;), including our website, mobile app, and in-person facilities, you agree to be bound by these Terms of Service (&quot;Terms&quot;). If you do not agree, do not use our services.
+            By accessing or using the services of PBJB LLC, doing business as {BRAND.name} (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;), including our website, mobile app, and in-person facilities, you agree to be bound by these Terms of Service (&quot;Terms&quot;). If you do not agree, do not use our services.
           </p>
         </section>
 
@@ -45,7 +45,7 @@ export default function TermsOfServicePage() {
         <section>
           <h2 className="text-lg font-semibold text-stone-800 mt-6 mb-2">5. Waiver and Release of Liability</h2>
           <p>
-            By using our facilities and services, you acknowledge that physical activity involves inherent risks of injury. You agree to sign our liability waiver before using the facility. You release {BRAND.name}, its owners, employees, and affiliates from any liability for injury, loss, or damage arising from your participation, except where prohibited by law.
+            By using our facilities and services, you acknowledge that physical activity involves inherent risks of injury. You agree to sign our liability waiver before using the facility. You release PBJB LLC, its owners, employees, and affiliates from any liability for injury, loss, or damage arising from your participation, except where prohibited by law.
           </p>
         </section>
 
@@ -67,7 +67,7 @@ export default function TermsOfServicePage() {
         <section>
           <h2 className="text-lg font-semibold text-stone-800 mt-6 mb-2">7. Intellectual Property</h2>
           <p>
-            Our name, logo, and content are owned by us. You may not use them without our prior written consent.
+            The {BRAND.name} name, logo, and content are owned by PBJB LLC. You may not use them without our prior written consent.
           </p>
         </section>
 
@@ -95,7 +95,7 @@ export default function TermsOfServicePage() {
         <section>
           <h2 className="text-lg font-semibold text-stone-800 mt-6 mb-2">11. General</h2>
           <p>
-            These Terms constitute the entire agreement between you and {BRAND.name}. If any provision is found unenforceable, the remaining provisions remain in effect. Our failure to enforce any right does not waive that right.
+            These Terms constitute the entire agreement between you and PBJB LLC. If any provision is found unenforceable, the remaining provisions remain in effect. Our failure to enforce any right does not waive that right.
           </p>
         </section>
 

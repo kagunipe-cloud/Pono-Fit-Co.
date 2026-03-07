@@ -17,7 +17,7 @@ export default function PrivacyPolicyPage() {
         <section>
           <h2 className="text-lg font-semibold text-stone-800 mt-6 mb-2">1. Introduction</h2>
           <p>
-            {BRAND.name} (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;) operates the membership and fitness services at beponofitco.com and related applications. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our services.
+            PBJB LLC, doing business as {BRAND.name} (&quot;we,&quot; &quot;our,&quot; or &quot;us&quot;), operates the membership and fitness services at beponofitco.com and related applications. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our services.
           </p>
         </section>
 
