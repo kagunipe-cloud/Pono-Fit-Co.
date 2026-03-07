@@ -100,11 +100,11 @@ function SignWaiverContent() {
           </a>
         </p>
         <p className="text-stone-600 text-sm mb-4">
-          <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline font-medium">
+          <a href={token ? `/privacy?token=${encodeURIComponent(token)}` : "/privacy"} className="text-brand-600 hover:underline font-medium">
             Privacy Policy
           </a>
           {" · "}
-          <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline font-medium">
+          <a href={token ? `/terms?token=${encodeURIComponent(token)}` : "/terms"} className="text-brand-600 hover:underline font-medium">
             Terms of Service
           </a>
         </p>
@@ -117,7 +117,7 @@ function SignWaiverContent() {
               className="mt-1 rounded border-stone-300 text-brand-600 focus:ring-brand-500"
             />
             <span className="text-stone-700 text-sm">
-              I have read the waiver, <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline">Privacy Policy</a>, and <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline">Terms of Service</a>, and agree to them.
+              I have read the waiver, <a href={token ? `/privacy?token=${encodeURIComponent(token)}` : "/privacy"} className="text-brand-600 hover:underline">Privacy Policy</a>, and <a href={token ? `/terms?token=${encodeURIComponent(token)}` : "/terms"} className="text-brand-600 hover:underline">Terms of Service</a>, and agree to them.
             </span>
           </label>
           {error && <p className="text-red-600 text-sm">{error}</p>}

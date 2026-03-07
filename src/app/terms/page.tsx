@@ -1,5 +1,6 @@
-import Link from "next/link";
+import { Suspense } from "react";
 import { BRAND } from "@/lib/branding";
+import { BackLink } from "@/components/BackLink";
 
 export const metadata = {
   title: `Terms of Service | ${BRAND.name}`,
@@ -9,7 +10,9 @@ export const metadata = {
 export default function TermsOfServicePage() {
   return (
     <div className="max-w-3xl mx-auto py-8 px-4">
-      <Link href="/" className="text-stone-500 hover:text-stone-700 text-sm mb-6 inline-block">← Back</Link>
+      <Suspense fallback={<span className="text-stone-500 text-sm mb-6 inline-block">← Back</span>}>
+        <BackLink />
+      </Suspense>
       <h1 className="text-2xl font-bold text-stone-800 mb-2">Terms of Service</h1>
       <p className="text-stone-500 text-sm mb-8">Last updated: March 2025</p>
 
