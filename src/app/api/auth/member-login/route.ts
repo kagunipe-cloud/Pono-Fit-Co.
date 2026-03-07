@@ -36,10 +36,10 @@ export async function POST(request: NextRequest) {
     ensureMembersPasswordColumn(db);
     const member = db
       .prepare(
-        "SELECT member_id, email, password_hash, role FROM members WHERE LOWER(TRIM(email)) = ? LIMIT 1"
+        "SELECT member_id, email, password_hash, role, waiver_signed_at FROM members WHERE LOWER(TRIM(email)) = ? LIMIT 1"
       )
       .get(email) as
-      | { member_id: string; email: string | null; password_hash: string | null; role: string | null }
+      | { member_id: string; email: string | null; password_hash: string | null; role: string | null; waiver_signed_at: string | null }
       | undefined;
     db.close();
 
@@ -58,7 +58,14 @@ export async function POST(request: NextRequest) {
 
     await setMemberSession(member.member_id);
     const role = member.role ?? "Member";
-    return NextResponse.json({ success: true, member_id: member.member_id, role });
+    const waiverSigned = !!(member.waiver_signed_at ?? "").trim();
+    const waiverRequired = !waiverSigned;
+    return NextResponse.json({
+      success: true,
+      member_id: member.member_id,
+      role,
+      waiver_required: waiverRequired,
+    });
   } catch (err) {
     console.error(err);
     return NextResponse.json(

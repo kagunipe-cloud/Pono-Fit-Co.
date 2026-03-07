@@ -13,8 +13,8 @@ export async function GET() {
 
     const db = getDb();
     const member = db.prepare(
-      "SELECT member_id, first_name, last_name, email, role FROM members WHERE member_id = ?"
-    ).get(memberId) as { member_id: string; first_name: string | null; last_name: string | null; email: string | null; role: string | null } | undefined;
+      "SELECT member_id, first_name, last_name, email, role, waiver_signed_at FROM members WHERE member_id = ?"
+    ).get(memberId) as { member_id: string; first_name: string | null; last_name: string | null; email: string | null; role: string | null; waiver_signed_at: string | null } | undefined;
     db.close();
 
     if (!member) {
@@ -28,6 +28,7 @@ export async function GET() {
       last_name: member.last_name,
       name: [member.first_name, member.last_name].filter(Boolean).join(" ") || "Member",
       role: member.role ?? "Member",
+      waiver_signed_at: member.waiver_signed_at ?? null,
     });
   } catch (err) {
     console.error(err);

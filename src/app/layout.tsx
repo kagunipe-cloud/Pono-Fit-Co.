@@ -1,6 +1,7 @@
 import Sidebar from "@/components/Sidebar";
 import { BRAND } from "@/lib/branding";
 import { SettingsProvider } from "@/lib/settings-context";
+import { WaiverGate } from "@/components/WaiverGate";
 import "./globals.css";
 
 export const metadata = {
@@ -29,12 +30,14 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen bg-gradient-to-r from-white to-brand-200 text-stone-900 antialiased">
         <SettingsProvider>
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <main className="flex-1 overflow-auto bg-gradient-to-r from-white to-brand-200 p-4 pt-14 md:p-6 md:pt-6">
-            {children}
-          </main>
-        </div>
+        <WaiverGate>
+          <div className="flex min-h-screen">
+            <Sidebar />
+            <main className="flex-1 overflow-auto bg-gradient-to-r from-white to-brand-200 p-4 pt-14 md:p-6 md:pt-6">
+              {children}
+            </main>
+          </div>
+        </WaiverGate>
         </SettingsProvider>
       </body>
     </html>

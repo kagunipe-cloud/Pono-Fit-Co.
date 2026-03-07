@@ -37,7 +37,7 @@ function isTrainerPath(pathname: string): boolean {
 }
 
 function isMemberPath(pathname: string): boolean {
-  return pathname === "/member" || pathname.startsWith("/member/");
+  return pathname === "/member" || pathname.startsWith("/member/") || pathname === "/sign-waiver-required";
 }
 
 function isPublicPath(pathname: string): boolean {

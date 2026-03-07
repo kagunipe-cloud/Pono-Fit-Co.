@@ -46,6 +46,10 @@ function LoginContent() {
         setError(data.error ?? "Login failed.");
         return;
       }
+      if (data.waiver_required) {
+        window.location.href = "/sign-waiver-required";
+        return;
+      }
       const nextPath = searchParams.get("next")?.trim();
       const defaultDest = data.role === "Admin" ? "/" : "/member";
       const dest = nextPath && nextPath.startsWith("/") && !nextPath.includes("//") ? nextPath : defaultDest;
