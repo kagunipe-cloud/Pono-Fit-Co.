@@ -5,6 +5,7 @@ import { ensureTrainersTable } from "./trainers";
 import { ensureTrainerClientsTable } from "./trainer-clients";
 import { ensureBodyCompositionTable } from "./body-composition";
 import { ensureClientGoalsTable } from "./client-goals";
+import { ensureGymsTable } from "./gyms";
 
 const dbPath = path.join(process.cwd(), "data", "the-fox-says.db");
 const restorePendingPath = path.join(process.cwd(), "data", "restore-pending.db");
@@ -96,10 +97,14 @@ function ensureAppSettingsDefaults(db: Database.Database) {
   }
 }
 
-/** Get the gym's timezone (e.g. for schedules, macros, usage). Default Pacific/Honolulu. */
-export function getAppTimezone(db: ReturnType<typeof getDb>): string {
-  const row = db.prepare("SELECT value FROM app_settings WHERE key = ?").get("timezone") as { value: string } | undefined;
-  const tz = row?.value?.trim();
+/** Get the gym's timezone (e.g. for schedules, macros, usage). Uses gyms.timezone first, else app_settings. Default Pacific/Honolulu. */
+export function getAppTimezone(db: ReturnType<typeof getDb>, gymId: number | null = 1): string {
+  const gym = db.prepare("SELECT timezone FROM gyms WHERE id = ?").get(gymId ?? 1) as { timezone: string | null } | undefined;
+  let tz = gym?.timezone?.trim();
+  if (!tz) {
+    const row = db.prepare("SELECT value FROM app_settings WHERE key = ?").get("timezone") as { value: string } | undefined;
+    tz = row?.value?.trim();
+  }
   if (!tz) return DEFAULT_TIMEZONE;
   try {
     new Intl.DateTimeFormat(undefined, { timeZone: tz });
@@ -121,12 +126,14 @@ export function getDb() {
     }
   }
   const db = new Database(dbPath);
+  ensureGymsTable(db);
   ensureBaseSchema(db);
   ensureSalesSaleDateColumn(db);
   ensureMembersWaiverColumns(db);
   ensureMembersPhoneColumn(db);
   ensurePaymentFailuresTable(db);
   ensureMembersMemberIdUnique(db);
+  ensureGymIdColumns(db);
   ensureTrainersTable(db);
   ensureTrainerClientsTable(db);
   ensureBodyCompositionTable(db);
@@ -148,12 +155,31 @@ export function ensureMembersStripeColumn(db: ReturnType<typeof getDb>) {
   }
 }
 
+/** Ensure sales table exists (created by cart/confirm-payment). */
+function ensureSalesTable(db: ReturnType<typeof getDb>) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS sales (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sales_id TEXT,
+      date_time TEXT,
+      member_id TEXT,
+      stripe_link TEXT,
+      grand_total TEXT,
+      email TEXT,
+      status TEXT,
+      price TEXT,
+      sale_date TEXT
+    )
+  `);
+}
+
 /** Add sale_date (YYYY-MM-DD) to sales if missing, for date-range filtering. */
 export function ensureSalesSaleDateColumn(db: ReturnType<typeof getDb>) {
+  ensureSalesTable(db);
   try {
     db.exec("ALTER TABLE sales ADD COLUMN sale_date TEXT");
   } catch {
-    // Column already exists or table missing
+    // Column already exists
   }
 }
 
@@ -200,6 +226,42 @@ export function ensureMembersMemberIdUnique(db: ReturnType<typeof getDb>) {
     db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_members_member_id ON members(member_id)");
   } catch {
     // Index already exists or duplicates exist (caller may need to fix data)
+  }
+}
+
+/** Add gym_id to tenant-scoped tables. NULL/1 = default gym. Enables Stripe Connect + multi-tenant later. */
+function ensureGymIdColumns(db: ReturnType<typeof getDb>) {
+  const tables = [
+    "members",
+    "subscriptions",
+    "membership_plans",
+    "payment_failures",
+    "trainers",
+    "pt_sessions",
+    "classes",
+    "recurring_classes",
+    "cart",
+    "cart_items",
+    "door_access_events",
+    "app_usage_events",
+  ];
+  for (const table of tables) {
+    try {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN gym_id INTEGER DEFAULT 1`);
+    } catch {
+      /* column already exists */
+    }
+  }
+  // sales, pt_bookings, class_bookings may not exist yet
+  for (const table of ["sales", "pt_bookings", "class_bookings"]) {
+    try {
+      const info = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+      if (info.length > 0 && !info.some((c) => c.name === "gym_id")) {
+        db.exec(`ALTER TABLE ${table} ADD COLUMN gym_id INTEGER DEFAULT 1`);
+      }
+    } catch {
+      /* table may not exist */
+    }
   }
 }
 

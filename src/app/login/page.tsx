@@ -130,6 +130,11 @@ function LoginContent() {
           ← Back to home
         </Link>
       </p>
+      <p className="mt-2 text-center text-sm text-stone-500">
+        <Link href="/privacy" className="text-brand-600 hover:underline">Privacy Policy</Link>
+        {" · "}
+        <Link href="/terms" className="text-brand-600 hover:underline">Terms of Service</Link>
+      </p>
     </div>
   );
 }

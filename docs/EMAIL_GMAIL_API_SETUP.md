@@ -38,6 +38,26 @@ In Railway (or your host) add:
 
 Redeploy. The app will send all member emails via the Gmail API over HTTPS.
 
+## 5. Branding verification (for production)
+
+When publishing as External, Google may require:
+
+### Privacy policy link on homepage
+
+The homepage (or the page shown when visiting your app URL) must include a link to your privacy policy. The app has this on the login page and homepage footer.
+
+### Domain ownership verification
+
+If Google says "The website of your home page URL is not registered to you":
+
+1. Go to [Google Search Console](https://search.google.com/search-console/).
+2. Add a property for your domain (e.g. `https://app.beponofitco.com` or the root `beponofitco.com`).
+3. Verify ownership using one of:
+   - **DNS**: Add a TXT record to your domain (recommended).
+   - **HTML file**: Upload a verification file to your site.
+   - **HTML meta tag**: Add a meta tag to your site.
+4. Use the same Google account that owns the Cloud project. Verification can take a few minutes.
+
 ## Notes
 
 - You can remove SMTP variables (`SMTP_HOST`, etc.) if you use Gmail API only.
