@@ -6,6 +6,7 @@ import Link from "next/link";
 
 type Member = { member_id: string; first_name: string | null; last_name: string | null; email: string | null };
 type PtSession = { id: number; session_name: string; duration_minutes: number; price: string; trainer: string | null };
+type Trainer = { member_id: string; display_name: string };
 
 function normalizeTimeToHHmm(t: string): string {
   const parts = String(t).trim().split(/[:\s]/).map((x) => parseInt(x, 10));
@@ -23,9 +24,11 @@ function AdminBookPTForMemberContent() {
 
   const [members, setMembers] = useState<Member[]>([]);
   const [sessions, setSessions] = useState<PtSession[]>([]);
+  const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [memberQuery, setMemberQuery] = useState("");
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
+  const [selectedTrainerId, setSelectedTrainerId] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -38,6 +41,10 @@ function AdminBookPTForMemberContent() {
       .then((r) => r.json())
       .then((list) => setSessions(Array.isArray(list) ? list : []))
       .catch(() => setSessions([]));
+    fetch("/api/trainers")
+      .then((r) => r.json())
+      .then((list) => setTrainers(Array.isArray(list) ? list : []))
+      .catch(() => setTrainers([]));
   }, []);
 
   const filteredMembers = useMemo(() => {
@@ -75,6 +82,7 @@ function AdminBookPTForMemberContent() {
             date,
             start_time: startTime,
             duration_minutes: selectedSession?.duration_minutes ?? 60,
+            ...(selectedTrainerId ? { trainer_member_id: selectedTrainerId } : {}),
           },
         }),
       });
@@ -141,6 +149,23 @@ function AdminBookPTForMemberContent() {
               </option>
             ))}
           </select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-stone-700 mb-1">Assign to trainer (optional)</label>
+          <select
+            value={selectedTrainerId}
+            onChange={(e) => setSelectedTrainerId(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-white"
+          >
+            <option value="">— No preference (leave open) —</option>
+            {trainers.map((t) => (
+              <option key={t.member_id} value={t.member_id}>
+                {t.display_name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-stone-500 mt-1">Leave open to assign later from the Master Schedule.</p>
         </div>
       </div>
 

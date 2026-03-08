@@ -53,7 +53,14 @@ export async function POST(request: NextRequest) {
     const slot = body.slot;
     const slot_json =
       product_type === "pt_session" && slot && typeof slot === "object" && slot.date && slot.start_time && slot.duration_minutes
-        ? JSON.stringify({ date: String(slot.date), start_time: String(slot.start_time), duration_minutes: Number(slot.duration_minutes) })
+        ? JSON.stringify({
+            date: String(slot.date),
+            start_time: String(slot.start_time),
+            duration_minutes: Number(slot.duration_minutes),
+            ...(slot.trainer_member_id && typeof slot.trainer_member_id === "string" && slot.trainer_member_id.trim()
+              ? { trainer_member_id: String(slot.trainer_member_id).trim() }
+              : {}),
+          })
         : null;
 
     const db = getDb();

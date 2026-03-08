@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
+import { getAdminMemberId } from "../../../../../lib/admin";
+import { sendMemberEmail } from "../../../../../lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -27,12 +29,16 @@ export async function GET(
   }
 }
 
-/** PATCH: update occurrence_date, start_time, member_id, guest_name. If guest_name set, member_id stored as ''. */
+/** PATCH: update occurrence_date, start_time, member_id, guest_name, trainer_member_id. Admin only. */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const adminId = await getAdminMemberId(request);
+    if (!adminId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     const { id } = await params;
     const numericId = parseInt(id, 10);
     if (Number.isNaN(numericId)) {
@@ -52,10 +58,28 @@ export async function PATCH(
     const member_id = body.member_id !== undefined ? String(body.member_id).trim() : existing.member_id;
     const effectiveMemberId = guest_name ? "" : (member_id ?? "");
     const effectiveGuestName = guest_name ?? (effectiveMemberId ? null : existing.guest_name);
+    const trainer_member_id = body.trainer_member_id !== undefined ? (String(body.trainer_member_id).trim() || null) : (existing.trainer_member_id as string | null) ?? null;
+
+    const prevTrainerId = (existing.trainer_member_id as string | null) ?? null;
+    const isNewAssignment = trainer_member_id && trainer_member_id !== prevTrainerId;
+
     db.prepare(
-      "UPDATE pt_open_bookings SET occurrence_date = ?, start_time = ?, member_id = ?, guest_name = ? WHERE id = ?"
-    ).run(occurrence_date, start_time, effectiveMemberId, effectiveGuestName, numericId);
+      "UPDATE pt_open_bookings SET occurrence_date = ?, start_time = ?, member_id = ?, guest_name = ?, trainer_member_id = ? WHERE id = ?"
+    ).run(occurrence_date, start_time, effectiveMemberId, effectiveGuestName, trainer_member_id, numericId);
     const row = db.prepare("SELECT * FROM pt_open_bookings WHERE id = ?").get(numericId);
+
+    if (isNewAssignment && trainer_member_id) {
+      const memberRow = db.prepare("SELECT first_name, last_name FROM members WHERE member_id = ?").get(effectiveMemberId) as { first_name: string | null; last_name: string | null } | undefined;
+      const trainerRow = db.prepare("SELECT email, first_name, last_name FROM members WHERE member_id = ?").get(trainer_member_id) as { email: string | null; first_name: string | null; last_name: string | null } | undefined;
+      const memberName = memberRow ? [memberRow.first_name, memberRow.last_name].filter(Boolean).join(" ").trim() || "A client" : "A client";
+      const trainerEmail = trainerRow?.email?.trim();
+      if (trainerEmail) {
+        const subject = `PT session assigned: ${memberName} — ${occurrence_date} at ${start_time}`;
+        const text = `You've been assigned a PT session with ${memberName} on ${occurrence_date} at ${start_time}.`;
+        sendMemberEmail(trainerEmail, subject, text).catch(() => {});
+      }
+    }
+
     db.close();
     return NextResponse.json(row);
   } catch (err) {

@@ -160,6 +160,11 @@ export function ensurePTSlotTables(db: ReturnType<typeof getDb>) {
   } catch {
     /* already exists */
   }
+  try {
+    db.exec("ALTER TABLE pt_open_bookings ADD COLUMN trainer_member_id TEXT");
+  } catch {
+    /* already exists */
+  }
 }
 
 export function getPTCreditBalance(db: ReturnType<typeof getDb>, member_id: string, duration_minutes: number): number {

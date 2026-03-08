@@ -139,24 +139,39 @@ export async function POST(request: NextRequest) {
           const session = db.prepare("SELECT * FROM pt_sessions WHERE id = ?").get(it.product_id) as { id: number; price: string; product_id: string; duration_minutes?: number; trainer?: string | null } | undefined;
           if (session) {
             grand_total += parsePrice(session.price) * it.quantity;
-            let slot: { date: string; start_time: string; duration_minutes: number } | null = null;
+            let slot: { date: string; start_time: string; duration_minutes: number; trainer_member_id?: string } | null = null;
             if (it.slot_json) {
               try {
                 const parsed = JSON.parse(it.slot_json);
                 if (parsed?.date && parsed?.start_time != null && typeof parsed.duration_minutes === "number") {
-                  slot = { date: String(parsed.date), start_time: String(parsed.start_time), duration_minutes: Number(parsed.duration_minutes) };
+                  slot = {
+                    date: String(parsed.date),
+                    start_time: String(parsed.start_time),
+                    duration_minutes: Number(parsed.duration_minutes),
+                    ...(parsed.trainer_member_id && typeof parsed.trainer_member_id === "string" ? { trainer_member_id: String(parsed.trainer_member_id).trim() } : {}),
+                  };
                 }
               } catch {
                 /* ignore */
               }
             }
             if (slot) {
+              const trainerMemberId = slot.trainer_member_id || null;
               db.prepare(
-                "INSERT INTO pt_open_bookings (member_id, occurrence_date, start_time, duration_minutes, pt_session_id, payment_type) VALUES (?, ?, ?, ?, ?, 'paid')"
-              ).run(member_id, slot.date, slot.start_time, slot.duration_minutes, session.id);
-              const trainerName = (session.trainer ?? "").trim();
-              const trainerMemberId = trainerName ? getTrainerMemberIdByDisplayName(db, trainerName) : null;
-              if (trainerMemberId) ensureTrainerClient(db, trainerMemberId, member_id);
+                "INSERT INTO pt_open_bookings (member_id, occurrence_date, start_time, duration_minutes, pt_session_id, payment_type, trainer_member_id) VALUES (?, ?, ?, ?, ?, 'paid', ?)"
+              ).run(member_id, slot.date, slot.start_time, slot.duration_minutes, session.id, trainerMemberId);
+              if (trainerMemberId) {
+                ensureTrainerClient(db, trainerMemberId, member_id);
+                const memberRow = db.prepare("SELECT first_name, last_name FROM members WHERE member_id = ?").get(member_id) as { first_name: string | null; last_name: string | null } | undefined;
+                const trainerRow = db.prepare("SELECT email FROM members WHERE member_id = ?").get(trainerMemberId) as { email: string | null } | undefined;
+                const memberName = memberRow ? [memberRow.first_name, memberRow.last_name].filter(Boolean).join(" ").trim() || "A client" : "A client";
+                const trainerEmail = trainerRow?.email?.trim();
+                if (trainerEmail) {
+                  const subject = `PT session assigned: ${memberName} — ${slot.date} at ${slot.start_time}`;
+                  const text = `You've been assigned a PT session with ${memberName} on ${slot.date} at ${slot.start_time}.`;
+                  sendMemberEmail(trainerEmail, subject, text).catch(() => {});
+                }
+              }
             } else {
               const pt_booking_id = randomUUID().slice(0, 8);
               try {

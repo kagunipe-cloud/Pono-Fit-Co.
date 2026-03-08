@@ -29,7 +29,7 @@ type CellItem =
   | { type: "class_span" }
   | { type: "unavailable"; id: number; description: string }
   | { type: "pt_segment"; blockId: number; trainer: string; start_time: string; end_time: string; booked: boolean; member_name?: string; booking_id?: number }
-  | { type: "open_booked"; id?: number; member_name?: string }
+  | { type: "open_booked"; id?: number; member_name?: string; trainer_name?: string | null }
   | { type: "available" }
   | { type: "trainer_not_available" };
 
@@ -91,6 +91,10 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
     : "";
   const [unavailableDeletingId, setUnavailableDeletingId] = useState<number | null>(null);
   const [availabilityDeletingId, setAvailabilityDeletingId] = useState<number | null>(null);
+  const [assignTrainerBookingId, setAssignTrainerBookingId] = useState<number | null>(null);
+  const [trainers, setTrainers] = useState<{ member_id: string; display_name: string }[]>([]);
+  const [assignTrainerSelected, setAssignTrainerSelected] = useState("");
+  const [assignTrainerSubmitting, setAssignTrainerSubmitting] = useState(false);
   const [localRefreshKey, setLocalRefreshKey] = useState(0);
   const refreshKey = scheduleRefreshKey ?? localRefreshKey;
   type SelectedSlot = { date: string; slotMin: number; timeStr: string; item: CellItem };
@@ -113,7 +117,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
       fetch(`/api/offerings/class-occurrences?from=${fromStr}&to=${toStr}`).then((r) => r.json()),
       fetch(`/api/offerings/unavailable-blocks?from=${fromStr}&to=${toStr}`).then((r) => r.json()),
       fetch(ptUrl).then((r) => r.json()),
-      fetch(`/api/offerings/pt-open-bookings?from=${fromStr}&to=${toStr}`).then((r) => r.json()),
+      fetch(`/api/offerings/pt-open-bookings?from=${fromStr}&to=${toStr}${effectiveTrainerId ? `&trainer_member_id=${encodeURIComponent(effectiveTrainerId)}` : ""}`).then((r) => r.json()),
     ])
       .then(([classData, unavailData, ptData, openData]) => {
         setOccurrences(Array.isArray(classData) ? classData : []);
@@ -201,7 +205,12 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
           return slotOverlaps(slotMin, startMin, endMin);
         });
         if (openBookingAtSlot) {
-          map.set(key, { type: "open_booked", ...(openBookingAtSlot.id != null && { id: openBookingAtSlot.id }), ...(openBookingAtSlot.member_name != null && { member_name: openBookingAtSlot.member_name }) });
+          map.set(key, {
+            type: "open_booked",
+            ...(openBookingAtSlot.id != null && { id: openBookingAtSlot.id }),
+            ...(openBookingAtSlot.member_name != null && { member_name: openBookingAtSlot.member_name }),
+            ...(openBookingAtSlot.trainer_name != null && { trainer_name: openBookingAtSlot.trainer_name }),
+          });
           continue;
         }
         const memberWithTrainerFilter = variant === "member" && effectiveTrainerId != null;
@@ -341,6 +350,27 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
 
   function getDayOfWeek(dateStr: string): number {
     return new Date(dateStr + "T12:00:00").getDay();
+  }
+
+  async function handleAssignTrainer(bookingId: number, trainerMemberId: string) {
+    setAssignTrainerSubmitting(true);
+    try {
+      const res = await fetch(`/api/offerings/pt-open-bookings/${bookingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trainer_member_id: trainerMemberId || null }),
+      });
+      if (res.ok) {
+        setLocalRefreshKey((k) => k + 1);
+        setAssignTrainerBookingId(null);
+        setSelectedSlot(null);
+      } else {
+        const data = await res.json();
+        alert(data.error ?? "Failed to assign");
+      }
+    } finally {
+      setAssignTrainerSubmitting(false);
+    }
   }
 
   async function handleCancelOpenBooking(id: number) {
@@ -524,9 +554,9 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                           {item.type === "open_booked" && (
                             <div
                               className="rounded-lg bg-stone-400 min-h-[2.5rem] flex items-center px-2 py-1.5 text-stone-100"
-                              title={isMaster ? (item.member_name ?? "PT booked") : "Unavailable"}
+                              title={isMaster || isTrainer ? (item.member_name ?? "PT booked") : "Unavailable"}
                             >
-                              {isMaster ? (
+                              {(isMaster || isTrainer) ? (
                                 <span className="text-xs truncate block w-full" title={item.member_name ?? "Booked"}>
                                   {item.member_name ?? "Booked"}
                                 </span>
@@ -646,11 +676,66 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                 </li>
               )}
               {selectedSlot.item.type === "open_booked" && selectedSlot.item.id != null && (isMaster || allowAdminEdit) && (
-                <li>
-                  <button type="button" onClick={() => { if (selectedSlot.item.type === "open_booked" && selectedSlot.item.id != null) { handleCancelOpenBooking(selectedSlot.item.id); setSelectedSlot(null); } }} className="text-red-600 hover:underline">
-                    Cancel PT for client
-                  </button>
-                </li>
+                <>
+                  {assignTrainerBookingId === selectedSlot.item.id ? (
+                    <li className="space-y-2">
+                      <span className="font-medium text-stone-700">Assign to trainer:</span>
+                      <select
+                        value={assignTrainerSelected}
+                        onChange={(e) => setAssignTrainerSelected(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                      >
+                        <option value="">— No preference (leave open) —</option>
+                        {trainers.map((t) => (
+                          <option key={t.member_id} value={t.member_id}>
+                            {t.display_name}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleAssignTrainer(selectedSlot.item.id!, assignTrainerSelected)}
+                          disabled={assignTrainerSubmitting}
+                          className="px-3 py-1.5 rounded-lg bg-brand-600 text-white text-sm font-medium disabled:opacity-50"
+                        >
+                          {assignTrainerSubmitting ? "Saving…" : "Save"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAssignTrainerBookingId(null)}
+                          className="px-3 py-1.5 rounded-lg border border-stone-200 text-sm"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </li>
+                  ) : (
+                    <li>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (selectedSlot.item.type === "open_booked" && selectedSlot.item.id != null) {
+                            setAssignTrainerBookingId(selectedSlot.item.id);
+                            setAssignTrainerSelected("");
+                            fetch("/api/trainers")
+                              .then((r) => r.json())
+                              .then((list) => setTrainers(Array.isArray(list) ? list : []))
+                              .catch(() => setTrainers([]));
+                          }
+                        }}
+                        className="text-brand-600 hover:underline"
+                      >
+                        {selectedSlot.item.trainer_name ? `Change trainer (${selectedSlot.item.trainer_name})` : "Assign to trainer"}
+                      </button>
+                    </li>
+                  )}
+                  <li>
+                    <button type="button" onClick={() => { if (selectedSlot.item.type === "open_booked" && selectedSlot.item.id != null) { handleCancelOpenBooking(selectedSlot.item.id); setSelectedSlot(null); } }} className="text-red-600 hover:underline">
+                      Cancel PT for client
+                    </button>
+                  </li>
+                </>
               )}
               {selectedSlot.item.type === "available" && (isMaster || allowAdminEdit) && (
                 <li>
