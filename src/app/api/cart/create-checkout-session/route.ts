@@ -146,6 +146,7 @@ export async function POST(request: NextRequest) {
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
       mode: "payment",
+      billing_address_collection: "required",
       line_items: lineItems.map((item) => {
         const unitAmount = parsePriceToCents(item.price);
         if (unitAmount <= 0) {
