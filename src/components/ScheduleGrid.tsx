@@ -695,7 +695,11 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          onClick={() => handleAssignTrainer(selectedSlot.item.id!, assignTrainerSelected)}
+                          onClick={() => {
+                            if (selectedSlot.item.type === "open_booked" && selectedSlot.item.id != null) {
+                              handleAssignTrainer(selectedSlot.item.id, assignTrainerSelected);
+                            }
+                          }}
                           disabled={assignTrainerSubmitting}
                           className="px-3 py-1.5 rounded-lg bg-brand-600 text-white text-sm font-medium disabled:opacity-50"
                         >
