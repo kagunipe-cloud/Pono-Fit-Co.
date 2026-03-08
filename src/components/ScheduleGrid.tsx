@@ -80,7 +80,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
   const [occurrences, setOccurrences] = useState<Occurrence[]>([]);
   const [unavailable, setUnavailable] = useState<UnavailableOccurrence[]>([]);
   const [ptBlocks, setPtBlocks] = useState<PtBlockWithSegments[]>([]);
-  const [openBookings, setOpenBookings] = useState<{ id?: number; occurrence_date: string; start_time: string; duration_minutes: number; member_name?: string }[]>([]);
+  const [openBookings, setOpenBookings] = useState<{ id?: number; occurrence_date: string; start_time: string; duration_minutes: number; member_name?: string; trainer_name?: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const bookPtQuery = productId ? `&product=${encodeURIComponent(productId)}` : "";
   const isMaster = variant === "master";
