@@ -269,8 +269,10 @@ export default function MemberDetailPage() {
       });
       if (!res.ok) throw new Error("Failed to update");
       const updated = await res.json();
-      setData((d) => (d ? { ...d, member: updated } : null));
+      const { kisi_sync_warning, ...memberData } = updated;
+      setData((d) => (d ? { ...d, member: memberData } : null));
       setEditing(false);
+      if (kisi_sync_warning) alert(kisi_sync_warning);
     } catch {
       setError("Failed to save");
     }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, expiryDateSortableSql } from "../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
+import { updateKisiUser, ensureKisiUser } from "../../../../lib/kisi";
 
 export const dynamic = "force-dynamic";
 
@@ -166,9 +167,33 @@ export async function PATCH(
     stmt.run(...values);
     const row = db.prepare(
       "SELECT id, member_id, first_name, last_name, email, phone, kisi_id, kisi_group_id, join_date, exp_next_payment_date, role, created_at FROM members WHERE id = ?"
-    ).get(memberId);
-    db.close();
+    ).get(memberId) as { id: number; member_id: string; first_name: string | null; last_name: string | null; email: string | null; phone: string | null; kisi_id: string | null } | undefined;
 
+    // Sync email/name to Kisi regardless of current door access (handles cancel-and-return members)
+    const profileChanged = body.email !== undefined || body.first_name !== undefined || body.last_name !== undefined;
+    const email = row?.email?.trim();
+    const name = [row?.first_name, row?.last_name].filter(Boolean).join(" ").trim() || undefined;
+    if (profileChanged && email && row) {
+      try {
+        const kisiId = row.kisi_id?.trim();
+        if (kisiId) {
+          await updateKisiUser(kisiId, { email, name });
+        } else {
+          const newKisiId = await ensureKisiUser(email, name);
+          db.prepare("UPDATE members SET kisi_id = ? WHERE id = ?").run(newKisiId, memberId);
+          (row as { kisi_id: string }).kisi_id = newKisiId;
+        }
+      } catch (e) {
+        console.error("[members PATCH] Kisi sync failed:", e);
+        db.close();
+        return NextResponse.json({
+          ...row,
+          kisi_sync_warning: "Member updated but Kisi sync failed. Update the email in Kisi manually if needed.",
+        });
+      }
+    }
+
+    db.close();
     return NextResponse.json(row);
   } catch (err) {
     console.error(err);

@@ -79,6 +79,40 @@ export async function ensureKisiUser(email: string, name?: string | null): Promi
   return String(created.id);
 }
 
+/**
+ * Update a Kisi user's email and/or name. Use when member profile is edited.
+ * Silently skips if Kisi is not configured.
+ */
+export async function updateKisiUser(
+  kisiUserId: string,
+  updates: { email?: string; name?: string }
+): Promise<void> {
+  const headers = authHeaders();
+  if (!headers.Authorization) {
+    console.log("[Kisi] KISI_API_KEY not set; skipping user update.");
+    return;
+  }
+  const kisiId = kisiUserId?.trim();
+  if (!kisiId) return;
+
+  const user: { email?: string; name?: string } = {};
+  if (updates.email?.trim()) user.email = updates.email.trim();
+  if (updates.name !== undefined) user.name = (updates.name ?? "").trim() || undefined;
+  if (Object.keys(user).length === 0) return;
+
+  const res = await fetch(`${KISI_API_BASE}/users/${kisiId}`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify({ user }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    console.error("[Kisi] update user failed:", res.status, err);
+    throw new Error(`Kisi user update failed: ${res.status}`);
+  }
+}
+
 export async function grantAccess(kisiUserId: string, validUntil: Date): Promise<void> {
   const key = process.env.KISI_API_KEY?.trim();
   const groupId = process.env.KISI_GROUP_ID?.trim();
