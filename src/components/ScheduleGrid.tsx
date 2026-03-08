@@ -435,16 +435,19 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
             {isMaster ? "Master Schedule" : isTrainer ? "My Schedule" : "Schedule"}
           </h1>
           {isMaster && (
-            <p className="mt-1 text-sm text-stone-500">
-              Add recurring:{" "}
-              <Link href="/recurring-classes" className="text-brand-600 hover:underline font-medium">Recurring classes</Link>
-              {" · "}
-              <Link href="/pt-bookings/generate-recurring" className="text-brand-600 hover:underline font-medium">PT recurring</Link>
-              {" · "}
-              <Link href="/classes" className="text-brand-600 hover:underline font-medium">Classes</Link>
-              {" · "}
-              <Link href="/admin/block-time" className="text-brand-600 hover:underline font-medium">Block time</Link>
-            </p>
+            <>
+              <p className="mt-1 text-base font-medium text-stone-700">
+                Click on a Time Slot to Book a Member.
+              </p>
+              <p className="mt-1 text-sm text-stone-500">
+                Add Recurring:{" "}
+                <Link href="/recurring-classes" className="text-brand-600 hover:underline font-medium">Classes</Link>
+                {" — "}
+                <Link href="/pt-bookings/generate-recurring" className="text-brand-600 hover:underline font-medium">PT</Link>
+                {" — "}
+                <Link href="/admin/block-time" className="text-brand-600 hover:underline font-medium">Blocked Time</Link>
+              </p>
+            </>
           )}
           {isTrainer && allowAdminEdit && trainerDisplayName && (
             <p className="mt-1 text-sm text-stone-500">
@@ -460,7 +463,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {!isTrainer && (
+          {!isTrainer && !isMaster && (
             <>
               <Link href="/member/classes" className="text-brand-600 hover:underline font-medium">Browse Classes</Link>
               <span className="text-stone-300">|</span>

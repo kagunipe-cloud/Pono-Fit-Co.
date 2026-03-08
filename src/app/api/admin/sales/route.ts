@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   try {
     const db = getDb();
     const rows = db.prepare(
-      `SELECT s.sales_id, s.date_time, s.member_id, s.grand_total, s.email, s.status,
+      `SELECT s.sales_id, s.date_time, s.member_id, s.grand_total, s.tax_amount, s.email, s.status,
         TRIM(COALESCE(m.first_name, '') || ' ' || COALESCE(m.last_name, '')) AS member_name
        FROM sales s
        LEFT JOIN members m ON m.member_id = s.member_id

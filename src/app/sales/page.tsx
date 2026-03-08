@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 type CategoryRow = { category: string; count: number; revenue: number };
-type Report = { totalCount: number; totalRevenue: number; byCategory: CategoryRow[]; from: string | null; to: string | null } | null;
+type Report = { totalCount: number; totalRevenue: number; totalTaxCollected?: number; byCategory: CategoryRow[]; from: string | null; to: string | null } | null;
 
 function formatMoney(n: number): string {
   if (Number.isNaN(n) || n === 0) return "$0";
@@ -211,7 +211,7 @@ export default function SalesPage() {
         <p className="p-6 text-stone-500">Could not load report.</p>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
             <div className="rounded-xl border border-stone-200 bg-white p-4">
               <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Transactions</p>
               <p className="text-2xl font-bold text-stone-800 mt-1">{report.totalCount}</p>
@@ -219,6 +219,10 @@ export default function SalesPage() {
             <div className="rounded-xl border border-stone-200 bg-white p-4">
               <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Total revenue</p>
               <p className="text-2xl font-bold text-stone-800 mt-1">{formatMoney(report.totalRevenue)}</p>
+            </div>
+            <div className="rounded-xl border border-stone-200 bg-white p-4">
+              <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Tax collected</p>
+              <p className="text-2xl font-bold text-stone-800 mt-1">{formatMoney(report.totalTaxCollected ?? 0)}</p>
             </div>
           </div>
           <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">

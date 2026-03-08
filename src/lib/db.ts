@@ -129,6 +129,7 @@ export function getDb() {
   ensureGymsTable(db);
   ensureBaseSchema(db);
   ensureSalesSaleDateColumn(db);
+  ensureSalesTaxAmountColumn(db);
   ensureMembersWaiverColumns(db);
   ensureMembersPhoneColumn(db);
   ensurePaymentFailuresTable(db);
@@ -178,6 +179,16 @@ export function ensureSalesSaleDateColumn(db: ReturnType<typeof getDb>) {
   ensureSalesTable(db);
   try {
     db.exec("ALTER TABLE sales ADD COLUMN sale_date TEXT");
+  } catch {
+    // Column already exists
+  }
+}
+
+/** Add tax_amount (dollars) to sales if missing, for Stripe tax tracking. */
+export function ensureSalesTaxAmountColumn(db: ReturnType<typeof getDb>) {
+  ensureSalesTable(db);
+  try {
+    db.exec("ALTER TABLE sales ADD COLUMN tax_amount TEXT");
   } catch {
     // Column already exists
   }

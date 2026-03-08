@@ -24,10 +24,11 @@ export async function GET(request: NextRequest) {
     const byCategory: CategoryRow[] = [];
 
     const totalRow = db.prepare(
-      `SELECT COUNT(*) AS cnt, COALESCE(SUM(CAST(s.grand_total AS REAL)), 0) AS rev FROM sales s WHERE s.status != 'Refunded'${dateFilter}`
-    ).get(...dateArgs) as { cnt: number; rev: number };
+      `SELECT COUNT(*) AS cnt, COALESCE(SUM(CAST(s.grand_total AS REAL)), 0) AS rev, COALESCE(SUM(CAST(s.tax_amount AS REAL)), 0) AS tax FROM sales s WHERE s.status != 'Refunded'${dateFilter}`
+    ).get(...dateArgs) as { cnt: number; rev: number; tax: number };
     const totalCount = Number(totalRow?.cnt ?? 0);
     const totalRevenue = Number(totalRow?.rev ?? 0);
+    const totalTaxCollected = Number(totalRow?.tax ?? 0);
 
     try {
       const sub = db.prepare(
@@ -67,6 +68,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       totalCount,
       totalRevenue,
+      totalTaxCollected,
       byCategory,
       from: hasRange ? from : null,
       to: hasRange ? to : null,

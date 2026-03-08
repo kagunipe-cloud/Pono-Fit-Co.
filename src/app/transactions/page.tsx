@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-type Sale = { sales_id: string; date_time: string; member_id: string; member_name?: string | null; email?: string; status: string; grand_total?: string };
+type Sale = { sales_id: string; date_time: string; member_id: string; member_name?: string | null; email?: string; status: string; grand_total?: string; tax_amount?: string | null };
 
 export default function TransactionsPage() {
   const router = useRouter();
@@ -72,6 +72,7 @@ export default function TransactionsPage() {
                 <th className="py-2 px-4">Member</th>
                 <th className="py-2 px-4">Status</th>
                 <th className="py-2 px-4">Total</th>
+                <th className="py-2 px-4">Tax</th>
                 <th className="py-2 px-4">Admin</th>
               </tr>
             </thead>
@@ -87,6 +88,7 @@ export default function TransactionsPage() {
                   </td>
                   <td className="py-2 px-4">{s.status ?? "—"}</td>
                   <td className="py-2 px-4">{s.grand_total ?? "—"}</td>
+                  <td className="py-2 px-4">{s.tax_amount != null && parseFloat(s.tax_amount) > 0 ? `$${parseFloat(s.tax_amount).toFixed(2)}` : "—"}</td>
                   <td className="py-2 px-4">
                     {s.status !== "Refunded" && (
                       <button

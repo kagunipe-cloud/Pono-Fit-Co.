@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     let member_id = (body.member_id ?? "").trim();
     const stripe_session_id = (body.stripe_session_id ?? "").trim() || null;
+    let stripeSession: Stripe.Checkout.Session | null = null;
 
     if (stripe_session_id) {
       const stripeSecret = process.env.STRIPE_SECRET_KEY;
@@ -49,6 +50,7 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+      stripeSession = session;
       const metaMemberId = session.metadata?.member_id;
       if (metaMemberId) member_id = metaMemberId;
       // If they opted in to save card, store Stripe customer id on member for renewals
@@ -264,10 +266,12 @@ export async function POST(request: NextRequest) {
       }
 
     const member = db.prepare("SELECT email FROM members WHERE member_id = ?").get(member_id) as { email: string } | undefined;
-      db.prepare(`
-        INSERT INTO sales (sales_id, date_time, member_id, grand_total, email, status, sale_date)
-        VALUES (?, ?, ?, ?, ?, 'Paid', ?)
-      `).run(sales_id, date_time, member_id, String(grand_total), member?.email ?? "", sale_date);
+    const finalGrandTotal = stripeSession?.amount_total != null ? stripeSession.amount_total / 100 : grand_total;
+    const taxAmount = stripeSession?.total_details?.amount_tax != null ? stripeSession.total_details.amount_tax / 100 : 0;
+    db.prepare(`
+        INSERT INTO sales (sales_id, date_time, member_id, grand_total, tax_amount, email, status, sale_date)
+        VALUES (?, ?, ?, ?, ?, ?, 'Paid', ?)
+      `).run(sales_id, date_time, member_id, String(finalGrandTotal), String(taxAmount), member?.email ?? "", sale_date);
 
       db.prepare("DELETE FROM cart_items WHERE cart_id = ?").run(cart.id);
 

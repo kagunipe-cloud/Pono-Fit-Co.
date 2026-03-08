@@ -141,6 +141,8 @@ export async function POST(request: NextRequest) {
     const successUrl = `${origin}/members/${member_id}/cart/success?session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${origin}/members/${member_id}/cart`;
 
+    const taxRateId = process.env.STRIPE_TAX_RATE_ID?.trim() || null;
+
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
       mode: "payment",
@@ -149,14 +151,19 @@ export async function POST(request: NextRequest) {
         if (unitAmount <= 0) {
           throw new Error(`Invalid price for ${item.name}`);
         }
-        return {
+        const lineItem: Stripe.Checkout.SessionCreateParams.LineItem = {
           price_data: {
             currency: "usd",
             product_data: { name: item.name },
             unit_amount: unitAmount,
+            tax_behavior: "exclusive",
           },
           quantity: item.quantity,
         };
+        if (taxRateId) {
+          lineItem.tax_rates = [taxRateId];
+        }
+        return lineItem;
       }),
       success_url: successUrl,
       cancel_url: cancelUrl,
