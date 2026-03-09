@@ -10,10 +10,10 @@ export const metadata = {
   manifest: "/api/manifest",
   icons: {
     icon: [
-      { url: "/Lei_Logo.png", sizes: "192x192", type: "image/png" },
-      { url: "/Lei_Logo.png", sizes: "512x512", type: "image/png" },
+      { url: "/Lei_Logos.png", sizes: "192x192", type: "image/png" },
+      { url: "/Lei_Logos.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: "/Lei_Logo.png",
+    apple: "/Lei_Logos.png",
   },
   appleWebApp: {
     capable: true,

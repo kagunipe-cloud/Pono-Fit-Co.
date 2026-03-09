@@ -14,7 +14,7 @@
 /* Primary buttons: gray background, mint text + logo icon */
 [data-dumbbell-btn] {
   background-color: #7e817e;
-  background-image: url("/Lei_Logo.png");
+  background-image: url("/Lei_Logos.png");
   background-repeat: no-repeat;
   background-position: left 0.6rem center;
   background-size: 1.25rem 1.25rem;
@@ -31,7 +31,7 @@
 /* Use app logo on specific buttons – e.g. Unlock Door */
 button[data-dumbbell-btn][data-button-icon="app"],
 [data-dumbbell-btn][data-button-icon="app"] {
-  background-image: url("/Lei_Logo.png") !important;
+  background-image: url("/Lei_Logos.png") !important;
   background-size: 3rem 3rem !important;
   padding-left: 3.5rem !important;
 }
