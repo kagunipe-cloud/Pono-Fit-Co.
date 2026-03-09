@@ -240,35 +240,70 @@ export function ensureMembersMemberIdUnique(db: ReturnType<typeof getDb>) {
   }
 }
 
+/** All tenant-scoped tables that need gym_id for multi-tenant isolation. */
+const GYM_ID_TABLES = [
+  "members",
+  "subscriptions",
+  "membership_plans",
+  "payment_failures",
+  "trainers",
+  "pt_sessions",
+  "classes",
+  "recurring_classes",
+  "cart",
+  "cart_items",
+  "door_access_events",
+  "app_usage_events",
+  "sales",
+  "pt_bookings",
+  "class_bookings",
+  // PT slots
+  "trainer_availability",
+  "pt_block_bookings",
+  "pt_slot_bookings",
+  "pt_credit_ledger",
+  "pt_pack_products",
+  "pt_open_bookings",
+  "unavailable_blocks",
+  // Recurring classes
+  "class_occurrences",
+  "class_pack_products",
+  "class_credit_ledger",
+  "occurrence_bookings",
+  // Rec leagues
+  "rec_leagues",
+  "rec_teams",
+  "rec_team_league_enrollments",
+  "rec_team_members",
+  "rec_team_invites",
+  "rec_games",
+  "rec_waiver_tokens",
+  "rec_playoff_brackets",
+] as const;
+
 /** Add gym_id to tenant-scoped tables. NULL/1 = default gym. Enables Stripe Connect + multi-tenant later. */
 function ensureGymIdColumns(db: ReturnType<typeof getDb>) {
-  const tables = [
-    "members",
-    "subscriptions",
-    "membership_plans",
-    "payment_failures",
-    "trainers",
-    "pt_sessions",
-    "classes",
-    "recurring_classes",
-    "cart",
-    "cart_items",
-    "door_access_events",
-    "app_usage_events",
-  ];
-  for (const table of tables) {
-    try {
-      db.exec(`ALTER TABLE ${table} ADD COLUMN gym_id INTEGER DEFAULT 1`);
-    } catch {
-      /* column already exists */
-    }
-  }
-  // sales, pt_bookings, class_bookings may not exist yet
-  for (const table of ["sales", "pt_bookings", "class_bookings"]) {
+  for (const table of GYM_ID_TABLES) {
     try {
       const info = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
       if (info.length > 0 && !info.some((c) => c.name === "gym_id")) {
         db.exec(`ALTER TABLE ${table} ADD COLUMN gym_id INTEGER DEFAULT 1`);
+      }
+    } catch {
+      /* table may not exist yet (created lazily) or column already exists */
+    }
+  }
+  ensureGymIdIndexes(db);
+}
+
+/** Add indexes on gym_id for query performance when filtering by tenant. */
+function ensureGymIdIndexes(db: ReturnType<typeof getDb>) {
+  const indexTables = ["members", "subscriptions", "sales", "cart", "pt_sessions", "classes", "trainers"];
+  for (const table of indexTables) {
+    try {
+      const info = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+      if (info.some((c) => c.name === "gym_id")) {
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_${table}_gym_id ON ${table}(gym_id)`);
       }
     } catch {
       /* table may not exist */
