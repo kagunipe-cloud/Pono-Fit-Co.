@@ -9,8 +9,11 @@ export const metadata = {
   description: "Gym membership, classes, PT, and door access",
   manifest: "/api/manifest",
   icons: {
-    icon: [{ url: "/Icon.png", sizes: "192x192", type: "image/png" }],
-    apple: "/Icon.png",
+    icon: [
+      { url: "/Lei_Logo.png", sizes: "192x192", type: "image/png" },
+      { url: "/Lei_Logo.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/Lei_Logo.png",
   },
   appleWebApp: {
     capable: true,

@@ -11,10 +11,10 @@
   --brand-link: #5abd78; /* darker for link readability (brand-800) */
 }
 
-/* Primary buttons: gray background, mint text + pineapple icon */
+/* Primary buttons: gray background, mint text + logo icon */
 [data-dumbbell-btn] {
   background-color: #7e817e;
-  background-image: url("/pineapple.svg");
+  background-image: url("/Lei_Logo.png");
   background-repeat: no-repeat;
   background-position: left 0.6rem center;
   background-size: 1.25rem 1.25rem;
@@ -28,12 +28,12 @@
   opacity: 0.5;
 }
 
-/* Use app icon (rounded square + pineapple) on specific buttons – e.g. Unlock Door */
+/* Use app logo on specific buttons – e.g. Unlock Door */
 button[data-dumbbell-btn][data-button-icon="app"],
 [data-dumbbell-btn][data-button-icon="app"] {
-  background-image: url("/Icon.png") !important;
-  background-size: 2rem 2rem !important;
-  padding-left: 3rem !important;
+  background-image: url("/Lei_Logo.png") !important;
+  background-size: 3rem 3rem !important;
+  padding-left: 3.5rem !important;
 }
 
 /* Secondary buttons (mint bg): dark text for readability – Browse Classes, Add to cart, Save, Create, etc. */

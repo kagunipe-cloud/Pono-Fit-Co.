@@ -12,7 +12,9 @@ export function GET() {
     theme_color: BRAND.themeColor,
     orientation: "portrait-primary",
     icons: [
-      { src: "/Icon.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/Lei_Logo.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/Lei_Logo.png", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/Lei_Logo.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
     ],
   };
   return NextResponse.json(manifest, {
