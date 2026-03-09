@@ -12,7 +12,7 @@ export function GET() {
     theme_color: BRAND.themeColor,
     orientation: "portrait-primary",
     icons: [
-      { src: "/app-icon.png", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/Icon.png", sizes: "192x192", type: "image/png", purpose: "any" },
     ],
   };
   return NextResponse.json(manifest, {

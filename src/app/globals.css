@@ -31,7 +31,7 @@
 /* Use app icon (rounded square + pineapple) on specific buttons – e.g. Unlock Door */
 button[data-dumbbell-btn][data-button-icon="app"],
 [data-dumbbell-btn][data-button-icon="app"] {
-  background-image: url("/app-icon.png") !important;
+  background-image: url("/Icon.png") !important;
   background-size: 2rem 2rem !important;
   padding-left: 3rem !important;
 }
