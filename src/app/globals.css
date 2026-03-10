@@ -32,8 +32,9 @@
 button[data-dumbbell-btn][data-button-icon="app"],
 [data-dumbbell-btn][data-button-icon="app"] {
   background-image: url("/Lei_Logos.png") !important;
-  background-size: 3rem 3rem !important;
-  padding-left: 3.5rem !important;
+  background-size: 3.25rem 3.25rem !important;
+  background-position: 0.5rem center !important;
+  padding-left: 4.25rem !important;
 }
 
 /* Secondary buttons (mint bg): dark text for readability – Browse Classes, Add to cart, Save, Create, etc. */

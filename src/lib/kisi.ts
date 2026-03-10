@@ -155,6 +155,48 @@ export async function grantAccess(kisiUserId: string, validUntil: Date): Promise
 }
 
 /**
+ * Revoke door access for a Kisi user by deleting their role assignments.
+ * Use when ACH payment fails or membership is cancelled.
+ */
+export async function revokeAccess(kisiUserId: string): Promise<void> {
+  const key = process.env.KISI_API_KEY?.trim();
+  if (!key) {
+    console.log("[Kisi] KISI_API_KEY not set; skipping revoke.");
+    return;
+  }
+  const kisiId = kisiUserId?.trim();
+  if (!kisiId) return;
+
+  const listRes = await fetch(
+    `${KISI_API_BASE}/role_assignments?user_id=${encodeURIComponent(kisiId)}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `KISI-LOGIN ${key}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+  if (!listRes.ok) {
+    const err = await listRes.text();
+    console.error("[Kisi] list role_assignments failed:", listRes.status, err);
+    return;
+  }
+  const assignments = (await listRes.json()) as { id: number }[];
+  const list = Array.isArray(assignments) ? assignments : [];
+  for (const a of list) {
+    if (a?.id == null) continue;
+    const delRes = await fetch(`${KISI_API_BASE}/role_assignments/${a.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `KISI-LOGIN ${key}` },
+    });
+    if (!delRes.ok) {
+      console.error("[Kisi] delete role_assignment failed:", a.id, delRes.status);
+    }
+  }
+}
+
+/**
  * Create a short-lived login for a managed user so we can make API calls as them (e.g. unlock).
  * Returns the user's secret (API key) for that login.
  */

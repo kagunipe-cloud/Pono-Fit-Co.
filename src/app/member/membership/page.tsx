@@ -38,10 +38,10 @@ function MemberMembershipContent() {
         body: JSON.stringify({ session_id: sessionId }),
       })
         .then(() => {
-          setCardMessage("Card updated successfully.");
+          setCardMessage("Payment method updated successfully.");
           window.history.replaceState({}, "", "/member/membership");
         })
-        .catch(() => setCardMessage("Card was updated; if this was your first time, it may take a moment to reflect."));
+        .catch(() => setCardMessage("Payment method was updated; if this was your first time, it may take a moment to reflect."));
     }
   }, [searchParams]);
 
@@ -67,15 +67,15 @@ function MemberMembershipContent() {
     <div className="max-w-2xl mx-auto p-6">
       <h1 className="text-2xl font-bold text-stone-800 mb-6">My Membership</h1>
       <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-stone-50">
-        <p className="text-sm font-medium text-stone-800 mb-1">Card on file</p>
-        <p className="text-sm text-stone-500 mb-2">Used for membership renewals. If your card was declined or has expired, update it here so we can charge your next renewal.</p>
+        <p className="text-sm font-medium text-stone-800 mb-1">Payment method</p>
+        <p className="text-sm text-stone-500 mb-2">Used for membership renewals. Add or switch to a card or bank account (ACH). Lower fees with ACH.</p>
         <button
           type="button"
           onClick={changeCard}
           disabled={updatingCard}
           className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
         >
-          {updatingCard ? "Redirecting…" : "Change card on file"}
+          {updatingCard ? "Redirecting…" : "Change payment method"}
         </button>
         {cardMessage && <p className="text-sm text-stone-600 mt-2">{cardMessage}</p>}
       </div>

@@ -393,7 +393,7 @@ export default function MemberDetailPage() {
               disabled={changingCard}
               className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium disabled:opacity-50"
             >
-              {changingCard ? "Redirecting…" : "Change card on file"}
+              {changingCard ? "Redirecting…" : "Change payment method"}
             </button>
             <button
               type="button"

@@ -5,7 +5,7 @@ import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
 
-/** POST body: { session_id }. After Stripe setup-mode checkout, save the Stripe customer id to the member if new. */
+/** POST body: { session_id }. After Stripe setup-mode checkout, save customer id and set new payment method as default. */
 export async function POST(request: NextRequest) {
   try {
     const memberId = await getMemberIdFromSession();
@@ -19,13 +19,23 @@ export async function POST(request: NextRequest) {
     if (!stripeSecret) return NextResponse.json({ error: "Stripe not configured" }, { status: 500 });
 
     const stripe = new Stripe(stripeSecret);
-    const session = await stripe.checkout.sessions.retrieve(session_id);
+    const session = await stripe.checkout.sessions.retrieve(session_id, { expand: ["setup_intent"] });
     if (session.mode !== "setup") return NextResponse.json({ error: "Not a setup session" }, { status: 400 });
     const metaMemberId = session.metadata?.member_id;
     if (metaMemberId !== memberId) return NextResponse.json({ error: "Session does not match member" }, { status: 403 });
 
     const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id;
     if (!customerId) return NextResponse.json({ error: "No customer on session" }, { status: 400 });
+
+    const setupIntent = session.setup_intent;
+    const paymentMethodId = typeof setupIntent === "object" && setupIntent?.status === "succeeded"
+      ? (typeof setupIntent.payment_method === "string" ? setupIntent.payment_method : setupIntent.payment_method?.id)
+      : null;
+    if (paymentMethodId) {
+      await stripe.customers.update(customerId, {
+        invoice_settings: { default_payment_method: paymentMethodId },
+      });
+    }
 
     const db = getDb();
     ensureMembersStripeColumn(db);

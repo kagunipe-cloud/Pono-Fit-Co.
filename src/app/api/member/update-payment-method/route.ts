@@ -5,7 +5,7 @@ import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
 
-/** POST: create a Stripe Checkout setup session so the member can add/update their card on file. */
+/** POST: create a Stripe Checkout setup session so the member can add/update their payment method (card or ACH). */
 export async function POST(request: NextRequest) {
   try {
     const memberId = await getMemberIdFromSession();
@@ -29,7 +29,8 @@ export async function POST(request: NextRequest) {
 
     const params: Stripe.Checkout.SessionCreateParams = {
       mode: "setup",
-      payment_method_types: ["card"],
+      payment_method_types: ["card", "us_bank_account"],
+      currency: "usd",
       success_url: successUrl,
       cancel_url: cancelUrl,
       metadata: { member_id: memberId },

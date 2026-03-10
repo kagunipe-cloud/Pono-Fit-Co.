@@ -35,6 +35,7 @@ Railway gives you a persistent volume and runs `next start` so SQLite and cron b
 In Railway → your service → **Variables**, add every variable from `.env.local` (copy the **names** and **values** from your local file; use **test** Stripe keys for testing):
 
 - `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET` (for ACH failure webhook; see docs/STRIPE_WEBHOOK.md)
 - `KISI_API_KEY`
 - `KISI_GROUP_ID`
 - `SESSION_SECRET` (use a long random string; e.g. `openssl rand -base64 32`)

@@ -130,6 +130,7 @@ export function getDb() {
   ensureBaseSchema(db);
   ensureSalesSaleDateColumn(db);
   ensureSalesTaxAmountColumn(db);
+  ensureSalesStripePaymentIntentColumn(db);
   ensureMembersWaiverColumns(db);
   ensureMembersPhoneColumn(db);
   ensurePaymentFailuresTable(db);
@@ -189,6 +190,15 @@ export function ensureSalesTaxAmountColumn(db: ReturnType<typeof getDb>) {
   ensureSalesTable(db);
   try {
     db.exec("ALTER TABLE sales ADD COLUMN tax_amount TEXT");
+  } catch {
+    // Column already exists
+  }
+}
+
+/** Add stripe_payment_intent_id to sales for webhook lookup (ACH failure → revoke). */
+export function ensureSalesStripePaymentIntentColumn(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE sales ADD COLUMN stripe_payment_intent_id TEXT");
   } catch {
     // Column already exists
   }

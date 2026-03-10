@@ -19,7 +19,7 @@ export async function POST(
     if (!stripeSecret) return NextResponse.json({ error: "Stripe not configured" }, { status: 500 });
 
     const stripe = new Stripe(stripeSecret);
-    const session = await stripe.checkout.sessions.retrieve(session_id);
+    const session = await stripe.checkout.sessions.retrieve(session_id, { expand: ["setup_intent"] });
     if (session.mode !== "setup") return NextResponse.json({ error: "Not a setup session" }, { status: 400 });
 
     const metaMemberId = session.metadata?.member_id as string | undefined;
@@ -43,6 +43,16 @@ export async function POST(
     if (!customerId) {
       db.close();
       return NextResponse.json({ error: "No customer on session" }, { status: 400 });
+    }
+
+    const setupIntent = session.setup_intent;
+    const paymentMethodId = typeof setupIntent === "object" && setupIntent?.status === "succeeded"
+      ? (typeof setupIntent.payment_method === "string" ? setupIntent.payment_method : setupIntent.payment_method?.id)
+      : null;
+    if (paymentMethodId) {
+      await stripe.customers.update(customerId, {
+        invoice_settings: { default_payment_method: paymentMethodId },
+      });
     }
 
     db.prepare("UPDATE members SET stripe_customer_id = ? WHERE member_id = ?").run(customerId, memberId);
