@@ -37,9 +37,11 @@ export async function POST(
   const isPurelyNumeric = /^\d+$/.test(memberParam);
 
   const db = getDb();
-  const member = (isPurelyNumeric
-    ? db.prepare("SELECT member_id FROM members WHERE id = ?").get(parseInt(memberParam, 10))
-    : db.prepare("SELECT member_id FROM members WHERE member_id = ?").get(memberParam)) as { member_id: string } | undefined;
+  // Prefer member_id (URL from members list uses member_id); fallback to id when numeric
+  let member = db.prepare("SELECT member_id FROM members WHERE member_id = ?").get(memberParam) as { member_id: string } | undefined;
+  if (!member && isPurelyNumeric) {
+    member = db.prepare("SELECT member_id FROM members WHERE id = ?").get(parseInt(memberParam, 10)) as { member_id: string } | undefined;
+  }
   if (!member) {
     db.close();
     return NextResponse.json({ error: "Member not found" }, { status: 404 });

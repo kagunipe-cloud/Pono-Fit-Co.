@@ -34,12 +34,12 @@ export async function GET(
     const db = getDb();
     ensureMembersStripeColumn(db);
 
-    let member = (isPurelyNumeric
-      ? db.prepare("SELECT id, member_id, first_name, last_name, stripe_customer_id FROM members WHERE id = ?").get(parseInt(id, 10))
-      : null
-    ) as { member_id: string; first_name: string; last_name: string; stripe_customer_id: string | null } | undefined;
-    if (!member) {
-      member = db.prepare("SELECT id, member_id, first_name, last_name, stripe_customer_id FROM members WHERE member_id = ?").get(id) as
+    // Prefer member_id (URL from members list uses member_id); fallback to id when numeric
+    let member = db.prepare("SELECT id, member_id, first_name, last_name, stripe_customer_id FROM members WHERE member_id = ?").get(id) as
+      | { member_id: string; first_name: string; last_name: string; stripe_customer_id: string | null }
+      | undefined;
+    if (!member && isPurelyNumeric) {
+      member = db.prepare("SELECT id, member_id, first_name, last_name, stripe_customer_id FROM members WHERE id = ?").get(parseInt(id, 10)) as
         | { member_id: string; first_name: string; last_name: string; stripe_customer_id: string | null }
         | undefined;
     }
