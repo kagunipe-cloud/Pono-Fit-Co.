@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, ensureMembersStripeColumn } from "../../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersStripeColumn } from "../../../../../lib/db";
+import { formatDateForDisplay } from "../../../../../lib/app-timezone";
 import { ensureRecurringClassesTables } from "../../../../../lib/recurring-classes";
 import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
 
@@ -80,7 +81,11 @@ export async function GET(
           LEFT JOIN recurring_classes r ON r.id = o.recurring_class_id
           WHERE o.id = ?
         `).get(it.product_id) as { name: string; price: string; occurrence_date: string; occurrence_time: string } | undefined;
-        if (row) { name = `${row.name ?? "Class"} — ${row.occurrence_date} ${row.occurrence_time}`; price = row.price ?? "—"; }
+        if (row) {
+          const tz = getAppTimezone(db);
+          name = `${row.name ?? "Class"} — ${formatDateForDisplay(row.occurrence_date, tz)} ${row.occurrence_time}`;
+          price = row.price ?? "—";
+        }
       } else if (it.product_type === "pt_pack") {
         ensurePTSlotTables(db);
         const row = db.prepare("SELECT name, price, credits, duration_minutes FROM pt_pack_products WHERE id = ?").get(it.product_id) as { name: string; price: string; credits: number; duration_minutes: number } | undefined;

@@ -30,7 +30,9 @@ function AdminBookPTForMemberContent() {
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [selectedTrainerId, setSelectedTrainerId] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  const [useCreditSubmitting, setUseCreditSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [credits, setCredits] = useState<Record<number, number>>({ 30: 0, 60: 0, 90: 0 });
 
   useEffect(() => {
     fetch("/api/members")
@@ -61,6 +63,73 @@ function AdminBookPTForMemberContent() {
 
   const selectedSession = selectedSessionId != null ? sessions.find((s) => s.id === selectedSessionId) : null;
   const startTime = time ? normalizeTimeToHHmm(time) : "";
+
+  useEffect(() => {
+    if (!selectedMemberId) {
+      setCredits({ 30: 0, 60: 0, 90: 0 });
+      return;
+    }
+    fetch(`/api/members/${encodeURIComponent(selectedMemberId)}/pt-credits`)
+      .then((r) => (r.ok ? r.json() : { 30: 0, 60: 0, 90: 0 }))
+      .then((b) => setCredits(b ?? { 30: 0, 60: 0, 90: 0 }))
+      .catch(() => setCredits({ 30: 0, 60: 0, 90: 0 }));
+  }, [selectedMemberId]);
+
+  const duration = selectedSession?.duration_minutes ?? 60;
+  const hasCredit = (credits[duration as keyof typeof credits] ?? 0) >= 1;
+
+  async function handleUseCredit() {
+    if (!selectedMemberId || !selectedSessionId || !date || !startTime) {
+      setError("Select a member and a PT session. Date and time must be in the URL.");
+      return;
+    }
+    if (!hasCredit) {
+      setError("Member has no PT credits for this session duration.");
+      return;
+    }
+    setError(null);
+    setUseCreditSubmitting(true);
+    try {
+      if (block) {
+        const blockId = parseInt(block, 10);
+        if (Number.isNaN(blockId)) throw new Error("Invalid block ID");
+        const res = await fetch("/api/pt-bookings/book-block", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            trainer_availability_id: blockId,
+            occurrence_date: date,
+            start_time: startTime,
+            session_duration_minutes: duration,
+            member_id: selectedMemberId,
+            use_credit: true,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Booking failed");
+        router.push("/master-schedule");
+      } else {
+        const res = await fetch("/api/pt-bookings/book-open-slot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            member_id: selectedMemberId,
+            occurrence_date: date,
+            start_time: startTime,
+            duration_minutes: duration,
+            pt_session_id: selectedSessionId,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Booking failed");
+        router.push("/master-schedule");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Booking failed");
+    } finally {
+      setUseCreditSubmitting(false);
+    }
+  }
 
   async function handleAddToCart() {
     if (!selectedMemberId || !selectedSessionId || !date || !startTime) {
@@ -102,7 +171,7 @@ function AdminBookPTForMemberContent() {
     <div className="max-w-lg mx-auto">
       <Link href="/master-schedule" className="text-stone-500 hover:text-stone-700 text-sm mb-4 inline-block">← Back to Master Schedule</Link>
       <h1 className="text-2xl font-bold text-stone-800 mb-1">Book PT for member</h1>
-      <p className="text-stone-500 text-sm mb-6">Select the member to charge, choose session type, then add to their cart and check out.</p>
+      <p className="text-stone-500 text-sm mb-6">Select the member, choose session type. Use their credit if they have one, or add to cart to charge.</p>
 
       <div className="mb-4 p-3 rounded-lg bg-stone-100 text-sm">
         <span className="font-medium text-stone-700">Slot: </span>
@@ -172,13 +241,23 @@ function AdminBookPTForMemberContent() {
       {error && <p className="mb-4 text-red-600 text-sm">{error}</p>}
 
       <div className="flex flex-wrap gap-3">
+        {hasCredit && (
+          <button
+            type="button"
+            onClick={handleUseCredit}
+            disabled={!canSubmit || useCreditSubmitting}
+            className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-50"
+          >
+            {useCreditSubmitting ? "Booking…" : "Use 1 credit (free)"}
+          </button>
+        )}
         <button
           type="button"
           onClick={handleAddToCart}
           disabled={!canSubmit || submitting}
           className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
         >
-          {submitting ? "Adding…" : "Add to cart & go to checkout"}
+          {submitting ? "Adding…" : "Add to cart & pay"}
         </button>
         <Link href="/master-schedule" className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium">
           Cancel
@@ -186,7 +265,8 @@ function AdminBookPTForMemberContent() {
       </div>
 
       <p className="mt-4 text-stone-500 text-xs">
-        You’ll be taken to the member’s cart. Use “Pay with Stripe” to charge their card or complete in-person with your Stripe reader.
+        {hasCredit ? `Member has ${credits[duration as keyof typeof credits] ?? 0}×${duration}-min credit(s). ` : ""}
+        “Add to cart” takes you to checkout to charge their card or pay in-person.
       </p>
     </div>
   );

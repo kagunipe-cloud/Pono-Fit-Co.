@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { formatDateForDisplay } from "@/lib/app-timezone";
 
 type Member = { member_id: string; first_name: string | null; last_name: string | null; email: string | null };
 type Occurrence = {
@@ -118,7 +119,7 @@ function AdminBookClassForMemberContent() {
           <span className="font-medium text-stone-700">{occurrence.class_name ?? "Class"}</span>
           {occurrence.instructor && <span className="text-stone-500"> — {occurrence.instructor}</span>}
           <span className="text-stone-500 block mt-0.5">
-            {occurrence.occurrence_date} at {occurrence.occurrence_time} · ${occurrence.price}
+            {formatDateForDisplay(occurrence.occurrence_date)} at {occurrence.occurrence_time} · ${occurrence.price}
             {occurrence.capacity != null && ` · ${occurrence.booked_count}/${occurrence.capacity} booked`}
           </span>
         </div>

@@ -275,8 +275,8 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
           map.set(key, ptItem);
           continue;
         }
-        // When member has a trainer selected, only show "available" inside that trainer's blocks; otherwise show trainer_not_available
-        map.set(key, memberWithTrainerFilter ? { type: "trainer_not_available" } : { type: "available" });
+        // No trainer has a block at this slot — not available for PT (show Unavailable)
+        map.set(key, { type: "trainer_not_available" });
       }
     }
     return map;

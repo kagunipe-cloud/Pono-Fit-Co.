@@ -14,7 +14,7 @@ export default function TermsOfServicePage() {
         <BackLink />
       </Suspense>
       <h1 className="text-2xl font-bold text-stone-800 mb-2">Terms of Service</h1>
-      <p className="text-stone-500 text-sm mb-8">Last updated: March 2025</p>
+      <p className="text-stone-500 text-sm mb-8">Last updated: March 2026</p>
 
       <div className="prose prose-stone max-w-none space-y-6 text-sm text-stone-700">
         <section>
@@ -34,7 +34,7 @@ export default function TermsOfServicePage() {
         <section>
           <h2 className="text-lg font-semibold text-stone-800 mt-6 mb-2">3. Payment and Billing</h2>
           <p>
-            Fees are due as specified in your membership agreement. By providing payment information, you authorize us to charge your chosen payment method for recurring fees until you cancel. Failed payments may result in suspension of access. Refunds are subject to our refund policy communicated at purchase.
+            Fees are due as specified in your membership agreement. We accept credit/debit cards and ACH (bank account) payments through our payment processor, Stripe. By providing payment information, you authorize us to charge your chosen payment method for recurring fees until you cancel. ACH payments may take 3–5 business days to clear; if an ACH payment fails (e.g., insufficient funds), we may revoke access and cancel your subscription. Failed payments may result in suspension of access. Refunds are subject to our refund policy communicated at purchase.
           </p>
         </section>
 

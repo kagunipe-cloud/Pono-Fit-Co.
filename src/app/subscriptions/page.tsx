@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { formatDateForDisplay } from "@/lib/app-timezone";
 
 type SubReportRow = {
   id: number;
@@ -67,6 +68,7 @@ export default function SubscriptionsPage() {
   const displayValue = (row: SubReportRow, key: string): string => {
     const v = row[key as keyof SubReportRow];
     if (v == null || v === "") return "—";
+    if (key === "start_date" || key === "expiry_date") return formatDateForDisplay(String(v)) || "—";
     return String(v);
   };
 

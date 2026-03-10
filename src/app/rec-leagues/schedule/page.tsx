@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { formatDateOnlyInAppTz } from "@/lib/app-timezone";
+import { formatDateForDisplay } from "@/lib/app-timezone";
 import { useAppTimezone } from "@/lib/settings-context";
 
 type Game = {
@@ -111,7 +111,7 @@ export default function RecLeaguesSchedulePage() {
           {sortedDates.map((date) => (
             <li key={date}>
               <p className="text-sm font-medium text-stone-500 mb-2">
-                {formatDateOnlyInAppTz(date, { weekday: "short", month: "short", day: "numeric", year: "numeric" }, tz)}
+                {formatDateForDisplay(date, tz)}
               </p>
               <ul className="space-y-2">
                 {byDate[date].map((g) => (

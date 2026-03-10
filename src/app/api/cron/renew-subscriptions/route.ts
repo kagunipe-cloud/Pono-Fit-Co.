@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone, ensureMembersStripeColumn, ensurePaymentFailuresTable } from "../../../../lib/db";
 import { grantAccess as kisiGrantAccess } from "../../../../lib/kisi";
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
-import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz } from "../../../../lib/app-timezone";
+import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz, formatDateForStorage } from "../../../../lib/app-timezone";
 import { randomUUID } from "crypto";
 import Stripe from "stripe";
 
@@ -24,9 +24,9 @@ function addDuration(startDate: Date, length: string, unit: string): Date {
   return d;
 }
 
-/** Today in gym timezone (e.g. "1/15/2026") to match expiry_date in DB. */
+/** Today in gym timezone (YYYY-MM-DD) to match expiry_date in DB. */
 function todayString(tz: string): string {
-  return formatInAppTz(new Date(), { month: "numeric", day: "numeric", year: "numeric" }, tz);
+  return todayInAppTz(tz);
 }
 
 export async function GET(request: NextRequest) {
@@ -122,8 +122,8 @@ export async function GET(request: NextRequest) {
 
       const startDate = new Date();
       const expiryDate = addDuration(startDate, sub.length || "1", sub.unit || "Month");
-      const startStr = formatInAppTz(startDate, { month: "numeric", day: "numeric", year: "numeric" }, tz);
-      const expiryStr = formatInAppTz(expiryDate, { month: "numeric", day: "numeric", year: "numeric" }, tz);
+      const startStr = formatDateForStorage(startDate, tz);
+      const expiryStr = formatDateForStorage(expiryDate, tz);
       const daysRemaining = Math.ceil((expiryDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
       const sales_id = randomUUID().slice(0, 8);
       const new_sub_id = randomUUID().slice(0, 8);

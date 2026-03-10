@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone, ensureMembersStripeColumn } from "../../../../lib/db";
-import { formatInAppTz } from "../../../../lib/app-timezone";
+import { formatDateForStorage, todayInAppTz } from "../../../../lib/app-timezone";
 import { sendMembershipExpiryReminder } from "../../../../lib/email";
 
 export const dynamic = "force-dynamic";
@@ -16,12 +16,10 @@ export async function GET(request: NextRequest) {
   ensureMembersStripeColumn(db);
   const tz = getAppTimezone(db);
 
-  /** Date in gym timezone (e.g. "2/5/2026") to match expiry_date in DB. */
-  const dateString = (d: Date) => formatInAppTz(d, { month: "numeric", day: "numeric", year: "numeric" }, tz);
-
+  /** Date in gym timezone (YYYY-MM-DD) to match expiry_date in DB. */
   const inTwoDays = new Date();
   inTwoDays.setDate(inTwoDays.getDate() + 2);
-  const expiryTarget = dateString(inTwoDays);
+  const expiryTarget = formatDateForStorage(inTwoDays, tz);
 
   const expiring = db.prepare(`
     SELECT s.subscription_id, s.member_id, s.expiry_date
@@ -60,7 +58,7 @@ export async function GET(request: NextRequest) {
 
   const sent = results.filter((r) => r.sent).length;
   return NextResponse.json({
-    date: dateString(new Date()),
+    date: todayInAppTz(tz),
     expiry_target: expiryTarget,
     count: expiring.length,
     sent,

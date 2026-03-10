@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
+import { getMemberIdFromSession } from "../../../../lib/session";
+import { getAdminMemberId } from "../../../../lib/admin";
 import { ensurePTSlotTables, getPTCreditBalance, reservedMinutes } from "../../../../lib/pt-slots";
 import { ensureTrainerClient } from "../../../../lib/trainer-clients";
 import { getBlocksInRange, getFreeIntervals, getBookingsForBlock } from "../../../../lib/pt-availability";
@@ -26,6 +28,12 @@ export async function POST(request: NextRequest) {
 
     if (!trainer_availability_id || !occurrence_date || !start_time || !member_id) {
       return NextResponse.json({ error: "trainer_availability_id, occurrence_date, start_time, member_id required" }, { status: 400 });
+    }
+
+    const sessionMemberId = await getMemberIdFromSession();
+    const isAdmin = !!(await getAdminMemberId(request));
+    if (sessionMemberId !== member_id && !isAdmin) {
+      return NextResponse.json({ error: "Forbidden: can only book for yourself unless admin" }, { status: 403 });
     }
 
     const db = getDb();

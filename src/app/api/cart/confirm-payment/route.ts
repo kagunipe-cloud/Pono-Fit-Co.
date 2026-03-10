@@ -6,7 +6,7 @@ import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
 import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureTrainerClient, getTrainerMemberIdByDisplayName } from "../../../../lib/trainer-clients";
-import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz } from "../../../../lib/app-timezone";
+import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz, formatDateForStorage } from "../../../../lib/app-timezone";
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { getAdminMemberId } from "../../../../lib/admin";
 import { randomUUID } from "crypto";
@@ -125,8 +125,8 @@ export async function POST(request: NextRequest) {
             grand_total += price;
             const start_date = new Date();
             const expiry_date = addDuration(start_date, plan.length || "1", plan.unit || "Month");
-            const startStr = formatInAppTz(start_date, { month: "numeric", day: "numeric", year: "numeric" }, tz);
-            const expiryStr = formatInAppTz(expiry_date, { month: "numeric", day: "numeric", year: "numeric" }, tz);
+            const startStr = formatDateForStorage(start_date, tz);
+            const expiryStr = formatDateForStorage(expiry_date, tz);
             const daysRemaining = Math.ceil((expiry_date.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
             const sub_id = randomUUID().slice(0, 8);
             db.prepare(`

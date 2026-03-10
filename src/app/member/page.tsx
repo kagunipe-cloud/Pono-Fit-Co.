@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toTitleCase } from "@/lib/format";
+import { formatDateForDisplay } from "@/lib/app-timezone";
 
 type MemberData = {
   member: { member_id: string; name: string; email: string | null };
@@ -104,7 +105,7 @@ export default function MemberHomePage() {
           <h3 className="font-semibold text-brand-gray">My Membership</h3>
           <p className="text-sm text-brand-gray mt-1">
             {activeSub
-              ? `${toTitleCase(activeSub.plan_name ?? "Active")} — Expires ${activeSub.expiry_date ?? ""}`
+              ? `${toTitleCase(activeSub.plan_name ?? "Active")} — Expires ${formatDateForDisplay(activeSub.expiry_date) || ""}`
               : "No Active Membership"}
           </p>
         </Link>

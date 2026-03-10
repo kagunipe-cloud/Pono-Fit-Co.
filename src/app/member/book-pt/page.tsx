@@ -28,6 +28,7 @@ function MemberBookPTContent() {
   const searchParams = useSearchParams();
   const highlightDate = searchParams.get("date")?.trim() || null;
   const highlightTime = searchParams.get("time")?.trim() || null;
+  const block = searchParams.get("block")?.trim() || null;
   const slotFromSchedule = highlightDate && highlightTime;
   const selectedTrainerNameFromUrl = searchParams.get("trainer_name")?.trim() || null;
   const selectedTrainerIdFromUrl = searchParams.get("trainer")?.trim() || null;
@@ -89,7 +90,7 @@ function MemberBookPTContent() {
   );
 
   const [slotFree, setSlotFree] = useState<boolean | null>(null);
-  const slotFromOpenSchedule = slotFromSchedule && !searchParams.get("block"); // date+time from "Available" (no block)
+  const slotFromOpenSchedule = slotFromSchedule && !block; // date+time from "Available" (no block)
   useEffect(() => {
     if (!slotFromOpenSchedule || !highlightDate || !highlightTime || !slotProduct) {
       setSlotFree(null);
@@ -107,17 +108,38 @@ function MemberBookPTContent() {
     const start_time = normalizeTimeToHHmm(highlightTime);
     setSlotBookingInProgress(true);
     try {
-      const res = await fetch("/api/pt-bookings/book-open-slot", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          member_id: memberId,
-          occurrence_date: highlightDate,
-          start_time,
-          duration_minutes: slotProduct.duration_minutes,
-          pt_session_id: slotProduct.id,
-        }),
-      });
+      let res: Response;
+      if (block) {
+        const blockId = parseInt(block, 10);
+        if (Number.isNaN(blockId)) {
+          alert("Invalid slot. Please try again from the schedule.");
+          return;
+        }
+        res = await fetch("/api/pt-bookings/book-block", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            trainer_availability_id: blockId,
+            occurrence_date: highlightDate,
+            start_time,
+            session_duration_minutes: slotProduct.duration_minutes,
+            member_id: memberId,
+            use_credit: true,
+          }),
+        });
+      } else {
+        res = await fetch("/api/pt-bookings/book-open-slot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            member_id: memberId,
+            occurrence_date: highlightDate,
+            start_time,
+            duration_minutes: slotProduct.duration_minutes,
+            pt_session_id: slotProduct.id,
+          }),
+        });
+      }
       const data = await res.json();
       if (res.ok) {
         setCredits((c) => ({ ...c, [slotProduct.duration_minutes]: data.balance ?? Math.max(0, (c[slotProduct.duration_minutes] ?? 1) - 1) }));

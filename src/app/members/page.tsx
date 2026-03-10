@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { formatDateForDisplay } from "@/lib/app-timezone";
 
 export type MemberType = "Monthly" | "Day pass" | "Week pass" | "Class client" | "PT client";
 
@@ -235,8 +236,8 @@ export default function MembersPage() {
                         {m.role ?? "—"}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-stone-600">{m.join_date ?? "—"}</td>
-                    <td className="py-3 px-4 text-stone-600">{m.exp_next_payment_date ?? "—"}</td>
+                    <td className="py-3 px-4 text-stone-600">{formatDateForDisplay(m.join_date) || "—"}</td>
+                    <td className="py-3 px-4 text-stone-600">{formatDateForDisplay(m.exp_next_payment_date) || "—"}</td>
                     <td className="py-3 px-4 text-stone-400 text-sm font-mono">{m.member_id}</td>
                     <td className="py-3 px-4">
                       <Link

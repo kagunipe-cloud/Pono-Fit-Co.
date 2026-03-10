@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { formatPrice } from "@/lib/format";
-import { todayInAppTz, weekStartInAppTz, addDaysToDateStr, formatInAppTz } from "@/lib/app-timezone";
+import { todayInAppTz, weekStartInAppTz, addDaysToDateStr, formatDateForDisplay } from "@/lib/app-timezone";
 import { useAppTimezone } from "@/lib/settings-context";
 
 type CartItem = {
@@ -295,7 +295,7 @@ export default function MemberCartPage() {
               <button type="button" onClick={() => setClassScheduleWeekStart(weekStartInAppTz(todayInAppTz(tz)))} className="px-2 py-1 rounded border border-stone-200 text-sm hover:bg-stone-50">Today</button>
               <button type="button" onClick={() => setClassScheduleWeekStart((s) => addDaysToDateStr(s, 7))} className="px-2 py-1 rounded border border-stone-200 text-sm hover:bg-stone-50">Next →</button>
               <span className="text-sm text-stone-500 ml-2">
-                {formatInAppTz(new Date(classScheduleFrom + "T12:00:00Z"), { month: "short", day: "numeric", year: "numeric" }, tz)} – {formatInAppTz(new Date(classScheduleTo + "T12:00:00Z"), { month: "short", day: "numeric", year: "numeric" }, tz)}
+                {formatDateForDisplay(classScheduleFrom, tz)} – {formatDateForDisplay(classScheduleTo, tz)}
               </span>
             </div>
             <div className="flex-1 overflow-auto p-3">

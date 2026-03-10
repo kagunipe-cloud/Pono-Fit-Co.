@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone, expiryDateSortableSql } from "../../../lib/db";
-import { formatInAppTz, todayInAppTz, parseAppDateToYMD, ymdGte } from "../../../lib/app-timezone";
+import { formatDateForStorage, todayInAppTz, parseAppDateToYMD, ymdGte } from "../../../lib/app-timezone";
 import { randomUUID } from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -81,12 +81,14 @@ export async function GET(request: NextRequest) {
     const todayYMD = getTodayYMD(tz);
     const typesMap = getMemberTypesMap(db);
 
+    const subquery = `(SELECT s.expiry_date FROM subscriptions s WHERE s.member_id = m.member_id AND s.status = 'Active' ORDER BY ${expiryDateSortableSql("s.expiry_date")} DESC LIMIT 1)`;
     let rows: Record<string, unknown>[];
     if (q) {
       const pattern = `%${q.replace(/%/g, "\\%")}%`;
       const stmt = db.prepare(`
         SELECT m.id, m.member_id, m.first_name, m.last_name, m.email, m.phone, m.kisi_id, m.kisi_group_id, m.join_date,
-          COALESCE(m.exp_next_payment_date, (SELECT s.expiry_date FROM subscriptions s WHERE s.member_id = m.member_id AND s.status = 'Active' ORDER BY ${expiryDateSortableSql("s.expiry_date")} DESC LIMIT 1)) AS exp_next_payment_date,
+          COALESCE(m.exp_next_payment_date, ${subquery}) AS exp_next_payment_date,
+          ${subquery} AS subscription_expiry,
           m.role, m.created_at
         FROM members m
         WHERE m.first_name LIKE ? OR m.last_name LIKE ? OR m.email LIKE ? OR m.role LIKE ? OR m.member_id LIKE ?
@@ -96,7 +98,8 @@ export async function GET(request: NextRequest) {
     } else {
       const stmt = db.prepare(`
         SELECT m.id, m.member_id, m.first_name, m.last_name, m.email, m.phone, m.kisi_id, m.kisi_group_id, m.join_date,
-          COALESCE(m.exp_next_payment_date, (SELECT s.expiry_date FROM subscriptions s WHERE s.member_id = m.member_id AND s.status = 'Active' ORDER BY ${expiryDateSortableSql("s.expiry_date")} DESC LIMIT 1)) AS exp_next_payment_date,
+          COALESCE(m.exp_next_payment_date, ${subquery}) AS exp_next_payment_date,
+          ${subquery} AS subscription_expiry,
           m.role, m.created_at
         FROM members m
         ORDER BY m.last_name ASC, m.first_name ASC
@@ -106,9 +109,12 @@ export async function GET(request: NextRequest) {
 
     const members = rows.map((m) => {
       const exp = m.exp_next_payment_date as string | null | undefined;
-      const active = ymdGte(parseAppDateToYMD(exp), todayYMD);
+      const subExp = m.subscription_expiry as string | null | undefined;
+      const parsed = parseAppDateToYMD(exp) ?? parseAppDateToYMD(subExp);
+      const active = ymdGte(parsed, todayYMD);
       const types = typesMap.get(String(m.member_id)) ?? [];
-      return { ...m, active, types };
+      const { subscription_expiry, ...rest } = m;
+      return { ...rest, active, types };
     });
 
     db.close();
@@ -141,7 +147,7 @@ export async function POST(request: NextRequest) {
     const db = getDb();
     const tz = getAppTimezone(db);
     const member_id = randomUUID().slice(0, 8);
-    const join_date = formatInAppTz(new Date(), { month: "numeric", day: "numeric", year: "numeric" }, tz);
+    const join_date = formatDateForStorage(new Date(), tz);
 
     const stmt = db.prepare(`
       INSERT INTO members (member_id, first_name, last_name, email, phone, join_date, role)

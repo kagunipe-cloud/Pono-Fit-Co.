@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { formatDateForDisplay } from "@/lib/app-timezone";
 
 type Booking = { class_name?: string; class_date?: string; class_time?: string; booking_date?: string; payment_status?: string };
 type OccurrenceBooking = { id?: number; class_name?: string; occurrence_date?: string; occurrence_time?: string };
@@ -73,7 +74,7 @@ export default function MemberClassBookingsPage() {
                     <div>
                       <p className="font-medium text-stone-800">{b.class_name ?? "Class"}</p>
                       <p className="text-sm text-stone-500">
-                        {b.occurrence_date} at {b.occurrence_time}
+                        {formatDateForDisplay(b.occurrence_date)} at {b.occurrence_time}
                       </p>
                     </div>
                     {b.id != null && (

@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { formatDateForDisplay } from "@/lib/app-timezone";
 
 type Occurrence = { id: number; class_name: string; instructor: string | null; occurrence_date: string; occurrence_time: string; booked_count: number; capacity: number; price: string };
 
@@ -113,7 +114,7 @@ function MemberBookClassesContent() {
           >
             <div>
               <p className="font-medium text-stone-800">{o.class_name}</p>
-              <p className="text-sm text-stone-500">{o.occurrence_date} at {o.occurrence_time} · {o.instructor ?? "—"} · {o.booked_count}/{o.capacity} booked · {formatPrice(o.price ?? "0")}</p>
+              <p className="text-sm text-stone-500">{formatDateForDisplay(o.occurrence_date)} at {o.occurrence_time} · {o.instructor ?? "—"} · {o.booked_count}/{o.capacity} booked · {formatPrice(o.price ?? "0")}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button

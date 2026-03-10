@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatDateOnlyInAppTz, formatInAppTz, formatWeekdayShortInAppTz, todayInAppTz, weekStartInAppTz } from "@/lib/app-timezone";
+import { formatDateForDisplay, formatInAppTz, formatWeekdayShortInAppTz, todayInAppTz, weekStartInAppTz } from "@/lib/app-timezone";
 import { useAppTimezone } from "@/lib/settings-context";
 
 type JournalDay = { id: number; member_id: string; date: string; created_at: string };
@@ -480,7 +480,7 @@ export default function MemberMacrosPage() {
         >
           <span className="font-semibold text-stone-800">Today&apos;s Journal</span>
           <span className="block text-sm text-stone-500 mt-0.5">
-            {formatDateOnlyInAppTz(today, undefined, tz)}
+            {formatDateForDisplay(today, tz)}
           </span>
           <span className="text-brand-600 text-sm font-medium mt-1 inline-block">Open journal →</span>
         </Link>

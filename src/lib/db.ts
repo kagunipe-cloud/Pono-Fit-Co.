@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import { normalizeDateToYMD } from "./app-timezone";
 import { ensureTrainersTable } from "./trainers";
 import { ensureTrainerClientsTable } from "./trainer-clients";
 import { ensureBodyCompositionTable } from "./body-composition";
@@ -136,6 +137,7 @@ export function getDb() {
   ensurePaymentFailuresTable(db);
   ensureMembersMemberIdUnique(db);
   ensureGymIdColumns(db);
+  ensureDatesNormalized(db);
   ensureTrainersTable(db);
   ensureTrainerClientsTable(db);
   ensureBodyCompositionTable(db);
@@ -322,17 +324,48 @@ function ensureGymIdIndexes(db: ReturnType<typeof getDb>) {
 }
 
 /**
- * SQLite expression that converts an expiry_date column (M/D/YYYY or MM/DD/YYYY text)
- * to YYYY-MM-DD for chronological ORDER BY / comparison.
+ * All date-only columns are stored as YYYY-MM-DD, which sorts correctly as text.
  * @param columnRef - Full column reference, e.g. "s.expiry_date" or "expiry_date"
  */
 export function expiryDateSortableSql(columnRef: string): string {
-  const c = columnRef;
-  return `PRINTF('%04d-%02d-%02d',
-    CAST(SUBSTR(SUBSTR(${c}, INSTR(${c}, '/') + 1), INSTR(SUBSTR(${c}, INSTR(${c}, '/') + 1), '/') + 1) AS INTEGER),
-    CAST(SUBSTR(${c}, 1, INSTR(${c}, '/') - 1) AS INTEGER),
-    CAST(SUBSTR(SUBSTR(${c}, INSTR(${c}, '/') + 1), 1, INSTR(SUBSTR(${c}, INSTR(${c}, '/') + 1), '/') - 1) AS INTEGER)
-  )`;
+  return columnRef;
+}
+
+/** Normalize date columns to YYYY-MM-DD. Runs once; uses app_settings flag. */
+function ensureDatesNormalized(db: ReturnType<typeof getDb>) {
+  try {
+    const done = db.prepare("SELECT 1 FROM app_settings WHERE key = ? AND value = ?").get("dates_normalized", "1");
+    if (done) return;
+    const members = db.prepare("SELECT member_id, join_date, exp_next_payment_date FROM members").all() as {
+      member_id: string;
+      join_date: string | null;
+      exp_next_payment_date: string | null;
+    }[];
+    const updMember = db.prepare("UPDATE members SET join_date = ?, exp_next_payment_date = ? WHERE member_id = ?");
+    for (const m of members) {
+      const join = normalizeDateToYMD(m.join_date) ?? m.join_date;
+      const exp = normalizeDateToYMD(m.exp_next_payment_date) ?? m.exp_next_payment_date;
+      if (join !== m.join_date || exp !== m.exp_next_payment_date) {
+        updMember.run(join, exp, m.member_id);
+      }
+    }
+    const subs = db.prepare("SELECT subscription_id, start_date, expiry_date FROM subscriptions").all() as {
+      subscription_id: string;
+      start_date: string | null;
+      expiry_date: string | null;
+    }[];
+    const updSub = db.prepare("UPDATE subscriptions SET start_date = ?, expiry_date = ? WHERE subscription_id = ?");
+    for (const s of subs) {
+      const start = normalizeDateToYMD(s.start_date) ?? s.start_date;
+      const expiry = normalizeDateToYMD(s.expiry_date) ?? s.expiry_date;
+      if (start !== s.start_date || expiry !== s.expiry_date) {
+        updSub.run(start, expiry, s.subscription_id);
+      }
+    }
+    db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)").run("dates_normalized", "1");
+  } catch {
+    /* tables may not exist yet */
+  }
 }
 
 /** Table of failed/skipped recurring payment attempts for the Money Owed report. */

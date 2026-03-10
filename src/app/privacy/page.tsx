@@ -14,7 +14,7 @@ export default function PrivacyPolicyPage() {
         <BackLink />
       </Suspense>
       <h1 className="text-2xl font-bold text-stone-800 mb-2">Privacy Policy</h1>
-      <p className="text-stone-500 text-sm mb-8">Last updated: March 2025</p>
+      <p className="text-stone-500 text-sm mb-8">Last updated: March 2026</p>
 
       <div className="prose prose-stone max-w-none space-y-6 text-sm text-stone-700">
         <section>
@@ -29,7 +29,7 @@ export default function PrivacyPolicyPage() {
           <p className="mb-2">We collect information you provide directly and information generated through your use of our services:</p>
           <ul className="list-disc pl-6 space-y-1">
             <li><strong>Account information:</strong> Name, email address, phone number, and member ID</li>
-            <li><strong>Payment information:</strong> Processed by Stripe; we do not store full card numbers. Billing address is collected at checkout for payment processing and tax compliance.</li>
+            <li><strong>Payment information:</strong> Processed by Stripe; we do not store full card numbers or bank account details. We accept credit/debit cards and ACH (bank account) payments for memberships, classes, and personal training. Billing address is collected at checkout for payment processing and tax compliance.</li>
             <li><strong>Membership and booking data:</strong> Subscriptions, class bookings, personal training sessions</li>
             <li><strong>Fitness and nutrition data:</strong> Workout logs, macro tracking, and related information you choose to enter</li>
             <li><strong>Waiver and consent records:</strong> Liability waiver agreements and signatures</li>
