@@ -35,7 +35,9 @@ export default function SignWaiverRequiredPage() {
       <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-6">
         <h1 className="text-xl font-bold text-stone-800 mb-2">Waiver Required</h1>
         <p className="text-stone-600 text-sm mb-4">
-          You must sign the liability waiver, Privacy Policy, and Terms of Service before using the app or accessing the facility.
+          You must sign the liability waiver,{" "}
+          <Link href="/privacy" className="text-brand-600 hover:underline">Privacy Policy</Link>, and{" "}
+          <Link href="/terms" className="text-brand-600 hover:underline">Terms of Service</Link> before using the app or accessing the facility.
         </p>
         <p className="text-stone-600 text-sm mb-6">
           We&apos;ll send a waiver link to the email on your account. Click the link, review the documents, and check the box to agree.

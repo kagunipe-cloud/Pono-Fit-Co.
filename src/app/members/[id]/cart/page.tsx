@@ -409,6 +409,11 @@ export default function MemberCartPage() {
 
       {items.length > 0 && (
         <>
+          <p className="text-stone-500 text-sm mb-4">
+            By paying you agree to our{" "}
+            <Link href="/privacy" className="text-brand-600 hover:underline">Privacy Policy</Link> and{" "}
+            <Link href="/terms" className="text-brand-600 hover:underline">Terms of Service</Link>.
+          </p>
           {!hasSavedCard && (
             <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-white">
               <p className="text-sm font-medium text-stone-800 mb-2">Use this card for future payments?</p>

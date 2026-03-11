@@ -22,7 +22,24 @@ export async function GET(request: NextRequest) {
 
     let blocks = getBlocksInRange(from, to);
     if (trainer_member_id) {
-      blocks = blocks.filter((b) => b.trainer_member_id === trainer_member_id);
+      const byMemberId = blocks.filter((b) => b.trainer_member_id === trainer_member_id);
+      if (byMemberId.length === 0) {
+        // Fallback: include blocks with trainer_member_id null where trainer name matches (legacy blocks)
+        const dbForLookup = getDb();
+        const member = dbForLookup.prepare("SELECT first_name, last_name FROM members WHERE member_id = ?").get(trainer_member_id) as
+          | { first_name: string | null; last_name: string | null }
+          | undefined;
+        dbForLookup.close();
+        const displayName = member ? [member.first_name, member.last_name].filter(Boolean).join(" ").trim() : null;
+        blocks = blocks.filter(
+          (b) =>
+            b.trainer_member_id == null &&
+            displayName != null &&
+            b.trainer.trim().toLowerCase() === displayName.toLowerCase()
+        );
+      } else {
+        blocks = byMemberId;
+      }
     }
     const unavailableOccurrences = getUnavailableInRange(from, to);
     const db = getDb();

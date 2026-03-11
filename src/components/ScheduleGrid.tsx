@@ -187,36 +187,10 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
           break;
         }
         if (classPlaced) continue;
-        const unavailAtSlot = unavailList.find((u) => {
-          if (u.date !== date) return false;
-          const startMin = parseTimeToMinutes(u.start_time);
-          const endMin = parseTimeToMinutes(u.end_time);
-          return slotOverlaps(slotMin, startMin, endMin);
-        });
-        if (unavailAtSlot) {
-          map.set(key, { type: "unavailable", id: unavailAtSlot.id, description: unavailAtSlot.description });
-          continue;
-        }
-        const PT_SPILLOVER = 15;
-        const openBookingAtSlot = openBookings.find((b) => {
-          if (b.occurrence_date !== date) return false;
-          const startMin = parseTimeToMinutes(b.start_time);
-          const endMin = startMin + b.duration_minutes + PT_SPILLOVER;
-          return slotOverlaps(slotMin, startMin, endMin);
-        });
-        if (openBookingAtSlot) {
-          map.set(key, {
-            type: "open_booked",
-            ...(openBookingAtSlot.id != null && { id: openBookingAtSlot.id }),
-            ...(openBookingAtSlot.member_name != null && { member_name: openBookingAtSlot.member_name }),
-            ...(openBookingAtSlot.trainer_name != null && { trainer_name: openBookingAtSlot.trainer_name }),
-          });
-          continue;
-        }
         const memberWithTrainerFilter = variant === "member" && effectiveTrainerId != null;
         let ptItem: CellItem | null = null;
-        if (memberWithTrainerFilter) {
-          // One trainer selected: first matching segment wins (API already filtered to that trainer).
+        // For trainer view: check PT blocks BEFORE unavailable so availability overrides default "unavailable"
+        if (isTrainer || memberWithTrainerFilter) {
           for (const block of ptBlocks) {
             if (block.date !== date || !block.segments) continue;
             for (const seg of block.segments) {
@@ -238,8 +212,13 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
             }
             if (ptItem) break;
           }
-        } else {
-          // No trainer selected (member): slot is "available" if ANY trainer has an open segment; else show "Booked" if all are booked.
+        }
+        if (ptItem) {
+          map.set(key, ptItem);
+          continue;
+        }
+        if (!isTrainer && !memberWithTrainerFilter) {
+          // Member with no trainer filter: check available from any trainer
           const segmentsAtSlot: { seg: BlockSegment; block: PtBlockWithSegments }[] = [];
           for (const block of ptBlocks) {
             if (block.date !== date || !block.segments) continue;
@@ -269,13 +248,37 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
               ...(first.seg.member_name != null && { member_name: first.seg.member_name }),
               ...(first.seg.booking_id != null && { booking_id: first.seg.booking_id }),
             };
+            map.set(key, ptItem);
+            continue;
           }
         }
-        if (ptItem) {
-          map.set(key, ptItem);
+        const PT_SPILLOVER = 15;
+        const openBookingAtSlot = openBookings.find((b) => {
+          if (b.occurrence_date !== date) return false;
+          const startMin = parseTimeToMinutes(b.start_time);
+          const endMin = startMin + b.duration_minutes + PT_SPILLOVER;
+          return slotOverlaps(slotMin, startMin, endMin);
+        });
+        if (openBookingAtSlot) {
+          map.set(key, {
+            type: "open_booked",
+            ...(openBookingAtSlot.id != null && { id: openBookingAtSlot.id }),
+            ...(openBookingAtSlot.member_name != null && { member_name: openBookingAtSlot.member_name }),
+            ...(openBookingAtSlot.trainer_name != null && { trainer_name: openBookingAtSlot.trainer_name }),
+          });
           continue;
         }
-        // No trainer has a block at this slot — not available for PT (show Unavailable)
+        const unavailAtSlot = unavailList.find((u) => {
+          if (u.date !== date) return false;
+          const startMin = parseTimeToMinutes(u.start_time);
+          const endMin = parseTimeToMinutes(u.end_time);
+          return slotOverlaps(slotMin, startMin, endMin);
+        });
+        if (unavailAtSlot) {
+          map.set(key, { type: "unavailable", id: unavailAtSlot.id, description: unavailAtSlot.description });
+          continue;
+        }
+        // No PT block at this slot — not available for PT (show Unavailable or trainer_not_available)
         map.set(key, { type: "trainer_not_available" });
       }
     }

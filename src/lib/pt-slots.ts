@@ -165,6 +165,32 @@ export function ensurePTSlotTables(db: ReturnType<typeof getDb>) {
   } catch {
     /* already exists */
   }
+  // One-time backfill: set trainer_member_id for blocks where it's null, by matching trainer name to members
+  try {
+    const done = db.prepare("SELECT 1 FROM app_settings WHERE key = ? AND value = ?").get("trainer_availability_backfill", "1");
+    if (done) return;
+    const nullBlocks = db.prepare("SELECT id, trainer FROM trainer_availability WHERE trainer_member_id IS NULL OR trainer_member_id = ''").all() as {
+      id: number;
+      trainer: string;
+    }[];
+    const upd = db.prepare("UPDATE trainer_availability SET trainer_member_id = ? WHERE id = ?");
+    const trainerMembers = db.prepare(
+      "SELECT member_id, first_name, last_name FROM members WHERE role IN ('Trainer','Admin')"
+    ).all() as { member_id: string; first_name: string | null; last_name: string | null }[];
+    for (const b of nullBlocks) {
+      const name = String(b.trainer ?? "").trim().toLowerCase();
+      if (!name) continue;
+      const match = trainerMembers.find((m) => {
+        const full = [m.first_name, m.last_name].filter(Boolean).join(" ").trim().toLowerCase();
+        const reverse = [m.last_name, m.first_name].filter(Boolean).join(", ").trim().toLowerCase();
+        return full === name || reverse === name || (m.first_name ?? "").toLowerCase() === name;
+      });
+      if (match) upd.run(match.member_id, b.id);
+    }
+    db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)").run("trainer_availability_backfill", "1");
+  } catch {
+    /* app_settings or tables may not exist */
+  }
 }
 
 export function getPTCreditBalance(db: ReturnType<typeof getDb>, member_id: string, duration_minutes: number): number {

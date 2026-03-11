@@ -534,6 +534,15 @@ export default function Sidebar() {
             <nav className="p-2 flex-1 overflow-y-auto">
               <NavList {...navProps} />
             </nav>
+            <div className="p-3 border-t border-white/20 shrink-0">
+              <Link href="/privacy" className="text-xs text-white/80 hover:text-white" onClick={() => setMobileMenuOpen(false)}>
+                Privacy
+              </Link>
+              <span className="text-white/60 mx-1">·</span>
+              <Link href="/terms" className="text-xs text-white/80 hover:text-white" onClick={() => setMobileMenuOpen(false)}>
+                Terms
+              </Link>
+            </div>
           </div>
         </>
       )}
@@ -551,6 +560,15 @@ export default function Sidebar() {
       <nav className="p-2 flex-1 overflow-y-auto">
         <NavList {...navProps} />
       </nav>
+      <div className="p-3 border-t border-white/20 shrink-0">
+        <Link href="/privacy" className="text-xs text-white/80 hover:text-white">
+          Privacy
+        </Link>
+        <span className="text-white/60 mx-1">·</span>
+        <Link href="/terms" className="text-xs text-white/80 hover:text-white">
+          Terms
+        </Link>
+      </div>
     </aside>
     </>
   );
