@@ -23,7 +23,7 @@ export async function GET(
     const memberStmt = db.prepare(`
       SELECT m.id, m.member_id, m.first_name, m.last_name, m.email, m.phone, m.kisi_id, m.kisi_group_id, m.join_date,
         COALESCE(m.exp_next_payment_date, (SELECT s.expiry_date FROM subscriptions s WHERE s.member_id = m.member_id AND s.status = 'Active' ORDER BY ${expiryDateSortableSql("s.expiry_date")} DESC LIMIT 1)) AS exp_next_payment_date,
-        m.role, m.created_at
+        m.role, m.created_at, m.waiver_signed_at
       FROM members m WHERE ${isPurelyNumeric ? "m.id = ? OR m.member_id = ?" : "m.member_id = ?"}
     `);
     const member = (isPurelyNumeric

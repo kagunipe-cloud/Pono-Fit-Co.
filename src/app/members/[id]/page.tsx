@@ -379,6 +379,19 @@ export default function MemberDetailPage() {
           <div>
             <h1 className="text-2xl font-bold text-stone-800">{name}</h1>
             <p className="text-stone-500 mt-1 font-mono text-sm">{member.member_id as string}</p>
+            {isAdmin && (
+              <span
+                className={`mt-2 inline-block px-2.5 py-1 rounded text-xs font-medium ${
+                  (member.waiver_signed_at as string)?.trim()
+                    ? "bg-green-100 text-green-800"
+                    : "bg-amber-100 text-amber-800"
+                }`}
+              >
+                {(member.waiver_signed_at as string)?.trim()
+                  ? `✓ Waiver signed ${new Date((member.waiver_signed_at as string).trim()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                  : "Waiver not signed"}
+              </span>
+            )}
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <Link
@@ -527,6 +540,16 @@ export default function MemberDetailPage() {
               <div><dt className="text-stone-500">Role</dt><dd><span className={`px-2 py-0.5 rounded text-xs font-medium ${member.role === "Admin" ? "bg-brand-100 text-brand-800" : "bg-stone-100"}`}>{String(member.role ?? "—")}</span></dd></div>
               <div><dt className="text-stone-500">Join date</dt><dd className="font-medium">{String(member.join_date ?? "—")}</dd></div>
               <div><dt className="text-stone-500">Renewal date</dt><dd className="font-medium">{String(member.exp_next_payment_date ?? "—")}</dd></div>
+              {isAdmin && (
+                <div>
+                  <dt className="text-stone-500">Waiver</dt>
+                  <dd className="font-medium">
+                    {(member.waiver_signed_at as string)?.trim()
+                      ? `Signed ${new Date((member.waiver_signed_at as string).trim()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                      : "Not signed"}
+                  </dd>
+                </div>
+              )}
             </dl>
           )}
         </div>
