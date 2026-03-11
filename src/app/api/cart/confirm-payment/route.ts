@@ -398,7 +398,7 @@ export async function POST(request: NextRequest) {
         grand_total,
         message: waiver.shouldGrantKisi
           ? "Payment confirmed. Membership/bookings created. Kisi notified for door access (if configured)."
-          : "Payment confirmed. Check your email to sign the liability waiver and activate door access.",
+          : "Payment confirmed. Sign the liability waiver in the app to activate door access.",
       });
     } catch (e) {
       db.exec("ROLLBACK");

@@ -223,6 +223,11 @@ export function ensureMembersWaiverColumns(db: ReturnType<typeof getDb>) {
   } catch {
     // already exists
   }
+  try {
+    db.exec("ALTER TABLE members ADD COLUMN privacy_terms_accepted_at TEXT");
+  } catch {
+    // already exists
+  }
 }
 
 /** Add password_hash to members if missing (for member login). */

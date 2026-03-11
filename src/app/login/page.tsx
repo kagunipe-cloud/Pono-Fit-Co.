@@ -46,7 +46,11 @@ function LoginContent() {
         setError(data.error ?? "Login failed.");
         return;
       }
-      if (data.waiver_required) {
+      if (!data.privacy_terms_accepted) {
+        window.location.href = "/accept-privacy-terms";
+        return;
+      }
+      if (data.needs_waiver) {
         window.location.href = "/sign-waiver-required";
         return;
       }

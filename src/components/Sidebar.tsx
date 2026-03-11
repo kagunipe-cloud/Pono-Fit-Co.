@@ -473,6 +473,8 @@ export default function Sidebar() {
 
   async function handleLogout() {
     await fetch("/api/auth/member-logout", { method: "POST" });
+    const { clearWaiverGateCache } = await import("@/components/WaiverGate");
+    clearWaiverGateCache();
     setMember(null);
     setMobileMenuOpen(false);
     router.push("/");
