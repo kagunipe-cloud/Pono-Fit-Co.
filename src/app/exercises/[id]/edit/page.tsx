@@ -13,6 +13,7 @@ type Exercise = {
   equipment: string | null;
   muscle_group: string | null;
   instructions: string[];
+  image_path?: string | null;
 };
 
 export default function EditExercisePage() {
@@ -98,6 +99,16 @@ export default function EditExercisePage() {
       <h1 className="text-2xl font-bold text-stone-800 mb-6">Edit exercise</h1>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {exercise.image_path && (
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Image</label>
+            <img
+              src={`/api/exercises/${id}/image`}
+              alt={exercise.name}
+              className="max-w-xs rounded-lg border border-stone-200 object-cover"
+            />
+          </div>
+        )}
         <div>
           <label htmlFor="name" className="block text-sm font-medium text-stone-700 mb-1">Name</label>
           <input

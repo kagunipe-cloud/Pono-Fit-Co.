@@ -147,7 +147,7 @@ export default function MemberWorkoutDetailPage() {
   const [exerciseSuggestions, setExerciseSuggestions] = useState<OfficialExercise[]>([]);
   const [selectedOfficialId, setSelectedOfficialId] = useState<number | null>(null);
   const [showCustomNameReminder, setShowCustomNameReminder] = useState(false);
-  const [instructionsModal, setInstructionsModal] = useState<{ exerciseName: string; instructions: string[] } | null>(null);
+  const [instructionsModal, setInstructionsModal] = useState<{ exerciseName: string; instructions: string[]; exerciseId?: number } | null>(null);
   const [loadingInstructions, setLoadingInstructions] = useState(false);
   const [editingExId, setEditingExId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
@@ -805,7 +805,11 @@ export default function MemberWorkoutDetailPage() {
                         const res = await fetch(`/api/exercises/${exerciseId}`);
                         if (res.ok) {
                           const data = await res.json();
-                          setInstructionsModal({ exerciseName: data.name ?? exerciseName.trim(), instructions: Array.isArray(data.instructions) ? data.instructions : [] });
+                          setInstructionsModal({
+                            exerciseName: data.name ?? exerciseName.trim(),
+                            instructions: Array.isArray(data.instructions) ? data.instructions : [],
+                            exerciseId: data.image_path ? data.id : undefined,
+                          });
                           return;
                         }
                       }
@@ -1232,7 +1236,11 @@ export default function MemberWorkoutDetailPage() {
                                 const res = await fetch(`/api/exercises/${exerciseId}`);
                                 if (res.ok) {
                                   const data = await res.json();
-                                  setInstructionsModal({ exerciseName: data.name ?? ex.exercise_name, instructions: Array.isArray(data.instructions) ? data.instructions : [] });
+                                  setInstructionsModal({
+                                    exerciseName: data.name ?? ex.exercise_name,
+                                    instructions: Array.isArray(data.instructions) ? data.instructions : [],
+                                    exerciseId: data.image_path ? data.id : undefined,
+                                  });
                                   return;
                                 }
                               }
@@ -1632,7 +1640,14 @@ export default function MemberWorkoutDetailPage() {
                 ✕
               </button>
             </div>
-            <div className="p-4 overflow-y-auto">
+            <div className="p-4 overflow-y-auto space-y-4">
+              {instructionsModal.exerciseId && (
+                <img
+                  src={`/api/exercises/${instructionsModal.exerciseId}/image`}
+                  alt={instructionsModal.exerciseName}
+                  className="w-full rounded-lg border border-stone-200 object-cover max-h-48"
+                />
+              )}
               {instructionsModal.instructions.length === 0 ? (
                 <p className="text-stone-500 text-sm">No instructions available for this exercise.</p>
               ) : (

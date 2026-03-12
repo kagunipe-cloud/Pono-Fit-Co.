@@ -12,6 +12,7 @@ type ExerciseRow = {
   equipment?: string | null;
   muscle_group?: string | null;
   instructions?: string | null;
+  image_path?: string | null;
 };
 
 export default function ExercisesPage() {
@@ -80,34 +81,20 @@ export default function ExercisesPage() {
     }
   }
 
-  const FREE_EXERCISE_DB_URL = "https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json";
-
   async function handleImportFromFreeExerciseDb() {
     setFetchingDb(true);
     setFreeDbResult(null);
     try {
-      const res = await fetch(FREE_EXERCISE_DB_URL);
-      if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
-      const data = await res.json();
-      const list = Array.isArray(data) ? data : [];
-      if (list.length === 0) {
-        setFreeDbResult("No exercises in response.");
-        return;
-      }
-      const importRes = await fetch("/api/exercises/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(list),
-      });
-      const result = await importRes.json().catch(() => ({}));
-      if (importRes.ok) {
-        setFreeDbResult(`Added ${result.added ?? 0} of ${result.total ?? list.length} exercises from free-exercise-db.`);
+      const res = await fetch("/api/exercises/import-from-free-db", { method: "POST" });
+      const result = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setFreeDbResult(result.message ?? `Added ${result.added ?? 0} of ${result.total ?? 0} exercises, ${result.imagesDownloaded ?? 0} images.`);
         fetchList();
       } else {
         setFreeDbResult(result.error ?? "Import failed");
       }
     } catch (e) {
-      setFreeDbResult(e instanceof Error ? e.message : "Failed to fetch or import");
+      setFreeDbResult(e instanceof Error ? e.message : "Failed to import");
     } finally {
       setFetchingDb(false);
     }
@@ -265,6 +252,20 @@ export default function ExercisesPage() {
       </div>
 
       <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50 space-y-3">
+        <h2 className="font-semibold text-stone-800">Export exercises</h2>
+        <p className="text-xs text-stone-500">
+          Download all exercises as JSON. Share the file to analyze name matching or for backup.
+        </p>
+        <a
+          href="/api/exercises/export"
+          download="exercises-export.json"
+          className="inline-block px-4 py-2 rounded-lg border border-stone-200 font-medium hover:bg-stone-50"
+        >
+          Download exercises JSON
+        </a>
+      </div>
+
+      <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50 space-y-3">
         <h2 className="font-semibold text-stone-800">Fix degree symbol (Â° → °)</h2>
         <p className="text-xs text-stone-500">
           Replace corrupted degree symbols (e.g. from import encoding) with the correct ° in all exercise names and instructions.
@@ -302,7 +303,7 @@ export default function ExercisesPage() {
       <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50 space-y-3">
         <h2 className="font-semibold text-stone-800">Import from free-exercise-db (800+ exercises)</h2>
         <p className="text-xs text-stone-500">
-          One-click import from the open <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline">free-exercise-db</a> dataset. We map their fields to TYPE, NAME, MUSCLE GROUP, TARGET MUSCLE, EQUIPMENT. Their <a href="https://github.com/yuhonas/free-exercise-db#what-do-they-look-like" target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline">schema</a> (name, equipment, primaryMuscles, instructions, etc.) is documented in the repo. All imported as &quot;lift&quot;.
+          One-click import from the open <a href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener noreferrer" className="text-brand-600 hover:underline">free-exercise-db</a> dataset. Downloads exercises and images to your volume. Matches existing exercises by name (case-insensitive, minor cleanup) for image backfill.
         </p>
         <button
           type="button"
@@ -386,6 +387,7 @@ export default function ExercisesPage() {
           <table className="w-full text-sm text-left border border-stone-200 rounded-lg overflow-hidden">
             <thead className="bg-stone-100 text-stone-600">
               <tr>
+                <th className="px-3 py-2 font-medium w-14"></th>
                 <th className="px-3 py-2 font-medium">TYPE</th>
                 <th className="px-3 py-2 font-medium">NAME</th>
                 <th className="px-3 py-2 font-medium">MUSCLE GROUP</th>
@@ -411,6 +413,17 @@ export default function ExercisesPage() {
                   : `${steps[0].length > 80 ? steps[0].slice(0, 80) + "…" : steps[0]} (+${steps.length - 1} more)`;
                 return (
                   <tr key={ex.id} className="border-t border-stone-200 text-stone-700">
+                    <td className="px-3 py-2">
+                      {ex.image_path ? (
+                        <img
+                          src={`/api/exercises/${ex.id}/image`}
+                          alt=""
+                          className="w-10 h-10 object-cover rounded border border-stone-200"
+                        />
+                      ) : (
+                        <span className="w-10 h-10 block bg-stone-100 rounded border border-stone-200" />
+                      )}
+                    </td>
                     <td className="px-3 py-2 capitalize text-stone-500">{ex.type}</td>
                     <td className="px-3 py-2">{ex.name}</td>
                     <td className="px-3 py-2 capitalize text-stone-600">{ex.muscle_group || "—"}</td>

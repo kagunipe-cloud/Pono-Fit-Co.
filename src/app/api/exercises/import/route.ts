@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     if (!contentType.includes("application/json")) {
       return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 400 });
     }
-    type ExerciseItem = { name: string; type: "lift" | "cardio"; primary_muscles?: string; secondary_muscles?: string; equipment?: string; muscle_group?: string; instructions?: string };
+    type ExerciseItem = { name: string; type: "lift" | "cardio"; primary_muscles?: string; secondary_muscles?: string; equipment?: string; muscle_group?: string; instructions?: string; image_path?: string };
     const body = await request.json().catch(() => ({}));
     let items: ExerciseItem[] = [];
 
@@ -99,7 +99,8 @@ export async function POST(request: NextRequest) {
           ? muscle_group_raw
           : getMuscleGroup(primary_muscles || undefined, name);
         const instructions = instructionsIdx >= 0 ? (parts[instructionsIdx] ?? "").trim().replace(/^"|"$/g, "") : "";
-        items.push({ name, type, primary_muscles, secondary_muscles, equipment, muscle_group, instructions: instructions || undefined });
+        const image_path = headers.includes("image_path") ? (parts[headers.indexOf("image_path")] ?? "").trim() : undefined;
+        items.push({ name, type, primary_muscles, secondary_muscles, equipment, muscle_group, instructions: instructions || undefined, image_path: image_path || undefined });
       }
     } else {
       const list = Array.isArray(body.exercises) ? body.exercises : Array.isArray(body) ? body : [];
@@ -130,14 +131,15 @@ export async function POST(request: NextRequest) {
         if (!muscle_group) muscle_group = getMuscleGroup(primary_muscles || undefined, name);
         const instructionsArr = Array.isArray(row.instructions) ? row.instructions : row.instructions != null ? [String(row.instructions)] : [];
         const instructions = instructionsArr.length > 0 ? JSON.stringify(instructionsArr.map(String)) : "";
-        items.push({ name, type, primary_muscles, secondary_muscles, equipment, muscle_group, instructions: instructions || undefined });
+        const image_path = row.image_path != null ? String(row.image_path).trim() || undefined : undefined;
+        items.push({ name, type, primary_muscles, secondary_muscles, equipment, muscle_group, instructions: instructions || undefined, image_path });
       }
     }
 
     const db = getDb();
     ensureWorkoutTables(db);
     const insert = db.prepare(
-      "INSERT OR IGNORE INTO exercises (name, type, primary_muscles, secondary_muscles, equipment, muscle_group, instructions) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      "INSERT OR IGNORE INTO exercises (name, type, primary_muscles, secondary_muscles, equipment, muscle_group, instructions, image_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     );
     let added = 0;
     for (const it of items) {
@@ -148,7 +150,8 @@ export async function POST(request: NextRequest) {
         it.secondary_muscles ?? "",
         it.equipment ?? "",
         it.muscle_group ?? "core",
-        it.instructions ?? ""
+        it.instructions ?? "",
+        it.image_path ?? ""
       );
       if (r.changes > 0) added++;
     }

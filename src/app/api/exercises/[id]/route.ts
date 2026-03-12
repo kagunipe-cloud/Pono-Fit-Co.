@@ -16,8 +16,8 @@ export async function GET(
     const db = getDb();
     ensureWorkoutTables(db);
     const row = db.prepare(
-      "SELECT id, name, type, primary_muscles, secondary_muscles, equipment, muscle_group, instructions FROM exercises WHERE id = ?"
-    ).get(id) as { id: number; name: string; type: string; primary_muscles: string | null; secondary_muscles: string | null; equipment: string | null; muscle_group: string | null; instructions: string | null } | undefined;
+      "SELECT id, name, type, primary_muscles, secondary_muscles, equipment, muscle_group, instructions, image_path FROM exercises WHERE id = ?"
+    ).get(id) as { id: number; name: string; type: string; primary_muscles: string | null; secondary_muscles: string | null; equipment: string | null; muscle_group: string | null; instructions: string | null; image_path: string | null } | undefined;
     db.close();
 
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -41,6 +41,7 @@ export async function GET(
       equipment: row.equipment,
       muscle_group: row.muscle_group,
       instructions,
+      image_path: row.image_path ?? null,
     });
   } catch (err) {
     console.error(err);
@@ -66,6 +67,7 @@ export async function PATCH(
     const secondary_muscles = body.secondary_muscles != null ? String(body.secondary_muscles).trim() || null : null;
     const equipment = body.equipment != null ? String(body.equipment).trim() || null : null;
     const muscle_group = body.muscle_group != null ? String(body.muscle_group).trim() || null : null;
+    const image_path = body.image_path != null ? (String(body.image_path).trim() || null) : undefined;
     let instructions: string | null | undefined = undefined;
     if (body.instructions !== undefined) {
       if (Array.isArray(body.instructions)) {
@@ -92,15 +94,20 @@ export async function PATCH(
       );
     }
 
+    const updates: string[] = ["name", "type", "primary_muscles", "secondary_muscles", "equipment", "muscle_group"];
+    const values: (string | null)[] = [name, type, primary_muscles, secondary_muscles, equipment, muscle_group];
     if (instructions !== undefined) {
-      db.prepare(
-        "UPDATE exercises SET name = ?, type = ?, primary_muscles = ?, secondary_muscles = ?, equipment = ?, muscle_group = ?, instructions = ? WHERE id = ?"
-      ).run(name, type, primary_muscles, secondary_muscles, equipment, muscle_group, instructions, id);
-    } else {
-      db.prepare(
-        "UPDATE exercises SET name = ?, type = ?, primary_muscles = ?, secondary_muscles = ?, equipment = ?, muscle_group = ? WHERE id = ?"
-      ).run(name, type, primary_muscles, secondary_muscles, equipment, muscle_group, id);
+      updates.push("instructions");
+      values.push(instructions);
     }
+    if (image_path !== undefined) {
+      updates.push("image_path");
+      values.push(image_path);
+    }
+    values.push(String(id));
+    db.prepare(
+      `UPDATE exercises SET ${updates.map((c) => `${c} = ?`).join(", ")} WHERE id = ?`
+    ).run(...values);
     db.close();
 
     return NextResponse.json({ ok: true });

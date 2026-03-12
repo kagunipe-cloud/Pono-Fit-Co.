@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     const db = getDb();
     ensureWorkoutTables(db);
 
-    let sql = "SELECT id, name, type, primary_muscles, secondary_muscles, equipment, muscle_group, instructions FROM exercises WHERE 1=1";
+    let sql = "SELECT id, name, type, primary_muscles, secondary_muscles, equipment, muscle_group, instructions, image_path FROM exercises WHERE 1=1";
     const params: (string | number)[] = [];
     if (type === "lift" || type === "cardio") {
       sql += " AND type = ?";
@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
       equipment?: string | null;
       muscle_group?: string | null;
       instructions?: string | null;
+      image_path?: string | null;
     }[];
     db.close();
 

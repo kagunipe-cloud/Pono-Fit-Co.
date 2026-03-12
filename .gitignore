@@ -29,6 +29,9 @@ yarn-error.log*
 # sqlite
 /data/*.db
 
+# exercise images (downloaded on import, stored on volume)
+/data/exercise-images/
+
 # exported Kaggle exercise data (optional)
 gym-exercises-export.json
 

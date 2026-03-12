@@ -98,7 +98,7 @@ export function ensureWorkoutTables(db: ReturnType<typeof getDb>) {
     CREATE INDEX IF NOT EXISTS idx_exercises_name ON exercises(name);
   `);
   const exerciseCols = db.prepare("PRAGMA table_info(exercises)").all() as { name: string }[];
-  for (const col of ["primary_muscles", "secondary_muscles", "equipment", "muscle_group", "instructions"]) {
+  for (const col of ["primary_muscles", "secondary_muscles", "equipment", "muscle_group", "instructions", "image_path"]) {
     if (exerciseCols.every((c) => c.name !== col)) {
       try {
         db.prepare(`ALTER TABLE exercises ADD COLUMN ${col} TEXT`).run();
