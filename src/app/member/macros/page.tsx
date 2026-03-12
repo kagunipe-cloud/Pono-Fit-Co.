@@ -205,7 +205,7 @@ export default function MemberMacrosPage() {
               className={`relative min-w-0 ${isMobile ? "w-full aspect-[495/385] min-h-[240px] max-w-full" : "w-full max-w-[562px] h-[380px] min-h-[320px]"}`}
             >
             <svg
-              viewBox={isMobile ? "-35 -55 495 385" : "-35 -55 570 385"}
+              viewBox={isMobile ? "7 -55 495 385" : "-35 -55 570 385"}
               className="w-full h-full block"
               preserveAspectRatio="xMidYMid meet"
             >
