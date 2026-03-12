@@ -200,9 +200,10 @@ export default function MemberMacrosPage() {
           <p className="text-sm text-stone-500">Log a weight in your journal to see the chart.</p>
         ) : (
           <>
-          <div
-            className={`w-full relative mx-auto ${isMobile ? "aspect-[495/385] min-h-[240px] max-w-full" : "h-[380px] min-h-[320px]"}`}
-          >
+          <div className="flex justify-center">
+            <div
+              className={`relative ${isMobile ? "w-full aspect-[495/385] min-h-[240px] max-w-full" : "w-full max-w-[562px] h-[380px] min-h-[320px]"}`}
+            >
             <svg
               viewBox={isMobile ? "-35 -55 495 385" : "-35 -55 570 385"}
               className="w-full h-full block"
@@ -352,6 +353,7 @@ export default function MemberMacrosPage() {
                 );
               })()}
             </svg>
+            </div>
           </div>
           {goals.weight_goal == null || goals.weight_goal <= 0 ? (
             <p className="text-xs text-stone-500 mt-2">Set a weight goal in the goals section below to show your goal line on the chart.</p>
