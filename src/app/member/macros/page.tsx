@@ -169,7 +169,7 @@ export default function MemberMacrosPage() {
       </div>
 
       {/* Weight chart — data from daily weigh-ins in journal */}
-      <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-white">
+      <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-white -mx-6 sm:mx-0 sm:px-4">
         <h2 className="font-semibold text-stone-800 mb-2">My Weight Management Odyssey</h2>
         <p className="text-xs text-stone-500 mb-3">From your daily weigh-ins in the journal. Toggle the range below.</p>
         <div className="flex flex-wrap gap-2 mb-3">
@@ -188,7 +188,7 @@ export default function MemberMacrosPage() {
           <p className="text-sm text-stone-500">Log a weight in your journal to see the chart.</p>
         ) : (
           <>
-          <div className="w-full relative" style={{ minHeight: "380px", height: "380px" }}>
+          <div className="w-full relative aspect-[570/385] min-h-[55vh] sm:min-h-[320px]">
             <svg viewBox="-35 -55 570 385" className="w-full h-full block" preserveAspectRatio="xMidYMid meet">
               {(() => {
                 const pts = weighIns.map((w) => ({ x: w.date, y: w.weight }));
