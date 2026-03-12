@@ -133,10 +133,14 @@ export default function MyClientsPage() {
   if (loading) return <div className="p-6 text-stone-500">Loading…</div>;
   if (error) return <div className="p-6 text-red-600">{error}</div>;
 
+  const selectedTrainer = filterTrainerId ? trainers.find((t) => t.member_id === filterTrainerId) : null;
+  const scheduleBackHref = isAdmin && filterTrainerId ? `/admin/trainers?trainer=${encodeURIComponent(filterTrainerId)}` : "/trainer";
+  const scheduleBackLabel = isAdmin && selectedTrainer?.display_name ? `${selectedTrainer.display_name.split(/\s+/)[0]}'s Schedule` : "My Schedule";
+
   return (
     <div className="max-w-3xl mx-auto p-6">
       <div className="mb-6">
-        <Link href="/trainer" className="text-stone-500 hover:text-stone-700 text-sm mb-2 inline-block">← My Schedule</Link>
+        <Link href={scheduleBackHref} className="text-stone-500 hover:text-stone-700 text-sm mb-2 inline-block">← {scheduleBackLabel}</Link>
         <h1 className="text-2xl font-bold text-stone-800">My Clients</h1>
         <p className="text-stone-500 text-sm mt-1">
           {isAdmin ? "All PT clients for the gym. Filter by trainer or add a client to any trainer." : "Clients who have booked PT with you (or were added here) appear below."}

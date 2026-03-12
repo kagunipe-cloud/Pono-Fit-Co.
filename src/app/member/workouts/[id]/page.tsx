@@ -1645,7 +1645,7 @@ export default function MemberWorkoutDetailPage() {
                 <img
                   src={`/api/exercises/${instructionsModal.exerciseId}/image`}
                   alt={instructionsModal.exerciseName}
-                  className="w-full rounded-lg border border-stone-200 object-cover max-h-48"
+                  className="w-full rounded-lg border border-stone-200 object-cover max-h-72"
                 />
               )}
               {instructionsModal.instructions.length === 0 ? (

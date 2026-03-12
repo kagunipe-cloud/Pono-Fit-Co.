@@ -435,7 +435,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-stone-800 tracking-tight">
-            {isMaster ? "Master Schedule" : isTrainer ? "My Schedule" : "Schedule"}
+            {isMaster ? "Master Schedule" : isTrainer ? (trainerDisplayName ? `${trainerDisplayName.split(/\s+/)[0]}'s Schedule` : "My Schedule") : "Schedule"}
           </h1>
           {isMaster && (
             <>

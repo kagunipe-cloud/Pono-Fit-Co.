@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import ScheduleGrid from "@/components/ScheduleGrid";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -20,6 +21,8 @@ type AvailabilityBlock = {
 };
 
 export default function AdminTrainersPage() {
+  const searchParams = useSearchParams();
+  const trainerFromUrl = searchParams.get("trainer")?.trim() || null;
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -39,13 +42,15 @@ export default function AdminTrainersPage() {
       .then((data: Trainer[]) => {
         const list = Array.isArray(data) ? data : [];
         setTrainers(list);
-        if (list.length > 0 && !selectedId) {
-          setSelectedId(list[0].member_id);
+        if (list.length > 0) {
+          const fromUrl = trainerFromUrl && list.some((t) => t.member_id === trainerFromUrl) ? trainerFromUrl : null;
+          if (fromUrl) setSelectedId(fromUrl);
+          else if (!selectedId) setSelectedId(list[0].member_id);
         }
       })
       .catch(() => setTrainers([]))
       .finally(() => setLoading(false));
-  }, [selectedId]);
+  }, [selectedId, trainerFromUrl]);
 
   useEffect(() => {
     if (!selectedId) {
