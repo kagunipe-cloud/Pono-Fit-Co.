@@ -189,7 +189,7 @@ export default function MemberMacrosPage() {
         ) : (
           <>
           <div className="w-full relative" style={{ minHeight: "380px", height: "380px" }}>
-            <svg viewBox="0 0 500 320" className="w-full h-full block" preserveAspectRatio="xMidYMid meet">
+            <svg viewBox="-35 -55 570 385" className="w-full h-full block" preserveAspectRatio="xMidYMid meet">
               {(() => {
                 const pts = weighIns.map((w) => ({ x: w.date, y: w.weight }));
                 const goalWeight = goals.weight_goal != null && goals.weight_goal > 0 ? goals.weight_goal : null;

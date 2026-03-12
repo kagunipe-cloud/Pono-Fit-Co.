@@ -7,7 +7,7 @@ import ScheduleGrid from "@/components/ScheduleGrid";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-type Trainer = { member_id: string; display_name: string };
+type Trainer = { member_id: string; display_name: string; source?: "trainers" | "admin" };
 
 type AvailabilityBlock = {
   id: number;
@@ -35,6 +35,7 @@ export default function AdminTrainersPage() {
   const [addDesc, setAddDesc] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deletingTrainerId, setDeletingTrainerId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/trainers")
@@ -139,6 +140,23 @@ export default function AdminTrainersPage() {
     setScheduleRefreshKey((k) => k + 1);
   }
 
+  async function handleDeleteTrainer(memberId: string) {
+    if (!confirm("Remove this trainer? Their availability blocks, client links, and PT bookings will be deleted. Their member account will remain but their role will be set to Member.")) return;
+    setDeletingTrainerId(memberId);
+    try {
+      const res = await fetch(`/api/admin/trainers/${encodeURIComponent(memberId)}`, { method: "DELETE" });
+      if (res.ok) {
+        setTrainers((prev) => prev.filter((t) => t.member_id !== memberId));
+        if (selectedId === memberId) setSelectedId(null);
+      } else {
+        const data = await res.json();
+        alert(data.error ?? "Failed to delete trainer");
+      }
+    } finally {
+      setDeletingTrainerId(null);
+    }
+  }
+
   return (
     <div className="max-w-6xl mx-auto">
       <header className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -178,19 +196,41 @@ export default function AdminTrainersPage() {
           <aside className="bg-white border border-stone-200 rounded-xl p-3">
             <ul className="space-y-1">
               {trainers.map((t) => (
-                <li key={t.member_id}>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(t.member_id)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium ${
-                      selectedId === t.member_id
-                        ? "bg-brand-50 text-brand-800"
-                        : "text-stone-700 hover:bg-stone-100"
-                    }`}
-                  >
-                    <span className="block truncate">{t.display_name}</span>
-                    <span className="block text-xs text-stone-400 truncate">ID: {t.member_id}</span>
-                  </button>
+                <li key={t.member_id} className="group">
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(t.member_id)}
+                      className={`flex-1 min-w-0 text-left px-3 py-2 rounded-lg text-sm font-medium ${
+                        selectedId === t.member_id
+                          ? "bg-brand-50 text-brand-800"
+                          : "text-stone-700 hover:bg-stone-100"
+                      }`}
+                    >
+                      <span className="block truncate">{t.display_name}</span>
+                      <span className="block text-xs text-stone-400 truncate">ID: {t.member_id}</span>
+                    </button>
+                    {t.source === "trainers" && (
+                      <div className="flex shrink-0 gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Link
+                          href={`/admin/trainers/${t.member_id}/edit`}
+                          className="p-1.5 rounded text-stone-500 hover:text-brand-600 hover:bg-stone-100"
+                          title="Edit trainer"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTrainer(t.member_id)}
+                          disabled={deletingTrainerId === t.member_id}
+                          className="p-1.5 rounded text-stone-500 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          title="Delete trainer"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -199,12 +239,34 @@ export default function AdminTrainersPage() {
             {selected ? (
               <>
                 <div className="bg-white border border-stone-200 rounded-xl p-4">
-                  <h2 className="text-lg font-semibold text-stone-800 mb-1">{selected.display_name}</h2>
-                  <p className="text-xs text-stone-500">Member ID: {selected.member_id}</p>
-                  <p className="mt-2 text-xs text-stone-500">
-                    Trainers see and edit their own availability from <span className="font-semibold">My schedule</span>. Admins can
-                    also adjust availability using the schedule below.
-                  </p>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-lg font-semibold text-stone-800 mb-1">{selected.display_name}</h2>
+                      <p className="text-xs text-stone-500">Member ID: {selected.member_id}</p>
+                      <p className="mt-2 text-xs text-stone-500">
+                        Trainers see and edit their own availability from <span className="font-semibold">My schedule</span>. Admins can
+                        also adjust availability using the schedule below.
+                      </p>
+                    </div>
+                    {selected.source === "trainers" && (
+                      <div className="flex shrink-0 gap-2">
+                        <Link
+                          href={`/admin/trainers/${selected.member_id}/edit`}
+                          className="px-3 py-1.5 rounded-lg border border-stone-200 text-sm font-medium text-stone-700 hover:bg-stone-50"
+                        >
+                          Edit
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTrainer(selected.member_id)}
+                          disabled={deletingTrainerId === selected.member_id}
+                          className="px-3 py-1.5 rounded-lg border border-red-200 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          {deletingTrainerId === selected.member_id ? "Removing…" : "Delete"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="bg-white border border-stone-200 rounded-xl p-4">
                   <ScheduleGrid

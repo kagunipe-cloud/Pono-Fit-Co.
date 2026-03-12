@@ -154,16 +154,34 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
       for (let slotMin = TIME_SLOT_MIN; slotMin < TIME_SLOT_MAX; slotMin += SLOT_MINUTES) {
         const key = `${date}-${slotMin}`;
         // Classes: block duration_minutes + 15 min across slots; first slot gets full item with rowSpan
+        // When multiple classes overlap a slot (e.g. 8:00 class + buffer extends to 9:15), prefer the one that STARTS at this slot so back-to-back classes both show.
+        // Cap earlier class spans so they don't extend into a later class's start slot.
         let classPlaced = false;
+        const overlapping: Occurrence[] = [];
         for (const o of occurrences) {
           if (o.occurrence_date !== date) continue;
           const startMin = parseTimeToMinutes(o.occurrence_time);
           const durationMin = typeof o.duration_minutes === "number" ? o.duration_minutes : 60;
           const endMin = startMin + durationMin + CLASS_BUFFER_MINUTES;
           if (!slotOverlaps(slotMin, startMin, endMin)) continue;
-          const classStartSlot = Math.floor((startMin - TIME_SLOT_MIN) / SLOT_MINUTES) * SLOT_MINUTES + TIME_SLOT_MIN;
-          const spanSlots = Math.ceil((durationMin + CLASS_BUFFER_MINUTES) / SLOT_MINUTES);
-          if (slotMin === classStartSlot) {
+          overlapping.push(o);
+        }
+        const toClassStartSlot = (startMin: number) =>
+          Math.floor((startMin - TIME_SLOT_MIN) / SLOT_MINUTES) * SLOT_MINUTES + TIME_SLOT_MIN;
+        const o = overlapping.find((occ) => toClassStartSlot(parseTimeToMinutes(occ.occurrence_time)) === slotMin)
+          ?? overlapping[0];
+        if (o) {
+          const startMin = parseTimeToMinutes(o.occurrence_time);
+          const durationMin = typeof o.duration_minutes === "number" ? o.duration_minutes : 60;
+          const oClassStartSlot = toClassStartSlot(startMin);
+          const idealSpan = Math.ceil((durationMin + CLASS_BUFFER_MINUTES) / SLOT_MINUTES);
+          const otherStarts = occurrences
+            .filter((x) => x.occurrence_date === date && x.id !== o.id)
+            .map((x) => toClassStartSlot(parseTimeToMinutes(x.occurrence_time)));
+          const nextStartSlot = otherStarts.filter((s) => s > oClassStartSlot).sort((a, b) => a - b)[0];
+          const slotCountToNext = nextStartSlot != null ? (nextStartSlot - oClassStartSlot) / SLOT_MINUTES : Infinity;
+          const spanSlots = Math.min(idealSpan, Math.floor(slotCountToNext));
+          if (slotMin === oClassStartSlot) {
             map.set(key, {
               type: "class",
               id: o.id,
@@ -174,17 +192,15 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
               booked_count: o.booked_count,
               capacity: o.capacity,
               duration_minutes: durationMin,
-              classStartSlot,
+              classStartSlot: oClassStartSlot,
               spanSlots,
               ...(o.class_id != null && { class_id: o.class_id }),
               ...(o.recurring_class_id != null && { recurring_class_id: o.recurring_class_id }),
             });
-            classPlaced = true;
           } else {
             map.set(key, { type: "class_span" });
-            classPlaced = true;
           }
-          break;
+          classPlaced = true;
         }
         if (classPlaced) continue;
         const memberWithTrainerFilter = variant === "member" && effectiveTrainerId != null;
