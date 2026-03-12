@@ -2,6 +2,17 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(typeof window !== "undefined" && window.innerWidth < 640);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+  return isMobile;
+}
 import { useRouter } from "next/navigation";
 import { formatDateForDisplay, formatInAppTz, formatWeekdayShortInAppTz, todayInAppTz, weekStartInAppTz } from "@/lib/app-timezone";
 import { useAppTimezone } from "@/lib/settings-context";
@@ -26,6 +37,7 @@ function daySlug(d: string, tz: string): string {
 export default function MemberMacrosPage() {
   const router = useRouter();
   const tz = useAppTimezone();
+  const isMobile = useIsMobile();
   const [weeks, setWeeks] = useState<string[]>([]);
   const [daysByWeek, setDaysByWeek] = useState<Record<string, JournalDay[]>>({});
   const [loading, setLoading] = useState(true);
@@ -189,7 +201,11 @@ export default function MemberMacrosPage() {
         ) : (
           <>
           <div className="w-full relative h-[60vh] min-h-[280px] sm:h-[380px] sm:min-h-[320px]">
-            <svg viewBox="-35 -55 570 385" className="w-full h-full block" preserveAspectRatio="xMinYMid slice">
+            <svg
+              viewBox={isMobile ? "-35 -55 495 385" : "-35 -55 570 385"}
+              className="w-full h-full block"
+              preserveAspectRatio={isMobile ? "xMidYMid meet" : "xMidYMid slice"}
+            >
               {(() => {
                 const pts = weighIns.map((w) => ({ x: w.date, y: w.weight }));
                 const goalWeight = goals.weight_goal != null && goals.weight_goal > 0 ? goals.weight_goal : null;
