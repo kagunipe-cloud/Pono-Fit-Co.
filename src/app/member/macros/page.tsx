@@ -188,8 +188,8 @@ export default function MemberMacrosPage() {
           <p className="text-sm text-stone-500">Log a weight in your journal to see the chart.</p>
         ) : (
           <>
-          <div className="w-full relative aspect-[570/385] min-h-[55vh] sm:min-h-[320px]">
-            <svg viewBox="-35 -55 570 385" className="w-full h-full block" preserveAspectRatio="xMidYMid meet">
+          <div className="w-full relative h-[60vh] min-h-[280px] sm:h-[380px] sm:min-h-[320px]">
+            <svg viewBox="-35 -55 570 385" className="w-full h-full block" preserveAspectRatio="xMinYMid slice">
               {(() => {
                 const pts = weighIns.map((w) => ({ x: w.date, y: w.weight }));
                 const goalWeight = goals.weight_goal != null && goals.weight_goal > 0 ? goals.weight_goal : null;
