@@ -52,8 +52,7 @@ export function hasPTAtSlot(db: ReturnType<typeof getDb>, date: string, timeMinu
   for (const r of openRows) {
     const bStart = parseTimeToMinutes(r.start_time);
     const bEnd = bStart + (r.duration_minutes ?? 60);
-    const bufferEnd = bEnd + PT_BUFFER_MINUTES;
-    if (key < bufferEnd && slotEnd > bStart && !(slotEnd === bEnd)) return true;
+    if (key < bEnd && slotEnd > bStart) return true;
   }
   return false;
 }
@@ -76,13 +75,15 @@ export function hasClassAtSlot(db: ReturnType<typeof getDb>, date: string, timeM
 /**
  * Returns true if [startMin, startMin+durationMinutes] is free for a PT booking.
  * No overlap with classes, unavailable, block bookings, or other PT open bookings.
- * PT buffer: nothing may start in (ourEnd, ourEnd+15]; OK if something starts exactly when we end.
+ * PT buffer (15 min): only applies when the conflicting booking is the SAME trainer.
+ * When trainerMemberId is null, buffer applies to all (backward compat).
  */
 export function isPTBookingSlotFree(
   db: ReturnType<typeof getDb>,
   date: string,
   startMin: number,
-  durationMinutes: number
+  durationMinutes: number,
+  trainerMemberId?: string | null
 ): boolean {
   const endMin = startMin + durationMinutes;
   for (let m = startMin; m < endMin; m += SLOT_MINUTES) {
@@ -97,13 +98,17 @@ export function isPTBookingSlotFree(
   }
   ensurePTSlotTables(db);
   const openBookings = db
-    .prepare("SELECT occurrence_date, start_time, duration_minutes FROM pt_open_bookings WHERE occurrence_date = ?")
-    .all(date) as { occurrence_date: string; start_time: string; duration_minutes: number }[];
+    .prepare("SELECT occurrence_date, start_time, duration_minutes, trainer_member_id FROM pt_open_bookings WHERE occurrence_date = ?")
+    .all(date) as { occurrence_date: string; start_time: string; duration_minutes: number; trainer_member_id: string | null }[];
   for (const b of openBookings) {
     const bStart = parseTimeToMinutes(b.start_time);
-    const bEnd = bStart + (b.duration_minutes ?? 60) + PT_BUFFER_MINUTES;
-    if (startMin < bEnd && endMin > bStart) return false;
-    if (bStart > endMin && bStart <= endMin + PT_BUFFER_MINUTES) return false;
+    const bDuration = b.duration_minutes ?? 60;
+    const bEnd = bStart + bDuration;
+    const sameTrainer = trainerMemberId != null && (b.trainer_member_id ?? "").trim() === trainerMemberId.trim();
+    const useBuffer = trainerMemberId == null || sameTrainer;
+    const effectiveBEnd = useBuffer ? bEnd + PT_BUFFER_MINUTES : bEnd;
+    if (startMin < effectiveBEnd && endMin > bStart) return false;
+    if (useBuffer && bStart > endMin && bStart <= endMin + PT_BUFFER_MINUTES) return false;
   }
   const blockBookings = db
     .prepare("SELECT start_time, reserved_minutes FROM pt_block_bookings WHERE occurrence_date = ?")

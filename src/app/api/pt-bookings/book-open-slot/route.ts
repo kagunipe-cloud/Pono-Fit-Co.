@@ -3,57 +3,12 @@ import { getDb } from "../../../../lib/db";
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { getAdminMemberId } from "../../../../lib/admin";
 import { ensurePTSlotTables, getPTCreditBalance } from "../../../../lib/pt-slots";
-import { hasClassAtSlot } from "../../../../lib/schedule-conflicts";
-import { getUnavailableInRange } from "../../../../lib/pt-availability";
+import { isPTBookingSlotFree } from "../../../../lib/schedule-conflicts";
 import { timeToMinutes } from "../../../../lib/pt-slots";
 import { sendStaffEmail, sendMemberEmail } from "../../../../lib/email";
 import { ensureTrainerClient, getTrainerMemberIdByDisplayName } from "../../../../lib/trainer-clients";
 
 export const dynamic = "force-dynamic";
-
-const SLOT_MINUTES = 30;
-
-const PT_BUFFER_MINUTES = 15;
-
-/** Check if [startMin, startMin+durationMinutes] is free. No overlap with any block. PT buffer: nothing may start in (ourEnd, ourEnd+15]; OK if something starts exactly when we end. */
-function isOpenSlotFree(
-  db: ReturnType<typeof getDb>,
-  date: string,
-  startMin: number,
-  durationMinutes: number
-): boolean {
-  const endMin = startMin + durationMinutes;
-  for (let m = startMin; m < endMin; m += SLOT_MINUTES) {
-    if (hasClassAtSlot(db, date, m)) return false;
-  }
-  const unavail = getUnavailableInRange(date, date);
-  for (const u of unavail) {
-    if (u.date !== date) continue;
-    const uStart = timeToMinutes(u.start_time);
-    const uEnd = timeToMinutes(u.end_time);
-    if (startMin < uEnd && endMin > uStart) return false;
-  }
-  const openBookings = db
-    .prepare("SELECT occurrence_date, start_time, duration_minutes FROM pt_open_bookings WHERE occurrence_date = ?")
-    .all(date) as { occurrence_date: string; start_time: string; duration_minutes: number }[];
-  for (const b of openBookings) {
-    const bStart = timeToMinutes(b.start_time);
-    const bEnd = bStart + (b.duration_minutes ?? 60) + PT_BUFFER_MINUTES; // session + 15 min buffer
-    if (startMin < bEnd && endMin > bStart) return false;
-    if (bStart > endMin && bStart <= endMin + PT_BUFFER_MINUTES) return false;
-  }
-  const blockBookings = db
-    .prepare(
-      `SELECT start_time, reserved_minutes FROM pt_block_bookings WHERE occurrence_date = ?`
-    )
-    .all(date) as { start_time: string; reserved_minutes: number }[];
-  for (const b of blockBookings) {
-    const bStart = timeToMinutes(b.start_time);
-    const bEnd = bStart + b.reserved_minutes;
-    if (startMin < bEnd && endMin > bStart) return false;
-  }
-  return true;
-}
 
 /**
  * POST { member_id, occurrence_date, start_time, duration_minutes (30|60|90), pt_session_id }
@@ -94,7 +49,8 @@ export async function POST(request: NextRequest) {
     }
 
     const startMin = timeToMinutes(start_time);
-    if (!isOpenSlotFree(db, occurrence_date, startMin, duration_minutes)) {
+    const trainerMemberId = session.trainer ? getTrainerMemberIdByDisplayName(db, session.trainer) : null;
+    if (!isPTBookingSlotFree(db, occurrence_date, startMin, duration_minutes, trainerMemberId)) {
       db.close();
       return NextResponse.json({ error: "There is a schedule conflict. Please select a time slot with enough time for the duration of your session." }, { status: 409 });
     }
@@ -110,11 +66,9 @@ export async function POST(request: NextRequest) {
     ).run(member_id, duration_minutes, `Booked ${duration_minutes}-min PT`, String(pt_session_id));
 
     db.prepare(
-      "INSERT INTO pt_open_bookings (member_id, occurrence_date, start_time, duration_minutes, pt_session_id, payment_type) VALUES (?, ?, ?, ?, ?, 'credit')"
-    ).run(member_id, occurrence_date, start_time, duration_minutes, pt_session_id);
+      "INSERT INTO pt_open_bookings (member_id, occurrence_date, start_time, duration_minutes, pt_session_id, payment_type, trainer_member_id) VALUES (?, ?, ?, ?, ?, 'credit', ?)"
+    ).run(member_id, occurrence_date, start_time, duration_minutes, pt_session_id, trainerMemberId ?? null);
 
-    const trainerName = (session.trainer ?? "").trim();
-    const trainerMemberId = trainerName ? getTrainerMemberIdByDisplayName(db, trainerName) : null;
     if (trainerMemberId) ensureTrainerClient(db, trainerMemberId, member_id);
 
     const newBalance = getPTCreditBalance(db, member_id, duration_minutes);

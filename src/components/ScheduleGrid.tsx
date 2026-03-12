@@ -80,7 +80,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
   const [occurrences, setOccurrences] = useState<Occurrence[]>([]);
   const [unavailable, setUnavailable] = useState<UnavailableOccurrence[]>([]);
   const [ptBlocks, setPtBlocks] = useState<PtBlockWithSegments[]>([]);
-  const [openBookings, setOpenBookings] = useState<{ id?: number; occurrence_date: string; start_time: string; duration_minutes: number; member_name?: string; trainer_name?: string | null }[]>([]);
+  const [openBookings, setOpenBookings] = useState<{ id?: number; occurrence_date: string; start_time: string; duration_minutes: number; member_name?: string; trainer_name?: string | null; trainer_member_id?: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const bookPtQuery = productId ? `&product=${encodeURIComponent(productId)}` : "";
   const isMaster = variant === "master";
@@ -272,7 +272,8 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
         const openBookingAtSlot = openBookings.find((b) => {
           if (b.occurrence_date !== date) return false;
           const startMin = parseTimeToMinutes(b.start_time);
-          const endMin = startMin + b.duration_minutes + PT_SPILLOVER;
+          const useSpillover = effectiveTrainerId == null || (b.trainer_member_id ?? "").trim() === effectiveTrainerId.trim();
+          const endMin = startMin + b.duration_minutes + (useSpillover ? PT_SPILLOVER : 0);
           return slotOverlaps(slotMin, startMin, endMin);
         });
         if (openBookingAtSlot) {

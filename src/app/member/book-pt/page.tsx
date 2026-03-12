@@ -97,7 +97,7 @@ function MemberBookPTContent() {
       return;
     }
     const start_time = normalizeTimeToHHmm(highlightTime);
-    fetch(`/api/pt-bookings/check-open-slot?date=${encodeURIComponent(highlightDate)}&time=${encodeURIComponent(start_time)}&duration_minutes=${slotProduct.duration_minutes}`)
+    fetch(`/api/pt-bookings/check-open-slot?date=${encodeURIComponent(highlightDate)}&time=${encodeURIComponent(start_time)}&duration_minutes=${slotProduct.duration_minutes}&pt_session_id=${slotProduct.id}`)
       .then((r) => r.json())
       .then((data: { free?: boolean }) => setSlotFree(data.free === true))
       .catch(() => setSlotFree(null));
