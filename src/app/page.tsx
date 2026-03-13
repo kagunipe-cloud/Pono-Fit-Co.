@@ -19,11 +19,6 @@ export default function Home() {
           </Link>
         ))}
       </div>
-      <footer className="mt-12 pt-6 border-t border-stone-200 text-sm text-stone-500">
-        <Link href="/privacy" className="text-brand-600 hover:underline">Privacy Policy</Link>
-        {" · "}
-        <Link href="/terms" className="text-brand-600 hover:underline">Terms of Service</Link>
-      </footer>
     </div>
   );
 }
