@@ -206,6 +206,15 @@ export function ensureSalesStripePaymentIntentColumn(db: ReturnType<typeof getDb
   }
 }
 
+/** Add promo_code to sales for discount tracking. */
+export function ensureSalesPromoCodeColumn(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE sales ADD COLUMN promo_code TEXT");
+  } catch {
+    // Column already exists
+  }
+}
+
 /** Add waiver columns to members if missing (liability waiver before Kisi access). */
 export function ensureMembersWaiverColumns(db: ReturnType<typeof getDb>) {
   try {

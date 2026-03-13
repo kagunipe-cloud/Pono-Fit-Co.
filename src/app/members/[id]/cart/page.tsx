@@ -72,6 +72,9 @@ export default function MemberCartPage() {
   const [addMode, setAddMode] = useState<"membership_plan" | "pt_session" | "class" | "class_pack" | "pt_pack" | null>(null);
   const [saveCardForFuture, setSaveCardForFuture] = useState<boolean | null>(null);
   const [hasSavedCard, setHasSavedCard] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [discount, setDiscount] = useState<{ code: string; percent_off: number; description?: string | null } | null>(null);
 
   const tz = useAppTimezone();
   const [classScheduleWeekStart, setClassScheduleWeekStart] = useState<string>(() => weekStartInAppTz(todayInAppTz(tz)));
@@ -95,6 +98,8 @@ export default function MemberCartPage() {
         setClassPacks(data.classPacks ?? []);
         setPtPacks(data.ptPackProducts ?? []);
         setHasSavedCard(Boolean(data.has_saved_card));
+        setPromoCode(data.promo_code ?? "");
+        setDiscount(data.discount ?? null);
         if (data.has_saved_card) setSaveCardForFuture(false);
       })
       .catch(() => {
@@ -201,10 +206,48 @@ export default function MemberCartPage() {
     }
   }
 
-  const total = items.reduce((sum, it) => {
+  const subtotal = items.reduce((sum, it) => {
     const p = parseFloat(String(it.price).replace(/[^0-9.-]/g, "")) || 0;
     return sum + (Number.isNaN(p) ? 0 : p) * it.quantity;
   }, 0);
+  const discountAmount = discount ? subtotal * (discount.percent_off / 100) : 0;
+  const total = Math.max(0, subtotal - discountAmount);
+
+  async function applyPromoCode() {
+    const code = promoCode.trim().toUpperCase();
+    if (!code || !memberId) return;
+    setPromoError(null);
+    try {
+      const res = await fetch("/api/cart", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ member_id: memberId, promo_code: code }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Invalid code");
+      const cartData = await fetch(`/api/members/${id}/cart-data`).then((r) => r.json());
+      setDiscount(cartData.discount ?? null);
+      setPromoCode(cartData.promo_code ?? code);
+    } catch (e) {
+      setPromoError(e instanceof Error ? e.message : "Invalid promo code");
+    }
+  }
+
+  async function removePromoCode() {
+    if (!memberId) return;
+    setPromoError(null);
+    try {
+      await fetch("/api/cart", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ member_id: memberId, promo_code: "" }),
+      });
+      setDiscount(null);
+      setPromoCode("");
+    } catch {
+      setPromoError("Could not remove code");
+    }
+  }
 
   if (loading && !memberId) return <div className="p-12 text-center text-stone-500">Loading…</div>;
   if (!memberId) return <div className="p-12 text-center text-red-600">Member not found.</div>;
@@ -400,10 +443,38 @@ export default function MemberCartPage() {
           </ul>
         )}
         {items.length > 0 && (
-          <div className="p-4 border-t border-stone-100 flex justify-between items-center">
-            <span className="font-medium">Total</span>
-            <span>{formatPrice(total)}</span>
-          </div>
+          <>
+            {discount && (
+              <div className="p-4 border-t border-stone-100 flex justify-between items-center text-green-700">
+                <span className="text-sm">
+                  Promo <span className="font-mono font-medium">{discount.code}</span> ({discount.percent_off}% off)
+                  <button type="button" onClick={removePromoCode} className="ml-2 text-red-600 hover:underline text-xs">Remove</button>
+                </span>
+                <span>-{formatPrice(discountAmount)}</span>
+              </div>
+            )}
+            {!discount && (
+              <div className="p-4 border-t border-stone-100">
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    value={promoCode}
+                    onChange={(e) => { setPromoCode(e.target.value.toUpperCase()); setPromoError(null); }}
+                    placeholder="Promo code"
+                    className="flex-1 px-3 py-2 rounded-lg border border-stone-200 text-sm font-mono uppercase"
+                  />
+                  <button type="button" onClick={applyPromoCode} className="px-3 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 text-sm font-medium">
+                    Apply
+                  </button>
+                </div>
+                {promoError && <p className="text-red-600 text-xs mt-1">{promoError}</p>}
+              </div>
+            )}
+            <div className="p-4 border-t border-stone-100 flex justify-between items-center">
+              <span className="font-medium">Total</span>
+              <span>{formatPrice(total)}</span>
+            </div>
+          </>
         )}
       </div>
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureSalesStripePaymentIntentColumn } from "../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureSalesStripePaymentIntentColumn, ensureSalesPromoCodeColumn } from "../../../../lib/db";
 import { sendPostPurchaseEmail, sendAppDownloadInviteEmail, sendStaffEmail, sendMemberEmail } from "../../../../lib/email";
 import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../lib/kisi";
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
@@ -266,16 +266,18 @@ export async function POST(request: NextRequest) {
       }
 
     const member = db.prepare("SELECT email FROM members WHERE member_id = ?").get(member_id) as { email: string } | undefined;
+    const promoCode = (stripeSession?.metadata?.promo_code as string) || (db.prepare("SELECT promo_code FROM cart WHERE member_id = ?").get(member_id) as { promo_code?: string | null })?.promo_code?.trim() || null;
     const finalGrandTotal = stripeSession?.amount_total != null ? stripeSession.amount_total / 100 : grand_total;
     const taxAmount = stripeSession?.total_details?.amount_tax != null ? stripeSession.total_details.amount_tax / 100 : 0;
     const paymentIntentId = stripeSession?.payment_intent
       ? (typeof stripeSession.payment_intent === "string" ? stripeSession.payment_intent : stripeSession.payment_intent?.id)
       : null;
     ensureSalesStripePaymentIntentColumn(db);
+    ensureSalesPromoCodeColumn(db);
     db.prepare(`
-        INSERT INTO sales (sales_id, date_time, member_id, grand_total, tax_amount, email, status, sale_date, stripe_payment_intent_id)
-        VALUES (?, ?, ?, ?, ?, ?, 'Paid', ?, ?)
-      `).run(sales_id, date_time, member_id, String(finalGrandTotal), String(taxAmount), member?.email ?? "", sale_date, paymentIntentId);
+        INSERT INTO sales (sales_id, date_time, member_id, grand_total, tax_amount, email, status, sale_date, stripe_payment_intent_id, promo_code)
+        VALUES (?, ?, ?, ?, ?, ?, 'Paid', ?, ?, ?)
+      `).run(sales_id, date_time, member_id, String(finalGrandTotal), String(taxAmount), member?.email ?? "", sale_date, paymentIntentId, promoCode || null);
 
       db.prepare("DELETE FROM cart_items WHERE cart_id = ?").run(cart.id);
 

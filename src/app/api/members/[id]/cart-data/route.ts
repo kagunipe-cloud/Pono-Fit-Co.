@@ -3,6 +3,7 @@ import { getDb, getAppTimezone, ensureMembersStripeColumn } from "../../../../..
 import { formatDateForDisplay } from "../../../../../lib/app-timezone";
 import { ensureRecurringClassesTables } from "../../../../../lib/recurring-classes";
 import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
+import { ensureDiscountsTable } from "../../../../../lib/discounts";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,11 @@ function ensureCartTables(db: ReturnType<typeof getDb>) {
       FOREIGN KEY (cart_id) REFERENCES cart(id)
     );
   `);
+  try {
+    db.exec("ALTER TABLE cart ADD COLUMN promo_code TEXT");
+  } catch {
+    /* already exists */
+  }
 }
 
 export async function GET(
@@ -50,10 +56,10 @@ export async function GET(
 
     ensureCartTables(db);
     ensureRecurringClassesTables(db);
-    let cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member.member_id) as { id: number } | undefined;
+    let cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member.member_id) as { id: number; promo_code?: string | null } | undefined;
     if (!cart) {
       db.prepare("INSERT INTO cart (member_id) VALUES (?)").run(member.member_id);
-      cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member.member_id) as { id: number };
+      cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member.member_id) as { id: number; promo_code?: string | null };
     }
 
     const rawItems = db.prepare("SELECT * FROM cart_items WHERE cart_id = ?").all(cart.id) as { id: number; product_type: string; product_id: number; quantity: number }[];
@@ -101,6 +107,16 @@ export async function GET(
     ensurePTSlotTables(db);
     const ptPackProducts = db.prepare("SELECT id, name, price, credits, duration_minutes FROM pt_pack_products ORDER BY duration_minutes, credits").all() as { id: number; name: string; price: string; credits: number; duration_minutes: number }[];
 
+    ensureDiscountsTable(db);
+    let discount: { percent_off: number; code: string; description: string | null } | null = null;
+    const promoCode = (cart as { promo_code?: string | null }).promo_code?.trim();
+    if (promoCode) {
+      const d = db.prepare("SELECT code, percent_off, description FROM discounts WHERE UPPER(TRIM(code)) = ?").get(promoCode.toUpperCase()) as
+        | { code: string; percent_off: number; description: string | null }
+        | undefined;
+      if (d) discount = { code: d.code, percent_off: d.percent_off, description: d.description };
+    }
+
     db.close();
 
     const memberName = [member.first_name, member.last_name].filter(Boolean).join(" ") || "Member";
@@ -115,6 +131,8 @@ export async function GET(
       classes,
       classPacks,
       ptPackProducts,
+      promo_code: promoCode || null,
+      discount: discount ? { code: discount.code, percent_off: discount.percent_off, description: discount.description } : null,
     });
   } catch (err) {
     console.error(err);

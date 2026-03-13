@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../lib/db";
 import { getMemberIdFromSession } from "../../../lib/session";
 import { getAdminMemberId } from "../../../lib/admin";
+import { ensureDiscountsTable } from "../../../lib/discounts";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,11 @@ function ensureCartTables(db: ReturnType<typeof getDb>) {
   } catch {
     /* already exists */
   }
+  try {
+    db.exec("ALTER TABLE cart ADD COLUMN promo_code TEXT");
+  } catch {
+    /* already exists */
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -43,10 +49,10 @@ export async function GET(request: NextRequest) {
     const db = getDb();
     ensureCartTables(db);
 
-    let cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member_id) as { id: number; member_id: string } | undefined;
+    let cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member_id) as { id: number; member_id: string; promo_code?: string | null } | undefined;
     if (!cart) {
       db.prepare("INSERT INTO cart (member_id) VALUES (?)").run(member_id);
-      cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member_id) as { id: number; member_id: string };
+      cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member_id) as { id: number; member_id: string; promo_code?: string | null };
     }
 
     const rawItems = db.prepare("SELECT * FROM cart_items WHERE cart_id = ?").all(cart.id) as { id: number; product_type: string; product_id: number; quantity: number; slot_json?: string | null }[];
@@ -93,5 +99,46 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: "Failed to fetch cart" }, { status: 500 });
+  }
+}
+
+/** PATCH — Apply or remove promo code. Body: { member_id, promo_code } (promo_code empty to clear). */
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json().catch(() => ({}));
+    const member_id = (body.member_id ?? "").trim();
+    const promo_code = (body.promo_code ?? "").trim().toUpperCase() || null;
+
+    if (!member_id) return NextResponse.json({ error: "member_id required" }, { status: 400 });
+
+    const sessionMemberId = await getMemberIdFromSession();
+    const isAdmin = !!(await getAdminMemberId(request));
+    if (sessionMemberId !== member_id && !isAdmin) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const db = getDb();
+    ensureCartTables(db);
+    if (promo_code) {
+      ensureDiscountsTable(db);
+      const discount = db.prepare("SELECT id FROM discounts WHERE UPPER(TRIM(code)) = ?").get(promo_code);
+      if (!discount) {
+        db.close();
+        return NextResponse.json({ error: "Invalid or expired promo code" }, { status: 400 });
+      }
+    }
+
+    let cart = db.prepare("SELECT id FROM cart WHERE member_id = ?").get(member_id) as { id: number } | undefined;
+    if (!cart) {
+      db.prepare("INSERT INTO cart (member_id) VALUES (?)").run(member_id);
+      cart = db.prepare("SELECT id FROM cart WHERE member_id = ?").get(member_id) as { id: number };
+    }
+    db.prepare("UPDATE cart SET promo_code = ? WHERE member_id = ?").run(promo_code, member_id);
+    const updated = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member_id);
+    db.close();
+    return NextResponse.json({ ok: true, cart: updated });
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ error: "Failed to update cart" }, { status: 500 });
   }
 }

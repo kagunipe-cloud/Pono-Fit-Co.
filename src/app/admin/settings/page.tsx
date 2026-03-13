@@ -101,6 +101,13 @@ export default function AdminSettingsPage() {
           <h2 className="font-semibold text-stone-800">Import members</h2>
           <p className="text-sm text-stone-500 mt-0.5">Import members from a CSV file.</p>
         </Link>
+        <Link
+          href="/discounts"
+          className="block p-4 rounded-xl border border-stone-200 bg-white hover:border-brand-300 hover:bg-brand-50/30 transition-colors"
+        >
+          <h2 className="font-semibold text-stone-800">Discounts</h2>
+          <p className="text-sm text-stone-500 mt-0.5">Manage promo codes for cart and checkout.</p>
+        </Link>
       </div>
 
       <section className="mb-8">

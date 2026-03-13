@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, ensureMembersStripeColumn } from "../../../../lib/db";
 import { ensureRecurringClassesTables, ensureClassesRecurringColumns, ensureClassOccurrencesClassId } from "../../../../lib/recurring-classes";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
+import { ensureDiscountsTable } from "../../../../lib/discounts";
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { getAdminMemberId } from "../../../../lib/admin";
 import Stripe from "stripe";
@@ -24,6 +25,11 @@ function ensureCartTables(db: ReturnType<typeof getDb>) {
       FOREIGN KEY (cart_id) REFERENCES cart(id)
     );
   `);
+  try {
+    db.exec("ALTER TABLE cart ADD COLUMN promo_code TEXT");
+  } catch {
+    /* already exists */
+  }
 }
 
 function parsePriceToCents(p: string | null): number {
@@ -65,7 +71,7 @@ export async function POST(request: NextRequest) {
     const customerEmail = memberRow?.email?.trim() || undefined;
     const existingStripeCustomerId = memberRow?.stripe_customer_id?.trim() || undefined;
 
-    const cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member_id) as { id: number } | undefined;
+    const cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member_id) as { id: number; promo_code?: string | null } | undefined;
     if (!cart) {
       db.close();
       return NextResponse.json({ error: "No cart for this member" }, { status: 404 });
@@ -156,7 +162,25 @@ export async function POST(request: NextRequest) {
       }
       lineItems.push({ name, price, quantity: Math.max(1, it.quantity) });
     }
+
+    let percentOff = 0;
+    const promoCode = cart?.promo_code?.trim();
+    if (promoCode) {
+      ensureDiscountsTable(db);
+      const discount = db.prepare("SELECT percent_off FROM discounts WHERE UPPER(TRIM(code)) = ?").get(promoCode.toUpperCase()) as { percent_off: number } | undefined;
+      if (discount) percentOff = Math.min(100, Math.max(0, discount.percent_off));
+    }
     db.close();
+
+    if (percentOff > 0) {
+      const multiplier = 1 - percentOff / 100;
+      lineItems.forEach((item) => {
+        const orig = parseFloat(String(item.price).replace(/[^0-9.-]/g, "")) || 0;
+        if (orig > 0) {
+          item.price = String((orig * multiplier).toFixed(2));
+        }
+      });
+    }
 
     if (lineItems.length === 0) {
       return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
@@ -195,7 +219,11 @@ export async function POST(request: NextRequest) {
       }),
       success_url: successUrl,
       cancel_url: cancelUrl,
-      metadata: { member_id, save_card_for_future: save_card_for_future ? "1" : "0" },
+      metadata: {
+        member_id,
+        save_card_for_future: save_card_for_future ? "1" : "0",
+        ...(promoCode ? { promo_code: promoCode } : {}),
+      },
     };
 
     sessionParams.payment_intent_data = {

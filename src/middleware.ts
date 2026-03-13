@@ -18,6 +18,7 @@ const ADMIN_PATHS = [
   "/macros",
   "/class-packs",
   "/pt-packs",
+  "/discounts",
 ];
 
 const TRAINER_PATHS = ["/trainer"];
