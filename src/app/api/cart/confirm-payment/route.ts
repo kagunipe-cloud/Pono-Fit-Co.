@@ -6,7 +6,8 @@ import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
 import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureTrainerClient, getTrainerMemberIdByDisplayName } from "../../../../lib/trainer-clients";
-import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz, formatDateForStorage } from "../../../../lib/app-timezone";
+import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz, formatDateForStorage, formatDateForDisplay } from "../../../../lib/app-timezone";
+import { formatPrice } from "../../../../lib/format";
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { getAdminMemberId } from "../../../../lib/admin";
 import { randomUUID } from "crypto";
@@ -114,6 +115,7 @@ export async function POST(request: NextRequest) {
       date: string;
       time: string;
     }[] = [];
+    const emailLineItems: { name: string; quantity: number; price: string }[] = [];
 
     db.exec("BEGIN TRANSACTION");
     try {
@@ -123,6 +125,7 @@ export async function POST(request: NextRequest) {
           if (plan) {
             const price = parsePrice(plan.price) * it.quantity;
             grand_total += price;
+            emailLineItems.push({ name: plan.plan_name ?? "Membership", quantity: it.quantity, price: formatPrice(plan.price) });
             const start_date = new Date();
             const expiry_date = addDuration(start_date, plan.length || "1", plan.unit || "Month");
             const startStr = formatDateForStorage(start_date, tz);
@@ -138,9 +141,10 @@ export async function POST(request: NextRequest) {
           }
         } else if (it.product_type === "pt_session") {
           ensurePTSlotTables(db);
-          const session = db.prepare("SELECT * FROM pt_sessions WHERE id = ?").get(it.product_id) as { id: number; price: string; product_id: string; duration_minutes?: number; trainer?: string | null } | undefined;
+          const session = db.prepare("SELECT * FROM pt_sessions WHERE id = ?").get(it.product_id) as { id: number; price: string; session_name?: string; product_id: string; duration_minutes?: number; trainer?: string | null } | undefined;
           if (session) {
             grand_total += parsePrice(session.price) * it.quantity;
+            emailLineItems.push({ name: session.session_name ?? "PT Session", quantity: it.quantity, price: formatPrice(session.price) });
             let slot: { date: string; start_time: string; duration_minutes: number; trainer_member_id?: string } | null = null;
             if (it.slot_json) {
               try {
@@ -198,6 +202,7 @@ export async function POST(request: NextRequest) {
           const cls = db.prepare("SELECT * FROM classes WHERE id = ?").get(it.product_id) as { price: string; product_id: string; class_name?: string | null; date?: string | null; time?: string | null; trainer_member_id?: string | null } | undefined;
           if (cls) {
             grand_total += parsePrice(cls.price) * it.quantity;
+            emailLineItems.push({ name: cls.class_name ?? "Class", quantity: it.quantity, price: formatPrice(cls.price) });
             const class_booking_id = randomUUID().slice(0, 8);
             db.prepare(`
               INSERT INTO class_bookings (class_booking_id, product_id, member_id, payment_status, booking_date, sales_id, price, quantity)
@@ -213,10 +218,11 @@ export async function POST(request: NextRequest) {
           }
         } else if (it.product_type === "class_pack") {
           ensureRecurringClassesTables(db);
-          const pack = db.prepare("SELECT * FROM class_pack_products WHERE id = ?").get(it.product_id) as { credits: number; price: string } | undefined;
+          const pack = db.prepare("SELECT * FROM class_pack_products WHERE id = ?").get(it.product_id) as { name?: string; credits: number; price: string } | undefined;
           if (pack) {
             const totalCredits = pack.credits * it.quantity;
             grand_total += parsePrice(pack.price) * it.quantity;
+            emailLineItems.push({ name: pack.name ? `${pack.name} (${pack.credits} credits)` : `Class pack (${pack.credits} credits)`, quantity: it.quantity, price: formatPrice(pack.price) });
             db.prepare(`
               INSERT INTO class_credit_ledger (member_id, amount, reason, reference_type, reference_id)
               VALUES (?, ?, 'purchase', 'sale', ?)
@@ -238,6 +244,7 @@ export async function POST(request: NextRequest) {
           `).get(it.product_id) as { id: number; price: string; occurrence_date: string; occurrence_time: string | null; class_name: string | null; trainer_member_id: string | null } | undefined;
           if (occ) {
             grand_total += parsePrice(occ.price) * it.quantity;
+            emailLineItems.push({ name: `${occ.class_name ?? "Class"} — ${occ.occurrence_date} ${occ.occurrence_time ?? ""}`, quantity: it.quantity, price: formatPrice(occ.price) });
             try {
               db.prepare("INSERT INTO occurrence_bookings (member_id, class_occurrence_id) VALUES (?, ?)").run(member_id, occ.id);
             } catch {
@@ -253,10 +260,11 @@ export async function POST(request: NextRequest) {
           }
         } else if (it.product_type === "pt_pack") {
           ensurePTSlotTables(db);
-          const pack = db.prepare("SELECT id, duration_minutes, credits, price FROM pt_pack_products WHERE id = ?").get(it.product_id) as { duration_minutes: number; credits: number; price: string } | undefined;
+          const pack = db.prepare("SELECT id, name, duration_minutes, credits, price FROM pt_pack_products WHERE id = ?").get(it.product_id) as { name?: string; duration_minutes: number; credits: number; price: string } | undefined;
           if (pack) {
             const totalCredits = pack.credits * it.quantity;
             grand_total += parsePrice(pack.price) * it.quantity;
+            emailLineItems.push({ name: pack.name ? `${pack.name} (${pack.credits}×${pack.duration_minutes} min)` : `PT pack (${pack.credits}×${pack.duration_minutes} min)`, quantity: it.quantity, price: formatPrice(pack.price) });
             db.prepare(`
               INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id)
               VALUES (?, ?, ?, 'purchase', 'sale', ?)
@@ -320,6 +328,11 @@ export async function POST(request: NextRequest) {
           member_id,
           first_name: memberRow?.first_name,
           origin,
+          receipt: {
+            date: formatDateForDisplay(sale_date, tz) || sale_date,
+            total: formatPrice(finalGrandTotal),
+            items: emailLineItems,
+          },
         }).then((r) => {
           if (!r.ok) console.error("[Email] post-purchase:", r.error);
         });

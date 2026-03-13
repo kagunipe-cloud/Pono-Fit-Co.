@@ -162,13 +162,19 @@ export async function sendPostPurchaseEmail(params: {
   member_id: string;
   first_name?: string | null;
   origin: string;
+  /** Receipt details shown at bottom of email */
+  receipt?: {
+    date: string;
+    total: string;
+    items: { name: string; quantity: number; price: string }[];
+  };
 }): Promise<{ ok: boolean; error?: string }> {
   const origin = params.origin.replace(/\/$/, "");
   const installUrl = `${origin}/install`;
   const memberId = params.member_id.trim();
   const setPasswordUrl = `${origin}/set-password?member_id=${encodeURIComponent(memberId)}&email=${encodeURIComponent(params.to)}`;
-  const subject = "Thanks for your purchase";
-  const text = `Hi${params.first_name ? ` ${params.first_name}` : ""},
+  const subject = "Welcome to our 'Ohana";
+  let text = `Hi${params.first_name ? ` ${params.first_name}` : ""},
 
 Thanks for your purchase. You can view your membership and bookings in the app.
 
@@ -180,9 +186,17 @@ Your Member ID: ${memberId}
 To sign in for the first time, set your password here:
 ${setPasswordUrl}
 
-After that you'll sign in with your email and password.
+After that you'll sign in with your email and password.`;
 
-— Pono Fit Co.`;
+  if (params.receipt && params.receipt.items.length > 0) {
+    text += `\n\n---\n\nReceipt\nDate: ${params.receipt.date}\n\n`;
+    for (const it of params.receipt.items) {
+      text += `${it.name} × ${it.quantity} — ${it.price}\n`;
+    }
+    text += `\nTotal: ${params.receipt.total}\n`;
+  }
+
+  text += `\n— Pono Fit Co.`;
   return sendMemberEmail(params.to, subject, text);
 }
 
