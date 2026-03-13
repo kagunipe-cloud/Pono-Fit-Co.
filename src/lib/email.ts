@@ -156,15 +156,33 @@ export async function sendMembershipExpiryReminder(params: {
   return sendMemberEmail(params.to, subject, text);
 }
 
-/** Post-purchase receipt / confirmation to member. */
+/** Post-purchase receipt / confirmation to member. Includes app download and set-password links. */
 export async function sendPostPurchaseEmail(params: {
   to: string;
   member_id: string;
   first_name?: string | null;
   origin: string;
 }): Promise<{ ok: boolean; error?: string }> {
+  const origin = params.origin.replace(/\/$/, "");
+  const installUrl = `${origin}/install`;
+  const memberId = params.member_id.trim();
+  const setPasswordUrl = `${origin}/set-password?member_id=${encodeURIComponent(memberId)}&email=${encodeURIComponent(params.to)}`;
   const subject = "Thanks for your purchase";
-  const text = `Hi${params.first_name ? ` ${params.first_name}` : ""},\n\nThanks for your purchase. You can view your membership and bookings in the app: ${params.origin}.\n\n— Pono Fit Co.`;
+  const text = `Hi${params.first_name ? ` ${params.first_name}` : ""},
+
+Thanks for your purchase. You can view your membership and bookings in the app.
+
+Download the app (open on your phone to add to home screen):
+${installUrl}
+
+Your Member ID: ${memberId}
+
+To sign in for the first time, set your password here:
+${setPasswordUrl}
+
+After that you'll sign in with your email and password.
+
+— Pono Fit Co.`;
   return sendMemberEmail(params.to, subject, text);
 }
 

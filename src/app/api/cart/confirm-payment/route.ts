@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureSalesStripePaymentIntentColumn, ensureSalesPromoCodeColumn } from "../../../../lib/db";
-import { sendPostPurchaseEmail, sendAppDownloadInviteEmail, sendStaffEmail, sendMemberEmail } from "../../../../lib/email";
+import { sendPostPurchaseEmail, sendStaffEmail, sendMemberEmail } from "../../../../lib/email";
 import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../lib/kisi";
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
 import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
@@ -286,17 +286,6 @@ export async function POST(request: NextRequest) {
 
       const origin = process.env.NEXT_PUBLIC_APP_URL?.trim() || new URL(request.url).origin;
       const emailTo = memberRow?.email?.trim();
-      if (emailTo) {
-        sendPostPurchaseEmail({
-          to: emailTo,
-          member_id,
-          first_name: memberRow?.first_name,
-          origin,
-        }).then((r) => {
-          if (!r.ok) console.error("[Email] post-purchase:", r.error);
-        });
-      }
-
       const waiver = await ensureWaiverBeforeKisi(member_id, {
         email: memberRow?.email ?? null,
         first_name: memberRow?.first_name,
@@ -326,13 +315,13 @@ export async function POST(request: NextRequest) {
       }
 
       if (emailTo) {
-        sendAppDownloadInviteEmail({
+        sendPostPurchaseEmail({
           to: emailTo,
+          member_id,
           first_name: memberRow?.first_name,
           origin,
-          member_id,
         }).then((r) => {
-          if (!r.ok) console.error("[Email] app download invite:", r.error);
+          if (!r.ok) console.error("[Email] post-purchase:", r.error);
         });
       }
 
