@@ -255,27 +255,27 @@ export default function MemberMacrosPage() {
                 return (
                   <>
                     {/* Y-axis line */}
-                    <line x1={chartLeft} y1={chartTop} x2={chartLeft} y2={chartBottom} stroke="#e5e7eb" strokeWidth="1" />
+                    <line x1={chartLeft} y1={chartTop} x2={chartLeft} y2={chartBottom} stroke="#e5e7eb" strokeWidth="1.5" />
                     {/* Y-axis labels */}
                     {yTickValues.map((v, i) => {
                       const y = yToPx(v);
                       return (
                         <g key={i}>
-                          <line x1={chartLeft} y1={y} x2={chartLeft - 4} y2={y} stroke="#d1d5db" strokeWidth="1" />
-                          <text x={chartLeft - 8} y={y + 4} textAnchor="end" fontSize="10" fill="#6b7280" fontFamily="system-ui, sans-serif">
+                          <line x1={chartLeft} y1={y} x2={chartLeft - 6} y2={y} stroke="#d1d5db" strokeWidth="1.5" />
+                          <text x={chartLeft - 10} y={y + 5} textAnchor="end" fontSize="13" fill="#6b7280" fontFamily="system-ui, sans-serif">
                             {Math.round(v)}
                           </text>
                         </g>
                       );
                     })}
                     {/* X-axis line */}
-                    <line x1={chartLeft} y1={chartBottom} x2={chartRight} y2={chartBottom} stroke="#e5e7eb" strokeWidth="1" />
+                    <line x1={chartLeft} y1={chartBottom} x2={chartRight} y2={chartBottom} stroke="#e5e7eb" strokeWidth="1.5" />
                     {/* X-axis labels (dates) */}
                     {xTickIndices.map((i) => {
                       const d = pts[i].x;
                       const shortDate = d.length >= 10 ? `${d.slice(5, 7)}/${d.slice(8, 10)}` : d;
                       return (
-                        <text key={i} x={xs[i]} y={chartBottom + 16} textAnchor="middle" fontSize="10" fill="#6b7280" fontFamily="system-ui, sans-serif">
+                        <text key={i} x={xs[i]} y={chartBottom + 18} textAnchor="middle" fontSize="13" fill="#6b7280" fontFamily="system-ui, sans-serif">
                           {shortDate}
                         </text>
                       );
@@ -289,8 +289,8 @@ export default function MemberMacrosPage() {
                           x2={chartRight}
                           y2={goalTopY}
                           stroke="rgba(6, 95, 70, 0.5)"
-                          strokeWidth="1.5"
-                          strokeDasharray="6 3"
+                          strokeWidth="2"
+                          strokeDasharray="8 4"
                         />
                         <image
                           href="/goal-ocean.png"
@@ -302,10 +302,10 @@ export default function MemberMacrosPage() {
                           opacity={1}
                         />
                         <text
-                          x={chartRight - 8}
-                          y={goalTopY + goalStripHeight / 2 + 4}
+                          x={chartRight - 10}
+                          y={goalTopY + goalStripHeight / 2 + 5}
                           textAnchor="end"
-                          fontSize="11"
+                          fontSize="14"
                           fontWeight="600"
                           fill="var(--brand-700, #0f766e)"
                           fontFamily="system-ui, sans-serif"
@@ -315,31 +315,33 @@ export default function MemberMacrosPage() {
                       </g>
                     )}
                     {/* Weight polyline + points on top of goal ocean */}
-                    <polyline points={poly} fill="none" stroke="var(--brand-600, #0d9488)" strokeWidth="2" />
+                    <polyline points={poly} fill="none" stroke="var(--brand-600, #0d9488)" strokeWidth="3" />
                     {pts.map((p, i) => {
                       const isLast = i === pts.length - 1;
                       const useSubmarine = isLast && goalWeight != null && lastRecordedWeight != null && goalWeight > lastRecordedWeight;
+                      const iconW = 72;
+                      const iconH = 56;
                       return (
                         <g key={p.x}>
                           {isLast ? (
                             <image
                               href={useSubmarine ? "/submarine.png" : "/seaplane.png"}
-                              x={xs[i] - 28}
-                              y={ys[i] - 44}
-                              width={56}
-                              height={44}
+                              x={xs[i] - iconW / 2}
+                              y={ys[i] - iconH}
+                              width={iconW}
+                              height={iconH}
                               preserveAspectRatio="xMidYMax meet"
                               style={{ pointerEvents: "none" }}
                             />
                           ) : (
-                            <circle cx={xs[i]} cy={ys[i]} r="3" fill="var(--brand-600)" />
+                            <circle cx={xs[i]} cy={ys[i]} r="4" fill="var(--brand-600)" />
                           )}
                           {/* Weight label at each point */}
                           <text
                             x={xs[i]}
-                            y={isLast ? ys[i] - 50 : ys[i] - 10}
+                            y={isLast ? ys[i] - iconH - 8 : ys[i] - 12}
                             textAnchor="middle"
-                            fontSize="11"
+                            fontSize="14"
                             fontWeight="600"
                             fill="var(--brand-700, #0f766e)"
                             fontFamily="system-ui, sans-serif"
