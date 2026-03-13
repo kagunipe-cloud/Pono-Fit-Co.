@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "../../../../../lib/db";
+import { getDb, getAppTimezone, expiryDateSortableSql } from "../../../../../lib/db";
 import { ensureTrainersTable } from "../../../../../lib/trainers";
 import { ensureTrainerClientsTable } from "../../../../../lib/trainer-clients";
 import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
 import { getAdminMemberId } from "../../../../../lib/admin";
+import { revokeAccess as kisiRevokeAccess, grantAccess as kisiGrantAccess } from "../../../../../lib/kisi";
+import { todayInAppTz } from "../../../../../lib/app-timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -31,11 +33,41 @@ export async function GET(
       form_i9_received_at: string | null;
       exempt_from_tax_forms: number;
     } | undefined;
+
+    if (!member) {
+      db.close();
+      return NextResponse.json({ error: "Member not found" }, { status: 404 });
+    }
+    if (!trainer && member.role === "Admin") {
+      db.prepare(
+        "INSERT INTO trainers (member_id, waiver_agreed_at, form_1099_received_at, form_i9_received_at, exempt_from_tax_forms) VALUES (?, NULL, NULL, NULL, 1)"
+      ).run(memberId);
+      const newTrainer = db.prepare("SELECT * FROM trainers WHERE member_id = ?").get(memberId) as {
+        waiver_agreed_at: string | null;
+        form_1099_received_at: string | null;
+        form_i9_received_at: string | null;
+        exempt_from_tax_forms: number;
+      };
+      db.close();
+      return NextResponse.json({
+        member_id: member.member_id,
+        first_name: member.first_name,
+        last_name: member.last_name,
+        email: member.email,
+        phone: member.phone,
+        role: member.role,
+        waiver_agreed_at: newTrainer?.waiver_agreed_at ?? "",
+        form_1099_received_at: newTrainer?.form_1099_received_at ?? "",
+        form_i9_received_at: newTrainer?.form_i9_received_at ?? "",
+        exempt_from_tax_forms: newTrainer?.exempt_from_tax_forms ?? 1,
+      });
+    }
+    if (!trainer) {
+      db.close();
+      return NextResponse.json({ error: "Not in trainers table" }, { status: 404 });
+    }
+
     db.close();
-
-    if (!member) return NextResponse.json({ error: "Member not found" }, { status: 404 });
-    if (!trainer) return NextResponse.json({ error: "Not in trainers table (admin trainers cannot be edited here)" }, { status: 404 });
-
     return NextResponse.json({
       member_id: member.member_id,
       first_name: member.first_name,
@@ -111,25 +143,48 @@ export async function DELETE(
     ensurePTSlotTables(db);
 
     const member = db.prepare("SELECT role FROM members WHERE member_id = ?").get(memberId) as { role: string | null } | undefined;
-    if (member?.role === "Admin") {
-      db.close();
-      return NextResponse.json({ error: "Cannot remove admin as trainer" }, { status: 400 });
-    }
     const trainerRow = db.prepare("SELECT 1 FROM trainers WHERE member_id = ?").get(memberId);
-    if (!trainerRow) {
-      db.close();
-      return NextResponse.json({ error: "Trainer not found" }, { status: 404 });
+
+    const kisiRow = db.prepare("SELECT kisi_id FROM members WHERE member_id = ?").get(memberId) as { kisi_id: string | null } | undefined;
+    const kisiId = kisiRow?.kisi_id?.trim() || null;
+    let membershipExpiry: Date | null = null;
+    if (kisiId) {
+      const tz = getAppTimezone(db);
+      const today = todayInAppTz(tz);
+      const subRow = db.prepare(
+        `SELECT expiry_date FROM subscriptions WHERE member_id = ? AND status = 'Active' AND expiry_date >= ? ORDER BY ${expiryDateSortableSql("expiry_date")} DESC LIMIT 1`
+      ).get(memberId, today) as { expiry_date: string } | undefined;
+      if (subRow?.expiry_date) {
+        const d = new Date(subRow.expiry_date + "T23:59:59");
+        if (!Number.isNaN(d.getTime())) membershipExpiry = d;
+      }
     }
 
-    const blockIds = db.prepare("SELECT id FROM trainer_availability WHERE trainer_member_id = ?").all(memberId) as { id: number }[];
-    for (const b of blockIds) {
-      db.prepare("DELETE FROM pt_block_bookings WHERE trainer_availability_id = ?").run(b.id);
+    if (trainerRow) {
+      const blockIds = db.prepare("SELECT id FROM trainer_availability WHERE trainer_member_id = ?").all(memberId) as { id: number }[];
+      for (const b of blockIds) {
+        db.prepare("DELETE FROM pt_block_bookings WHERE trainer_availability_id = ?").run(b.id);
+      }
+      db.prepare("DELETE FROM trainer_availability WHERE trainer_member_id = ?").run(memberId);
+      db.prepare("DELETE FROM trainer_clients WHERE trainer_member_id = ?").run(memberId);
+      db.prepare("DELETE FROM trainers WHERE member_id = ?").run(memberId);
     }
-    db.prepare("DELETE FROM trainer_availability WHERE trainer_member_id = ?").run(memberId);
-    db.prepare("DELETE FROM trainer_clients WHERE trainer_member_id = ?").run(memberId);
-    db.prepare("DELETE FROM trainers WHERE member_id = ?").run(memberId);
-    db.prepare("UPDATE members SET role = ? WHERE member_id = ? AND role = ?").run("Member", memberId, "Trainer");
+    if (member?.role === "Trainer" || member?.role === "Admin") {
+      db.prepare("UPDATE members SET role = ? WHERE member_id = ?").run("Member", memberId);
+    }
     db.close();
+
+    if (kisiId) {
+      try {
+        await kisiRevokeAccess(kisiId);
+        if (membershipExpiry) {
+          await kisiGrantAccess(kisiId, membershipExpiry);
+        }
+      } catch (e) {
+        console.error("[DELETE /api/admin/trainers] Kisi revoke/grant failed:", e);
+      }
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error(err);

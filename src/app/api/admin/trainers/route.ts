@@ -2,7 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, ensureMembersPhoneColumn } from "../../../../lib/db";
 import { ensureTrainersTable } from "../../../../lib/trainers";
 import { getAdminMemberId } from "../../../../lib/admin";
+import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../lib/kisi";
 import { randomUUID } from "crypto";
+
+/** 10 years from now for trainer door access. */
+function trainerAccessExpiry(): Date {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() + 10);
+  return d;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +86,30 @@ export async function POST(request: NextRequest) {
       exempt ? null : formI9At,
       exempt
     );
+
+    const memberRow = db.prepare("SELECT email, kisi_id, first_name, last_name FROM members WHERE member_id = ?").get(memberId) as {
+      email: string | null;
+      kisi_id: string | null;
+      first_name: string | null;
+      last_name: string | null;
+    } | undefined;
+    const memberEmail = memberRow?.email?.trim();
+    if (memberEmail) {
+      try {
+        let kisiId = memberRow?.kisi_id?.trim() || null;
+        if (!kisiId) {
+          const name = [memberRow?.first_name, memberRow?.last_name].filter(Boolean).join(" ") || undefined;
+          kisiId = await ensureKisiUser(memberEmail, name);
+          db.prepare("UPDATE members SET kisi_id = ? WHERE member_id = ?").run(kisiId, memberId);
+        }
+        if (kisiId) {
+          await kisiGrantAccess(kisiId, trainerAccessExpiry());
+        }
+      } catch (e) {
+        console.error("[POST /api/admin/trainers] Kisi door access grant failed:", e);
+      }
+    }
+
     const row = db.prepare("SELECT * FROM trainers WHERE member_id = ?").get(memberId);
     return NextResponse.json(row);
   } catch (err) {

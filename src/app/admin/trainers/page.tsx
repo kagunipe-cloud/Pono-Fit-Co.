@@ -210,7 +210,7 @@ export default function AdminTrainersPage() {
                       <span className="block truncate">{t.display_name}</span>
                       <span className="block text-xs text-stone-400 truncate">ID: {t.member_id}</span>
                     </button>
-                    {t.source === "trainers" && (
+                    {(t.source === "trainers" || t.source === "admin") && (
                       <div className="flex shrink-0 gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Link
                           href={`/admin/trainers/${t.member_id}/edit`}
@@ -248,7 +248,7 @@ export default function AdminTrainersPage() {
                         also adjust availability using the schedule below.
                       </p>
                     </div>
-                    {selected.source === "trainers" && (
+                    {(selected.source === "trainers" || selected.source === "admin") && (
                       <div className="flex shrink-0 gap-2">
                         <Link
                           href={`/admin/trainers/${selected.member_id}/edit`}
