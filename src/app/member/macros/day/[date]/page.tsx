@@ -1457,13 +1457,13 @@ export default function MemberMacrosDayPage() {
                 {favoritesSearch.trim() ? "No favorites match." : "No favorites yet."}
               </p>
             ) : (
-              <ul className="space-y-2 mb-3">
+              <ul className="space-y-3 mb-3">
                 {favorites
                   .filter((f) => !favoritesSearch.trim() || f.name.toLowerCase().includes(favoritesSearch.toLowerCase()))
                   .map((fav) => (
-                    <li key={fav.id} className="flex items-center justify-between gap-2 py-1.5">
-                      <span className="text-sm text-stone-700 truncate">{capitalizeWords(fav.name)}</span>
-                      <div className="flex flex-wrap gap-1 shrink-0 justify-end">
+                    <li key={fav.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-2 py-1.5">
+                      <span className="text-sm text-stone-700 sm:truncate sm:min-w-0">{capitalizeWords(fav.name)}</span>
+                      <div className="flex flex-wrap gap-1 shrink-0">
                         {day?.meals.map((meal) => (
                           <button
                             key={meal.id}
