@@ -257,6 +257,7 @@ function NavList({
       {!isAdmin && <li>{link("/schedule", "Schedule", pathname === "/schedule" || pathname?.startsWith("/schedule/"))}</li>}
       {isAdmin && <li>{link("/master-schedule", "Master Schedule")}</li>}
       {isAdmin && <li>{link("/admin/trainers", "Trainers")}</li>}
+      {isAdmin && <li>{link("/admin/leads", "Leads")}</li>}
       {isAdmin && <li>{link("/admin/settings", "Settings")}</li>}
       {isAdmin && <li>{link("/admin/email-members", "Email all members")}</li>}
       {mainSections.map((s) => (

@@ -1,57 +1,48 @@
 "use client";
 
-import { Suspense, useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import InstallAppBanner from "@/components/InstallAppBanner";
 
-function LoginContent() {
+const MIN_PASSWORD_LENGTH = 8;
+
+function SignupContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [showBootstrap, setShowBootstrap] = useState(false);
-
-  useEffect(() => {
-    if (searchParams.get("password_set") === "1") {
-      setSuccess("Password set. You can sign in with your email and password.");
-    }
-  }, [searchParams]);
-
-  useEffect(() => {
-    fetch("/api/auth/bootstrap-status")
-      .then((r) => (r.ok ? r.json() : { needs_bootstrap: false }))
-      .then((data) => setShowBootstrap(data.needs_bootstrap === true))
-      .catch(() => setShowBootstrap(false));
-  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     const em = email.trim();
     if (!em || !password) {
-      setError("Enter your email and password.");
+      setError("Email and password are required.");
+      return;
+    }
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
       return;
     }
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/member-login", {
+      const res = await fetch("/api/auth/member-signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: em, password }),
+        body: JSON.stringify({
+          email: em,
+          password,
+          first_name: firstName.trim() || null,
+          last_name: lastName.trim() || null,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
-        if (data.code === "PASSWORD_NOT_SET" && data.member_id) {
-          router.push(
-            `/set-password?member_id=${encodeURIComponent(data.member_id)}&email=${encodeURIComponent(em)}`
-          );
-          return;
-        }
-        setError(data.error ?? "Login failed.");
+        setError(data.error ?? "Signup failed.");
         return;
       }
       if (!data.privacy_terms_accepted) {
@@ -62,10 +53,7 @@ function LoginContent() {
         window.location.href = "/sign-waiver-required";
         return;
       }
-      const nextPath = searchParams.get("next")?.trim();
-      const defaultDest = data.role === "Admin" ? "/" : "/member";
-      const dest = nextPath && nextPath.startsWith("/") && !nextPath.includes("//") ? nextPath : defaultDest;
-      // Full page redirect so the session cookie is sent on the next request (avoids "sign in twice")
+      const dest = data.role === "Admin" ? "/" : "/member";
       window.location.href = dest;
     } catch {
       setError("Something went wrong.");
@@ -78,9 +66,9 @@ function LoginContent() {
     <div className="max-w-sm mx-auto py-12 px-4">
       <InstallAppBanner variant="banner" />
       <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-6">
-        <h1 className="text-xl font-bold text-stone-800 mb-1">Sign in</h1>
+        <h1 className="text-xl font-bold text-stone-800 mb-1">Create account</h1>
         <p className="text-stone-500 text-sm mb-6">
-          Members: access your membership, bookings, and door unlock. Staff: sign in with your admin account to open the admin dashboard.
+          Sign up to browse classes, book sessions, and manage your membership.
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -95,7 +83,38 @@ function LoginContent() {
               placeholder="you@example.com"
               className="w-full px-3 py-2 rounded-lg border border-stone-200"
               autoComplete="email"
+              required
             />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="first_name" className="block text-sm font-medium text-stone-700 mb-1">
+                First name
+              </label>
+              <input
+                id="first_name"
+                type="text"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder="First"
+                className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                autoComplete="given-name"
+              />
+            </div>
+            <div>
+              <label htmlFor="last_name" className="block text-sm font-medium text-stone-700 mb-1">
+                Last name
+              </label>
+              <input
+                id="last_name"
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder="Last"
+                className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                autoComplete="family-name"
+              />
+            </div>
           </div>
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-stone-700 mb-1">
@@ -106,9 +125,11 @@ function LoginContent() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
+              placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
               className="w-full px-3 py-2 rounded-lg border border-stone-200"
-              autoComplete="current-password"
+              autoComplete="new-password"
+              minLength={MIN_PASSWORD_LENGTH}
+              required
             />
           </div>
           <button
@@ -117,34 +138,18 @@ function LoginContent() {
             disabled={loading}
             className="w-full py-3 rounded-lg font-medium disabled:opacity-50"
           >
-            {loading ? "Signing in…" : "Sign in"}
+            {loading ? "Creating account…" : "Create account"}
           </button>
         </form>
-        {success && (
-          <p className="mt-4 text-sm text-green-600">{success}</p>
-        )}
         {error && (
           <p className="mt-4 text-sm text-red-600">{error}</p>
         )}
       </div>
       <p className="mt-6 text-center text-sm text-stone-500">
-        Don&apos;t have an account?{" "}
-        <Link href="/signup" className="text-brand-600 hover:underline">
-          Create one
+        Already have an account?{" "}
+        <Link href="/login" className="text-brand-600 hover:underline">
+          Sign in
         </Link>
-      </p>
-      <p className="mt-2 text-center text-sm text-stone-500">
-        <Link href="/set-password" className="text-brand-600 hover:underline">
-          Set your password
-        </Link>
-        {showBootstrap && (
-          <>
-            {" · "}
-            <Link href="/bootstrap" className="text-brand-600 hover:underline">
-              Create first admin
-            </Link>
-          </>
-        )}
       </p>
       <p className="mt-2 text-center">
         <Link href="/" className="text-stone-500 hover:text-stone-700 text-sm">
@@ -160,10 +165,10 @@ function LoginContent() {
   );
 }
 
-export default function LoginPage() {
+export default function SignupPage() {
   return (
     <Suspense fallback={<div className="max-w-sm mx-auto py-12 px-4 text-stone-500 text-center">Loading…</div>}>
-      <LoginContent />
+      <SignupContent />
     </Suspense>
   );
 }

@@ -1,22 +1,16 @@
 import { Suspense } from "react";
 import { BRAND } from "@/lib/branding";
 import { BackLink } from "@/components/BackLink";
+import { getDocumentSettings } from "@/lib/documents";
 
 export const metadata = {
   title: `Terms of Service | ${BRAND.name}`,
   description: `Terms of service for ${BRAND.name} membership and fitness services.`,
 };
 
-export default function TermsOfServicePage() {
+function TermsDefaultContent() {
   return (
-    <div className="max-w-3xl mx-auto py-8 px-4">
-      <Suspense fallback={<span className="text-stone-500 text-sm mb-6 inline-block">← Back</span>}>
-        <BackLink />
-      </Suspense>
-      <h1 className="text-2xl font-bold text-stone-800 mb-2">Terms of Service</h1>
-      <p className="text-stone-500 text-sm mb-8">Last updated: March 2026</p>
-
-      <div className="prose prose-stone max-w-none space-y-6 text-sm text-stone-700">
+    <div className="prose prose-stone max-w-none space-y-6 text-sm text-stone-700">
         <section>
           <h2 className="text-lg font-semibold text-stone-800 mt-6 mb-2">1. Agreement to Terms</h2>
           <p>
@@ -110,6 +104,33 @@ export default function TermsOfServicePage() {
           </p>
         </section>
       </div>
+  );
+}
+
+export default function TermsOfServicePage() {
+  const { html, hasFile } = getDocumentSettings("terms");
+
+  return (
+    <div className="max-w-3xl mx-auto py-8 px-4">
+      <Suspense fallback={<span className="text-stone-500 text-sm mb-6 inline-block">← Back</span>}>
+        <BackLink />
+      </Suspense>
+      <h1 className="text-2xl font-bold text-stone-800 mb-2">Terms of Service</h1>
+      <p className="text-stone-500 text-sm mb-8">Last updated: March 2026</p>
+
+      {hasFile ? (
+        <div className="border border-stone-200 rounded-lg overflow-hidden bg-white">
+          <iframe
+            src="/api/documents/terms"
+            title="Terms of Service"
+            className="w-full min-h-[70vh] border-0"
+          />
+        </div>
+      ) : html ? (
+        <div className="prose prose-stone max-w-none text-sm text-stone-700" dangerouslySetInnerHTML={{ __html: html }} />
+      ) : (
+        <TermsDefaultContent />
+      )}
     </div>
   );
 }

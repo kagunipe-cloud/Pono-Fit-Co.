@@ -108,6 +108,13 @@ export default function AdminSettingsPage() {
           <h2 className="font-semibold text-stone-800">Discounts</h2>
           <p className="text-sm text-stone-500 mt-0.5">Manage promo codes for cart and checkout.</p>
         </Link>
+        <Link
+          href="/admin/settings/emails-documents"
+          className="block p-4 rounded-xl border border-stone-200 bg-white hover:border-brand-300 hover:bg-brand-50/30 transition-colors"
+        >
+          <h2 className="font-semibold text-stone-800">Emails & Documents</h2>
+          <p className="text-sm text-stone-500 mt-0.5">Edit auto-sent emails and waiver documents (privacy, terms, gym).</p>
+        </Link>
       </div>
 
       <section className="mb-8">

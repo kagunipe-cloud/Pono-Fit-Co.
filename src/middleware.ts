@@ -19,6 +19,7 @@ const ADMIN_PATHS = [
   "/class-packs",
   "/pt-packs",
   "/discounts",
+  "/admin/leads",
 ];
 
 const TRAINER_PATHS = ["/trainer"];
@@ -42,7 +43,7 @@ function isMemberPath(pathname: string): boolean {
 }
 
 function isPublicPath(pathname: string): boolean {
-  const publicPaths = ["/login", "/set-password", "/bootstrap", "/install", "/schedule", "/unlock", "/privacy", "/terms", "/sign-waiver"];
+  const publicPaths = ["/login", "/signup", "/set-password", "/bootstrap", "/install", "/schedule", "/unlock", "/privacy", "/terms", "/sign-waiver"];
   if (publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))) return true;
   if (pathname.startsWith("/rec-leagues")) return true;
   if (pathname.startsWith("/api/")) return true;

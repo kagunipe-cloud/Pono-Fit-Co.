@@ -1,6 +1,26 @@
 import nodemailer from "nodemailer";
+import { getDb } from "@/lib/db";
 
 let transporter: nodemailer.Transporter | null = null;
+
+function getEmailSetting(key: string): string | null {
+  try {
+    const db = getDb();
+    const row = db.prepare("SELECT value FROM app_settings WHERE key = ?").get(key) as { value: string } | undefined;
+    db.close();
+    return row?.value?.trim() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function applyPlaceholders(text: string, vars: Record<string, string>): string {
+  let out = text;
+  for (const [k, v] of Object.entries(vars)) {
+    out = out.replace(new RegExp(`\\{\\{${k}\\}\\}`, "g"), v ?? "");
+  }
+  return out;
+}
 
 /** True if Gmail API OAuth env vars are set. Sending then uses HTTPS (port 443) so it works when SMTP is blocked. */
 export function isGmailApiConfigured(): boolean {
@@ -148,11 +168,22 @@ export async function sendMembershipExpiryReminder(params: {
   expiry_date: string;
   has_card_on_file: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
-  const subject = "Your membership is expiring soon";
+  const cardMessage = params.has_card_on_file
+    ? `You have a card on file—as long as it's still valid, you're all set and we'll charge it automatically. If your card has changed or expired, please update it in the app before ${params.expiry_date} so we can process your renewal.`
+    : `Payment is due by then to continue your access. You can renew in the app or at the front desk.`;
+  const vars = {
+    first_name: params.first_name ?? "",
+    expiry_date: params.expiry_date,
+    card_message: cardMessage,
+  };
+  const customSubject = getEmailSetting("email_membership_expiry_subject");
+  const customBody = getEmailSetting("email_membership_expiry_body");
+  const subject = customSubject ? applyPlaceholders(customSubject, vars) : "Your membership is expiring soon";
   const closing = "\n\nMahalo Nui Loa,\n\nB & P";
-  const text = params.has_card_on_file
+  const defaultText = params.has_card_on_file
     ? `Aloha,\n\nBekah & Perry with Pono Fit Co. here! We're just emailing to let you know that your membership expires on ${params.expiry_date}. You have a card on file—as long as it's still valid, you're all set and we'll charge it automatically. If your card has changed or expired, please update it in the app before ${params.expiry_date} so we can process your renewal.${closing}`
     : `Aloha,\n\nBekah & Perry with Pono Fit Co. here! We're just emailing to let you know that your membership expires on ${params.expiry_date}. Payment is due by then to continue your access. You can renew in the app or at the front desk.${closing}`;
+  const text = customBody ? applyPlaceholders(customBody, vars) : defaultText;
   return sendMemberEmail(params.to, subject, text);
 }
 
@@ -173,8 +204,29 @@ export async function sendPostPurchaseEmail(params: {
   const installUrl = `${origin}/install`;
   const memberId = params.member_id.trim();
   const setPasswordUrl = `${origin}/set-password?member_id=${encodeURIComponent(memberId)}&email=${encodeURIComponent(params.to)}`;
-  const subject = "Welcome to our 'Ohana";
-  let text = `Hi${params.first_name ? ` ${params.first_name}` : ""},
+  let receiptBlock = "";
+  if (params.receipt && params.receipt.items.length > 0) {
+    receiptBlock = `\n\n---\n\nReceipt\nDate: ${params.receipt.date}\n\n`;
+    for (const it of params.receipt.items) {
+      receiptBlock += `${it.name} × ${it.quantity} — ${it.price}\n`;
+    }
+    receiptBlock += `\nTotal: ${params.receipt.total}\n`;
+  }
+  const vars: Record<string, string> = {
+    first_name: params.first_name ? ` ${params.first_name}` : "",
+    member_id: memberId,
+    email: params.to,
+    origin,
+    install_url: installUrl,
+    set_password_url: setPasswordUrl,
+    receipt: receiptBlock,
+  };
+  const customSubject = getEmailSetting("email_post_purchase_subject");
+  const customBody = getEmailSetting("email_post_purchase_body");
+  const subject = customSubject ? applyPlaceholders(customSubject, vars) : "Welcome to our 'Ohana";
+  let text = customBody
+    ? applyPlaceholders(customBody, vars)
+    : `Hi${params.first_name ? ` ${params.first_name}` : ""},
 
 Thanks for your purchase. You can view your membership and bookings in the app.
 
@@ -186,17 +238,9 @@ Your Member ID: ${memberId}
 To sign in for the first time, set your password here:
 ${setPasswordUrl}
 
-After that you'll sign in with your email and password.`;
+After that you'll sign in with your email and password.${receiptBlock}
 
-  if (params.receipt && params.receipt.items.length > 0) {
-    text += `\n\n---\n\nReceipt\nDate: ${params.receipt.date}\n\n`;
-    for (const it of params.receipt.items) {
-      text += `${it.name} × ${it.quantity} — ${it.price}\n`;
-    }
-    text += `\nTotal: ${params.receipt.total}\n`;
-  }
-
-  text += `\n— Pono Fit Co.`;
+— Pono Fit Co.`;
   return sendMemberEmail(params.to, subject, text);
 }
 
@@ -212,8 +256,18 @@ export async function sendAppDownloadInviteEmail(params: {
   const installUrl = `${origin}/install`;
   const memberId = params.member_id.trim();
   const setPasswordUrl = `${origin}/set-password?member_id=${encodeURIComponent(memberId)}&email=${encodeURIComponent(params.to)}`;
-  const subject = "Get the Pono Fit Co. app";
-  const text = `Hi${params.first_name ? ` ${params.first_name}` : ""},
+  const vars = {
+    first_name: params.first_name ? ` ${params.first_name}` : "",
+    member_id: memberId,
+    email: params.to,
+    origin,
+    install_url: installUrl,
+    set_password_url: setPasswordUrl,
+  };
+  const customSubject = getEmailSetting("email_app_download_subject");
+  const customBody = getEmailSetting("email_app_download_body");
+  const subject = customSubject ? applyPlaceholders(customSubject, vars) : "Get the Pono Fit Co. app";
+  const defaultText = `Hi${params.first_name ? ` ${params.first_name}` : ""},
 
 Download our app to view your membership, book classes, and more:
 
@@ -229,6 +283,7 @@ ${setPasswordUrl}
 After that you'll sign in with your email and password.
 
 — Pono Fit Co.`;
+  const text = customBody ? applyPlaceholders(customBody, vars) : defaultText;
   return sendMemberEmail(params.to, subject, text);
 }
 
@@ -262,7 +317,14 @@ export async function sendLiabilityWaiverEmail(params: {
   first_name?: string | null;
   waiver_url: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const subject = "Sign your liability waiver to get door access";
-  const text = `Hi${params.first_name ? ` ${params.first_name}` : ""},\n\nPlease sign the liability waiver to activate your door access. Open the link below (valid for 14 days):\n\n${params.waiver_url}\n\n— Pono Fit Co.`;
+  const vars = {
+    first_name: params.first_name ? ` ${params.first_name}` : "",
+    waiver_url: params.waiver_url,
+  };
+  const customSubject = getEmailSetting("email_liability_waiver_subject");
+  const customBody = getEmailSetting("email_liability_waiver_body");
+  const subject = customSubject ? applyPlaceholders(customSubject, vars) : "Sign your liability waiver to get door access";
+  const defaultText = `Hi${params.first_name ? ` ${params.first_name}` : ""},\n\nPlease sign the liability waiver to activate your door access. Open the link below (valid for 14 days):\n\n${params.waiver_url}\n\n— Pono Fit Co.`;
+  const text = customBody ? applyPlaceholders(customBody, vars) : defaultText;
   return sendMemberEmail(params.to, subject, text);
 }

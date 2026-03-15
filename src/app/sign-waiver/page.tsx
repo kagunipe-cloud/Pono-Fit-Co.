@@ -5,6 +5,8 @@ import { useEffect, useState, Suspense } from "react";
 function SignWaiverContent() {
   const [token, setToken] = useState("");
   const [memberName, setMemberName] = useState<string | null>(null);
+  const [waiverUrl, setWaiverUrl] = useState<string | null>("/waiver.pdf");
+  const [waiverHtml, setWaiverHtml] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [agreeChecked, setAgreeChecked] = useState(false);
@@ -20,15 +22,18 @@ function SignWaiverContent() {
       setError("Missing link. Use the link from your waiver email.");
       return;
     }
-    fetch(`/api/waiver/validate?token=${encodeURIComponent(t)}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.error) {
-          setError(data.error);
-          return;
-        }
-        setMemberName(data.first_name || data.member_id || "Member");
-      })
+    Promise.all([
+      fetch(`/api/waiver/validate?token=${encodeURIComponent(t)}`).then((r) => r.json()),
+      fetch("/api/documents/waiver-info").then((r) => r.json()),
+    ]).then(([validateData, waiverData]) => {
+      if (validateData.error) {
+        setError(validateData.error);
+        return;
+      }
+      setMemberName(validateData.first_name || validateData.member_id || "Member");
+      setWaiverUrl(waiverData.url ?? "/waiver.pdf");
+      setWaiverHtml(waiverData.html ?? null);
+    })
       .catch(() => setError("Could not validate link."))
       .finally(() => setLoading(false));
   }, []);
@@ -89,16 +94,20 @@ function SignWaiverContent() {
         <p className="text-stone-600 text-sm mb-4">
           Hi{memberName ? ` ${memberName}` : ""}, please read the waiver and confirm below.
         </p>
-        <p className="text-stone-600 text-sm mb-4">
-          <a
-            href="/waiver.pdf"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-brand-600 hover:underline font-medium"
-          >
-            Open the waiver (PDF)
-          </a>
-        </p>
+        {waiverHtml ? (
+          <div className="mb-4 p-4 rounded-lg border border-stone-200 bg-stone-50 max-h-64 overflow-y-auto text-sm text-stone-700 prose prose-stone max-w-none" dangerouslySetInnerHTML={{ __html: waiverHtml }} />
+        ) : waiverUrl ? (
+          <p className="text-stone-600 text-sm mb-4">
+            <a
+              href={waiverUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-brand-600 hover:underline font-medium"
+            >
+              Open the waiver (PDF)
+            </a>
+          </p>
+        ) : null}
         <p className="text-stone-600 text-sm mb-4">
           <a href={token ? `/privacy?token=${encodeURIComponent(token)}` : "/privacy"} className="text-brand-600 hover:underline font-medium">
             Privacy Policy

@@ -10,6 +10,7 @@ const BYPASS_PATHS = [
   "/privacy",
   "/terms",
   "/login",
+  "/signup",
   "/set-password",
 ];
 
