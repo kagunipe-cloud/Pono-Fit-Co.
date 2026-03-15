@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import InstallAppBanner from "@/components/InstallAppBanner";
 
@@ -9,6 +9,8 @@ const MIN_PASSWORD_LENGTH = 8;
 
 function SignupContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -46,14 +48,14 @@ function SignupContent() {
         return;
       }
       if (!data.privacy_terms_accepted) {
-        window.location.href = "/accept-privacy-terms";
+        window.location.href = redirectTo ? `/accept-privacy-terms?redirect=${encodeURIComponent(redirectTo)}` : "/accept-privacy-terms";
         return;
       }
       if (data.needs_waiver) {
-        window.location.href = "/sign-waiver-required";
+        window.location.href = redirectTo ? `/sign-waiver-required?redirect=${encodeURIComponent(redirectTo)}` : "/sign-waiver-required";
         return;
       }
-      const dest = data.role === "Admin" ? "/" : "/member";
+      const dest = data.role === "Admin" ? "/" : (redirectTo && redirectTo.startsWith("/") ? redirectTo : "/member");
       window.location.href = dest;
     } catch {
       setError("Something went wrong.");

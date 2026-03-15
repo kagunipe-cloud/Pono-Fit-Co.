@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatPrice } from "@/lib/format";
+import { CopyBuyLinkButton } from "@/components/CopyBuyLinkButton";
 
 type Session = {
   id: number;
@@ -93,6 +94,7 @@ export default function PTSessionsPage() {
                   <td className="py-3 px-4 text-stone-600">{s.trainer ?? "—"}</td>
                   <td className="py-3 px-4 flex gap-2">
                     <Link href={`/pt-sessions/${s.id}/edit`} className="text-brand-600 hover:underline text-sm">Edit</Link>
+                    <CopyBuyLinkButton productType="pt-session" productId={s.id} />
                     <button type="button" onClick={() => handleDelete(s.id)} disabled={deletingId === s.id} className="text-red-600 hover:underline text-sm disabled:opacity-50">{deletingId === s.id ? "…" : "Delete"}</button>
                   </td>
                 </tr>

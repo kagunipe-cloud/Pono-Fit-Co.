@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatPrice } from "@/lib/format";
+import { CopyBuyLinkButton } from "@/components/CopyBuyLinkButton";
 
 type Pack = { id: number; name: string; duration_minutes: number; credits: number; price: string };
 
@@ -146,6 +147,7 @@ export default function PTPacksPage() {
                     <span className="text-stone-600">{p.credits}×{p.duration_minutes} min · {formatPrice(p.price)}</span>
                     <span className="flex gap-2">
                       <button type="button" onClick={() => { setEditingId(p.id); setEditForm({ name: p.name, duration_minutes: p.duration_minutes, credits: p.credits, price: p.price }); }} className="text-brand-600 hover:underline text-sm font-medium">Edit</button>
+                      <CopyBuyLinkButton productType="pt-pack" productId={p.id} />
                       <button type="button" onClick={() => handleDelete(p.id)} disabled={deletingId !== null} className="text-red-600 hover:underline text-sm font-medium disabled:opacity-50">Delete</button>
                     </span>
                   </>

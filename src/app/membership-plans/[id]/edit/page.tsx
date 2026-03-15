@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { CopyBuyLinkButton } from "@/components/CopyBuyLinkButton";
 
 export default function EditMembershipPlanPage() {
   const params = useParams();
@@ -72,7 +73,10 @@ export default function EditMembershipPlanPage() {
   return (
     <div className="max-w-xl mx-auto">
       <Link href="/membership-plans" className="text-stone-500 hover:text-stone-700 text-sm mb-4 inline-block">← Back to plans</Link>
-      <h1 className="text-2xl font-bold text-stone-800 mb-6">Edit Membership Plan</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+        <h1 className="text-2xl font-bold text-stone-800">Edit Membership Plan</h1>
+        <CopyBuyLinkButton productType="membership" productId={parseInt(id, 10)} />
+      </div>
 
       <form onSubmit={handleSubmit} className="bg-white rounded-xl border border-stone-200 shadow-sm p-6 space-y-4">
         {submitErr && <div className="p-3 rounded-lg bg-red-50 text-red-700 text-sm">{submitErr}</div>}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatPrice } from "@/lib/format";
+import { CopyBuyLinkButton } from "@/components/CopyBuyLinkButton";
 
 type ClassRow = {
   id: number;
@@ -120,6 +121,7 @@ export default function ClassesPage() {
                       <button type="button" onClick={() => handleGenerate(c.id)} disabled={generatingId === c.id} className="text-brand-600 hover:underline text-sm disabled:opacity-50">{generatingId === c.id ? "…" : `Generate ${generateWeeks} wk`}</button>
                     ) : null}
                     <Link href={`/classes/${c.id}/edit`} className="text-brand-600 hover:underline text-sm">Edit</Link>
+                    <CopyBuyLinkButton productType="class" productId={c.id} />
                     <button type="button" onClick={() => handleDelete(c.id)} disabled={deletingId === c.id} className="text-red-600 hover:underline text-sm disabled:opacity-50">{deletingId === c.id ? "…" : "Delete"}</button>
                   </td>
                 </tr>

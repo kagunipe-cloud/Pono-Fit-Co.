@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function SignWaiverRequiredPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect");
   const [agreeChecked, setAgreeChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -24,7 +26,7 @@ export default function SignWaiverRequiredPage() {
       const data = await res.json();
       if (res.ok && data.ok) {
         router.refresh();
-        router.push("/member");
+        router.push(redirectTo && redirectTo.startsWith("/") ? redirectTo : "/member");
       } else {
         setError(data.error ?? "Failed to sign waiver.");
       }

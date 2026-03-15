@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatPrice } from "@/lib/format";
+import { CopyBuyLinkButton } from "@/components/CopyBuyLinkButton";
 
 type Plan = {
   id: number;
@@ -99,6 +100,7 @@ export default function MembershipPlansPage() {
                   <td className="py-3 px-4 text-stone-600">{p.category ?? "—"}</td>
                   <td className="py-3 px-4 flex gap-2">
                     <Link href={`/membership-plans/${p.id}/edit`} className="text-brand-600 hover:underline text-sm">Edit</Link>
+                    <CopyBuyLinkButton productType="membership" productId={p.id} />
                     <button
                       type="button"
                       onClick={() => handleDelete(p.id)}
