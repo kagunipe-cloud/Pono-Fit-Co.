@@ -28,6 +28,7 @@ export default function MemberWorkoutsPage() {
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prBadgesByWorkout, setPrBadgesByWorkout] = useState<Record<number, ("Reps" | "Auto 1RM" | "My 1RM")[]>>({});
+  const [my1rmList, setMy1rmList] = useState<{ exercise_name: string; current_1rm_lbs: number | null }[]>([]);
 
   function fetchWorkouts() {
     fetch("/api/member/workouts")
@@ -65,6 +66,18 @@ export default function MemberWorkoutsPage() {
       })
       .catch(() => setPrBadgesByWorkout({}));
   }, [workouts]);
+
+  useEffect(() => {
+    fetch("/api/member/workouts/my-1rm")
+      .then((r) => (r.ok ? r.json() : { exercises: [] }))
+      .then((data: { exercises?: { exercise_name?: string; current_1rm_lbs?: number | null }[] }) => {
+        const list = (data.exercises ?? [])
+          .filter((e) => e?.exercise_name)
+          .map((e) => ({ exercise_name: e.exercise_name!, current_1rm_lbs: e.current_1rm_lbs ?? null }));
+        setMy1rmList(list);
+      })
+      .catch(() => setMy1rmList([]));
+  }, []);
 
   async function handleStartWorkout() {
     setError(null);
@@ -168,9 +181,6 @@ export default function MemberWorkoutsPage() {
         )}
       </div>
 
-      <p className="mb-6">
-        <Link href="/member/workouts/progress" className="text-brand-600 hover:underline text-sm">View progress charts →</Link>
-      </p>
       {(volumeThisMonth > 0 || volumeThisYear > 0 || monthlyRecord || yearlyRecord) && (
         <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-stone-50">
           <h2 className="text-sm font-medium text-stone-500 mb-2">Total volume lifted</h2>
@@ -214,6 +224,26 @@ export default function MemberWorkoutsPage() {
           </ul>
         </div>
       )}
+      <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-stone-50">
+          <h2 className="text-sm font-medium text-stone-500 mb-2">My 1RMs</h2>
+          {my1rmList.length > 0 ? (
+            <>
+              <ul className="space-y-1 text-sm mb-2">
+                {my1rmList.map((e, i) => (
+                  <li key={i} className="text-stone-700">
+                    <span className="font-semibold">{e.current_1rm_lbs != null ? `${e.current_1rm_lbs} lbs` : "—"}</span> — {e.exercise_name}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-stone-500">Finish a workout with a designated exercise to update.</p>
+            </>
+          ) : (
+            <p className="text-sm text-stone-500 mb-2">No 1RMs yet. Add a lift and check &quot;Use for My 1RM Calculation&quot; when logging.</p>
+          )}
+          <p className="mt-2">
+            <Link href="/member/workouts/progress" className="text-brand-600 hover:underline text-sm">View progress charts →</Link>
+          </p>
+        </div>
       <h2 className="text-sm font-medium text-stone-500 mb-3">Workouts from My Trainer</h2>
       {fromTrainerWorkouts.length === 0 ? (
         <p className="text-stone-500 text-sm mb-6">No workouts from your trainer yet.</p>

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getMemberIdFromSession } from "@/lib/session";
-import { ensureWorkoutTables } from "@/lib/workouts";
+import { ensureWorkoutTables, estimate1RM } from "@/lib/workouts";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +66,26 @@ export async function PATCH(
     if (type === "lift" && effectiveExId != null) {
       if (use_for_my_1rm) {
         db.prepare("INSERT OR REPLACE INTO member_1rm_settings (member_id, exercise_id) VALUES (?, ?)").run(memberId, effectiveExId);
+        // If workout is already finished, backfill 1RM from existing sets so the amount shows immediately
+        const workoutRow = db.prepare("SELECT finished_at, started_at FROM workouts WHERE id = ?").get(workoutId) as { finished_at: string | null; started_at: string } | undefined;
+        if (workoutRow?.finished_at) {
+          const sets = db.prepare("SELECT reps, weight_kg FROM workout_sets WHERE workout_exercise_id = ?").all(exId) as { reps: number | null; weight_kg: number | null }[];
+          let best1RM: number | null = null;
+          for (const s of sets) {
+            const reps = s.reps ?? 0;
+            const w = s.weight_kg ?? 0;
+            if (w > 0 && reps > 0) {
+              const est = estimate1RM(w, Math.min(36, reps));
+              if (est != null && (best1RM == null || est > best1RM)) best1RM = est;
+            }
+          }
+          if (best1RM != null && best1RM > 0) {
+            const recordedAt = (workoutRow.started_at ?? new Date().toISOString()).slice(0, 19);
+            db.prepare(
+              "INSERT INTO member_1rm_records (member_id, workout_id, exercise_id, recorded_at, estimated_1rm_lbs) VALUES (?, ?, ?, ?, ?)"
+            ).run(memberId, workoutId, effectiveExId, recordedAt, best1RM);
+          }
+        }
       } else {
         db.prepare("DELETE FROM member_1rm_settings WHERE member_id = ? AND exercise_id = ?").run(memberId, effectiveExId);
       }
