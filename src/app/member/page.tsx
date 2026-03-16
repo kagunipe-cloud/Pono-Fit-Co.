@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toTitleCase } from "@/lib/format";
 import { formatDateForDisplay } from "@/lib/app-timezone";
+import OccupancyCount from "@/components/OccupancyCount";
 
 type MemberData = {
   member: { member_id: string; name: string; email: string | null };
@@ -73,7 +74,8 @@ export default function MemberHomePage() {
     <div className="max-w-2xl mx-auto p-6">
       <h1 className="text-2xl font-bold text-stone-800 mb-6">Welcome, {data.member.name}</h1>
 
-      <div className="mb-8">
+      <div className="mb-8 flex flex-col sm:flex-row sm:items-start gap-6">
+        <div className="flex-1">
         <h2 className="text-sm font-medium text-stone-500 mb-2">Door Access</h2>
 <button
             data-dumbbell-btn
@@ -95,6 +97,8 @@ export default function MemberHomePage() {
         {unlockMessage && (
           <p className="text-sm text-stone-600 mt-2">{unlockMessage}</p>
         )}
+        </div>
+        <OccupancyCount />
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
