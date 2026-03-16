@@ -63,8 +63,8 @@ export default function TransactionsPage() {
       ) : sales.length === 0 ? (
         <p className="p-6 text-stone-500">No transactions yet.</p>
       ) : (
-        <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
-          <table className="w-full text-left text-sm">
+        <div className="rounded-xl border border-stone-200 bg-white overflow-x-auto">
+          <table className="w-full text-left text-sm min-w-[600px]">
             <thead>
               <tr className="bg-stone-50 text-stone-500">
                 <th className="py-2 px-4">Sales ID</th>

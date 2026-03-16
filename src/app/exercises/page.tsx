@@ -384,7 +384,7 @@ export default function ExercisesPage() {
         <p className="text-stone-500">No exercises yet. Add or import above.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left border border-stone-200 rounded-lg overflow-hidden">
+          <table className="w-full text-sm text-left border border-stone-200 rounded-lg overflow-hidden min-w-[600px]">
             <thead className="bg-stone-100 text-stone-600">
               <tr>
                 <th className="px-3 py-2 font-medium w-14"></th>

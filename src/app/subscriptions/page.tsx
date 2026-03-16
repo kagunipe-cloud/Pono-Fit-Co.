@@ -123,7 +123,7 @@ export default function SubscriptionsPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left">
+            <table className="w-full text-left min-w-[600px]">
               <thead>
                 <tr className="bg-stone-50 text-stone-500 text-sm font-medium">
                   {COLUMNS.map((col) => (

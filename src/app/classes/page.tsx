@@ -83,7 +83,7 @@ export default function ClassesPage() {
         <input type="number" min={1} max={52} value={generateWeeks} onChange={(e) => setGenerateWeeks(Math.min(52, Math.max(1, parseInt(e.target.value, 10) || 12)))} className="w-14 px-2 py-1.5 rounded border border-stone-200" />
         <span>weeks.</span>
       </div>
-      <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-x-auto">
         {loading ? (
           <div className="p-12 text-center text-stone-500">Loading…</div>
         ) : classes.length === 0 ? (
@@ -91,7 +91,7 @@ export default function ClassesPage() {
             No classes yet. <Link href="/classes/new" className="text-brand-600 hover:underline">Add one</Link>
           </div>
         ) : (
-          <table className="w-full text-left">
+          <table className="w-full text-left min-w-[600px]">
             <thead>
               <tr className="bg-stone-50 text-stone-500 text-sm font-medium">
                 <th className="py-3 px-4">Class</th>

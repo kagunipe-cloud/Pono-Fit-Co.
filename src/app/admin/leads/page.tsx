@@ -43,7 +43,7 @@ export default function AdminLeadsPage() {
         Members who have signed up but not yet made a purchase. Click the email link to reach out.
       </p>
 
-      <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-x-auto">
         {loading ? (
           <div className="p-12 text-center text-stone-500">Loading…</div>
         ) : leads.length === 0 ? (
@@ -51,7 +51,7 @@ export default function AdminLeadsPage() {
             No leads yet. New signups will appear here.
           </div>
         ) : (
-          <table className="w-full text-left">
+          <table className="w-full text-left min-w-[400px]">
             <thead>
               <tr className="bg-stone-50 text-stone-500 text-sm font-medium">
                 <th className="py-3 px-4">Name</th>

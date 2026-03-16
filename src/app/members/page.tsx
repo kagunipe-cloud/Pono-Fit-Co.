@@ -183,7 +183,7 @@ export default function MembersPage() {
               )}
             </div>
           ) : (
-            <table className="w-full text-left">
+            <table className="w-full text-left min-w-[600px]">
               <thead>
                 <tr className="bg-stone-50 text-stone-500 text-sm font-medium">
                   <th className="py-3 px-4">Name</th>

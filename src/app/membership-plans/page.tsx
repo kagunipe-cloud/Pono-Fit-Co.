@@ -70,7 +70,7 @@ export default function MembershipPlansPage() {
         </Link>
       </header>
 
-      <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-x-auto">
         {loading ? (
           <div className="p-12 text-center text-stone-500">Loading…</div>
         ) : plans.length === 0 ? (
@@ -79,7 +79,7 @@ export default function MembershipPlansPage() {
             <Link href="/membership-plans/new" className="text-brand-600 hover:underline">Add your first plan</Link>
           </div>
         ) : (
-          <table className="w-full text-left">
+          <table className="w-full text-left min-w-[500px]">
             <thead>
               <tr className="bg-stone-50 text-stone-500 text-sm font-medium">
                 <th className="py-3 px-4">Plan</th>

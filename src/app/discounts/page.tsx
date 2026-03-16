@@ -65,7 +65,7 @@ export default function DiscountsPage() {
         </Link>
       </header>
 
-      <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-x-auto">
         {loading ? (
           <div className="p-12 text-center text-stone-500">Loading…</div>
         ) : discounts.length === 0 ? (
@@ -74,7 +74,7 @@ export default function DiscountsPage() {
             <Link href="/discounts/new" className="text-brand-600 hover:underline">Add your first discount</Link>
           </div>
         ) : (
-          <table className="w-full text-left">
+          <table className="w-full text-left min-w-[500px]">
             <thead>
               <tr className="bg-stone-50 text-stone-500 text-sm font-medium">
                 <th className="py-3 px-4">Code</th>

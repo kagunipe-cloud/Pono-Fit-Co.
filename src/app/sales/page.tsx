@@ -225,8 +225,8 @@ export default function SalesPage() {
               <p className="text-2xl font-bold text-stone-800 mt-1">{formatMoney(report.totalTaxCollected ?? 0)}</p>
             </div>
           </div>
-          <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
-            <table className="w-full text-left text-sm">
+          <div className="rounded-xl border border-stone-200 bg-white overflow-x-auto">
+            <table className="w-full text-left text-sm min-w-[400px]">
               <thead>
                 <tr className="bg-stone-50 text-stone-500">
                   <th className="py-2 px-4">Category</th>
