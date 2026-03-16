@@ -72,7 +72,8 @@ export async function middleware(request: NextRequest) {
   if (isMemberPath(pathname)) {
     if (!ok) {
       const login = new URL("/login", request.url);
-      login.searchParams.set("next", pathname);
+      const nextUrl = pathname + (request.nextUrl.search || "");
+      login.searchParams.set("next", nextUrl);
       return NextResponse.redirect(login);
     }
     return NextResponse.next();
@@ -81,7 +82,8 @@ export async function middleware(request: NextRequest) {
   if (isTrainerPath(pathname)) {
     if (!ok) {
       const login = new URL("/login", request.url);
-      login.searchParams.set("next", pathname);
+      const nextUrl = pathname + (request.nextUrl.search || "");
+      login.searchParams.set("next", nextUrl);
       return NextResponse.redirect(login);
     }
     if (role !== "Trainer" && role !== "Admin") {
@@ -93,7 +95,8 @@ export async function middleware(request: NextRequest) {
   if (isAdminPath(pathname)) {
     if (!ok) {
       const login = new URL("/login", request.url);
-      login.searchParams.set("next", pathname);
+      const nextUrl = pathname + (request.nextUrl.search || "");
+      login.searchParams.set("next", nextUrl);
       return NextResponse.redirect(login);
     }
     if (role !== "Admin") {

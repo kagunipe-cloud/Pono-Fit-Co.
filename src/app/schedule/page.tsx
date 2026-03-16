@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import ScheduleGrid from "@/components/ScheduleGrid";
 
@@ -12,6 +13,13 @@ function ScheduleContent() {
   const trainerFromUrl = searchParams.get("trainer")?.trim() || null;
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [selectedTrainerId, setSelectedTrainerId] = useState<string | null>(trainerFromUrl);
+  const [isGuest, setIsGuest] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/member-me")
+      .then((r) => setIsGuest(!r.ok))
+      .catch(() => setIsGuest(true));
+  }, []);
 
   useEffect(() => {
     fetch("/api/trainers")
@@ -32,6 +40,15 @@ function ScheduleContent() {
 
   return (
     <div>
+      {isGuest === true && (
+        <div className="mb-4 rounded-lg border border-brand-200 bg-brand-50 px-4 py-3 text-sm text-stone-700">
+          <span className="font-medium">Log in or create an account</span> to book classes and PT sessions.
+          {" "}
+          <Link href="/login" className="text-brand-600 hover:underline font-medium">Log in</Link>
+          {" · "}
+          <Link href="/signup" className="text-brand-600 hover:underline font-medium">Sign up</Link>
+        </div>
+      )}
       {trainers.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <span className="text-sm font-medium text-stone-600">PT trainer:</span>

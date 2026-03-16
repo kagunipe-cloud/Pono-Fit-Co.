@@ -129,7 +129,17 @@ function LoginContent() {
       </div>
       <p className="mt-6 text-center text-sm text-stone-500">
         Don&apos;t have an account?{" "}
-        <Link href="/signup" className="text-brand-600 hover:underline">
+        <Link
+          href={
+            (() => {
+              const next = searchParams.get("next")?.trim();
+              return next && next.startsWith("/") && !next.includes("//")
+                ? `/signup?redirect=${encodeURIComponent(next)}`
+                : "/signup";
+            })()
+          }
+          className="text-brand-600 hover:underline"
+        >
           Create one
         </Link>
       </p>
