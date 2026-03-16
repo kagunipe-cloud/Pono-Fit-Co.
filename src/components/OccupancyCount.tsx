@@ -25,8 +25,35 @@ export default function OccupancyCount() {
     }
 
     fetchOccupancy();
-    const interval = setInterval(fetchOccupancy, POLL_INTERVAL_MS);
-    return () => clearInterval(interval);
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    function startPolling() {
+      if (intervalId) return;
+      intervalId = setInterval(fetchOccupancy, POLL_INTERVAL_MS);
+    }
+    function stopPolling() {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    }
+
+    if (typeof document !== "undefined" && !document.hidden) startPolling();
+
+    function onVisibilityChange() {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        fetchOccupancy();
+        startPolling();
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, []);
 
   return (

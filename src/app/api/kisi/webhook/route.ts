@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { getDb } from "../../../../lib/db";
 import { ensureUsageTables } from "../../../../lib/usage";
+import { addOccupancyEntry, ensureOccupancyTable } from "../../../../lib/occupancy";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +79,10 @@ export async function POST(request: NextRequest) {
       body.success === true ? 1 : 0,
       happenedAt
     );
+
+    ensureOccupancyTable(db);
+    addOccupancyEntry(db, "kisi", happenedAt);
+
     db.close();
 
     return NextResponse.json({ ok: true });
