@@ -12,6 +12,7 @@ const BYPASS_PATHS = [
   "/login",
   "/signup",
   "/set-password",
+  "/embed",
 ];
 
 const CACHE_KEY = "waiver_gate_ok";
