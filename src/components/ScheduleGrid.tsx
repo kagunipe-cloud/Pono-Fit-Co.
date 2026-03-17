@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { formatInAppTz, todayInAppTz, weekStartInAppTz, addDaysToDateStr } from "@/lib/app-timezone";
-import { useAppTimezone } from "@/lib/settings-context";
+import { useAppTimezone, useOpenHours } from "@/lib/settings-context";
 
 type Occurrence = {
   id: number;
@@ -33,8 +33,6 @@ type CellItem =
   | { type: "available" }
   | { type: "trainer_not_available" };
 
-const TIME_SLOT_MIN = 6 * 60;
-const TIME_SLOT_MAX = 22 * 60;
 const SLOT_MINUTES = 30;
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -75,6 +73,9 @@ type ScheduleGridProps = { variant: "member" | "master" | "trainer"; trainerMemb
 export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayName, scheduleRefreshKey, allowAdminEdit, onAddAvailabilityForSlot, onAvailabilityChange }: ScheduleGridProps) {
   const searchParams = useSearchParams();
   const tz = useAppTimezone();
+  const { openHourMin, openHourMax } = useOpenHours();
+  const TIME_SLOT_MIN = openHourMin * 60;
+  const TIME_SLOT_MAX = openHourMax * 60;
   const productId = searchParams.get("product")?.trim() || null;
   const [weekStartStr, setWeekStartStr] = useState<string>(() => getInitialWeekStartStr(tz));
   const [occurrences, setOccurrences] = useState<Occurrence[]>([]);
@@ -142,7 +143,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
     const slots: number[] = [];
     for (let m = TIME_SLOT_MIN; m < TIME_SLOT_MAX; m += SLOT_MINUTES) slots.push(m);
     return slots;
-  }, []);
+  }, [TIME_SLOT_MIN, TIME_SLOT_MAX]);
 
   const grid = useMemo(() => {
     const unavailList = isTrainer && trainerDisplayName
@@ -300,7 +301,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
       }
     }
     return map;
-  }, [dayDates, occurrences, unavailable, openBookings, ptBlocks, isTrainer, trainerDisplayName, variant, effectiveTrainerId]);
+  }, [dayDates, occurrences, unavailable, openBookings, ptBlocks, isTrainer, trainerDisplayName, variant, effectiveTrainerId, TIME_SLOT_MIN, TIME_SLOT_MAX]);
 
   /** For rowSpan: (rowIndex, dateIndex) is a "hole" when a class cell above spans over this row. */
   const classSpanHoles = useMemo(() => {

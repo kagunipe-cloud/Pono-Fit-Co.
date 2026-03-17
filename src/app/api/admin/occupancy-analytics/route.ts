@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
 import { ensureOccupancySnapshotsTable } from "@/lib/occupancy";
-import { getAppTimezone } from "@/lib/db";
+import { getAppTimezone, getOpenHours } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     const db = getDb();
     ensureOccupancySnapshotsTable(db);
     const tz = getAppTimezone(db, 1);
+    const { openHourMin, openHourMax } = getOpenHours(db);
 
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace("T", " ");
     const rows = db.prepare(
@@ -70,9 +71,10 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    const hourRange = Array.from({ length: openHourMax - openHourMin + 1 }, (_, i) => openHourMin + i);
     const dayHourByDay = DAY_NAMES.map((dayName) => ({
       dayName,
-      hours: Array.from({ length: 24 }, (_, hour) => {
+      hours: hourRange.map((hour) => {
         const key = `${dayName}-${hour}`;
         const v = byDayHour[key];
         return { hour, avgCount: v && v.n > 0 ? Math.round((v.sum / v.n) * 10) / 10 : 0 };
@@ -102,6 +104,8 @@ export async function GET(request: NextRequest) {
       weeklyLine,
       timezone: tz,
       days,
+      open_hour_min: openHourMin,
+      open_hour_max: openHourMax,
     });
   } catch (err) {
     console.error("[occupancy-analytics]", err);

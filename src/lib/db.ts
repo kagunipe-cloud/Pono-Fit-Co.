@@ -91,11 +91,31 @@ function ensureBaseSchema(db: Database.Database) {
 
 const DEFAULT_TIMEZONE = "Pacific/Honolulu";
 
+const DEFAULT_OPEN_HOUR_MIN = 6;
+const DEFAULT_OPEN_HOUR_MAX = 22;
+
 function ensureAppSettingsDefaults(db: Database.Database) {
   const row = db.prepare("SELECT 1 FROM app_settings WHERE key = ?").get("timezone");
   if (!row) {
     db.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?)").run("timezone", DEFAULT_TIMEZONE);
   }
+  const openMin = db.prepare("SELECT 1 FROM app_settings WHERE key = ?").get("open_hour_min");
+  if (!openMin) {
+    db.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?)").run("open_hour_min", String(DEFAULT_OPEN_HOUR_MIN));
+  }
+  const openMax = db.prepare("SELECT 1 FROM app_settings WHERE key = ?").get("open_hour_max");
+  if (!openMax) {
+    db.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?)").run("open_hour_max", String(DEFAULT_OPEN_HOUR_MAX));
+  }
+}
+
+/** Get open hours (0–23). Default 6–22. */
+export function getOpenHours(db: ReturnType<typeof getDb>): { openHourMin: number; openHourMax: number } {
+  const minRow = db.prepare("SELECT value FROM app_settings WHERE key = ?").get("open_hour_min") as { value: string } | undefined;
+  const maxRow = db.prepare("SELECT value FROM app_settings WHERE key = ?").get("open_hour_max") as { value: string } | undefined;
+  const min = Math.max(0, Math.min(23, parseInt(minRow?.value ?? String(DEFAULT_OPEN_HOUR_MIN), 10) || DEFAULT_OPEN_HOUR_MIN));
+  const max = Math.max(0, Math.min(23, parseInt(maxRow?.value ?? String(DEFAULT_OPEN_HOUR_MAX), 10) || DEFAULT_OPEN_HOUR_MAX));
+  return { openHourMin: Math.min(min, max), openHourMax: Math.max(min, max) };
 }
 
 /** Get the gym's timezone (e.g. for schedules, macros, usage). Uses gyms.timezone first, else app_settings. Default Pacific/Honolulu. */

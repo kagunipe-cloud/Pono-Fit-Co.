@@ -21,19 +21,22 @@ type AnalyticsData = {
   weeklyLine: { week: string; avgCount: number }[];
   timezone: string;
   days: number;
+  open_hour_min: number;
+  open_hour_max: number;
 } | null;
 
-const HOUR_LABELS = Array.from({ length: 24 }, (_, i) => {
-  const h = i % 12 || 12;
-  const ampm = i < 12 ? "am" : "pm";
+function getHourLabel(hour: number): string {
+  const h = hour % 12 || 12;
+  const ampm = hour < 12 ? "am" : "pm";
   return `${h}${ampm}`;
-});
+}
 
 export default function AdminAnalyticsPage() {
   const router = useRouter();
   const [data, setData] = useState<AnalyticsData>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/admin/occupancy-analytics?days=${days}`)
@@ -65,6 +68,10 @@ export default function AdminAnalyticsPage() {
     1
   );
   const hasData = (data.dailyLine?.length ?? 0) > 0 || (data.weeklyLine?.length ?? 0) > 0;
+  const openMin = data.open_hour_min ?? 6;
+  const openMax = data.open_hour_max ?? 22;
+  const hourRange = Array.from({ length: openMax - openMin + 1 }, (_, i) => openMin + i);
+  const hourLabels = hourRange.map(getHourLabel);
 
   function getHeatmapColor(val: number): string {
     if (val <= 0) return "rgb(243 244 246)";
@@ -115,32 +122,68 @@ export default function AdminAnalyticsPage() {
               Darker green = busier. Use this to see peak times for scheduling.
             </p>
             <div className="overflow-x-auto">
-              <div className="min-w-[700px] grid gap-px bg-stone-200 rounded-lg overflow-hidden" style={{ gridTemplateColumns: "4rem repeat(24, 1fr)" }}>
+              <div className="min-w-[500px] grid gap-px bg-stone-200 rounded-lg overflow-hidden" style={{ gridTemplateColumns: `4rem repeat(${hourRange.length}, 1fr)` }}>
                 <div className="p-2 bg-stone-100 text-xs font-medium text-stone-600" />
-                {HOUR_LABELS.map((label, i) => (
+                {hourLabels.map((label, i) => (
                   <div key={i} className="p-1 bg-stone-100 text-[10px] font-medium text-stone-600 text-center">
                     {label}
                   </div>
                 ))}
                 {data.dayHourByDay.map((row) => (
                   <React.Fragment key={row.dayName}>
-                    <div className="p-2 bg-stone-100 text-xs font-medium text-stone-700">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDay(selectedDay === row.dayName ? null : row.dayName)}
+                      className={`p-2 bg-stone-100 text-xs font-medium text-left cursor-pointer hover:bg-stone-200 transition-colors rounded-l ${
+                        selectedDay === row.dayName ? "ring-2 ring-emerald-500 ring-inset" : ""
+                      } ${selectedDay === row.dayName ? "text-emerald-700 font-semibold" : "text-stone-700"}`}
+                    >
                       {row.dayName}
-                    </div>
+                    </button>
                     {row.hours.map((h) => (
-                      <div
+                      <button
+                        type="button"
                         key={h.hour}
-                        className="p-1.5 min-h-[2rem] flex items-center justify-center text-xs font-medium"
+                        onClick={() => setSelectedDay(selectedDay === row.dayName ? null : row.dayName)}
+                        className="p-1.5 min-h-[2rem] flex items-center justify-center text-xs font-medium cursor-pointer hover:ring-2 hover:ring-emerald-400 hover:ring-inset transition-all"
                         style={{ backgroundColor: getHeatmapColor(h.avgCount), color: h.avgCount > maxCount * 0.5 ? "white" : "inherit" }}
-                        title={`${row.dayName} ${HOUR_LABELS[h.hour]}: avg ${h.avgCount}`}
+                        title={`${row.dayName} ${getHourLabel(h.hour)}: avg ${h.avgCount}`}
                       >
                         {h.avgCount > 0 ? h.avgCount.toFixed(1) : "—"}
-                      </div>
+                      </button>
                     ))}
                   </React.Fragment>
                 ))}
               </div>
             </div>
+            <p className="text-xs text-stone-500 mt-2">Click a day to see hourly breakdown.</p>
+
+            {selectedDay && (
+              <div className="mt-6 p-4 rounded-lg border border-stone-200 bg-white">
+                <h3 className="text-sm font-semibold text-stone-800 mb-3">
+                  {selectedDay} — Average headcount by hour (last {days} days)
+                </h3>
+                <div className="h-56">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={data.dayHourByDay
+                        .find((d) => d.dayName === selectedDay)
+                        ?.hours.map((h) => ({
+                          hour: getHourLabel(h.hour),
+                          avgCount: h.avgCount,
+                        })) ?? []}
+                      margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
+                      <YAxis domain={[0, Math.ceil(maxCount * 1.1)]} tick={{ fontSize: 11 }} />
+                      <Tooltip formatter={(v) => [typeof v === "number" ? v.toFixed(1) : String(v ?? ""), "Avg count"]} />
+                      <Line type="monotone" dataKey="avgCount" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} name="Avg" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
           </section>
 
           <section>

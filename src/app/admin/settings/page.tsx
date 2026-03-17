@@ -17,8 +17,15 @@ const COMMON_TIMEZONES = [
   "Asia/Tokyo",
 ];
 
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => ({
+  value: i,
+  label: i === 0 ? "12 am" : i < 12 ? `${i} am` : i === 12 ? "12 pm" : `${i - 12} pm`,
+}));
+
 export default function AdminSettingsPage() {
   const [timezone, setTimezone] = useState("");
+  const [openHourMin, setOpenHourMin] = useState(6);
+  const [openHourMax, setOpenHourMax] = useState(22);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
@@ -26,8 +33,10 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     fetch("/api/admin/settings")
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: { timezone?: string } | null) => {
+      .then((data: { timezone?: string; open_hour_min?: number; open_hour_max?: number } | null) => {
         if (data?.timezone) setTimezone(data.timezone);
+        if (typeof data?.open_hour_min === "number") setOpenHourMin(data.open_hour_min);
+        if (typeof data?.open_hour_max === "number") setOpenHourMax(data.open_hour_max);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -39,20 +48,28 @@ export default function AdminSettingsPage() {
       setMessage({ type: "err", text: "Select or enter a timezone." });
       return;
     }
+    if (openHourMin > openHourMax) {
+      setMessage({ type: "err", text: "Open time must be before close time." });
+      return;
+    }
     setMessage(null);
     setSaving(true);
     try {
       const res = await fetch("/api/admin/settings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ timezone: timezone.trim() }),
+        body: JSON.stringify({
+          timezone: timezone.trim(),
+          open_hour_min: openHourMin,
+          open_hour_max: openHourMax,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
         setMessage({ type: "err", text: data.error ?? "Failed to save." });
         return;
       }
-      setMessage({ type: "ok", text: "Settings saved. Schedules, macros, and usage will use this timezone." });
+      setMessage({ type: "ok", text: "Settings saved. Schedules and analytics will use this timezone and open hours." });
     } catch {
       setMessage({ type: "err", text: "Something went wrong." });
     } finally {
@@ -120,7 +137,7 @@ export default function AdminSettingsPage() {
       <section className="mb-8">
         <h2 className="text-lg font-semibold text-stone-800 mb-3">General</h2>
         <p className="text-stone-500 mb-4">
-          Gym timezone for schedules, macros, usage, and journal dates.
+          Timezone and open hours set defaults for schedules and analytics.
         </p>
       {loading ? (
         <p className="text-stone-500">Loading…</p>
@@ -148,6 +165,41 @@ export default function AdminSettingsPage() {
               placeholder="e.g. America/Chicago"
               className="mt-2 w-full px-3 py-2 rounded-lg border border-stone-200"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-stone-700 mb-1">Open hours</label>
+            <p className="text-xs text-stone-500 mb-2">
+              Default time range for schedules and occupancy analytics.
+            </p>
+            <div className="flex items-center gap-3">
+              <div>
+                <label htmlFor="open-min" className="sr-only">Open</label>
+                <select
+                  id="open-min"
+                  value={openHourMin}
+                  onChange={(e) => setOpenHourMin(parseInt(e.target.value, 10))}
+                  className="px-3 py-2 rounded-lg border border-stone-200"
+                >
+                  {HOUR_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+              <span className="text-stone-500">to</span>
+              <div>
+                <label htmlFor="open-max" className="sr-only">Close</label>
+                <select
+                  id="open-max"
+                  value={openHourMax}
+                  onChange={(e) => setOpenHourMax(parseInt(e.target.value, 10))}
+                  className="px-3 py-2 rounded-lg border border-stone-200"
+                >
+                  {HOUR_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
           <button
             type="submit"

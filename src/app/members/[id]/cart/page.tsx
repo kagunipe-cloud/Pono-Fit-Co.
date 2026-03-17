@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { formatPrice } from "@/lib/format";
 import { todayInAppTz, weekStartInAppTz, addDaysToDateStr, formatDateForDisplay } from "@/lib/app-timezone";
-import { useAppTimezone } from "@/lib/settings-context";
+import { useAppTimezone, useOpenHours } from "@/lib/settings-context";
 
 type CartItem = {
   id: number;
@@ -34,8 +34,6 @@ type ClassOccurrence = {
 };
 
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const TIME_SLOT_MIN = 6 * 60;
-const TIME_SLOT_MAX = 22 * 60;
 const SLOT_MINUTES = 30;
 
 function parseTimeToMinutes(t: string): number {
@@ -77,6 +75,7 @@ export default function MemberCartPage() {
   const [discount, setDiscount] = useState<{ code: string; percent_off: number; description?: string | null } | null>(null);
 
   const tz = useAppTimezone();
+  const { openHourMin, openHourMax } = useOpenHours();
   const [classScheduleWeekStart, setClassScheduleWeekStart] = useState<string>(() => weekStartInAppTz(todayInAppTz(tz)));
   const [classOccurrences, setClassOccurrences] = useState<ClassOccurrence[]>([]);
   const [classScheduleLoading, setClassScheduleLoading] = useState(false);
@@ -128,13 +127,15 @@ export default function MemberCartPage() {
     [classScheduleWeekStart]
   );
   const classScheduleGrid = useMemo(() => {
+    const min = openHourMin * 60;
+    const max = openHourMax * 60;
     const map = new Map<string, ClassOccurrence>();
     for (const o of classOccurrences) {
       const date = o.occurrence_date;
       const startMin = parseTimeToMinutes(o.occurrence_time);
       const duration = o.duration_minutes ?? 60;
       const endMin = startMin + duration;
-      for (let slotMin = TIME_SLOT_MIN; slotMin < TIME_SLOT_MAX; slotMin += SLOT_MINUTES) {
+      for (let slotMin = min; slotMin < max; slotMin += SLOT_MINUTES) {
         if (slotOverlaps(slotMin, startMin, endMin)) {
           const key = `${date}-${slotMin}`;
           if (!map.has(key)) map.set(key, o);
@@ -143,21 +144,23 @@ export default function MemberCartPage() {
       }
     }
     return map;
-  }, [classOccurrences]);
+  }, [classOccurrences, openHourMin, openHourMax]);
   const classScheduleTimeSlots = useMemo(() => {
+    const min = openHourMin * 60;
+    const max = openHourMax * 60;
     const slotSet = new Set<number>();
     for (const o of classOccurrences) {
       const startMin = parseTimeToMinutes(o.occurrence_time);
       const duration = o.duration_minutes ?? 60;
       const endMin = startMin + duration;
-      for (let slotMin = TIME_SLOT_MIN; slotMin < TIME_SLOT_MAX; slotMin += SLOT_MINUTES) {
+      for (let slotMin = min; slotMin < max; slotMin += SLOT_MINUTES) {
         if (slotOverlaps(slotMin, startMin, endMin)) {
           slotSet.add(slotMin);
         }
       }
     }
     return Array.from(slotSet).sort((a, b) => a - b);
-  }, [classOccurrences]);
+  }, [classOccurrences, openHourMin, openHourMax]);
 
 
   async function addToCart(product_type: "membership_plan" | "pt_session" | "class" | "class_pack" | "class_occurrence" | "pt_pack", product_id: number) {
