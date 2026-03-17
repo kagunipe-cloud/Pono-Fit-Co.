@@ -1,0 +1,21 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/occupancy-snapshot",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/renew-subscriptions",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/membership-expiry-reminders",
+      "schedule": "10 2 * * *"
+    },
+    {
+      "path": "/api/cron/process-pt-sessions",
+      "schedule": "0 * * * *"
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { formatPrice } from "@/lib/format";
+import { computeCcFee } from "@/lib/cc-fees";
 import { todayInAppTz, weekStartInAppTz, addDaysToDateStr, formatDateForDisplay } from "@/lib/app-timezone";
 import { useAppTimezone, useOpenHours } from "@/lib/settings-context";
 
@@ -214,7 +215,9 @@ export default function MemberCartPage() {
     return sum + (Number.isNaN(p) ? 0 : p) * it.quantity;
   }, 0);
   const discountAmount = discount ? subtotal * (discount.percent_off / 100) : 0;
-  const total = Math.max(0, subtotal - discountAmount);
+  const afterDiscount = Math.max(0, subtotal - discountAmount);
+  const ccFee = computeCcFee(afterDiscount);
+  const total = afterDiscount + ccFee;
 
   async function applyPromoCode() {
     const code = promoCode.trim().toUpperCase();
@@ -473,6 +476,10 @@ export default function MemberCartPage() {
                 {promoError && <p className="text-red-600 text-xs mt-1">{promoError}</p>}
               </div>
             )}
+            <div className="p-4 border-t border-stone-100 flex justify-between items-center text-sm text-stone-600">
+              <span>CC fees (3% + $0.30)</span>
+              <span>{formatPrice(ccFee)}</span>
+            </div>
             <div className="p-4 border-t border-stone-100 flex justify-between items-center">
               <span className="font-medium">Total</span>
               <span>{formatPrice(total)}</span>

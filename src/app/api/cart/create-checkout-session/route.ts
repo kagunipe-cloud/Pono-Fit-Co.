@@ -5,6 +5,7 @@ import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureDiscountsTable } from "../../../../lib/discounts";
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { getAdminMemberId } from "../../../../lib/admin";
+import { computeCcFee } from "../../../../lib/cc-fees";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
@@ -184,6 +185,20 @@ export async function POST(request: NextRequest) {
 
     if (lineItems.length === 0) {
       return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
+    }
+
+    // Add CC fee line item (3% + $0.30)
+    const subtotalAfterDiscount = lineItems.reduce((sum, it) => {
+      const p = parseFloat(String(it.price).replace(/[^0-9.-]/g, "")) || 0;
+      return sum + p * (it.quantity || 1);
+    }, 0);
+    const ccFeeDollars = computeCcFee(subtotalAfterDiscount);
+    if (ccFeeDollars > 0) {
+      lineItems.push({
+        name: "Credit card processing fee",
+        price: ccFeeDollars.toFixed(2),
+        quantity: 1,
+      });
     }
 
     const stripe = new Stripe(stripeSecret);

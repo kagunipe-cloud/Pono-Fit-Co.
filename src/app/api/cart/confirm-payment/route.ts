@@ -4,10 +4,12 @@ import { sendPostPurchaseEmail, sendStaffEmail, sendMemberEmail } from "../../..
 import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../lib/kisi";
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
 import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
+import { ensureDiscountsTable } from "../../../../lib/discounts";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureTrainerClient, getTrainerMemberIdByDisplayName } from "../../../../lib/trainer-clients";
 import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz, formatDateForStorage, formatDateForDisplay } from "../../../../lib/app-timezone";
 import { formatPrice } from "../../../../lib/format";
+import { computeCcFee } from "../../../../lib/cc-fees";
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { getAdminMemberId } from "../../../../lib/admin";
 import { randomUUID } from "crypto";
@@ -275,7 +277,20 @@ export async function POST(request: NextRequest) {
 
     const member = db.prepare("SELECT email FROM members WHERE member_id = ?").get(member_id) as { email: string } | undefined;
     const promoCode = (stripeSession?.metadata?.promo_code as string) || (db.prepare("SELECT promo_code FROM cart WHERE member_id = ?").get(member_id) as { promo_code?: string | null })?.promo_code?.trim() || null;
-    const finalGrandTotal = stripeSession?.amount_total != null ? stripeSession.amount_total / 100 : grand_total;
+    let subtotalAfterDiscount = grand_total;
+    if (promoCode) {
+      ensureDiscountsTable(db);
+      const discount = db.prepare("SELECT percent_off FROM discounts WHERE UPPER(TRIM(code)) = ?").get(promoCode.toUpperCase()) as { percent_off: number } | undefined;
+      if (discount) {
+        const pct = Math.min(100, Math.max(0, discount.percent_off));
+        subtotalAfterDiscount = grand_total * (1 - pct / 100);
+      }
+    }
+    const ccFee = computeCcFee(subtotalAfterDiscount);
+    if (ccFee > 0) {
+      emailLineItems.push({ name: "Credit card processing fee", quantity: 1, price: formatPrice(ccFee) });
+    }
+    const finalGrandTotal = stripeSession?.amount_total != null ? stripeSession.amount_total / 100 : subtotalAfterDiscount + ccFee;
     const taxAmount = stripeSession?.total_details?.amount_tax != null ? stripeSession.total_details.amount_tax / 100 : 0;
     const paymentIntentId = stripeSession?.payment_intent
       ? (typeof stripeSession.payment_intent === "string" ? stripeSession.payment_intent : stripeSession.payment_intent?.id)
