@@ -55,3 +55,26 @@ export function removeOldestOccupancyEntry(db: ReturnType<typeof getDb>): boolea
   db.prepare(`DELETE FROM occupancy_entries WHERE id = ?`).run(row.id);
   return true;
 }
+
+/** Snapshot table for occupancy analytics (charts by day/hour, over time). */
+export function ensureOccupancySnapshotsTable(db: ReturnType<typeof getDb>) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS occupancy_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      recorded_at TEXT NOT NULL,
+      count INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_occupancy_snapshots_recorded ON occupancy_snapshots(recorded_at);
+  `);
+}
+
+/** Record current occupancy count for analytics. Call from cron every 15 min. */
+export function recordOccupancySnapshot(db: ReturnType<typeof getDb>): void {
+  ensureOccupancyTable(db);
+  ensureOccupancySnapshotsTable(db);
+  const count = getOccupancyCount(db);
+  const recordedAt = new Date().toISOString().slice(0, 19).replace("T", " ");
+  db.prepare(
+    `INSERT INTO occupancy_snapshots (recorded_at, count) VALUES (?, ?)`
+  ).run(recordedAt, count);
+}

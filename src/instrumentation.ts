@@ -84,5 +84,15 @@ export async function register() {
     }
   });
 
-  console.log("[instrumentation] Daily renewal (2:00 AM), expiry reminders (2:10 AM); hourly PT session processing.");
+  cron.schedule("*/15 * * * *", async () => {
+    try {
+      await fetch(`${base}/api/cron/occupancy-snapshot`, {
+        headers: secret ? { "x-cron-secret": secret } : {},
+      });
+    } catch (err) {
+      console.error("[occupancy-snapshot]", err);
+    }
+  });
+
+  console.log("[instrumentation] Daily renewal (2:00 AM), expiry reminders (2:10 AM); hourly PT; occupancy snapshot every 15 min.");
 }
