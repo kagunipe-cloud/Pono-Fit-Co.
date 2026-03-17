@@ -151,7 +151,7 @@ export default function AdminAnalyticsPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                   <YAxis domain={[0, Math.ceil(maxCount * 1.1)]} tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(v: number) => [v.toFixed(1), "Avg count"]} />
+                  <Tooltip formatter={(v) => [typeof v === "number" ? v.toFixed(1) : String(v ?? ""), "Avg count"]} />
                   <Line type="monotone" dataKey="avgCount" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} name="Avg" />
                 </LineChart>
               </ResponsiveContainer>
@@ -166,7 +166,7 @@ export default function AdminAnalyticsPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="week" tick={{ fontSize: 11 }} />
                   <YAxis domain={[0, Math.ceil(maxCount * 1.1)]} tick={{ fontSize: 11 }} />
-                  <Tooltip formatter={(v: number) => [v.toFixed(1), "Avg count"]} />
+                  <Tooltip formatter={(v) => [typeof v === "number" ? v.toFixed(1) : String(v ?? ""), "Avg count"]} />
                   <Bar dataKey="avgCount" fill="#22c55e" radius={[4, 4, 0, 0]} name="Avg" />
                 </BarChart>
               </ResponsiveContainer>
