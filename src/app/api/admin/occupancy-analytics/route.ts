@@ -33,7 +33,6 @@ export async function GET(request: NextRequest) {
     // Convert to gym timezone for grouping
     const byDayHour: Record<string, { sum: number; n: number }> = {};
     const byDate: Record<string, { sum: number; n: number }> = {};
-    const byWeek: Record<string, { sum: number; n: number }> = {};
 
     for (const row of rows) {
       const utcDate = new Date(row.recorded_at + "Z");
@@ -50,15 +49,15 @@ export async function GET(request: NextRequest) {
       byDayHour[dayHourKey].sum += row.count;
       byDayHour[dayHourKey].n += 1;
 
-      const dateKey = `${year}-${month}-${day}`;
-      if (!byDate[dateKey]) byDate[dateKey] = { sum: 0, n: 0 };
-      byDate[dateKey].sum += row.count;
-      byDate[dateKey].n += 1;
+      // Daily average: only during open hours (matches heatmap)
+      const inOpenHours = hour >= openHourMin && hour <= openHourMax;
+      if (inOpenHours) {
+        const dateKey = `${year}-${month}-${day}`;
+        if (!byDate[dateKey]) byDate[dateKey] = { sum: 0, n: 0 };
+        byDate[dateKey].sum += row.count;
+        byDate[dateKey].n += 1;
+      }
 
-      const weekStart = getWeekStart(utcDate, tz);
-      if (!byWeek[weekStart]) byWeek[weekStart] = { sum: 0, n: 0 };
-      byWeek[weekStart].sum += row.count;
-      byWeek[weekStart].n += 1;
     }
 
     const dayHourHeatmap = Object.entries(byDayHour).map(([key, v]) => {
@@ -89,12 +88,19 @@ export async function GET(request: NextRequest) {
         sampleCount: v.n,
       }));
 
-    const weeklyLine = Object.entries(byWeek)
+    // Weekly = average of daily averages (typical daily avg for that week), not avg of all snapshots
+    const byWeekDailyAvg: Record<string, number[]> = {};
+    for (const { date, avgCount } of dailyLine) {
+      const weekStart = getWeekStartForDate(date, tz);
+      if (!byWeekDailyAvg[weekStart]) byWeekDailyAvg[weekStart] = [];
+      byWeekDailyAvg[weekStart].push(avgCount);
+    }
+    const weeklyLine = Object.entries(byWeekDailyAvg)
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([week, v]) => ({
+      .map(([week, avgs]) => ({
         week,
-        avgCount: v.n > 0 ? Math.round((v.sum / v.n) * 10) / 10 : 0,
-        sampleCount: v.n,
+        avgCount: avgs.length > 0 ? Math.round((avgs.reduce((a, b) => a + b, 0) / avgs.length) * 10) / 10 : 0,
+        sampleCount: avgs.length,
       }));
 
     return NextResponse.json({
@@ -125,4 +131,11 @@ function getWeekStart(d: Date, tz: string): string {
   const m = p2.find((p) => p.type === "month")?.value ?? "";
   const day = p2.find((p) => p.type === "day")?.value ?? "01";
   return `${y}-${m}-${day}`;
+}
+
+/** Get week start (Monday) for a date string YYYY-MM-DD. */
+function getWeekStartForDate(dateStr: string, tz: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dObj = new Date(Date.UTC(y ?? 0, ((m ?? 1) - 1), d ?? 1, 12, 0, 0));
+  return getWeekStart(dObj, tz);
 }

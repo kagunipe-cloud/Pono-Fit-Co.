@@ -31,6 +31,23 @@ function getHourLabel(hour: number): string {
   return `${h}${ampm}`;
 }
 
+/** Returns nice Y-axis domain and ticks for cleaner chart display. */
+function getNiceYAxis(maxVal: number): { domain: [number, number]; ticks: number[] } {
+  if (maxVal <= 0) return { domain: [0, 5], ticks: [0, 1, 2, 3, 4, 5] };
+  const rawMax = Math.max(maxVal * 1.1, 1);
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawMax)));
+  const normalized = rawMax / magnitude;
+  const step = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  const stepVal = step * magnitude;
+  const niceMax = Math.ceil(rawMax / stepVal) * stepVal;
+  const ticks: number[] = [];
+  for (let i = 0; i * stepVal <= niceMax + 0.001; i++) {
+    const t = Math.round(i * stepVal * 10) / 10;
+    if (t <= niceMax) ticks.push(t);
+  }
+  return { domain: [0, niceMax], ticks };
+}
+
 export default function AdminAnalyticsPage() {
   const router = useRouter();
   const [data, setData] = useState<AnalyticsData>(null);
@@ -68,6 +85,7 @@ export default function AdminAnalyticsPage() {
     1
   );
   const hasData = (data.dailyLine?.length ?? 0) > 0 || (data.weeklyLine?.length ?? 0) > 0;
+  const yAxis = getNiceYAxis(maxCount);
   const openMin = data.open_hour_min ?? 6;
   const openMax = data.open_hour_max ?? 22;
   const hourRange = Array.from({ length: openMax - openMin + 1 }, (_, i) => openMin + i);
@@ -176,7 +194,7 @@ export default function AdminAnalyticsPage() {
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
-                      <YAxis domain={[0, Math.ceil(maxCount * 1.1)]} tick={{ fontSize: 11 }} />
+                      <YAxis domain={yAxis.domain} ticks={yAxis.ticks} tick={{ fontSize: 11 }} allowDecimals={false} />
                       <Tooltip formatter={(v) => [typeof v === "number" ? v.toFixed(1) : String(v ?? ""), "Avg count"]} />
                       <Line type="monotone" dataKey="avgCount" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} name="Avg" />
                     </LineChart>
@@ -187,13 +205,13 @@ export default function AdminAnalyticsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-stone-800 mb-3">Occupancy: Average Headcount Over Time (Daily)</h2>
+            <h2 className="text-lg font-semibold text-stone-800 mb-3">Occupancy: Daily Average Over Time</h2>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={data.dailyLine} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis domain={[0, Math.ceil(maxCount * 1.1)]} tick={{ fontSize: 11 }} />
+                  <YAxis domain={yAxis.domain} ticks={yAxis.ticks} tick={{ fontSize: 11 }} allowDecimals={false} />
                   <Tooltip formatter={(v) => [typeof v === "number" ? v.toFixed(1) : String(v ?? ""), "Avg count"]} />
                   <Line type="monotone" dataKey="avgCount" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} name="Avg" />
                 </LineChart>
@@ -202,13 +220,13 @@ export default function AdminAnalyticsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-stone-800 mb-3">Occupancy: Average Headcount by Week</h2>
+            <h2 className="text-lg font-semibold text-stone-800 mb-3">Occupancy: Daily Average by Week</h2>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.weeklyLine} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis dataKey="week" tick={{ fontSize: 11 }} />
-                  <YAxis domain={[0, Math.ceil(maxCount * 1.1)]} tick={{ fontSize: 11 }} />
+                  <YAxis domain={yAxis.domain} ticks={yAxis.ticks} tick={{ fontSize: 11 }} allowDecimals={false} />
                   <Tooltip formatter={(v) => [typeof v === "number" ? v.toFixed(1) : String(v ?? ""), "Avg count"]} />
                   <Bar dataKey="avgCount" fill="#22c55e" radius={[4, 4, 0, 0]} name="Avg" />
                 </BarChart>
