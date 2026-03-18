@@ -32,9 +32,7 @@ export async function GET(request: NextRequest) {
         : pi.status === "canceled"
           ? "failed"
           : "in_progress";
-    // When card is declined, last_payment_error is set — surface it so UI can show "try another card"
-    const lastError = pi.last_payment_error?.message ?? null;
-    return NextResponse.json({ status, last_error: lastError, payment_intent: pi });
+    return NextResponse.json({ status, payment_intent: pi });
   } catch (err) {
     console.error("[terminal/payment-status]", err);
     return NextResponse.json({ error: "Failed to get status" }, { status: 500 });

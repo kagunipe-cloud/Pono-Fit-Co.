@@ -234,7 +234,15 @@ export default function MemberCartPage() {
       const paymentIntentId = data.payment_intent_id;
       if (!paymentIntentId) throw new Error("No payment intent returned");
 
+      const startedAt = Date.now();
+      const TIMEOUT_MS = 5 * 60 * 1000; // 5 min — no cancel on reader, customer might walk away
       const poll = async (): Promise<void> => {
+        if (Date.now() - startedAt > TIMEOUT_MS) {
+          setTerminalError("Payment timed out. Try again.");
+          setTerminalStatus("error");
+          setTerminalLoading(false);
+          return;
+        }
         const statusRes = await fetch(`/api/terminal/payment-status?payment_intent_id=${encodeURIComponent(paymentIntentId)}`);
         const statusData = await statusRes.json();
         if (statusData.status === "succeeded") {
@@ -258,10 +266,7 @@ export default function MemberCartPage() {
           setTerminalLoading(false);
           return;
         }
-        // In progress: show decline message if card was declined (customer can try another card)
-        if (statusData.last_error) {
-          setTerminalError(statusData.last_error + " — Try another card.");
-        }
+        // In progress: reader handles its own feedback (declined, insert card, etc.)
         setTimeout(poll, 2000);
       };
       await poll();
