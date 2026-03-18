@@ -366,7 +366,10 @@ export default function MemberWorkoutDetailPage() {
         const phrase = volume > 0 ? getWeightComparisonWithArticle(volume) : null;
         const prRes = await fetch(`/api/member/workouts/${id}/pr-badges`);
         const prData = prRes.ok ? await prRes.json() : null;
-        const prCount = Array.isArray(prData?.workoutBadges) ? prData.workoutBadges.length : 0;
+        // Count total PR badges (Reps, Auto 1RM, My 1RM) across all exercises
+        const prCount = Array.isArray(prData?.exercises)
+          ? prData.exercises.reduce((sum: number, e: { badges?: string[] }) => sum + (e.badges?.length ?? 0), 0)
+          : 0;
         if (phrase || prCount > 0) {
           setCongratsMessage(phrase);
           setCongratsPrCount(prCount);
