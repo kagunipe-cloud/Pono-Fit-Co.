@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn, ensureSalesStripePaymentIntentColumn, ensureSalesPromoCodeColumn } from "../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn, ensureSalesStripePaymentIntentColumn, ensureSalesPromoCodeColumn, ensureSalesItemTotalCcFeeColumns } from "../../../../lib/db";
 import { sendPostPurchaseEmail, sendStaffEmail, sendMemberEmail } from "../../../../lib/email";
 import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../lib/kisi";
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
@@ -326,12 +326,17 @@ export async function POST(request: NextRequest) {
       stripeSession?.payment_intent
         ? (typeof stripeSession.payment_intent === "string" ? stripeSession.payment_intent : stripeSession.payment_intent?.id)
         : payment_intent_id;
+    const itemTotal = stripeSession?.amount_total != null
+      ? finalGrandTotal - taxAmount
+      : subtotalAfterDiscount;
+    const ccFeeStored = stripeSession?.amount_total != null ? 0 : ccFee;
     ensureSalesStripePaymentIntentColumn(db);
     ensureSalesPromoCodeColumn(db);
+    ensureSalesItemTotalCcFeeColumns(db);
     db.prepare(`
-        INSERT INTO sales (sales_id, date_time, member_id, grand_total, tax_amount, email, status, sale_date, stripe_payment_intent_id, promo_code)
-        VALUES (?, ?, ?, ?, ?, ?, 'Paid', ?, ?, ?)
-      `).run(sales_id, date_time, member_id, String(finalGrandTotal), String(taxAmount), member?.email ?? "", sale_date, paymentIntentId, promoCode || null);
+        INSERT INTO sales (sales_id, date_time, member_id, grand_total, tax_amount, item_total, cc_fee, email, status, sale_date, stripe_payment_intent_id, promo_code)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Paid', ?, ?, ?)
+      `).run(sales_id, date_time, member_id, String(finalGrandTotal), String(taxAmount), String(itemTotal), String(ccFeeStored), member?.email ?? "", sale_date, paymentIntentId, promoCode || null);
 
       db.prepare("DELETE FROM cart_items WHERE cart_id = ?").run(cart.id);
 

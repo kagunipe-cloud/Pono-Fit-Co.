@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn, ensurePaymentFailuresTable } from "../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn, ensurePaymentFailuresTable, ensureSalesItemTotalCcFeeColumns, ensureSalesTypeColumn } from "../../../../lib/db";
 import { grantAccess as kisiGrantAccess } from "../../../../lib/kisi";
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
-import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz, formatDateForStorage } from "../../../../lib/app-timezone";
+import { formatDateTimeInAppTz, todayInAppTz, formatDateForStorage } from "../../../../lib/app-timezone";
+import { computeCcFee } from "../../../../lib/cc-fees";
 import { randomUUID } from "crypto";
 import Stripe from "stripe";
 
@@ -87,11 +88,28 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
-    if (amountCents <= 0) {
+    const itemTotalDollars = amountCents / 100;
+    if (itemTotalDollars <= 0) {
       results.push({ member_id: sub.member_id, status: "error", message: "Invalid price" });
       insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "Invalid price", null);
       continue;
     }
+
+    const ccFeeDollars = computeCcFee(itemTotalDollars);
+    const baseAmount = itemTotalDollars + ccFeeDollars;
+    let taxDollars = 0;
+    const taxRateId = process.env.STRIPE_TAX_RATE_ID?.trim();
+    if (taxRateId) {
+      try {
+        const taxRate = await stripe.taxRates.retrieve(taxRateId);
+        const pct = Number(taxRate.percentage) || 0;
+        taxDollars = Math.round(baseAmount * (pct / 100) * 100) / 100;
+      } catch {
+        /* skip tax if rate unavailable */
+      }
+    }
+    const totalDollars = baseAmount + taxDollars;
+    const chargeCents = Math.round(totalDollars * 100);
 
     try {
       const paymentMethods = await stripe.paymentMethods.list({
@@ -101,12 +119,12 @@ export async function GET(request: NextRequest) {
       const pm = paymentMethods.data[0];
       if (!pm) {
         results.push({ member_id: sub.member_id, status: "error", message: "No payment method on file" });
-        insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "No payment method on file", null);
+        insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, chargeCents, "No payment method on file", null);
         continue;
       }
 
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: amountCents,
+        amount: chargeCents,
         currency: "usd",
         customer: memberRow.stripe_customer_id,
         payment_method: pm.id,
@@ -121,30 +139,26 @@ export async function GET(request: NextRequest) {
         const lastError = (paymentIntent as { last_payment_error?: { code?: string; message?: string } }).last_payment_error;
         const stripeCode = lastError?.code ?? null;
         results.push({ member_id: sub.member_id, status: "error", message: statusMsg });
-        insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, lastError?.message || statusMsg, stripeCode);
+        insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, chargeCents, lastError?.message || statusMsg, stripeCode);
         continue;
       }
 
       const startDate = new Date();
       const expiryDate = addDuration(startDate, sub.length || "1", sub.unit || "Month");
-      const startStr = formatDateForStorage(startDate, tz);
       const expiryStr = formatDateForStorage(expiryDate, tz);
       const daysRemaining = Math.ceil((expiryDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
       const sales_id = randomUUID().slice(0, 8);
-      const new_sub_id = randomUUID().slice(0, 8);
 
+      ensureSalesItemTotalCcFeeColumns(db);
+      ensureSalesTypeColumn(db);
       db.exec("BEGIN TRANSACTION");
       try {
-        db.prepare("UPDATE subscriptions SET status = ? WHERE subscription_id = ?").run("Renewed", sub.subscription_id);
-        db.prepare(`
-          INSERT INTO subscriptions (subscription_id, member_id, product_id, status, start_date, expiry_date, days_remaining, price, sales_id, quantity)
-          VALUES (?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?)
-        `).run(new_sub_id, sub.member_id, sub.product_id, startStr, expiryStr, String(daysRemaining), sub.plan_price, sales_id, sub.quantity);
+        db.prepare("UPDATE subscriptions SET expiry_date = ?, days_remaining = ? WHERE subscription_id = ?").run(expiryStr, String(daysRemaining), sub.subscription_id);
         const date_time = formatDateTimeInAppTz(new Date(), undefined, tz);
         db.prepare(`
-          INSERT INTO sales (sales_id, date_time, member_id, grand_total, email, status, sale_date)
-          VALUES (?, ?, ?, ?, ?, 'Paid', ?)
-        `).run(sales_id, date_time, sub.member_id, String(amountCents / 100), memberRow.email ?? "", todayInAppTz(tz));
+          INSERT INTO sales (sales_id, date_time, member_id, grand_total, tax_amount, item_total, cc_fee, email, status, sale_date, sale_type)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Paid', ?, 'renewal')
+        `).run(sales_id, date_time, sub.member_id, String(totalDollars), String(taxDollars), String(itemTotalDollars), String(ccFeeDollars), memberRow.email ?? "", todayInAppTz(tz));
         db.prepare("UPDATE members SET exp_next_payment_date = ? WHERE member_id = ?").run(expiryStr, sub.member_id);
         db.exec("COMMIT");
       } catch (e) {

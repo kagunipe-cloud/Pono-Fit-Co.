@@ -152,8 +152,12 @@ export function getDb() {
   ensureSalesSaleDateColumn(db);
   ensureSalesTaxAmountColumn(db);
   ensureSalesStripePaymentIntentColumn(db);
+  ensureSalesItemTotalCcFeeColumns(db);
+  ensureSalesTypeColumn(db);
+  ensureSubscriptionsSalesIdColumn(db);
   ensureMembersWaiverColumns(db);
   ensureMembersPhoneColumn(db);
+  ensureMembersCreatedAtColumn(db);
   ensurePaymentFailuresTable(db);
   ensureMembersMemberIdUnique(db);
   ensureGymIdColumns(db);
@@ -249,6 +253,40 @@ export function ensureSalesPromoCodeColumn(db: ReturnType<typeof getDb>) {
   }
 }
 
+/** Add item_total and cc_fee to sales for transaction breakdown. */
+export function ensureSalesItemTotalCcFeeColumns(db: ReturnType<typeof getDb>) {
+  ensureSalesTable(db);
+  try {
+    db.exec("ALTER TABLE sales ADD COLUMN item_total TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE sales ADD COLUMN cc_fee TEXT");
+  } catch {
+    /* already exists */
+  }
+}
+
+/** Add sale_type to sales: 'purchase' | 'renewal' | 'complimentary'. For billing history and report attribution. */
+export function ensureSalesTypeColumn(db: ReturnType<typeof getDb>) {
+  ensureSalesTable(db);
+  try {
+    db.exec("ALTER TABLE sales ADD COLUMN sale_type TEXT DEFAULT 'purchase'");
+  } catch {
+    /* already exists */
+  }
+}
+
+/** Add sales_id to subscriptions if missing (links subscription to sale for reporting). */
+export function ensureSubscriptionsSalesIdColumn(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN sales_id TEXT");
+  } catch {
+    // Column already exists
+  }
+}
+
 /** Add waiver columns to members if missing (liability waiver before Kisi access). */
 export function ensureMembersWaiverColumns(db: ReturnType<typeof getDb>) {
   try {
@@ -288,6 +326,20 @@ export function ensureMembersPhoneColumn(db: ReturnType<typeof getDb>) {
     db.exec("ALTER TABLE members ADD COLUMN phone TEXT");
   } catch {
     // Column already exists
+  }
+}
+
+/** Add created_at to members if missing. Backfills NULL with join_date so leads "Signed up" column shows something. */
+export function ensureMembersCreatedAtColumn(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE members ADD COLUMN created_at TEXT DEFAULT (datetime('now'))");
+  } catch {
+    // Column already exists
+  }
+  try {
+    db.exec("UPDATE members SET created_at = join_date WHERE created_at IS NULL AND join_date IS NOT NULL AND TRIM(join_date) != ''");
+  } catch {
+    /* ignore */
   }
 }
 

@@ -171,8 +171,8 @@ export async function POST(
 
     ensureMembersStripeColumn(db);
     db.prepare(`
-      INSERT INTO sales (sales_id, date_time, member_id, grand_total, email, status, sale_date)
-      VALUES (?, ?, ?, '0', ?, 'Complimentary', ?)
+      INSERT INTO sales (sales_id, date_time, member_id, grand_total, email, status, sale_date, sale_type)
+      VALUES (?, ?, ?, '0', ?, 'Complimentary', ?, 'complimentary')
     `).run(sales_id, date_time, member_id, memberRow?.email ?? "", sale_date);
 
     db.exec("COMMIT");

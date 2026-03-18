@@ -4,8 +4,16 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-type CategoryRow = { category: string; count: number; revenue: number };
-type Report = { totalCount: number; totalRevenue: number; totalTaxCollected?: number; byCategory: CategoryRow[]; from: string | null; to: string | null } | null;
+type CategoryRow = { category: string; count: number; revenue: number; netRevenue: number };
+type Report = {
+  totalCount: number;
+  totalRevenue: number;
+  totalTaxCollected?: number;
+  totalNetRevenue?: number;
+  byCategory: CategoryRow[];
+  from: string | null;
+  to: string | null;
+} | null;
 
 function formatMoney(n: number): string {
   if (Number.isNaN(n) || n === 0) return "$0";
@@ -211,18 +219,22 @@ export default function SalesPage() {
         <p className="p-6 text-stone-500">Could not load report.</p>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <div className="rounded-xl border border-stone-200 bg-white p-4">
               <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Transactions</p>
               <p className="text-2xl font-bold text-stone-800 mt-1">{report.totalCount}</p>
             </div>
             <div className="rounded-xl border border-stone-200 bg-white p-4">
-              <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Total revenue</p>
+              <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Gross revenue</p>
               <p className="text-2xl font-bold text-stone-800 mt-1">{formatMoney(report.totalRevenue)}</p>
             </div>
             <div className="rounded-xl border border-stone-200 bg-white p-4">
               <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Tax collected</p>
               <p className="text-2xl font-bold text-stone-800 mt-1">{formatMoney(report.totalTaxCollected ?? 0)}</p>
+            </div>
+            <div className="rounded-xl border border-stone-200 bg-white p-4">
+              <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Net revenue</p>
+              <p className="text-2xl font-bold text-stone-800 mt-1">{formatMoney(report.totalNetRevenue ?? report.totalRevenue - (report.totalTaxCollected ?? 0))}</p>
             </div>
           </div>
           <div className="rounded-xl border border-stone-200 bg-white overflow-x-auto">
@@ -231,7 +243,8 @@ export default function SalesPage() {
                 <tr className="bg-stone-50 text-stone-500">
                   <th className="py-2 px-4">Category</th>
                   <th className="py-2 px-4">Count</th>
-                  <th className="py-2 px-4">Revenue</th>
+                  <th className="py-2 px-4">Gross</th>
+                  <th className="py-2 px-4">Net</th>
                 </tr>
               </thead>
               <tbody>
@@ -240,6 +253,7 @@ export default function SalesPage() {
                     <td className="py-2 px-4 font-medium text-stone-800">{row.category}</td>
                     <td className="py-2 px-4">{row.count}</td>
                     <td className="py-2 px-4">{formatMoney(row.revenue)}</td>
+                    <td className="py-2 px-4">{formatMoney(row.netRevenue ?? row.revenue)}</td>
                   </tr>
                 ))}
               </tbody>
