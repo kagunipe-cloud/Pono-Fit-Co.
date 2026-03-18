@@ -427,7 +427,7 @@ function NavList({
                 role="menuitem"
                 onClick={() => setReportsOpen(false)}
               >
-                Usage tracking
+                Who checked in
               </Link>
             </div>,
             document.body

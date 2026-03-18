@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { formatDateTimeInAppTz } from "@/lib/app-timezone";
+import { useAppTimezone } from "@/lib/settings-context";
 
 type Member = Record<string, unknown>;
 type LinkedRow = Record<string, unknown>;
@@ -10,6 +12,7 @@ type LinkedRow = Record<string, unknown>;
 export default function MemberDetailPage() {
   const params = useParams();
   const id = params.id as string;
+  const tz = useAppTimezone();
   const [data, setData] = useState<{
     member: Member;
     subscriptions: LinkedRow[];
@@ -44,6 +47,7 @@ export default function MemberDetailPage() {
   const [sendingWaiver, setSendingWaiver] = useState(false);
   const [togglingAutoRenew, setTogglingAutoRenew] = useState(false);
   const [waiverResult, setWaiverResult] = useState<{ message: string; url?: string } | null>(null);
+  const [unlocks, setUnlocks] = useState<{ id: number; lock_id: number | null; lock_name: string | null; success: number; happened_at: string }[]>([]);
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -125,6 +129,14 @@ export default function MemberDetailPage() {
         });
       })
       .catch(() => {});
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    fetch(`/api/members/${id}/unlocks?limit=10`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => setUnlocks(json?.unlocks ?? []))
+      .catch(() => setUnlocks([]));
   }, [id]);
 
   async function handleUnlock() {
@@ -555,6 +567,38 @@ export default function MemberDetailPage() {
           )}
         </div>
       </div>
+
+      {isAdmin && (
+        <section className="mb-8">
+          <h2 className="text-lg font-semibold text-stone-800 mb-3">Recent unlocks</h2>
+          <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
+            {unlocks.length === 0 ? (
+              <p className="p-6 text-stone-500 text-sm">No door unlocks recorded. Kisi webhook must be configured.</p>
+            ) : (
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="bg-stone-50 text-stone-500">
+                    <th className="py-2 px-4">Time</th>
+                    <th className="py-2 px-4">Door</th>
+                    <th className="py-2 px-4">Success</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {unlocks.map((u) => (
+                    <tr key={u.id} className="border-t border-stone-100">
+                      <td className="py-2 px-4 whitespace-nowrap">
+                        {formatDateTimeInAppTz(new Date(u.happened_at), undefined, tz)}
+                      </td>
+                      <td className="py-2 px-4">{u.lock_name ?? u.lock_id ?? "—"}</td>
+                      <td className="py-2 px-4">{u.success ? "Yes" : "No"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
+      )}
 
       <section className="mb-8">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
