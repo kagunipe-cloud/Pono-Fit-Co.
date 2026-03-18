@@ -38,7 +38,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     let member_id = (body.member_id ?? "").trim();
     const stripe_session_id = (body.stripe_session_id ?? "").trim() || null;
+    const payment_intent_id = (body.payment_intent_id ?? "").trim() || null;
     let stripeSession: Stripe.Checkout.Session | null = null;
+    let paymentIntentAmount: number | null = null;
 
     if (stripe_session_id) {
       const stripeSecret = process.env.STRIPE_SECRET_KEY;
@@ -65,6 +67,22 @@ export async function POST(request: NextRequest) {
         dbForCustomer.prepare("UPDATE members SET stripe_customer_id = ? WHERE member_id = ?").run(stripeCustomerId, member_id);
         dbForCustomer.close();
       }
+    } else if (payment_intent_id) {
+      const stripeSecret = process.env.STRIPE_SECRET_KEY;
+      if (!stripeSecret) {
+        return NextResponse.json({ error: "Stripe not configured" }, { status: 500 });
+      }
+      const stripe = new Stripe(stripeSecret);
+      const pi = await stripe.paymentIntents.retrieve(payment_intent_id);
+      if (pi.status !== "succeeded") {
+        return NextResponse.json(
+          { error: "Payment not completed. Only succeeded Terminal payments can be fulfilled." },
+          { status: 400 }
+        );
+      }
+      const metaMemberId = pi.metadata?.member_id;
+      if (metaMemberId) member_id = metaMemberId;
+      paymentIntentAmount = (pi.amount_received ?? pi.amount) / 100;
     }
 
     if (!member_id) {
@@ -290,11 +308,17 @@ export async function POST(request: NextRequest) {
     if (ccFee > 0) {
       emailLineItems.push({ name: "Credit card processing fee", quantity: 1, price: formatPrice(ccFee) });
     }
-    const finalGrandTotal = stripeSession?.amount_total != null ? stripeSession.amount_total / 100 : subtotalAfterDiscount + ccFee;
+    const finalGrandTotal =
+      stripeSession?.amount_total != null
+        ? stripeSession.amount_total / 100
+        : paymentIntentAmount != null
+          ? paymentIntentAmount
+          : subtotalAfterDiscount + ccFee;
     const taxAmount = stripeSession?.total_details?.amount_tax != null ? stripeSession.total_details.amount_tax / 100 : 0;
-    const paymentIntentId = stripeSession?.payment_intent
-      ? (typeof stripeSession.payment_intent === "string" ? stripeSession.payment_intent : stripeSession.payment_intent?.id)
-      : null;
+    const paymentIntentId =
+      stripeSession?.payment_intent
+        ? (typeof stripeSession.payment_intent === "string" ? stripeSession.payment_intent : stripeSession.payment_intent?.id)
+        : payment_intent_id;
     ensureSalesStripePaymentIntentColumn(db);
     ensureSalesPromoCodeColumn(db);
     db.prepare(`

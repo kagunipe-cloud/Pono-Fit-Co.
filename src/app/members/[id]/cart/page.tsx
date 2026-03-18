@@ -64,6 +64,12 @@ export default function MemberCartPage() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [readers, setReaders] = useState<{ id: string; label: string; status: string }[]>([]);
+  const [selectedReaderId, setSelectedReaderId] = useState("");
+  const [terminalLoading, setTerminalLoading] = useState(false);
+  const [terminalStatus, setTerminalStatus] = useState<"idle" | "processing" | "success" | "error">("idle");
+  const [terminalError, setTerminalError] = useState<string | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [classPacks, setClassPacks] = useState<ClassPack[]>([]);
@@ -74,12 +80,23 @@ export default function MemberCartPage() {
   const [promoCode, setPromoCode] = useState("");
   const [promoError, setPromoError] = useState<string | null>(null);
   const [discount, setDiscount] = useState<{ code: string; percent_off: number; description?: string | null } | null>(null);
+  const [canUseTerminal, setCanUseTerminal] = useState(false);
 
   const tz = useAppTimezone();
   const { openHourMin, openHourMax } = useOpenHours();
   const [classScheduleWeekStart, setClassScheduleWeekStart] = useState<string>(() => weekStartInAppTz(todayInAppTz(tz)));
   const [classOccurrences, setClassOccurrences] = useState<ClassOccurrence[]>([]);
   const [classScheduleLoading, setClassScheduleLoading] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/auth/member-me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((me) => {
+        const role = me?.role;
+        setCanUseTerminal(role === "Admin" || role === "Trainer");
+      })
+      .catch(() => setCanUseTerminal(false));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -183,6 +200,71 @@ export default function MemberCartPage() {
     if (memberId && id) {
       const data = await fetch(`/api/members/${id}/cart-data`).then((r) => r.json());
       setItems(data.items ?? []);
+    }
+  }
+
+  useEffect(() => {
+    if (!terminalOpen) return;
+    fetch("/api/terminal/readers")
+      .then((r) => r.json())
+      .then((data) => {
+        const list = data.readers ?? [];
+        setReaders(list);
+        if (list.length > 0) {
+          const online = list.find((r: { status: string }) => r.status === "online");
+          setSelectedReaderId(online?.id ?? list[0].id);
+        }
+      })
+      .catch(() => setReaders([]));
+  }, [terminalOpen]);
+
+  async function handleTerminalCharge() {
+    if (!memberId || !selectedReaderId) return;
+    setTerminalLoading(true);
+    setTerminalError(null);
+    setTerminalStatus("processing");
+    try {
+      const res = await fetch("/api/terminal/charge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ member_id: memberId, reader_id: selectedReaderId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to start charge");
+      const paymentIntentId = data.payment_intent_id;
+      if (!paymentIntentId) throw new Error("No payment intent returned");
+
+      const poll = async (): Promise<void> => {
+        const statusRes = await fetch(`/api/terminal/payment-status?payment_intent_id=${encodeURIComponent(paymentIntentId)}`);
+        const statusData = await statusRes.json();
+        if (statusData.status === "succeeded") {
+          const confirmRes = await fetch("/api/cart/confirm-payment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ member_id: memberId, payment_intent_id: paymentIntentId }),
+          });
+          const confirmData = await confirmRes.json();
+          if (!confirmRes.ok) throw new Error(confirmData.error ?? "Failed to confirm");
+          setTerminalStatus("success");
+          setTerminalLoading(false);
+          setTimeout(() => {
+            window.location.href = `/members/${id}/cart/success?source=terminal`;
+          }, 1500);
+          return;
+        }
+        if (statusData.status === "failed") {
+          setTerminalError("Payment declined or failed");
+          setTerminalStatus("error");
+          setTerminalLoading(false);
+          return;
+        }
+        setTimeout(poll, 2000);
+      };
+      await poll();
+    } catch (e) {
+      setTerminalError(e instanceof Error ? e.message : "Something went wrong");
+      setTerminalStatus("error");
+      setTerminalLoading(false);
     }
   }
 
@@ -535,10 +617,78 @@ export default function MemberCartPage() {
             >
               {checkoutLoading ? "Redirecting to Stripe…" : "Pay with Stripe"}
             </button>
+            {canUseTerminal && (
+              <button
+                type="button"
+                onClick={() => setTerminalOpen(true)}
+                className="px-6 py-3 rounded-lg border-2 border-emerald-600 text-emerald-700 font-medium hover:bg-emerald-50"
+              >
+                Pay at Front Desk
+              </button>
+            )}
             <p className="text-stone-500 text-sm self-center">
               You will complete payment on Stripe; then we will activate the membership and notify Kisi for door access.
             </p>
           </div>
+
+          {terminalOpen && (
+            <div
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60"
+              onClick={() => {
+                if (!terminalLoading) {
+                  setTerminalOpen(false);
+                  setTerminalError(null);
+                  setTerminalStatus("idle");
+                }
+              }}
+            >
+              <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
+                <h3 className="text-lg font-semibold text-stone-800 mb-4">Pay at Front Desk</h3>
+                <p className="text-stone-600 text-sm mb-4">
+                  Total: {formatPrice(total)} — Customer will pay on the reader.
+                </p>
+                {readers.length === 0 ? (
+                  <p className="text-stone-500 text-sm mb-4">Loading readers…</p>
+                ) : (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-stone-700 mb-2">Reader</label>
+                    <select
+                      value={selectedReaderId}
+                      onChange={(e) => setSelectedReaderId(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                      disabled={terminalLoading}
+                    >
+                      {readers.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          {r.label} ({r.status})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {terminalError && <p className="text-red-600 text-sm mb-4">{terminalError}</p>}
+                {terminalStatus === "success" && <p className="text-green-600 text-sm mb-4">Payment successful! Redirecting…</p>}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleTerminalCharge}
+                    disabled={terminalLoading || readers.length === 0 || !selectedReaderId}
+                    className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    {terminalLoading ? "Processing… Tap card on reader" : "Charge on reader"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTerminalOpen(false)}
+                    disabled={terminalLoading}
+                    className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

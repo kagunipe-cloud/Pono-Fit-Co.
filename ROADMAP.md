@@ -66,5 +66,5 @@ Single interface to manage **members**, **offerings** (plans, classes, PT, produ
 - ✅ Member CRUD + member detail with linked subscriptions, class bookings, PT bookings, sales.
 - ✅ **Offerings CRUD**: Membership plans, PT sessions, Classes — add, edit, delete (duration on plans).
 - ✅ **Cart flow**: Member → "Add to cart / Sell" → add membership/class/PT → "Payment received — activate & notify Kisi" (creates subscription/booking, sale, Kisi placeholder).
-- 🔲 **Stripe reader**: When payment succeeds (Terminal or webhook), call `POST /api/cart/confirm-payment` with `{ "member_id": "..." }`, or use the in-app button after taking payment.
+- ✅ **Stripe reader**: Pay at front desk from member cart — Terminal integration for WisePOS E; calls `POST /api/cart/confirm-payment` with `payment_intent_id` when payment succeeds.
 - 🔲 **Kisi**: Set `KISI_API_KEY` in env; implement `notifyKisiForAccess` in `src/app/api/cart/confirm-payment/route.ts` per [Kisi API](https://api.kisi.io/docs).

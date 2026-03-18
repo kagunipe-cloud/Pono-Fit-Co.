@@ -10,11 +10,18 @@ export default function CartSuccessPage() {
   const router = useRouter();
   const id = params.id as string;
   const sessionId = searchParams.get("session_id");
+  const source = searchParams.get("source");
 
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    if (source === "terminal") {
+      setStatus("success");
+      setMessage("Payment confirmed. Membership and bookings created.");
+      const t = setTimeout(() => router.push("/member"), 2000);
+      return () => clearTimeout(t);
+    }
     if (!sessionId) {
       setStatus("error");
       setMessage("Missing session ID. Return to cart and try again.");
@@ -38,7 +45,7 @@ export default function CartSuccessPage() {
         setStatus("error");
         setMessage(e instanceof Error ? e.message : "Something went wrong.");
       });
-  }, [id, sessionId]);
+  }, [id, sessionId, source]);
 
   if (status === "loading") {
     return (
