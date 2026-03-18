@@ -42,6 +42,7 @@ export default function MemberDetailPage() {
   const [compSubmitting, setCompSubmitting] = useState(false);
   const [compMessage, setCompMessage] = useState<string | null>(null);
   const [sendingWaiver, setSendingWaiver] = useState(false);
+  const [togglingAutoRenew, setTogglingAutoRenew] = useState(false);
   const [waiverResult, setWaiverResult] = useState<{ message: string; url?: string } | null>(null);
   const searchParams = useSearchParams();
 
@@ -556,7 +557,34 @@ export default function MemberDetailPage() {
       </div>
 
       <section className="mb-8">
-        <h2 className="text-lg font-semibold text-stone-800 mb-3">Subscriptions</h2>
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
+          <h2 className="text-lg font-semibold text-stone-800">Subscriptions</h2>
+          {isAdmin && data.subscriptions.some((s) => s.status === "Active") && (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={(data.member?.auto_renew ?? 0) === 1}
+                onChange={async () => {
+                  setTogglingAutoRenew(true);
+                  try {
+                    const res = await fetch(`/api/members/${id}/auto-renew`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ enabled: (data.member?.auto_renew ?? 0) !== 1 }),
+                    });
+                    const json = await res.json();
+                    if (json.ok) setData((d) => d && d.member ? { ...d, member: { ...d.member, auto_renew: json.auto_renew ? 1 : 0 } } : d);
+                  } finally {
+                    setTogglingAutoRenew(false);
+                  }
+                }}
+                disabled={togglingAutoRenew}
+                className="rounded border-stone-300 text-brand-600"
+              />
+              <span className="text-stone-600">Opt-in for auto-renewal (charge saved card when membership expires)</span>
+            </label>
+          )}
+        </div>
         <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
           {data.subscriptions.length === 0 ? (
             <p className="p-6 text-stone-500 text-sm">No subscriptions.</p>

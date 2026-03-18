@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureSalesStripePaymentIntentColumn, ensureSalesPromoCodeColumn } from "../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn, ensureSalesStripePaymentIntentColumn, ensureSalesPromoCodeColumn } from "../../../../lib/db";
 import { sendPostPurchaseEmail, sendStaffEmail, sendMemberEmail } from "../../../../lib/email";
 import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../lib/kisi";
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
@@ -64,7 +64,8 @@ export async function POST(request: NextRequest) {
       if (saveCard && stripeCustomerId) {
         const dbForCustomer = getDb();
         ensureMembersStripeColumn(dbForCustomer);
-        dbForCustomer.prepare("UPDATE members SET stripe_customer_id = ? WHERE member_id = ?").run(stripeCustomerId, member_id);
+        ensureMembersAutoRenewColumn(dbForCustomer);
+        dbForCustomer.prepare("UPDATE members SET stripe_customer_id = ?, auto_renew = 1 WHERE member_id = ?").run(stripeCustomerId, member_id);
         dbForCustomer.close();
       }
     } else if (payment_intent_id) {

@@ -179,6 +179,20 @@ export function ensureMembersStripeColumn(db: ReturnType<typeof getDb>) {
   }
 }
 
+/** Add auto_renew (0/1) to members. 1 = charge saved card when subscription expires. Default 0. */
+export function ensureMembersAutoRenewColumn(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE members ADD COLUMN auto_renew INTEGER DEFAULT 0");
+  } catch {
+    // Column already exists
+  }
+  try {
+    db.exec("UPDATE members SET auto_renew = 0 WHERE auto_renew IS NULL");
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Ensure sales table exists (created by cart/confirm-payment). */
 function ensureSalesTable(db: ReturnType<typeof getDb>) {
   db.exec(`

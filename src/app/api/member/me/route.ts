@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDb, getAppTimezone } from "../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersAutoRenewColumn } from "../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../lib/recurring-classes";
 import { getMemberIdFromSession } from "../../../../lib/session";
@@ -15,9 +15,10 @@ export async function GET() {
     }
 
     const db = getDb();
+    ensureMembersAutoRenewColumn(db);
     const member = db.prepare(
-      "SELECT member_id, first_name, last_name, email FROM members WHERE member_id = ?"
-    ).get(memberId) as { member_id: string; first_name: string | null; last_name: string | null; email: string | null } | undefined;
+      "SELECT member_id, first_name, last_name, email, stripe_customer_id, auto_renew FROM members WHERE member_id = ?"
+    ).get(memberId) as { member_id: string; first_name: string | null; last_name: string | null; email: string | null; stripe_customer_id: string | null; auto_renew?: number | null } | undefined;
     if (!member) {
       db.close();
       return NextResponse.json({ error: "Member not found" }, { status: 401 });
@@ -154,6 +155,8 @@ export async function GET() {
       classCredits,
       ptBookings,
       hasAccess,
+      has_saved_card: !!(member.stripe_customer_id?.trim()),
+      auto_renew: (member.auto_renew ?? 0) === 1,
     });
   } catch (err) {
     console.error(err);

@@ -32,5 +32,6 @@ If you’re on **Vercel** or prefer an external cron, something needs to **call*
 ## What the endpoint does
 
 - Finds all **Active** subscriptions whose **expiry_date** is **today** and whose plan is a **monthly** membership (`unit = 'Month'`). Yearly or other plan types are not auto-renewed.
-- For each, if the member has a saved card (`stripe_customer_id`), charges that card and creates the next subscription period.
+- For each, if the member has a saved card (`stripe_customer_id`) **and** has opted in to auto-renew (`auto_renew = 1`), charges that card and creates the next subscription period.
+- Members can opt in via: (1) "Save for renewals" at checkout, (2) the auto-renew toggle on **My Membership** (member portal), or (3) admin toggle on the member detail page.
 - Returns JSON with counts (renewed, skipped, errors) and per-member details.

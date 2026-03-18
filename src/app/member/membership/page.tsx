@@ -9,10 +9,11 @@ type Sub = { plan_name?: string; status?: string; start_date?: string; expiry_da
 function MemberMembershipContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [data, setData] = useState<{ subscriptions: Sub[] } | null>(null);
+  const [data, setData] = useState<{ subscriptions: Sub[]; has_saved_card?: boolean; auto_renew?: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingCard, setUpdatingCard] = useState(false);
   const [cardMessage, setCardMessage] = useState<string | null>(null);
+  const [togglingAutoRenew, setTogglingAutoRenew] = useState(false);
 
   useEffect(() => {
     fetch("/api/member/me")
@@ -40,6 +41,7 @@ function MemberMembershipContent() {
         .then(() => {
           setCardMessage("Payment method updated successfully.");
           window.history.replaceState({}, "", "/member/membership");
+          fetch("/api/member/me").then((r) => r.ok && r.json()).then(setData).catch(() => {});
         })
         .catch(() => setCardMessage("Payment method was updated; if this was your first time, it may take a moment to reflect."));
     }
@@ -58,10 +60,26 @@ function MemberMembershipContent() {
     }
   }
 
+  async function toggleAutoRenew() {
+    if (!data?.has_saved_card) return;
+    setTogglingAutoRenew(true);
+    try {
+      const res = await fetch("/api/member/auto-renew", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: !data.auto_renew }),
+      });
+      const json = await res.json();
+      if (json.ok) setData((d) => d ? { ...d, auto_renew: json.auto_renew } : d);
+    } finally {
+      setTogglingAutoRenew(false);
+    }
+  }
+
   if (loading) return <div className="p-8 text-center text-stone-500">Loading…</div>;
   if (!data) return null;
 
-  const subs = data.subscriptions;
+  const subs = data.subscriptions ?? [];
 
   return (
     <div className="max-w-2xl mx-auto p-6">
@@ -79,6 +97,28 @@ function MemberMembershipContent() {
         </button>
         {cardMessage && <p className="text-sm text-stone-600 mt-2">{cardMessage}</p>}
       </div>
+      {subs.some((s) => s.status === "Active") && (
+        <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-stone-50">
+          <p className="text-sm font-medium text-stone-800 mb-1">Opt-in for auto-renewal</p>
+          <p className="text-sm text-stone-500 mb-2">
+            When enabled, we'll automatically charge your saved card when your membership expires so you don't have to renew manually. Add a payment method above first, then check the box below.
+          </p>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!data.auto_renew}
+              onChange={toggleAutoRenew}
+              disabled={togglingAutoRenew || !data.has_saved_card}
+              className="rounded border-stone-300 text-brand-600"
+            />
+            <span className="text-sm font-medium text-stone-700">
+              {data.has_saved_card
+                ? (data.auto_renew ? "Yes, auto-renew my membership when it expires" : "Yes, opt me in for auto-renewal")
+                : "Add a payment method above to opt in"}
+            </span>
+          </label>
+        </div>
+      )}
       {subs.length === 0 ? (
         <p className="text-stone-500">You don’t have any memberships yet.</p>
       ) : (

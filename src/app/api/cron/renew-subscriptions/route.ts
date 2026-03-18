@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensureMembersStripeColumn, ensurePaymentFailuresTable } from "../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn, ensurePaymentFailuresTable } from "../../../../lib/db";
 import { grantAccess as kisiGrantAccess } from "../../../../lib/kisi";
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
 import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz, formatDateForStorage } from "../../../../lib/app-timezone";
@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
 
   const db = getDb();
   ensureMembersStripeColumn(db);
+  ensureMembersAutoRenewColumn(db);
   ensurePaymentFailuresTable(db);
 
   const tz = getAppTimezone(db);
@@ -75,10 +76,14 @@ export async function GET(request: NextRequest) {
 
   for (const sub of expiring) {
     const amountCents = parsePriceToCents(sub.plan_price) * Math.max(1, sub.quantity);
-    const memberRow = db.prepare("SELECT stripe_customer_id, email, first_name FROM members WHERE member_id = ?").get(sub.member_id) as { stripe_customer_id: string | null; email: string; first_name: string | null } | undefined;
+    const memberRow = db.prepare("SELECT stripe_customer_id, email, first_name, auto_renew FROM members WHERE member_id = ?").get(sub.member_id) as { stripe_customer_id: string | null; email: string; first_name: string | null; auto_renew?: number | null } | undefined;
     if (!memberRow?.stripe_customer_id) {
       results.push({ member_id: sub.member_id, status: "skipped", message: "No saved card" });
       insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "No saved card", null);
+      continue;
+    }
+    if ((memberRow.auto_renew ?? 0) !== 1) {
+      results.push({ member_id: sub.member_id, status: "skipped", message: "Auto-renew not opted in" });
       continue;
     }
 
