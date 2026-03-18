@@ -8,6 +8,8 @@
 
 import { getDb } from "./db";
 
+const DEDUPE_MINUTES = 60;
+
 export function ensureOccupancyTable(db: ReturnType<typeof getDb>) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS occupancy_entries (
@@ -17,6 +19,16 @@ export function ensureOccupancyTable(db: ReturnType<typeof getDb>) {
     );
     CREATE INDEX IF NOT EXISTS idx_occupancy_entered ON occupancy_entries(entered_at);
   `);
+  try {
+    db.exec("ALTER TABLE occupancy_entries ADD COLUMN member_id TEXT");
+  } catch {
+    /* column exists */
+  }
+  try {
+    db.exec("CREATE INDEX IF NOT EXISTS idx_occupancy_member ON occupancy_entries(member_id, entered_at)");
+  } catch {
+    /* index exists */
+  }
 }
 
 /** Count entries within the last hour. */
@@ -28,11 +40,13 @@ export function getOccupancyCount(db: ReturnType<typeof getDb>): number {
   return row?.n ?? 0;
 }
 
-/** Add an entry (+1). Source: 'kisi' (door unlock) or 'manual' (walk-in). enteredAt: optional ISO string (default: now). */
+/** Add an entry (+1). Source: 'kisi' (door unlock) or 'manual' (walk-in). enteredAt: optional ISO string (default: now).
+ * memberId: optional — if provided, skips adding if same member has an entry in the last DEDUPE_MINUTES (avoids double-count). */
 export function addOccupancyEntry(
   db: ReturnType<typeof getDb>,
   source: "kisi" | "manual",
-  enteredAt?: string
+  enteredAt?: string,
+  memberId?: string | null
 ): void {
   ensureOccupancyTable(db);
   const raw = enteredAt?.trim() || new Date().toISOString();
@@ -40,9 +54,16 @@ export function addOccupancyEntry(
   const at = Number.isNaN(d.getTime())
     ? new Date().toISOString().slice(0, 19).replace("T", " ")
     : d.toISOString().slice(0, 19).replace("T", " ");
+  const mid = memberId?.trim() || null;
+  if (mid) {
+    const recent = db.prepare(
+      `SELECT 1 FROM occupancy_entries WHERE member_id = ? AND entered_at > datetime('now', ?) LIMIT 1`
+    ).get(mid, `-${DEDUPE_MINUTES} minutes`) as { "1"?: number } | undefined;
+    if (recent) return;
+  }
   db.prepare(
-    `INSERT INTO occupancy_entries (entered_at, source) VALUES (?, ?)`
-  ).run(at, source);
+    `INSERT INTO occupancy_entries (entered_at, source, member_id) VALUES (?, ?, ?)`
+  ).run(at, source, mid);
 }
 
 /** Remove oldest entry (-1, FIFO). Returns true if one was removed. */

@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     );
 
     ensureOccupancyTable(db);
-    addOccupancyEntry(db, "kisi", happenedAt);
+    addOccupancyEntry(db, "kisi", happenedAt, memberId);
 
     db.close();
 

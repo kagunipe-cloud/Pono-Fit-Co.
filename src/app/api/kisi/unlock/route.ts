@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone } from "../../../../lib/db";
 import { createLoginForUser, ensureKisiUser, grantAccess, unlockWithUserSecret } from "../../../../lib/kisi";
 import { todayInAppTz } from "../../../../lib/app-timezone";
+import { addOccupancyEntry, ensureOccupancyTable } from "../../../../lib/occupancy";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +66,16 @@ export async function POST(request: NextRequest) {
 
     const secret = await createLoginForUser(member.email);
     await unlockWithUserSecret(secret);
+
+    // Add +1 to coconut count (Kisi may not send webhook for API-triggered unlocks). Dedupes same member within 10 min.
+    try {
+      const dbOcc = getDb();
+      ensureOccupancyTable(dbOcc);
+      addOccupancyEntry(dbOcc, "kisi", new Date().toISOString(), member_id);
+      dbOcc.close();
+    } catch (e) {
+      console.warn("[Kisi unlock] occupancy add failed:", e);
+    }
 
     return NextResponse.json({ success: true, message: "Door unlocked." });
   } catch (err) {

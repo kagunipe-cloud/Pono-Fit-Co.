@@ -9,7 +9,8 @@ The app tracks how many people are in the gym and records snapshots for analytic
 
 ## Sources of +1
 
-- **Kisi door unlock**: When Kisi sends a `lock.unlock` webhook, we add an entry. See **KISI.md** → "Unlock tracking (webhook)".
+- **App unlock** (Unlock button, /unlock page): When someone unlocks via the app, we add +1 immediately. Works even if Kisi webhook is not configured.
+- **Kisi webhook** (physical card tap, Kisi app): When Kisi sends a `lock.unlock` webhook, we add an entry. See **KISI.md** → "Unlock tracking (webhook)". Configure in Kisi: Integrations → Event Webhook → `lock.unlock` → `https://your-domain.com/api/kisi/webhook`.
 - **Manual +1**: Admin uses the Coconut Count widget to add walk-ins (e.g. door propped open).
 
 ## Why you might see no data
