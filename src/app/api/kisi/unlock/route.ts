@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "../../../../lib/db";
-import { createLoginForUser, unlockWithUserSecret } from "../../../../lib/kisi";
+import { getDb, getAppTimezone } from "../../../../lib/db";
+import { createLoginForUser, ensureKisiUser, grantAccess, unlockWithUserSecret } from "../../../../lib/kisi";
+import { todayInAppTz } from "../../../../lib/app-timezone";
 
 export const dynamic = "force-dynamic";
 
@@ -15,21 +16,51 @@ export async function POST(request: NextRequest) {
 
     const db = getDb();
     const member = db.prepare(
-      "SELECT email FROM members WHERE member_id = ?"
-    ).get(member_id) as { email: string | null } | undefined;
-    db.close();
-
+      "SELECT email, first_name, last_name, kisi_id FROM members WHERE member_id = ?"
+    ).get(member_id) as { email: string | null; first_name: string | null; last_name: string | null; kisi_id: string | null } | undefined;
     if (!member?.email?.trim()) {
+      db.close();
       return NextResponse.json(
         { error: "Member not found or has no email. Cannot unlock." },
         { status: 400 }
       );
     }
     if (emailProvided && member.email && emailProvided.toLowerCase() !== member.email.toLowerCase()) {
+      db.close();
       return NextResponse.json(
         { error: "Email does not match this member." },
         { status: 403 }
       );
+    }
+
+    // Ensure Kisi user exists (fixes 404 for complimentary members who weren't granted at signup)
+    let kisiId = member.kisi_id?.trim() || null;
+    if (!kisiId) {
+      const name = [member.first_name, member.last_name].filter(Boolean).join(" ").trim() || undefined;
+      kisiId = await ensureKisiUser(member.email.trim(), name);
+      db.prepare("UPDATE members SET kisi_id = ? WHERE member_id = ?").run(kisiId, member_id);
+    }
+    db.close();
+
+    // Grant access if member has active subscription (e.g. waiver signed after complimentary)
+    try {
+      const db2 = getDb();
+      const tz = getAppTimezone(db2);
+      const today = todayInAppTz(tz);
+      const sub = db2.prepare(`
+        SELECT expiry_date FROM subscriptions
+        WHERE member_id = ? AND status = 'Active' AND expiry_date >= ?
+        ORDER BY expiry_date DESC LIMIT 1
+      `).get(member_id, today) as { expiry_date: string } | undefined;
+      db2.close();
+      if (sub?.expiry_date) {
+        const validUntil = new Date(sub.expiry_date);
+        if (validUntil.getTime() > Date.now()) {
+          await grantAccess(kisiId, validUntil);
+        }
+      }
+    } catch (e) {
+      console.warn("[Kisi unlock] grant check failed, continuing:", e);
     }
 
     const secret = await createLoginForUser(member.email);
