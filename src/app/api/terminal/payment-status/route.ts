@@ -24,8 +24,17 @@ export async function GET(request: NextRequest) {
   try {
     const stripe = new Stripe(stripeSecret);
     const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
-    const status = pi.status === "succeeded" ? "succeeded" : pi.status === "canceled" || pi.status === "requires_payment_method" ? "failed" : "in_progress";
-    return NextResponse.json({ status, payment_intent: pi });
+    // requires_payment_method = waiting for customer to tap (or declined, can retry) — keep polling
+    // Only "canceled" is definitive failure; "succeeded" is success
+    const status =
+      pi.status === "succeeded"
+        ? "succeeded"
+        : pi.status === "canceled"
+          ? "failed"
+          : "in_progress";
+    // When card is declined, last_payment_error is set — surface it so UI can show "try another card"
+    const lastError = pi.last_payment_error?.message ?? null;
+    return NextResponse.json({ status, last_error: lastError, payment_intent: pi });
   } catch (err) {
     console.error("[terminal/payment-status]", err);
     return NextResponse.json({ error: "Failed to get status" }, { status: 500 });

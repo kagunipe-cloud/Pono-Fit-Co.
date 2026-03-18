@@ -253,10 +253,14 @@ export default function MemberCartPage() {
           return;
         }
         if (statusData.status === "failed") {
-          setTerminalError("Payment declined or failed");
+          setTerminalError("Payment canceled");
           setTerminalStatus("error");
           setTerminalLoading(false);
           return;
+        }
+        // In progress: show decline message if card was declined (customer can try another card)
+        if (statusData.last_error) {
+          setTerminalError(statusData.last_error + " — Try another card.");
         }
         setTimeout(poll, 2000);
       };
