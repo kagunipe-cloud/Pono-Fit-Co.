@@ -677,7 +677,7 @@ export default function MemberCartPage() {
                 )}
                 {terminalError && <p className="text-red-600 text-sm mb-4">{terminalError}</p>}
                 {terminalStatus === "success" && <p className="text-green-600 text-sm mb-4">Payment successful! Redirecting…</p>}
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={handleTerminalCharge}
@@ -686,13 +686,35 @@ export default function MemberCartPage() {
                   >
                     {terminalLoading ? "Processing… Tap card on reader" : "Charge on reader"}
                   </button>
+                  {terminalLoading && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await fetch("/api/terminal/cancel-action", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ reader_id: selectedReaderId }),
+                          });
+                          setTerminalLoading(false);
+                          setTerminalError("Payment canceled.");
+                          setTerminalStatus("error");
+                        } catch {
+                          setTerminalError("Failed to cancel.");
+                        }
+                      }}
+                      className="px-4 py-2 rounded-lg border-2 border-amber-500 text-amber-700 font-medium hover:bg-amber-50"
+                    >
+                      Cancel payment on reader
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setTerminalOpen(false)}
                     disabled={terminalLoading}
                     className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium"
                   >
-                    Cancel
+                    Close
                   </button>
                 </div>
               </div>
