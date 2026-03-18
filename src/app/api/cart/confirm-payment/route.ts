@@ -83,6 +83,12 @@ export async function POST(request: NextRequest) {
       const metaMemberId = pi.metadata?.member_id;
       if (metaMemberId) member_id = metaMemberId;
       paymentIntentAmount = (pi.amount_received ?? pi.amount) / 100;
+      // Tax for terminal payments is stored in PI metadata (we add it in terminal charge route)
+      if (pi.metadata?.tax_amount != null) {
+        stripeSession = {
+          total_details: { amount_tax: Math.round(parseFloat(String(pi.metadata.tax_amount)) * 100) },
+        } as Stripe.Checkout.Session;
+      }
     }
 
     if (!member_id) {

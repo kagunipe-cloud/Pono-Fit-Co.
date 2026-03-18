@@ -81,6 +81,13 @@ export default function MemberCartPage() {
   const [promoError, setPromoError] = useState<string | null>(null);
   const [discount, setDiscount] = useState<{ code: string; percent_off: number; description?: string | null } | null>(null);
   const [canUseTerminal, setCanUseTerminal] = useState(false);
+  const [terminalEstimate, setTerminalEstimate] = useState<{
+    subtotal: number;
+    after_discount: number;
+    cc_fee: number;
+    tax: number;
+    total: number;
+  } | null>(null);
 
   const tz = useAppTimezone();
   const { openHourMin, openHourMax } = useOpenHours();
@@ -97,6 +104,17 @@ export default function MemberCartPage() {
       })
       .catch(() => setCanUseTerminal(false));
   }, []);
+
+  useEffect(() => {
+    if (terminalOpen && memberId && items.length > 0) {
+      fetch(`/api/terminal/estimate?member_id=${encodeURIComponent(memberId)}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => d != null ? setTerminalEstimate(d) : setTerminalEstimate(null))
+        .catch(() => setTerminalEstimate(null));
+    } else {
+      setTerminalEstimate(null);
+    }
+  }, [terminalOpen, memberId, items.length, discount?.code]);
 
   useEffect(() => {
     let cancelled = false;
@@ -653,9 +671,39 @@ export default function MemberCartPage() {
             >
               <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
                 <h3 className="text-lg font-semibold text-stone-800 mb-4">Pay at Front Desk</h3>
-                <p className="text-stone-600 text-sm mb-4">
-                  Total: {formatPrice(total)} — Customer will pay on the reader.
-                </p>
+                {terminalEstimate != null ? (
+                  <div className="mb-4 space-y-1 text-sm">
+                    <div className="flex justify-between text-stone-600">
+                      <span>Subtotal</span>
+                      <span>{formatPrice(terminalEstimate.subtotal)}</span>
+                    </div>
+                    {terminalEstimate.after_discount < terminalEstimate.subtotal && (
+                      <div className="flex justify-between text-green-700">
+                        <span>Discount</span>
+                        <span>-{formatPrice(terminalEstimate.subtotal - terminalEstimate.after_discount)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-stone-600">
+                      <span>CC fees (3% + $0.30)</span>
+                      <span>{formatPrice(terminalEstimate.cc_fee)}</span>
+                    </div>
+                    {terminalEstimate.tax > 0 && (
+                      <div className="flex justify-between text-stone-600">
+                        <span>GETax</span>
+                        <span>{formatPrice(terminalEstimate.tax)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between font-semibold text-stone-800 pt-2 border-t border-stone-200">
+                      <span>Total</span>
+                      <span>{formatPrice(terminalEstimate.total)}</span>
+                    </div>
+                    <p className="text-stone-500 text-xs pt-1">Customer will pay on the reader.</p>
+                  </div>
+                ) : (
+                  <p className="text-stone-600 text-sm mb-4">
+                    Total: {formatPrice(total)} — Customer will pay on the reader.
+                  </p>
+                )}
                 {readers.length === 0 ? (
                   <p className="text-stone-500 text-sm mb-4">Loading readers…</p>
                 ) : (

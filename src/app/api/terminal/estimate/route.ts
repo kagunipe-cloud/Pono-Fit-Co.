@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { ensureCartTables } from "@/lib/cart";
 import { ensureDiscountsTable } from "@/lib/discounts";
-import { ensurePTSlotTables } from "@/lib/pt-slots";
 import { ensureRecurringClassesTables, ensureClassesRecurringColumns, ensureClassOccurrencesClassId } from "@/lib/recurring-classes";
+import { ensurePTSlotTables } from "@/lib/pt-slots";
 import { getAdminMemberId } from "@/lib/admin";
 import { computeCcFee } from "@/lib/cc-fees";
 import Stripe from "stripe";
@@ -16,23 +16,16 @@ function parsePrice(p: string | null): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
-/** POST — Create PaymentIntent and process on reader (admin only). Body: { member_id, reader_id } */
-export async function POST(request: NextRequest) {
+/** GET ?member_id= — Returns terminal charge breakdown (subtotal, cc_fee, tax, total). Admin only. */
+export async function GET(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
   if (!adminId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const stripeSecret = process.env.STRIPE_SECRET_KEY?.trim();
-  if (!stripeSecret) {
-    return NextResponse.json({ error: "Stripe not configured" }, { status: 500 });
-  }
-
-  const body = await request.json().catch(() => ({}));
-  const member_id = (body.member_id ?? "").trim();
-  const reader_id = (body.reader_id ?? "").trim();
-  if (!member_id || !reader_id) {
-    return NextResponse.json({ error: "member_id and reader_id required" }, { status: 400 });
+  const member_id = request.nextUrl.searchParams.get("member_id")?.trim();
+  if (!member_id) {
+    return NextResponse.json({ error: "member_id required" }, { status: 400 });
   }
 
   const db = getDb();
@@ -45,7 +38,7 @@ export async function POST(request: NextRequest) {
   const cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member_id) as { id: number; promo_code?: string | null } | undefined;
   if (!cart) {
     db.close();
-    return NextResponse.json({ error: "No cart for this member" }, { status: 404 });
+    return NextResponse.json({ subtotal: 0, after_discount: 0, cc_fee: 0, tax: 0, total: 0 });
   }
 
   const rawItems = db.prepare("SELECT * FROM cart_items WHERE cart_id = ?").all(cart.id) as {
@@ -94,52 +87,31 @@ export async function POST(request: NextRequest) {
   }
   db.close();
 
-  const afterDiscount = Math.max(0, subtotal * (1 - percentOff / 100));
-  const ccFee = computeCcFee(afterDiscount);
-  const baseAmount = afterDiscount + ccFee;
+  const after_discount = Math.max(0, subtotal * (1 - percentOff / 100));
+  const cc_fee = computeCcFee(after_discount);
+  const baseAmount = after_discount + cc_fee;
 
-  let taxDollars = 0;
+  let tax = 0;
+  const stripeSecret = process.env.STRIPE_SECRET_KEY?.trim();
   const taxRateId = process.env.STRIPE_TAX_RATE_ID?.trim();
-  if (taxRateId) {
+  if (stripeSecret && taxRateId) {
     try {
       const stripe = new Stripe(stripeSecret);
       const taxRate = await stripe.taxRates.retrieve(taxRateId);
       const pct = Number(taxRate.percentage) || 0;
-      taxDollars = baseAmount * (pct / 100);
-    } catch (e) {
-      console.warn("[terminal/charge] Could not fetch tax rate, skipping tax:", e);
+      tax = baseAmount * (pct / 100);
+    } catch {
+      /* ignore */
     }
   }
 
-  const totalDollars = baseAmount + taxDollars;
-  const amountCents = Math.round(totalDollars * 100);
-  if (amountCents < 50) {
-    return NextResponse.json({ error: "Amount must be at least $0.50" }, { status: 400 });
-  }
+  const total = baseAmount + tax;
 
-  try {
-    const stripe = new Stripe(stripeSecret);
-    const pi = await stripe.paymentIntents.create({
-      amount: amountCents,
-      currency: "usd",
-      payment_method_types: ["card_present"],
-      capture_method: "automatic",
-      metadata: {
-        member_id,
-        ...(taxDollars > 0 ? { tax_amount: taxDollars.toFixed(2) } : {}),
-      },
-    });
-
-    await stripe.terminal.readers.processPaymentIntent(reader_id, {
-      payment_intent: pi.id,
-    });
-
-    return NextResponse.json({ payment_intent_id: pi.id });
-  } catch (err) {
-    console.error("[terminal/charge]", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to process payment" },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json({
+    subtotal,
+    after_discount,
+    cc_fee,
+    tax,
+    total,
+  });
 }
