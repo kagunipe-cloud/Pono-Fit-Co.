@@ -95,7 +95,7 @@ export default function NewTrainerPage() {
       <p className="text-sm text-stone-600 mb-6">
         Add a gym staff member as a trainer. They’ll get access to their schedule to set availability. If the member is an admin, 1099 and I-9 are not required.
       </p>
-      <Link href="/admin/block-time" className="text-brand-600 hover:underline text-sm mb-6 inline-block">← Block time</Link>
+      <Link href="/admin/block-time" className="text-brand-600 hover:underline text-sm mb-6 inline-block">← Block off time</Link>
 
       <form onSubmit={handleSubmit} className="space-y-6 p-4 rounded-xl border border-stone-200 bg-white">
         <div>

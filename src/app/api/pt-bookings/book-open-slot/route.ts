@@ -11,8 +11,8 @@ import { ensureTrainerClient, getTrainerMemberIdByDisplayName } from "../../../.
 export const dynamic = "force-dynamic";
 
 /**
- * POST { member_id, occurrence_date, start_time, duration_minutes (30|60|90), pt_session_id }
- * Books an "open" slot (from schedule). Uses 1 PT credit. pt_session_id must be a product (date_time IS NULL).
+ * POST { member_id, occurrence_date, start_time, duration_minutes (30|60|90), pt_session_id, pay_on_arrival? }
+ * Books an "open" slot (from schedule). Uses 1 PT credit unless pay_on_arrival (admin only).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
     const start_time = (body.start_time ?? "").trim();
     const duration_minutes = [30, 60, 90].includes(Number(body.duration_minutes)) ? Number(body.duration_minutes) : 60;
     const pt_session_id = parseInt(String(body.pt_session_id), 10);
+    const pay_on_arrival = !!body.pay_on_arrival;
 
     if (!member_id || !occurrence_date || !start_time || Number.isNaN(pt_session_id)) {
       return NextResponse.json({ error: "member_id, occurrence_date, start_time, pt_session_id required" }, { status: 400 });
@@ -31,6 +32,9 @@ export async function POST(request: NextRequest) {
     const isAdmin = !!(await getAdminMemberId(request));
     if (sessionMemberId !== member_id && !isAdmin) {
       return NextResponse.json({ error: "Forbidden: can only book for yourself unless admin" }, { status: 403 });
+    }
+    if (pay_on_arrival && !isAdmin) {
+      return NextResponse.json({ error: "Only admins can book pay-on-arrival" }, { status: 403 });
     }
 
     const db = getDb();
@@ -55,19 +59,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "There is a schedule conflict. Please select a time slot with enough time for the duration of your session." }, { status: 409 });
     }
 
-    const balance = getPTCreditBalance(db, member_id, duration_minutes);
-    if (balance < 1) {
-      db.close();
-      return NextResponse.json({ error: `No ${duration_minutes}-min PT credits. Purchase a pack or add to cart.` }, { status: 400 });
+    if (!pay_on_arrival) {
+      const balance = getPTCreditBalance(db, member_id, duration_minutes);
+      if (balance < 1) {
+        db.close();
+        return NextResponse.json({ error: `No ${duration_minutes}-min PT credits. Purchase a pack or add to cart.` }, { status: 400 });
+      }
+      db.prepare(
+        "INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id) VALUES (?, ?, -1, ?, 'pt_open_booking', ?)"
+      ).run(member_id, duration_minutes, `Booked ${duration_minutes}-min PT`, String(pt_session_id));
     }
 
+    const payment_type = pay_on_arrival ? "pay_on_arrival" : "credit";
     db.prepare(
-      "INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id) VALUES (?, ?, -1, ?, 'pt_open_booking', ?)"
-    ).run(member_id, duration_minutes, `Booked ${duration_minutes}-min PT`, String(pt_session_id));
-
-    db.prepare(
-      "INSERT INTO pt_open_bookings (member_id, occurrence_date, start_time, duration_minutes, pt_session_id, payment_type, trainer_member_id) VALUES (?, ?, ?, ?, ?, 'credit', ?)"
-    ).run(member_id, occurrence_date, start_time, duration_minutes, pt_session_id, trainerMemberId ?? null);
+      "INSERT INTO pt_open_bookings (member_id, occurrence_date, start_time, duration_minutes, pt_session_id, payment_type, trainer_member_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).run(member_id, occurrence_date, start_time, duration_minutes, pt_session_id, payment_type, trainerMemberId ?? null);
 
     if (trainerMemberId) ensureTrainerClient(db, trainerMemberId, member_id);
 

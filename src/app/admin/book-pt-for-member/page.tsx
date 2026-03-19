@@ -137,30 +137,44 @@ function AdminBookPTForMemberContent() {
       setError("Select a member and a PT session. Date and time must be in the URL.");
       return;
     }
-    if (!block) {
-      setError("Pay on arrival is only available for block slots. Use the block link from the Master Schedule.");
-      return;
-    }
     setError(null);
     setPayOnArrivalSubmitting(true);
     try {
-      const blockId = parseInt(block, 10);
-      if (Number.isNaN(blockId)) throw new Error("Invalid block ID");
-      const res = await fetch("/api/pt-bookings/book-block", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          trainer_availability_id: blockId,
-          occurrence_date: date,
-          start_time: startTime,
-          session_duration_minutes: duration,
-          member_id: selectedMemberId,
-          pay_on_arrival: true,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Booking failed");
-      router.push("/master-schedule");
+      if (block) {
+        const blockId = parseInt(block, 10);
+        if (Number.isNaN(blockId)) throw new Error("Invalid block ID");
+        const res = await fetch("/api/pt-bookings/book-block", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            trainer_availability_id: blockId,
+            occurrence_date: date,
+            start_time: startTime,
+            session_duration_minutes: duration,
+            member_id: selectedMemberId,
+            pay_on_arrival: true,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Booking failed");
+        router.push("/master-schedule");
+      } else {
+        const res = await fetch("/api/pt-bookings/book-open-slot", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            member_id: selectedMemberId,
+            occurrence_date: date,
+            start_time: startTime,
+            duration_minutes: duration,
+            pt_session_id: selectedSessionId,
+            pay_on_arrival: true,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Booking failed");
+        router.push("/master-schedule");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Booking failed");
     } finally {
@@ -288,16 +302,14 @@ function AdminBookPTForMemberContent() {
             {useCreditSubmitting ? "Booking…" : "Use 1 credit (free)"}
           </button>
         )}
-        {block && (
-          <button
-            type="button"
-            onClick={handlePayOnArrival}
-            disabled={!canSubmit || payOnArrivalSubmitting}
-            className="px-4 py-2 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 disabled:opacity-50"
-          >
-            {payOnArrivalSubmitting ? "Booking…" : "Pay on arrival"}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={handlePayOnArrival}
+          disabled={!canSubmit || payOnArrivalSubmitting}
+          className="px-4 py-2 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 disabled:opacity-50"
+        >
+          {payOnArrivalSubmitting ? "Booking…" : "Pay on arrival"}
+        </button>
         <button
           type="button"
           onClick={handleAddToCart}

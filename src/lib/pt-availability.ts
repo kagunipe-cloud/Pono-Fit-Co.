@@ -57,17 +57,22 @@ export function getBlocksInRange(from: string, to: string): { id: number; traine
 
 export type UnavailableOccurrence = { id: number; trainer: string; date: string; start_time: string; end_time: string; description: string };
 
-/** Expand unavailable_blocks to date range. trainer '' means facility-wide. */
+/** Expand unavailable_blocks to date range. trainer '' means facility-wide. Supports one-time and recurring (with weeks_count). */
 export function getUnavailableInRange(from: string, to: string): UnavailableOccurrence[] {
   const db = getDb();
   ensurePTSlotTables(db);
-  const rows = db.prepare("SELECT id, trainer, day_of_week, start_time, end_time, description FROM unavailable_blocks").all() as {
+  const rows = db.prepare(
+    "SELECT id, trainer, day_of_week, start_time, end_time, description, recurrence_type, occurrence_date, weeks_count FROM unavailable_blocks"
+  ).all() as {
     id: number;
     trainer: string;
     day_of_week: number;
     start_time: string;
     end_time: string;
     description: string;
+    recurrence_type?: string | null;
+    occurrence_date?: string | null;
+    weeks_count?: number | null;
   }[];
   db.close();
   const fromDate = new Date(from + "T12:00:00");
@@ -78,7 +83,28 @@ export function getUnavailableInRange(from: string, to: string): UnavailableOccu
     const dateStr = cur.toISOString().slice(0, 10);
     const day = cur.getDay();
     for (const r of rows) {
-      if (r.day_of_week === day) {
+      const recurrenceType = (r.recurrence_type ?? "recurring").toLowerCase();
+      if (recurrenceType === "one_time") {
+        if (r.occurrence_date === dateStr) {
+          out.push({
+            id: r.id,
+            trainer: r.trainer ?? "",
+            date: dateStr,
+            start_time: r.start_time,
+            end_time: r.end_time,
+            description: r.description ?? "",
+          });
+        }
+      } else {
+        if (r.day_of_week !== day) continue;
+        const startDate = r.occurrence_date ? new Date(r.occurrence_date + "T12:00:00") : new Date(0);
+        if (cur < startDate) continue;
+        const weeksCount = r.weeks_count;
+        if (weeksCount != null && weeksCount > 0) {
+          const endDate = new Date(startDate);
+          endDate.setDate(endDate.getDate() + (weeksCount - 1) * 7);
+          if (cur > endDate) continue;
+        }
         out.push({
           id: r.id,
           trainer: r.trainer ?? "",

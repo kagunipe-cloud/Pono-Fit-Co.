@@ -136,6 +136,28 @@ export function ensurePTSlotTables(db: ReturnType<typeof getDb>) {
       created_at TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_unavailable_blocks_day ON unavailable_blocks(day_of_week);
+  `);
+  try {
+    db.exec("ALTER TABLE unavailable_blocks ADD COLUMN recurrence_type TEXT DEFAULT 'recurring'");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE unavailable_blocks ADD COLUMN occurrence_date TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE unavailable_blocks ADD COLUMN weeks_count INTEGER");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.prepare("UPDATE unavailable_blocks SET recurrence_type = 'recurring' WHERE recurrence_type IS NULL").run();
+  } catch {
+    /* ignore */
+  }
+  db.exec(`
     CREATE TABLE IF NOT EXISTS pt_open_bookings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       member_id TEXT NOT NULL,

@@ -32,6 +32,9 @@ export async function PATCH(
     if (body.start_time !== undefined) { updates.push("start_time = ?"); values.push(String(body.start_time).trim()); }
     if (body.end_time !== undefined) { updates.push("end_time = ?"); values.push(String(body.end_time).trim()); }
     if (body.description !== undefined) { updates.push("description = ?"); values.push(String(body.description).trim() || ""); }
+    if (body.recurrence_type !== undefined) { updates.push("recurrence_type = ?"); values.push(String(body.recurrence_type).toLowerCase() === "one_time" ? "one_time" : "recurring"); }
+    if (body.occurrence_date !== undefined) { updates.push("occurrence_date = ?"); values.push(String(body.occurrence_date).trim() || null); }
+    if (body.weeks_count !== undefined) { const w = body.weeks_count; updates.push("weeks_count = ?"); values.push(w === null || w === "" ? null : (parseInt(String(w), 10) || null)); }
     if (updates.length === 0) {
       db.close();
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });

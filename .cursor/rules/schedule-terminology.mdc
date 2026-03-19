@@ -1,0 +1,13 @@
+---
+description: Schedule and PT terminology - use "trainer availability block" not "block slot"
+globs: "**/*.{ts,tsx}"
+alwaysApply: false
+---
+
+# Schedule Terminology
+
+Use consistent terminology to avoid confusion:
+
+- **Trainer availability block** — A block of time when a trainer is available (from `trainer_availability`). These are **bookable**; PT sessions are booked within them. Do NOT use "block slot" or bare "block" when referring to these.
+
+- **Blocked-off time** / **unavailable** — Time intentionally blocked off (from `unavailable_blocks`), e.g. doctor's appointment. These are **not bookable**. Use "blocked-off time" in user-facing text when removing or describing these.

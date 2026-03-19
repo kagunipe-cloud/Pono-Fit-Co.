@@ -300,7 +300,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
           map.set(key, { type: "unavailable", id: unavailAtSlot.id, description: unavailAtSlot.description });
           continue;
         }
-        // No PT block at this slot — not available for PT (show Unavailable or trainer_not_available)
+        // No trainer availability block at this slot — not available for PT (show Unavailable or trainer_not_available)
         map.set(key, { type: "trainer_not_available" });
       }
     }
@@ -341,7 +341,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
   }
 
   async function handleRemoveUnavailable(id: number) {
-    if (!confirm("Remove this blocked time?")) return;
+    if (!confirm("Remove this blocked-off time?")) return;
     setUnavailableDeletingId(id);
     try {
       const res = await fetch(`/api/offerings/unavailable-blocks/${id}`, { method: "DELETE" });
@@ -470,15 +470,15 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                 {" — "}
                 <Link href="/pt-bookings/generate-recurring" className="text-brand-600 hover:underline font-medium">PT</Link>
                 {" — "}
-                <Link href="/admin/block-time" className="text-brand-600 hover:underline font-medium">Blocked Time</Link>
+                <Link href="/admin/block-time" className="text-brand-600 hover:underline font-medium">Block off time</Link>
               </p>
             </>
           )}
           {isTrainer && allowAdminEdit && trainerDisplayName && (
             <p className="mt-1 text-sm text-stone-500">
               Adjust this trainer&apos;s availability:{" "}
-              <Link href={`/admin/block-time?trainer=${encodeURIComponent(trainerDisplayName)}`} className="text-brand-600 hover:underline font-medium">Block time</Link>
-              {" "}(or remove blocks below)
+              <Link href={`/admin/block-time?trainer=${encodeURIComponent(trainerDisplayName)}`} className="text-brand-600 hover:underline font-medium">Block off time</Link>
+              {" "}(or remove trainer availability blocks below)
             </p>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -645,7 +645,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
 
       {!loading && occurrences.length === 0 && unavailable.length === 0 && ptBlocks.length === 0 && (
         <p className="mt-4 text-center text-stone-500 text-sm">
-          No classes or PT blocks this week.{" "}
+          No classes or trainer availability blocks this week.{" "}
           {isMaster ? (
             <>Add recurring classes in <Link href="/recurring-classes" className="text-brand-600 hover:underline">Recurring classes</Link> or <Link href="/pt-bookings/generate-recurring" className="text-brand-600 hover:underline">PT recurring</Link>.</>
           ) : (
@@ -666,13 +666,13 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                     : `/admin/block-time?day=${getDayOfWeek(selectedSlot.date)}&start=${selectedSlot.timeStr}&end=${timeMinutesToTimeString(parseTimeToMinutes(selectedSlot.timeStr) + SLOT_MINUTES)}`}
                   className="text-brand-600 hover:underline block"
                 >
-                  Add blocked time (unavailable)
+                  Add blocked-off time
                 </Link>
               </li>
               {selectedSlot.item.type === "unavailable" && (isMaster || allowAdminEdit) && (
                 <li>
                   <button type="button" onClick={() => { if (selectedSlot.item.type === "unavailable") { handleRemoveUnavailable(selectedSlot.item.id); setSelectedSlot(null); } }} className="text-red-600 hover:underline">
-                    Remove this block
+                    Remove this blocked-off time
                   </button>
                 </li>
               )}

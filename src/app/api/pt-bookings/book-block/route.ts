@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     const startMin = timeToMinutes(start_time);
     if (startMin < blockStart || startMin >= blockEnd) {
       db.close();
-      return NextResponse.json({ error: "Start time is outside this availability block" }, { status: 400 });
+      return NextResponse.json({ error: "Start time is outside this trainer availability block" }, { status: 400 });
     }
 
     const bookings = getBookingsForBlock(db, trainer_availability_id, occurrence_date);
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     const remainingMinutes = interval.endMin - startMin;
     if (remainingMinutes < session_duration_minutes) {
       db.close();
-      return NextResponse.json({ error: "Not enough time left in this block for the chosen duration" }, { status: 400 });
+      return NextResponse.json({ error: "Not enough time left in this trainer availability block for the chosen duration" }, { status: 400 });
     }
 
     const reserved_minutes = reservedMinutes(session_duration_minutes, remainingMinutes);
@@ -128,6 +128,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, balance: newBalance });
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "Failed to book PT block" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to book PT" }, { status: 500 });
   }
 }

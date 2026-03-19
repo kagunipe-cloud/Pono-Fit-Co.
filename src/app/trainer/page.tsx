@@ -120,7 +120,7 @@ export default function TrainerSchedulePage() {
   return (
     <div>
       <p className="mb-4 text-sm text-stone-600">
-        Your availability blocks and admin-blocked time. Members book PT with you from the Schedule.
+        Your availability time slots and admin-blocked-off time. Members book PT with you from the Schedule.
       </p>
       <ScheduleGrid
         variant="trainer"
