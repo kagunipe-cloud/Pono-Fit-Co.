@@ -28,7 +28,7 @@ type CellItem =
   | { type: "class"; id: number; name: string; sub: string | null; occurrence_date: string; occurrence_time: string; booked_count: number; capacity: number; duration_minutes: number; classStartSlot: number; spanSlots: number; class_id?: number | null; recurring_class_id?: number | null }
   | { type: "class_span" }
   | { type: "unavailable"; id: number; description: string }
-  | { type: "pt_segment"; blockId: number; trainer: string; start_time: string; end_time: string; booked: boolean; member_name?: string; booking_id?: number }
+  | { type: "pt_segment"; blockId: number; trainer: string; start_time: string; end_time: string; booked: boolean; member_name?: string; booking_id?: number; unavailable?: boolean; description?: string }
   | { type: "open_booked"; id?: number; member_name?: string; trainer_name?: string | null }
   | { type: "available" }
   | { type: "trainer_not_available" };
@@ -223,6 +223,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                   booked: seg.booked,
                   ...(seg.member_name != null && { member_name: seg.member_name }),
                   ...(seg.booking_id != null && { booking_id: seg.booking_id }),
+                  ...(seg.unavailable && { unavailable: true, description: seg.description }),
                 };
                 break;
               }
@@ -264,6 +265,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
               booked: true,
               ...(first.seg.member_name != null && { member_name: first.seg.member_name }),
               ...(first.seg.booking_id != null && { booking_id: first.seg.booking_id }),
+              ...(first.seg.unavailable && { unavailable: true, description: first.seg.description }),
             };
             map.set(key, ptItem);
             continue;
@@ -589,9 +591,9 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                           )}
                           {item.type === "pt_segment" && (
                             <div className={`rounded-lg border px-2 py-1.5 min-h-[2.5rem] ${item.booked ? "bg-stone-400 border-stone-500 text-stone-100" : "bg-brand-50 border-2 border-brand-500 hover:border-brand-600"}`}>
-                              {item.booked ? (isMaster || isTrainer ? (
-                                <span className="text-xs text-stone-200 block truncate" title={item.member_name ?? "Booked"}>
-                                  {item.member_name ?? "Booked"}
+                              {item.booked ? (isMaster || isTrainer || allowAdminEdit ? (
+                                <span className="text-xs text-stone-200 block truncate" title={item.unavailable ? (item.description ?? "Blocked") : (item.member_name ?? "Booked")}>
+                                  {item.unavailable ? (item.description ?? "Blocked") : (item.member_name ?? "Booked")}
                                 </span>
                               ) : null) : (
                                 <>
