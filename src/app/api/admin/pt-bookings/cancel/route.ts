@@ -65,15 +65,17 @@ export async function POST(request: NextRequest) {
         // ignore email errors
       }
     } else {
-      const row = db.prepare("SELECT id, member_id, session_duration_minutes FROM pt_block_bookings WHERE id = ?").get(id) as { id: number; member_id: string; session_duration_minutes: number } | undefined;
+      const row = db.prepare("SELECT id, member_id, session_duration_minutes, payment_type FROM pt_block_bookings WHERE id = ?").get(id) as { id: number; member_id: string; session_duration_minutes: number; payment_type: string } | undefined;
       if (!row) {
         db.close();
         return NextResponse.json({ error: "PT block booking not found" }, { status: 404 });
       }
       db.prepare("DELETE FROM pt_block_bookings WHERE id = ?").run(id);
-      db.prepare(
-        "INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id) VALUES (?, ?, 1, ?, 'admin_cancel_block', ?)"
-      ).run(row.member_id, row.session_duration_minutes, "Credit restored (admin cancelled booking)", String(id));
+      if (row.payment_type === "credit") {
+        db.prepare(
+          "INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id) VALUES (?, ?, 1, ?, 'admin_cancel_block', ?)"
+        ).run(row.member_id, row.session_duration_minutes, "Credit restored (admin cancelled booking)", String(id));
+      }
       try {
         const memberRow = db
           .prepare("SELECT email, first_name, last_name FROM members WHERE member_id = ?")

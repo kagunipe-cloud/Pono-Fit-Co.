@@ -31,6 +31,7 @@ function AdminBookPTForMemberContent() {
   const [selectedTrainerId, setSelectedTrainerId] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [useCreditSubmitting, setUseCreditSubmitting] = useState(false);
+  const [payOnArrivalSubmitting, setPayOnArrivalSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [credits, setCredits] = useState<Record<number, number>>({ 30: 0, 60: 0, 90: 0 });
 
@@ -128,6 +129,42 @@ function AdminBookPTForMemberContent() {
       setError(e instanceof Error ? e.message : "Booking failed");
     } finally {
       setUseCreditSubmitting(false);
+    }
+  }
+
+  async function handlePayOnArrival() {
+    if (!selectedMemberId || !selectedSessionId || !date || !startTime) {
+      setError("Select a member and a PT session. Date and time must be in the URL.");
+      return;
+    }
+    if (!block) {
+      setError("Pay on arrival is only available for block slots. Use the block link from the Master Schedule.");
+      return;
+    }
+    setError(null);
+    setPayOnArrivalSubmitting(true);
+    try {
+      const blockId = parseInt(block, 10);
+      if (Number.isNaN(blockId)) throw new Error("Invalid block ID");
+      const res = await fetch("/api/pt-bookings/book-block", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trainer_availability_id: blockId,
+          occurrence_date: date,
+          start_time: startTime,
+          session_duration_minutes: duration,
+          member_id: selectedMemberId,
+          pay_on_arrival: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Booking failed");
+      router.push("/master-schedule");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Booking failed");
+    } finally {
+      setPayOnArrivalSubmitting(false);
     }
   }
 
@@ -251,6 +288,16 @@ function AdminBookPTForMemberContent() {
             {useCreditSubmitting ? "Booking…" : "Use 1 credit (free)"}
           </button>
         )}
+        {block && (
+          <button
+            type="button"
+            onClick={handlePayOnArrival}
+            disabled={!canSubmit || payOnArrivalSubmitting}
+            className="px-4 py-2 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 disabled:opacity-50"
+          >
+            {payOnArrivalSubmitting ? "Booking…" : "Pay on arrival"}
+          </button>
+        )}
         <button
           type="button"
           onClick={handleAddToCart}
@@ -266,7 +313,7 @@ function AdminBookPTForMemberContent() {
 
       <p className="mt-4 text-stone-500 text-xs">
         {hasCredit ? `Member has ${credits[duration as keyof typeof credits] ?? 0}×${duration}-min credit(s). ` : ""}
-        “Add to cart” takes you to checkout to charge their card or pay in-person.
+        &quot;Pay on arrival&quot; holds the slot (red on schedule); they pay when they arrive. &quot;Add to cart&quot; charges now.
       </p>
     </div>
   );

@@ -11,8 +11,9 @@ import { sendStaffEmail, sendMemberEmail } from "../../../../lib/email";
 export const dynamic = "force-dynamic";
 
 /**
- * POST { trainer_availability_id, occurrence_date, start_time, session_duration_minutes (30|60|90), member_id, use_credit? }
+ * POST { trainer_availability_id, occurrence_date, start_time, session_duration_minutes (30|60|90), member_id, use_credit?, pay_on_arrival? }
  * Books a PT session within trainer availability. Reserves 45/75/120 min (or exact if only that much left).
+ * pay_on_arrival: admin only — books without payment or credit; member pays when they arrive.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -25,6 +26,7 @@ export async function POST(request: NextRequest) {
       : 60;
     const member_id = (body.member_id ?? "").trim();
     const use_credit = !!body.use_credit;
+    const pay_on_arrival = !!body.pay_on_arrival;
 
     if (!trainer_availability_id || !occurrence_date || !start_time || !member_id) {
       return NextResponse.json({ error: "trainer_availability_id, occurrence_date, start_time, member_id required" }, { status: 400 });
@@ -34,6 +36,9 @@ export async function POST(request: NextRequest) {
     const isAdmin = !!(await getAdminMemberId(request));
     if (sessionMemberId !== member_id && !isAdmin) {
       return NextResponse.json({ error: "Forbidden: can only book for yourself unless admin" }, { status: 403 });
+    }
+    if (pay_on_arrival && !isAdmin) {
+      return NextResponse.json({ error: "Only admins can book pay-on-arrival" }, { status: 403 });
     }
 
     const db = getDb();
@@ -71,7 +76,7 @@ export async function POST(request: NextRequest) {
 
     const reserved_minutes = reservedMinutes(session_duration_minutes, remainingMinutes);
 
-    if (use_credit) {
+    if (use_credit && !pay_on_arrival) {
       const balance = getPTCreditBalance(db, member_id, session_duration_minutes);
       if (balance < 1) {
         db.close();
@@ -82,9 +87,10 @@ export async function POST(request: NextRequest) {
       ).run(member_id, session_duration_minutes, `Booked ${session_duration_minutes}-min PT`, String(trainer_availability_id + "-" + occurrence_date + "-" + start_time));
     }
 
+    const payment_type = pay_on_arrival ? "pay_on_arrival" : use_credit ? "credit" : "paid";
     db.prepare(
       "INSERT INTO pt_block_bookings (trainer_availability_id, occurrence_date, start_time, session_duration_minutes, reserved_minutes, member_id, payment_type) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).run(trainer_availability_id, occurrence_date, start_time, session_duration_minutes, reserved_minutes, member_id, use_credit ? "credit" : "paid");
+    ).run(trainer_availability_id, occurrence_date, start_time, session_duration_minutes, reserved_minutes, member_id, payment_type);
 
     const trainerMemberId = (block.trainer_member_id ?? "").trim();
     if (trainerMemberId) ensureTrainerClient(db, trainerMemberId, member_id);

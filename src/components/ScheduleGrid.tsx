@@ -28,7 +28,7 @@ type CellItem =
   | { type: "class"; id: number; name: string; sub: string | null; occurrence_date: string; occurrence_time: string; booked_count: number; capacity: number; duration_minutes: number; classStartSlot: number; spanSlots: number; class_id?: number | null; recurring_class_id?: number | null }
   | { type: "class_span" }
   | { type: "unavailable"; id: number; description: string }
-  | { type: "pt_segment"; blockId: number; trainer: string; start_time: string; end_time: string; booked: boolean; member_name?: string; booking_id?: number; unavailable?: boolean; description?: string }
+  | { type: "pt_segment"; blockId: number; trainer: string; start_time: string; end_time: string; booked: boolean; member_name?: string; booking_id?: number; unavailable?: boolean; description?: string; payment_type?: string }
   | { type: "open_booked"; id?: number; member_name?: string; trainer_name?: string | null }
   | { type: "available" }
   | { type: "trainer_not_available" };
@@ -224,6 +224,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                   ...(seg.member_name != null && { member_name: seg.member_name }),
                   ...(seg.booking_id != null && { booking_id: seg.booking_id }),
                   ...(seg.unavailable && { unavailable: true, description: seg.description }),
+                  ...(seg.payment_type != null && { payment_type: seg.payment_type }),
                 };
                 break;
               }
@@ -266,6 +267,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
               ...(first.seg.member_name != null && { member_name: first.seg.member_name }),
               ...(first.seg.booking_id != null && { booking_id: first.seg.booking_id }),
               ...(first.seg.unavailable && { unavailable: true, description: first.seg.description }),
+              ...(first.seg.payment_type != null && { payment_type: first.seg.payment_type }),
             };
             map.set(key, ptItem);
             continue;
@@ -482,6 +484,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-stone-800">Class</span>
             <span className="rounded-lg bg-stone-400 px-2.5 py-1 text-xs font-medium text-stone-100">Unavailable</span>
+            <span className="rounded-lg bg-red-500 px-2.5 py-1 text-xs font-medium text-red-50">Pay on arrival</span>
             <span className="rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">Available</span>
           </div>
         </div>
@@ -508,6 +511,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
             <span className="font-medium text-stone-600">{weekLabel}</span>
             <span className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-stone-800">Class</span>
             <span className="rounded-lg bg-stone-400 px-2.5 py-1 text-xs font-medium text-stone-100">Unavailable</span>
+            <span className="rounded-lg bg-red-500 px-2.5 py-1 text-xs font-medium text-red-50">Pay on arrival</span>
             <span className="rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">Available</span>
           </div>
           <div className="overflow-x-auto">
@@ -590,10 +594,14 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                             </div>
                           )}
                           {item.type === "pt_segment" && (
-                            <div className={`rounded-lg border px-2 py-1.5 min-h-[2.5rem] ${item.booked ? "bg-stone-400 border-stone-500 text-stone-100" : "bg-brand-50 border-2 border-brand-500 hover:border-brand-600"}`}>
+                            <div className={`rounded-lg border px-2 py-1.5 min-h-[2.5rem] ${item.booked
+                              ? (item.payment_type === "pay_on_arrival" && (isMaster || isTrainer || allowAdminEdit))
+                                ? "bg-red-500 border-red-600 text-red-50"
+                                : "bg-stone-400 border-stone-500 text-stone-100"
+                              : "bg-brand-50 border-2 border-brand-500 hover:border-brand-600"}`}>
                               {item.booked ? (isMaster || isTrainer || allowAdminEdit ? (
-                                <span className="text-xs text-stone-200 block truncate" title={item.unavailable ? (item.description ?? "Blocked") : (item.member_name ?? "Booked")}>
-                                  {item.unavailable ? (item.description ?? "Blocked") : (item.member_name ?? "Booked")}
+                                <span className={`text-xs block truncate ${item.payment_type === "pay_on_arrival" ? "text-red-100" : "text-stone-200"}`} title={item.unavailable ? (item.description ?? "Blocked") : (item.payment_type === "pay_on_arrival" ? `${item.member_name ?? "Booked"} (pay on arrival)` : (item.member_name ?? "Booked"))}>
+                                  {item.unavailable ? (item.description ?? "Blocked") : (item.payment_type === "pay_on_arrival" ? `${item.member_name ?? "Booked"} · Pay on arrival` : (item.member_name ?? "Booked"))}
                                 </span>
                               ) : null) : (
                                 <>

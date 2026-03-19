@@ -149,8 +149,8 @@ export function getBookableStartsInInterval(intervalStart: number, intervalEnd: 
   return starts;
 }
 
-/** Segment of a block: free (AVAILABLE), booked (with member_name, booking_id), or unavailable (with description). */
-export type BlockSegment = { start_time: string; end_time: string; booked: boolean; member_name?: string; trainer: string; unavailable?: boolean; description?: string; booking_id?: number };
+/** Segment of a block: free (AVAILABLE), booked (with member_name, booking_id, payment_type), or unavailable (with description). */
+export type BlockSegment = { start_time: string; end_time: string; booked: boolean; member_name?: string; trainer: string; unavailable?: boolean; description?: string; booking_id?: number; payment_type?: string };
 
 /** Unavailable ranges overlapping a block (trainer must match or unavailable.trainer is ''). In minutes. */
 export function getUnavailableRangesForBlock(
@@ -184,10 +184,10 @@ export function getBlockSegments(
   const blockEnd = timeToMinutes(block.end_time);
   const blockDesc = block.description ?? undefined;
   const bookingRows = db.prepare(
-    `SELECT b.id, b.start_time, b.reserved_minutes, b.member_id, m.first_name, m.last_name
+    `SELECT b.id, b.start_time, b.reserved_minutes, b.member_id, b.payment_type, m.first_name, m.last_name
      FROM pt_block_bookings b LEFT JOIN members m ON m.member_id = b.member_id
      WHERE b.trainer_availability_id = ? AND b.occurrence_date = ? ORDER BY b.start_time`
-  ).all(block.id, occurrence_date) as { id: number; start_time: string; reserved_minutes: number; member_id: string; first_name: string | null; last_name: string | null }[];
+  ).all(block.id, occurrence_date) as { id: number; start_time: string; reserved_minutes: number; member_id: string; payment_type: string; first_name: string | null; last_name: string | null }[];
   const bookings = bookingRows.map((b) => ({ start_time: b.start_time, reserved_minutes: b.reserved_minutes }));
   const unavailRanges = getUnavailableRangesForBlock(block, occurrence_date, unavailableOccurrences);
   const free = getFreeIntervals(blockStart, blockEnd, bookings, unavailRanges);
@@ -199,7 +199,7 @@ export function getBlockSegments(
     const startMin = timeToMinutes(b.start_time);
     const endMin = startMin + b.reserved_minutes;
     const member_name = [b.first_name, b.last_name].filter(Boolean).join(" ").trim() || b.member_id;
-    segments.push({ start_time: minutesToTime(startMin), end_time: minutesToTime(endMin), booked: true, member_name, trainer: block.trainer, booking_id: b.id, ...(blockDesc && { description: blockDesc }) });
+    segments.push({ start_time: minutesToTime(startMin), end_time: minutesToTime(endMin), booked: true, member_name, trainer: block.trainer, booking_id: b.id, payment_type: b.payment_type ?? "paid", ...(blockDesc && { description: blockDesc }) });
   }
   for (const u of unavailableOccurrences) {
     if (u.date !== occurrence_date) continue;
