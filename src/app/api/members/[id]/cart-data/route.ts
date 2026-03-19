@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone, ensureMembersStripeColumn } from "../../../../../lib/db";
 import { formatDateForDisplay } from "../../../../../lib/app-timezone";
-import { ensureRecurringClassesTables } from "../../../../../lib/recurring-classes";
+import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../../lib/recurring-classes";
+import { getMemberIdFromSession } from "../../../../../lib/session";
 import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
 import { ensureDiscountsTable } from "../../../../../lib/discounts";
 
@@ -117,6 +118,9 @@ export async function GET(
       if (d) discount = { code: d.code, percent_off: d.percent_off, description: d.description };
     }
 
+    const class_credits = getMemberCreditBalance(db, member.member_id);
+    const sessionMemberId = await getMemberIdFromSession();
+    const is_own_cart = !!sessionMemberId && sessionMemberId === member.member_id;
     db.close();
 
     const memberName = [member.first_name, member.last_name].filter(Boolean).join(" ") || "Member";
@@ -125,6 +129,8 @@ export async function GET(
       memberId: member.member_id,
       memberName,
       has_saved_card,
+      class_credits,
+      is_own_cart,
       items,
       plans,
       sessions,

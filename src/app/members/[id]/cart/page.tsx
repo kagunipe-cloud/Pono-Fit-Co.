@@ -81,6 +81,10 @@ export default function MemberCartPage() {
   const [promoError, setPromoError] = useState<string | null>(null);
   const [discount, setDiscount] = useState<{ code: string; percent_off: number; description?: string | null } | null>(null);
   const [canUseTerminal, setCanUseTerminal] = useState(false);
+  const [classCredits, setClassCredits] = useState(0);
+  const [isOwnCart, setIsOwnCart] = useState(false);
+  const [useCreditLoadingId, setUseCreditLoadingId] = useState<number | null>(null);
+  const [useCreditConfirm, setUseCreditConfirm] = useState<{ cartItemId: number; occurrenceId: number; itemName: string } | null>(null);
   const [terminalEstimate, setTerminalEstimate] = useState<{
     subtotal: number;
     after_discount: number;
@@ -135,6 +139,8 @@ export default function MemberCartPage() {
         setHasSavedCard(Boolean(data.has_saved_card));
         setPromoCode(data.promo_code ?? "");
         setDiscount(data.discount ?? null);
+        setClassCredits(data.class_credits ?? 0);
+        setIsOwnCart(Boolean(data.is_own_cart));
         if (data.has_saved_card) setSaveCardForFuture(false);
       })
       .catch(() => {
@@ -218,6 +224,29 @@ export default function MemberCartPage() {
     if (memberId && id) {
       const data = await fetch(`/api/members/${id}/cart-data`).then((r) => r.json());
       setItems(data.items ?? []);
+      setClassCredits(data.class_credits ?? 0);
+    }
+  }
+
+  async function useCreditForClass(cartItemId: number, occurrenceId: number) {
+    setUseCreditConfirm(null);
+    setUseCreditLoadingId(cartItemId);
+    try {
+      const res = await fetch("/api/class-bookings/book", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ class_occurrence_id: occurrenceId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Could not book with credit");
+      await fetch(`/api/cart/items/${cartItemId}`, { method: "DELETE" });
+      const cartData = await fetch(`/api/members/${id}/cart-data`).then((r) => r.json());
+      setItems(cartData.items ?? []);
+      setClassCredits(cartData.class_credits ?? 0);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setUseCreditLoadingId(null);
     }
   }
 
@@ -542,17 +571,34 @@ export default function MemberCartPage() {
       )}
 
       <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden mb-6">
-        <div className="p-4 border-b border-stone-100 font-medium text-stone-800">Cart</div>
+        <div className="p-4 border-b border-stone-100 flex items-center justify-between">
+          <span className="font-medium text-stone-800">Cart</span>
+          {isOwnCart && classCredits > 0 && items.some((it) => it.product_type === "class_occurrence") && (
+            <span className="text-sm text-stone-500">{classCredits} credit{classCredits !== 1 ? "s" : ""} available</span>
+          )}
+        </div>
         {items.length === 0 ? (
           <p className="p-6 text-stone-500 text-sm">Cart is empty. Add a membership, class, or PT session above.</p>
         ) : (
           <ul className="divide-y divide-stone-100">
             {items.map((it) => (
-              <li key={it.id} className="p-4 flex justify-between items-center">
-                <span>{it.name} × {it.quantity} — {formatPrice(it.price)}</span>
-                <button type="button" onClick={() => removeItem(it.id)} className="text-red-600 hover:text-red-700 p-1 rounded" title="Remove" aria-label="Remove item">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                </button>
+              <li key={it.id} className="p-4 flex justify-between items-center gap-3">
+                <span className="flex-1 min-w-0">{it.name} × {it.quantity} — {formatPrice(it.price)}</span>
+                <div className="flex items-center gap-1 shrink-0">
+                  {it.product_type === "class_occurrence" && isOwnCart && classCredits >= 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setUseCreditConfirm({ cartItemId: it.id, occurrenceId: it.product_id, itemName: it.name })}
+                      disabled={useCreditLoadingId === it.id}
+                      className="px-2 py-1 rounded text-sm font-medium text-brand-600 hover:bg-brand-50 border border-brand-200 disabled:opacity-50"
+                    >
+                      {useCreditLoadingId === it.id ? "…" : "Use credit"}
+                    </button>
+                  )}
+                  <button type="button" onClick={() => removeItem(it.id)} className="text-red-600 hover:text-red-700 p-1 rounded" title="Remove" aria-label="Remove item">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -596,6 +642,43 @@ export default function MemberCartPage() {
           </>
         )}
       </div>
+
+      {useCreditConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60"
+          onClick={() => { if (useCreditLoadingId !== useCreditConfirm.cartItemId) setUseCreditConfirm(null); }}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl max-w-sm w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-stone-800 mb-2">Book with credit</h3>
+            <p className="text-stone-600 text-sm mb-3">
+              Use 1 credit to book <strong>{useCreditConfirm.itemName}</strong>?
+            </p>
+            <p className="text-stone-500 text-sm mb-4">
+              You have {classCredits} credit{classCredits !== 1 ? "s" : ""} available. This will use 1 of them.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => setUseCreditConfirm(null)}
+                className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => useCreditForClass(useCreditConfirm.cartItemId, useCreditConfirm.occurrenceId)}
+                disabled={useCreditLoadingId === useCreditConfirm.cartItemId}
+                className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
+              >
+                {useCreditLoadingId === useCreditConfirm.cartItemId ? "Booking…" : "Book with credit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {items.length > 0 && (
         <>

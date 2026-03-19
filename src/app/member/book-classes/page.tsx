@@ -21,11 +21,20 @@ function MemberBookClassesContent() {
   const [addingId, setAddingId] = useState<number | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/auth/member-me").then((r) => (r.ok ? r.json() : null)),
-      fetch("/api/member/class-credits").then((r) => (r.ok ? r.json() : { balance: 0 })),
-      fetch(`/api/offerings/class-occurrences?from=${new Date().toISOString().slice(0, 10)}&to=${(() => { const d = new Date(); d.setDate(d.getDate() + 28); return d.toISOString().slice(0, 10); })()}`).then((r) => r.json()),
-    ])
+    const from = new Date().toISOString().slice(0, 10);
+    const to = (() => { const d = new Date(); d.setDate(d.getDate() + 28); return d.toISOString().slice(0, 10); })();
+    const fetches = highlightId
+      ? [
+          fetch("/api/auth/member-me").then((r) => (r.ok ? r.json() : null)),
+          fetch("/api/member/class-credits").then((r) => (r.ok ? r.json() : { balance: 0 })),
+          fetch(`/api/offerings/class-occurrences/${highlightId}`).then((r) => (r.ok ? r.json() : null)),
+        ]
+      : [
+          fetch("/api/auth/member-me").then((r) => (r.ok ? r.json() : null)),
+          fetch("/api/member/class-credits").then((r) => (r.ok ? r.json() : { balance: 0 })),
+          fetch(`/api/offerings/class-occurrences?from=${from}&to=${to}`).then((r) => r.json()),
+        ];
+    Promise.all(fetches)
       .then(([me, cred, occ]) => {
         if (!me?.member_id) {
           router.replace("/login");
@@ -33,11 +42,11 @@ function MemberBookClassesContent() {
         }
         setMemberId(me.member_id);
         setCredits(cred.balance ?? 0);
-        setOccurrences(Array.isArray(occ) ? occ : []);
+        setOccurrences(highlightId && occ && !Array.isArray(occ) ? [occ] : Array.isArray(occ) ? occ : []);
       })
       .catch(() => router.replace("/login"))
       .finally(() => setLoading(false));
-  }, [router]);
+  }, [router, highlightId]);
 
   useEffect(() => {
     if (loading || !highlightId || !refMap.current[highlightId]) return;
@@ -96,7 +105,10 @@ function MemberBookClassesContent() {
 
   return (
     <div className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl font-bold text-stone-800 mb-2">Book a Class</h1>
+      {highlightId && (
+        <Link href="/schedule" className="text-stone-500 hover:text-stone-700 text-sm mb-4 inline-block">← Back to schedule</Link>
+      )}
+      <h1 className="text-2xl font-bold text-stone-800 mb-2">{highlightId ? "Book this class" : "Book a Class"}</h1>
       <p className="text-stone-600 mb-6">
         Pay for a single class or use a class credit. You have <strong>{credits ?? 0} class credits</strong>. <Link href="/member/class-packs" className="text-brand-600 hover:underline">Class packs</Link> are a separate purchase; then book with credit or pay per class.
       </p>
