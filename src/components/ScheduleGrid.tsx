@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { formatInAppTz, todayInAppTz, weekStartInAppTz, addDaysToDateStr } from "@/lib/app-timezone";
 import { useAppTimezone, useOpenHours } from "@/lib/settings-context";
+import type { BlockSegment } from "@/lib/pt-availability";
 
 type Occurrence = {
   id: number;
@@ -19,7 +20,6 @@ type Occurrence = {
   recurring_class_id?: number | null;
 };
 
-type BlockSegment = { start_time: string; end_time: string; booked: boolean; member_name?: string; trainer: string; booking_id?: number };
 type PtBlockWithSegments = { id: number; trainer: string; date: string; start_time: string; end_time: string; segments?: BlockSegment[] };
 
 type UnavailableOccurrence = { id: number; trainer: string; date: string; start_time: string; end_time: string; description: string };
