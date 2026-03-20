@@ -26,6 +26,34 @@ export default function AdminEmailMembersPage() {
   const [sendingWaiver, setSendingWaiver] = useState(false);
   const [waiverResult, setWaiverResult] = useState<{ message: string; url?: string } | null>(null);
 
+  // Email Groups filters
+  const [trialExpiredDays, setTrialExpiredDays] = useState<number | "">("");
+  const [compProductType, setCompProductType] = useState<string>("");
+  const [compProductId, setCompProductId] = useState<number | "">("");
+  const [planStatus, setPlanStatus] = useState<string>("");
+  const [joinDateInDays, setJoinDateInDays] = useState<number | "">("");
+  const [minClassBookings, setMinClassBookings] = useState<number | "">("");
+  const [minPtBookings, setMinPtBookings] = useState<number | "">("");
+  const [minVisits, setMinVisits] = useState<number | "">("");
+  const [visitsInDays, setVisitsInDays] = useState<number | "">("");
+  const [isLead, setIsLead] = useState(false);
+  const [failedPayment, setFailedPayment] = useState(false);
+  const [failedPaymentDays, setFailedPaymentDays] = useState<number | "">("");
+  const [failedPaymentPlanId, setFailedPaymentPlanId] = useState<number | "">("");
+  const [filteredMembers, setFilteredMembers] = useState<{ member_ids: string[]; count: number } | null>(null);
+  const [loadingFiltered, setLoadingFiltered] = useState(false);
+  const [groupOptions, setGroupOptions] = useState<{
+    plans?: { id: number; plan_name: string }[];
+    sessions?: { id: number; session_name: string }[];
+    classes?: { id: number; class_name: string }[];
+    classPacks?: { id: number; name: string }[];
+    ptPackProducts?: { id: number; name: string }[];
+  } | null>(null);
+  const [groupSubject, setGroupSubject] = useState("");
+  const [groupText, setGroupText] = useState("");
+  const [sendingGroup, setSendingGroup] = useState(false);
+  const [groupResult, setGroupResult] = useState<{ sent: number; total: number; failed: number; errors?: string[] } | null>(null);
+
   useEffect(() => {
     fetch("/api/admin/email-all-members")
       .then((r) => (r.ok ? r.json() : null))
@@ -51,6 +79,84 @@ export default function AdminEmailMembersPage() {
       .catch(() => setWelcomeMembers([]))
       .finally(() => setLoadingWelcomeMembers(false));
   }, [smtpConfigured]);
+
+  // Load Email Groups filter options
+  useEffect(() => {
+    if (!smtpConfigured) return;
+    fetch("/api/admin/email-groups/members?include_options=1")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) {
+          setGroupOptions({
+            plans: data.plans ?? [],
+            sessions: data.sessions ?? [],
+            classes: data.classes ?? [],
+            classPacks: data.classPacks ?? [],
+            ptPackProducts: data.ptPackProducts ?? [],
+          });
+        }
+      })
+      .catch(() => {});
+  }, [smtpConfigured]);
+
+  function fetchFilteredMembers() {
+    setLoadingFiltered(true);
+    const params = new URLSearchParams();
+    if (trialExpiredDays !== "" && trialExpiredDays > 0) params.set("trial_complimentary_expired_days", String(trialExpiredDays));
+    if (compProductType) params.set("complimentary_product_type", compProductType);
+    if (compProductId !== "" && compProductId > 0) params.set("complimentary_product_id", String(compProductId));
+    if (planStatus) params.set("plan_status", planStatus);
+    if (joinDateInDays !== "" && joinDateInDays > 0) params.set("join_date_in_days", String(joinDateInDays));
+    if (minClassBookings !== "" && minClassBookings > 0) params.set("min_class_bookings", String(minClassBookings));
+    if (minPtBookings !== "" && minPtBookings > 0) params.set("min_pt_bookings", String(minPtBookings));
+    if (minVisits !== "" && minVisits > 0) params.set("min_visits", String(minVisits));
+    if (visitsInDays !== "" && visitsInDays > 0) params.set("visits_in_days", String(visitsInDays));
+    if (isLead) params.set("is_lead", "1");
+    if (failedPayment) params.set("failed_payment", "1");
+    if (failedPaymentDays !== "" && failedPaymentDays > 0) params.set("failed_payment_days", String(failedPaymentDays));
+    if (failedPaymentPlanId !== "" && failedPaymentPlanId > 0) params.set("failed_payment_plan_id", String(failedPaymentPlanId));
+    fetch(`/api/admin/email-groups/members?${params.toString()}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) setFilteredMembers({ member_ids: data.member_ids ?? [], count: data.count ?? 0 });
+        else setFilteredMembers(null);
+      })
+      .catch(() => setFilteredMembers(null))
+      .finally(() => setLoadingFiltered(false));
+  }
+
+  async function handleSendToFilteredGroup(e: React.FormEvent) {
+    e.preventDefault();
+    if (!filteredMembers || filteredMembers.count === 0) return;
+    const sub = groupSubject.trim();
+    const body = groupText.trim();
+    if (!sub || !body) {
+      setError("Subject and message are required.");
+      return;
+    }
+    setError(null);
+    setGroupResult(null);
+    setSendingGroup(true);
+    try {
+      const res = await fetch("/api/admin/email-all-members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject: sub, text: body, member_ids: filteredMembers.member_ids }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? "Failed to send");
+        return;
+      }
+      setGroupResult({ sent: data.sent, total: data.total, failed: data.failed ?? 0, errors: data.errors });
+      setGroupSubject("");
+      setGroupText("");
+    } catch {
+      setError("Something went wrong.");
+    } finally {
+      setSendingGroup(false);
+    }
+  }
 
   const filteredWelcomeMembers = useMemo(() => {
     if (!welcomeSearch.trim()) return welcomeMembers;
@@ -219,6 +325,200 @@ export default function AdminEmailMembersPage() {
           </p>
         )}
       </div>
+
+      {smtpConfigured && (
+        <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50">
+          <h2 className="font-semibold text-stone-800 mb-1">Email Groups — Filters</h2>
+          <p className="text-sm text-stone-600 mb-3">
+            Target members by plan status, join date, bookings, visits, leads, failed payments, or trial/complimentary expiry. All filters combine with AND.
+          </p>
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-end gap-4">
+              <span className="text-xs font-medium text-stone-500">Plan status</span>
+              <select value={planStatus} onChange={(e) => setPlanStatus(e.target.value)} className="px-3 py-2 rounded-lg border border-stone-200 text-sm min-w-[120px]">
+                <option value="">Any</option>
+                <option value="active">Active</option>
+                <option value="expired">Expired</option>
+                <option value="cancelled">Cancelled</option>
+                <option value="none">No subscription</option>
+              </select>
+              <span className="text-xs font-medium text-stone-500">Join date</span>
+              <input type="number" min={1} max={3650} placeholder="Joined in last (days)" value={joinDateInDays === "" ? "" : joinDateInDays} onChange={(e) => setJoinDateInDays(e.target.value === "" ? "" : Math.max(0, parseInt(e.target.value, 10) || 0))} className="w-32 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={isLead} onChange={(e) => setIsLead(e.target.checked)} className="rounded border-stone-300" />
+                <span className="text-sm text-stone-600">Leads only (no purchase)</span>
+              </label>
+            </div>
+            <div className="flex flex-wrap items-end gap-4">
+              <span className="text-xs font-medium text-stone-500">Bookings</span>
+              <input type="number" min={1} placeholder="Min class" value={minClassBookings === "" ? "" : minClassBookings} onChange={(e) => setMinClassBookings(e.target.value === "" ? "" : Math.max(0, parseInt(e.target.value, 10) || 0))} className="w-20 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
+              <input type="number" min={1} placeholder="Min PT" value={minPtBookings === "" ? "" : minPtBookings} onChange={(e) => setMinPtBookings(e.target.value === "" ? "" : Math.max(0, parseInt(e.target.value, 10) || 0))} className="w-20 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
+              <span className="text-xs font-medium text-stone-500">Visits</span>
+              <input type="number" min={1} placeholder="Min" value={minVisits === "" ? "" : minVisits} onChange={(e) => setMinVisits(e.target.value === "" ? "" : Math.max(0, parseInt(e.target.value, 10) || 0))} className="w-16 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
+              <span className="text-xs text-stone-500">in last</span>
+              <input type="number" min={1} max={365} placeholder="days" value={visitsInDays === "" ? "" : visitsInDays} onChange={(e) => setVisitsInDays(e.target.value === "" ? "" : Math.max(0, parseInt(e.target.value, 10) || 0))} className="w-16 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
+            </div>
+            <div className="flex flex-wrap items-end gap-4">
+              <span className="text-xs font-medium text-stone-500">Failed payments</span>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={failedPayment} onChange={(e) => setFailedPayment(e.target.checked)} className="rounded border-stone-300" />
+                <span className="text-sm text-stone-600">Has failed</span>
+              </label>
+              <input type="number" min={1} max={365} placeholder="In last (days)" value={failedPaymentDays === "" ? "" : failedPaymentDays} onChange={(e) => setFailedPaymentDays(e.target.value === "" ? "" : Math.max(0, parseInt(e.target.value, 10) || 0))} className="w-24 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
+              <select value={failedPaymentPlanId === "" ? "" : failedPaymentPlanId} onChange={(e) => setFailedPaymentPlanId(e.target.value === "" ? "" : parseInt(e.target.value, 10))} className="px-3 py-2 rounded-lg border border-stone-200 text-sm min-w-[140px]">
+                <option value="">Any plan</option>
+                {groupOptions?.plans?.map((p) => <option key={p.id} value={p.id}>{p.plan_name}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-wrap items-end gap-4">
+              <span className="text-xs font-medium text-stone-500">Trial / Complimentary</span>
+              <input type="number" min={1} max={365} placeholder="Expired in last (days)" value={trialExpiredDays === "" ? "" : trialExpiredDays} onChange={(e) => setTrialExpiredDays(e.target.value === "" ? "" : Math.max(0, parseInt(e.target.value, 10) || 0))} className="w-36 px-3 py-2 rounded-lg border border-stone-200 text-sm" />
+              <select value={compProductType} onChange={(e) => { setCompProductType(e.target.value); setCompProductId(""); }} className="px-3 py-2 rounded-lg border border-stone-200 text-sm min-w-[140px]">
+                <option value="">All types</option>
+                <option value="membership_plan">Membership plan</option>
+                <option value="pt_session">PT session</option>
+                <option value="class">Class</option>
+                <option value="class_pack">Class pack</option>
+                <option value="pt_pack">PT pack</option>
+              </select>
+            {compProductType === "membership_plan" && groupOptions?.plans && (
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Plan</label>
+                <select
+                  value={compProductId === "" ? "" : compProductId}
+                  onChange={(e) => setCompProductId(e.target.value === "" ? "" : parseInt(e.target.value, 10))}
+                  className="px-3 py-2 rounded-lg border border-stone-200 text-sm min-w-[160px]"
+                >
+                  <option value="">Any plan</option>
+                  {groupOptions.plans.map((p) => (
+                    <option key={p.id} value={p.id}>{p.plan_name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {compProductType === "pt_session" && groupOptions?.sessions && (
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">PT session</label>
+                <select
+                  value={compProductId === "" ? "" : compProductId}
+                  onChange={(e) => setCompProductId(e.target.value === "" ? "" : parseInt(e.target.value, 10))}
+                  className="px-3 py-2 rounded-lg border border-stone-200 text-sm min-w-[160px]"
+                >
+                  <option value="">Any session</option>
+                  {groupOptions.sessions.map((s) => (
+                    <option key={s.id} value={s.id}>{s.session_name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {compProductType === "class" && groupOptions?.classes && (
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Class</label>
+                <select
+                  value={compProductId === "" ? "" : compProductId}
+                  onChange={(e) => setCompProductId(e.target.value === "" ? "" : parseInt(e.target.value, 10))}
+                  className="px-3 py-2 rounded-lg border border-stone-200 text-sm min-w-[160px]"
+                >
+                  <option value="">Any class</option>
+                  {groupOptions.classes.map((c) => (
+                    <option key={c.id} value={c.id}>{c.class_name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {compProductType === "class_pack" && groupOptions?.classPacks && (
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Class pack</label>
+                <select
+                  value={compProductId === "" ? "" : compProductId}
+                  onChange={(e) => setCompProductId(e.target.value === "" ? "" : parseInt(e.target.value, 10))}
+                  className="px-3 py-2 rounded-lg border border-stone-200 text-sm min-w-[160px]"
+                >
+                  <option value="">Any pack</option>
+                  {groupOptions.classPacks.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {compProductType === "pt_pack" && groupOptions?.ptPackProducts && (
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">PT pack</label>
+                <select
+                  value={compProductId === "" ? "" : compProductId}
+                  onChange={(e) => setCompProductId(e.target.value === "" ? "" : parseInt(e.target.value, 10))}
+                  className="px-3 py-2 rounded-lg border border-stone-200 text-sm min-w-[160px]"
+                >
+                  <option value="">Any pack</option>
+                  {groupOptions.ptPackProducts.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+              <button
+                type="button"
+                onClick={fetchFilteredMembers}
+                disabled={loadingFiltered}
+                className="px-4 py-2 rounded-lg border border-stone-300 bg-white font-medium hover:bg-stone-50 disabled:opacity-50"
+              >
+                {loadingFiltered ? "Loading…" : "Apply filters"}
+              </button>
+            </div>
+          </div>
+          {filteredMembers !== null && (
+            <div className="mb-3">
+              <p className="text-sm text-stone-600 mb-2">
+                <strong>{filteredMembers.count}</strong> member{filteredMembers.count !== 1 ? "s" : ""} match.
+              </p>
+              {filteredMembers.count > 0 && (
+                <form onSubmit={handleSendToFilteredGroup} className="space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-1">Subject</label>
+                    <input
+                      type="text"
+                      value={groupSubject}
+                      onChange={(e) => setGroupSubject(e.target.value)}
+                      placeholder="e.g. Your trial has ended — continue with us!"
+                      className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-stone-700 mb-1">Message</label>
+                    <textarea
+                      value={groupText}
+                      onChange={(e) => setGroupText(e.target.value)}
+                      placeholder="Type your message…"
+                      rows={4}
+                      className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm resize-y"
+                      required
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={sendingGroup}
+                    className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
+                  >
+                    {sendingGroup ? "Sending…" : `Send to filtered group (${filteredMembers.count})`}
+                  </button>
+                  {groupResult && (
+                    <p className="text-sm text-stone-600">
+                      Sent to <strong>{groupResult.sent}</strong> of {groupResult.total}.
+                      {groupResult.failed > 0 && groupResult.errors && (
+                        <details className="mt-1">
+                          <summary className="cursor-pointer text-amber-700">{groupResult.failed} failed</summary>
+                          <ul className="mt-1 text-xs list-disc list-inside">{groupResult.errors.slice(0, 5).map((err, i) => <li key={i}>{err}</li>)}</ul>
+                        </details>
+                      )}
+                    </p>
+                  )}
+                </form>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {recipientCount !== null && recipientCount > 0 && smtpConfigured && (
         <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50">

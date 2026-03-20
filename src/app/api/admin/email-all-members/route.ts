@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Admin only" }, { status: 403 });
   }
 
-  let body: { subject?: string; text?: string };
+  let body: { subject?: string; text?: string; member_ids?: string[] };
   try {
     body = await request.json();
   } catch {
@@ -58,10 +58,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Message body is required" }, { status: 400 });
   }
 
+  const filterIds = Array.isArray(body.member_ids)
+    ? body.member_ids.map((id) => String(id).trim()).filter(Boolean)
+    : null;
+
   const db = getDb();
-  const rows = db
+  let rows = db
     .prepare("SELECT member_id, email FROM members WHERE TRIM(COALESCE(email, '')) != ''")
     .all() as { member_id: string; email: string }[];
+  if (filterIds && filterIds.length > 0) {
+    const idSet = new Set(filterIds);
+    rows = rows.filter((r) => idSet.has(r.member_id));
+  }
   db.close();
 
   if (rows.length === 0) {

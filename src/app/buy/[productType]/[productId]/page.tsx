@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import { formatPrice, toTitleCase } from "@/lib/format";
 import { BRAND } from "@/lib/branding";
 
@@ -15,6 +15,7 @@ type ProductInfo = {
 
 const PRODUCT_TYPE_MAP: Record<string, { api: string; cartType: string; browsePath: string }> = {
   membership: { api: "membership-plans", cartType: "membership_plan", browsePath: "/member/memberships" },
+  "day-pass": { api: "membership-plans", cartType: "membership_plan", browsePath: "/member/memberships" },
   "pt-session": { api: "pt-sessions", cartType: "pt_session", browsePath: "/member/pt-sessions" },
   "class-pack": { api: "class-packs", cartType: "class_pack", browsePath: "/member/class-packs" },
   "pt-pack": { api: "pt-pack-products", cartType: "pt_pack", browsePath: "/member/pt-packs" },
@@ -23,11 +24,14 @@ const PRODUCT_TYPE_MAP: Record<string, { api: string; cartType: string; browsePa
 
 export default function BuyProductPage() {
   const params = useParams();
+  const pathname = usePathname();
   const productType = (params?.productType as string) ?? "";
   const productId = (params?.productId as string) ?? "";
   const [product, setProduct] = useState<ProductInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [memberId, setMemberId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const config = PRODUCT_TYPE_MAP[productType];
 
@@ -52,7 +56,7 @@ export default function BuyProductPage() {
         return r.json();
       })
       .then((data: Record<string, unknown>) => {
-        if (productType === "membership") {
+        if (productType === "membership" || productType === "day-pass") {
           setProduct({
             name: toTitleCase(String(data.plan_name ?? data.product_id ?? "Membership")),
             description: (data.description as string)?.trim() || null,
@@ -101,7 +105,39 @@ export default function BuyProductPage() {
       .finally(() => setLoading(false));
   }, [productType, productId, config]);
 
+  // Check if user is logged in (for "Add to cart" flow)
+  useEffect(() => {
+    if (!config || !product) return;
+    fetch("/api/auth/member-me")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((me) => me?.member_id && setMemberId(me.member_id))
+      .catch(() => {});
+  }, [config, product]);
+
+  async function addToCart() {
+    if (!memberId || !config || !productId) return;
+    const id = parseInt(productId, 10);
+    if (Number.isNaN(id)) return;
+    setAdding(true);
+    try {
+      const res = await fetch("/api/cart/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ member_id: memberId, product_type: config.cartType, product_id: id, quantity: 1 }),
+      });
+      if (res.ok) {
+        window.location.href = "/member/cart";
+      } else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error ?? "Could not add to cart");
+      }
+    } finally {
+      setAdding(false);
+    }
+  }
+
   const signupUrl = `/signup?redirect=${encodeURIComponent(config?.browsePath ?? "/member")}`;
+  const loginUrl = `/login?next=${encodeURIComponent(pathname || `/buy/${productType}/${productId}`)}`;
 
   if (loading) {
     return (
@@ -142,21 +178,37 @@ export default function BuyProductPage() {
               <span className="text-xl font-bold text-stone-800">{formatPrice(product.price)}</span>
             </div>
             <p className="text-stone-500 text-sm mt-6">
-              Create a free account to add this to your cart and complete your purchase in the {BRAND.name} app.
+              {memberId
+                ? "Add this to your cart and complete your purchase in the app."
+                : `Create a free account to add this to your cart and complete your purchase in the ${BRAND.name} app.`}
             </p>
-            <Link
-              href={signupUrl}
-              className="mt-6 flex items-center justify-center gap-2 w-full py-4 px-6 rounded-xl bg-brand-600 text-white font-semibold hover:bg-brand-700 transition-colors"
-            >
-              Sign up to purchase
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
-              </svg>
-            </Link>
+            {memberId ? (
+              <button
+                type="button"
+                onClick={addToCart}
+                disabled={adding}
+                className="mt-6 flex items-center justify-center gap-2 w-full py-4 px-6 rounded-xl bg-brand-600 text-white font-semibold hover:bg-brand-700 transition-colors disabled:opacity-50"
+              >
+                {adding ? "Adding…" : "Add to cart"}
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
+              </button>
+            ) : (
+              <Link
+                href={signupUrl}
+                className="mt-6 flex items-center justify-center gap-2 w-full py-4 px-6 rounded-xl bg-brand-600 text-white font-semibold hover:bg-brand-700 transition-colors"
+              >
+                Sign up to purchase
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
+              </Link>
+            )}
           </div>
         </div>
         <p className="mt-6 text-center">
-          <Link href="/login" className="text-stone-500 hover:text-stone-700 text-sm">
+          <Link href={loginUrl} className="text-stone-500 hover:text-stone-700 text-sm">
             Already have an account? Sign in
           </Link>
         </p>
