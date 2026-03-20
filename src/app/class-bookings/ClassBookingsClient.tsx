@@ -11,6 +11,8 @@ type Row = {
   status: "active" | "fulfilled";
   class_name: string;
   payment_type: string;
+  cancel_type?: string;
+  cancel_id?: number;
 };
 
 export function ClassBookingsClient() {
@@ -85,6 +87,7 @@ export function ClassBookingsClient() {
                 <th className="py-3 px-4">Status</th>
                 <th className="py-3 px-4">Class</th>
                 <th className="py-3 px-4">Payment</th>
+                <th className="py-3 px-4 w-20">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -112,6 +115,19 @@ export function ClassBookingsClient() {
                   </td>
                   <td className="py-3 px-4 text-stone-600">{display(row.class_name)}</td>
                   <td className="py-3 px-4 text-stone-600">{display(row.payment_type)}</td>
+                  <td className="py-3 px-4">
+                    {row.cancel_type === "occurrence" && row.cancel_id != null ? (
+                      <button
+                        type="button"
+                        onClick={() => handleCancel(row)}
+                        className="text-xs px-2 py-1 rounded border border-red-200 text-red-700 hover:bg-red-50"
+                      >
+                        Cancel
+                      </button>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

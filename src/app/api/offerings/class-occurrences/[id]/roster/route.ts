@@ -27,7 +27,7 @@ export async function GET(
       return NextResponse.json({ error: "Occurrence not found" }, { status: 404 });
     }
     const members = db.prepare(`
-      SELECT m.member_id, m.first_name, m.last_name, m.email, b.created_at AS booked_at
+      SELECT b.id AS booking_id, m.member_id, m.first_name, m.last_name, m.email, b.created_at AS booked_at
       FROM occurrence_bookings b
       JOIN members m ON m.member_id = b.member_id
       WHERE b.class_occurrence_id = ?

@@ -46,6 +46,28 @@ export function PtBookingsClient() {
     }
   }, []);
 
+  const handleCancel = useCallback(
+    async (row: Row) => {
+      if (!row.cancel_type || row.cancel_id == null) return;
+      if (!confirm(`Cancel this ${row.source} booking for ${row.member_name}?`)) return;
+      try {
+        const res = await fetch("/api/admin/pt-bookings/cancel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: row.cancel_type, id: row.cancel_id }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error ?? "Failed to cancel");
+        }
+        await fetchData(debouncedSearch);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to cancel");
+      }
+    },
+    [debouncedSearch, fetchData]
+  );
+
   useEffect(() => {
     fetchData(debouncedSearch);
   }, [debouncedSearch, fetchData]);
@@ -87,6 +109,7 @@ export function PtBookingsClient() {
                 <th className="py-3 px-4">Status</th>
                 <th className="py-3 px-4">Session Name</th>
                 <th className="py-3 px-4">Payment</th>
+                <th className="py-3 px-4 w-20">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -114,6 +137,19 @@ export function PtBookingsClient() {
                   </td>
                   <td className="py-3 px-4 text-stone-600">{display(row.session_name)}</td>
                   <td className="py-3 px-4 text-stone-600">{display(row.payment_type)}</td>
+                  <td className="py-3 px-4">
+                    {row.cancel_type && row.cancel_id != null ? (
+                      <button
+                        type="button"
+                        onClick={() => handleCancel(row)}
+                        className="text-xs px-2 py-1 rounded border border-red-200 text-red-700 hover:bg-red-50"
+                      >
+                        Cancel
+                      </button>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

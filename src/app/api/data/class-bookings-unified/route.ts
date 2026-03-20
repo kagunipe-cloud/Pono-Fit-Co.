@@ -14,6 +14,8 @@ type BookingRow = {
   status: "active" | "fulfilled";
   class_name: string;
   payment_type: string;
+  cancel_type?: string;
+  cancel_id?: number;
 };
 
 export async function GET(request: NextRequest) {
@@ -54,6 +56,8 @@ export async function GET(request: NextRequest) {
         status,
         class_name: r.class_name ?? "Class",
         payment_type: "—",
+        cancel_type: "occurrence",
+        cancel_id: r.id,
       });
     }
 
