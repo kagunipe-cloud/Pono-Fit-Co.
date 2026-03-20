@@ -7,6 +7,8 @@ export const dynamic = "force-dynamic";
 type BookingRow = {
   source: string;
   id: number | string;
+  member_id?: string;
+  recurring_class_id?: number | null;
   member_name: string;
   transaction_datetime: string;
   session_datetime: string;
@@ -32,13 +34,13 @@ export async function GET(request: NextRequest) {
     // occurrence_bookings (credit-based recurring)
     const occRows = db.prepare(`
       SELECT ob.id, ob.member_id, ob.created_at,
-             o.occurrence_date, o.occurrence_time,
+             o.occurrence_date, o.occurrence_time, o.recurring_class_id,
              COALESCE(c.class_name, r.name) AS class_name
       FROM occurrence_bookings ob
       JOIN class_occurrences o ON o.id = ob.class_occurrence_id
       LEFT JOIN classes c ON c.id = o.class_id
       LEFT JOIN recurring_classes r ON r.id = o.recurring_class_id
-    `).all() as { id: number; member_id: string; created_at: string | null; occurrence_date: string; occurrence_time: string | null; class_name: string | null }[];
+    `).all() as { id: number; member_id: string; created_at: string | null; occurrence_date: string; occurrence_time: string | null; recurring_class_id: number | null; class_name: string | null }[];
 
     for (const r of occRows) {
       const m = db.prepare("SELECT first_name, last_name FROM members WHERE member_id = ?").get(r.member_id) as { first_name: string | null; last_name: string | null } | undefined;
@@ -49,6 +51,8 @@ export async function GET(request: NextRequest) {
       rows.push({
         source: "Occurrence",
         id: r.id,
+        member_id: r.member_id,
+        recurring_class_id: r.recurring_class_id ?? null,
         member_name,
         transaction_datetime: r.created_at ?? "—",
         session_datetime: time ? `${r.occurrence_date} ${time}` : r.occurrence_date,

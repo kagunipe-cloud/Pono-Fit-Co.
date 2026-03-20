@@ -196,6 +196,16 @@ export function ensurePTSlotTables(db: ReturnType<typeof getDb>) {
   } catch {
     /* already exists */
   }
+  try {
+    db.exec("ALTER TABLE pt_open_bookings ADD COLUMN recurring_group_id TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE pt_trainer_specific_bookings ADD COLUMN recurring_group_id TEXT");
+  } catch {
+    /* already exists */
+  }
   // One-time backfill: set trainer_member_id for blocks where it's null, by matching trainer name to members
   try {
     const done = db.prepare("SELECT 1 FROM app_settings WHERE key = ? AND value = ?").get("trainer_availability_backfill", "1");

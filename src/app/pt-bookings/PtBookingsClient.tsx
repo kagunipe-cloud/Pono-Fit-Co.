@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 
 type Row = {
   source: string;
   id: number | string;
+  member_id?: string;
+  pt_session_id?: number | null;
+  trainer?: string | null;
+  recurring_group_id?: string | null;
   member_name: string;
   transaction_datetime: string;
   session_datetime: string;
@@ -67,6 +71,45 @@ export function PtBookingsClient() {
     },
     [debouncedSearch, fetchData]
   );
+
+  const handleCancelAll = useCallback(
+    async (groupRows: Row[]) => {
+      const ids = groupRows.map((r) => r.cancel_id).filter((id): id is number => id != null);
+      if (ids.length === 0) return;
+      const memberName = groupRows[0]?.member_name ?? "member";
+      const sessionName = groupRows[0]?.session_name ?? "PT";
+      if (!confirm(`Cancel all ${ids.length} ${sessionName} bookings for ${memberName}?`)) return;
+      try {
+        const res = await fetch("/api/admin/pt-bookings/cancel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: groupRows[0]?.cancel_type, ids }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error ?? "Failed to cancel");
+        }
+        await fetchData(debouncedSearch);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to cancel");
+      }
+    },
+    [debouncedSearch, fetchData]
+  );
+
+  const recurringGroups = useMemo(() => {
+    const map = new Map<string, Row[]>();
+    for (const row of rows) {
+      if (!row.cancel_type || row.cancel_id == null) continue;
+      if (row.cancel_type === "slot") continue;
+      if (!row.recurring_group_id?.trim()) continue;
+      const key = `${row.cancel_type}:${row.recurring_group_id}`;
+      const list = map.get(key) ?? [];
+      list.push(row);
+      map.set(key, list);
+    }
+    return map;
+  }, [rows]);
 
   useEffect(() => {
     fetchData(debouncedSearch);
@@ -139,13 +182,28 @@ export function PtBookingsClient() {
                   <td className="py-3 px-4 text-stone-600">{display(row.payment_type)}</td>
                   <td className="py-3 px-4">
                     {row.cancel_type && row.cancel_id != null ? (
-                      <button
-                        type="button"
-                        onClick={() => handleCancel(row)}
-                        className="text-xs px-2 py-1 rounded border border-red-200 text-red-700 hover:bg-red-50"
-                      >
-                        Cancel
-                      </button>
+                      <div className="flex flex-wrap gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleCancel(row)}
+                          className="text-xs px-2 py-1 rounded border border-red-200 text-red-700 hover:bg-red-50"
+                        >
+                          Cancel
+                        </button>
+                        {row.cancel_type !== "slot" && row.recurring_group_id?.trim() && (() => {
+                          const key = `${row.cancel_type}:${row.recurring_group_id}`;
+                          const group = recurringGroups.get(key);
+                          return group && group.length >= 2 ? (
+                            <button
+                              type="button"
+                              onClick={() => handleCancelAll(group)}
+                              className="text-xs px-2 py-1 rounded border border-red-300 text-red-800 hover:bg-red-100 font-medium"
+                            >
+                              Cancel all
+                            </button>
+                          ) : null;
+                        })()}
+                      </div>
                     ) : (
                       "—"
                     )}

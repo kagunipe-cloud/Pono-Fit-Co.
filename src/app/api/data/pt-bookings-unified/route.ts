@@ -7,6 +7,10 @@ export const dynamic = "force-dynamic";
 type BookingRow = {
   source: string;
   id: number | string;
+  member_id?: string;
+  pt_session_id?: number | null;
+  trainer?: string | null;
+  recurring_group_id?: string | null;
   member_name: string;
   transaction_datetime: string;
   session_datetime: string;
@@ -31,12 +35,12 @@ export async function GET(request: NextRequest) {
 
     // pt_open_bookings
     const openRows = db.prepare(`
-      SELECT ob.id, ob.member_id, ob.guest_name, ob.occurrence_date, ob.start_time, ob.duration_minutes, ob.created_at, ob.payment_type,
+      SELECT ob.id, ob.member_id, ob.guest_name, ob.occurrence_date, ob.start_time, ob.duration_minutes, ob.created_at, ob.payment_type, ob.pt_session_id, ob.recurring_group_id,
              m.first_name, m.last_name, p.session_name
       FROM pt_open_bookings ob
       LEFT JOIN members m ON m.member_id = ob.member_id
       LEFT JOIN pt_sessions p ON p.id = ob.pt_session_id
-    `).all() as { id: number; member_id: string; guest_name: string | null; occurrence_date: string; start_time: string; duration_minutes: number; created_at: string | null; payment_type: string | null; first_name: string | null; last_name: string | null; session_name: string | null }[];
+    `).all() as { id: number; member_id: string; guest_name: string | null; occurrence_date: string; start_time: string; duration_minutes: number; created_at: string | null; payment_type: string | null; pt_session_id: number; recurring_group_id: string | null; first_name: string | null; last_name: string | null; session_name: string | null }[];
 
     for (const r of openRows) {
       const member_name = (r.guest_name && r.guest_name.trim()) ? r.guest_name.trim() : ([r.first_name, r.last_name].filter(Boolean).join(" ").trim() || r.member_id || "—");
@@ -45,6 +49,9 @@ export async function GET(request: NextRequest) {
       rows.push({
         source: "Open",
         id: r.id,
+        member_id: r.member_id || (r.guest_name ? `guest:${r.guest_name}` : undefined),
+        pt_session_id: r.pt_session_id ?? null,
+        recurring_group_id: r.recurring_group_id ?? null,
         member_name,
         transaction_datetime: r.created_at ?? "—",
         session_datetime: `${r.occurrence_date} ${r.start_time}`,
@@ -59,12 +66,12 @@ export async function GET(request: NextRequest) {
 
     // pt_trainer_specific_bookings
     const tsRows = db.prepare(`
-      SELECT b.id, b.member_id, b.occurrence_date, b.start_time, b.session_duration_minutes, b.created_at, b.payment_type,
+      SELECT b.id, b.member_id, b.occurrence_date, b.start_time, b.session_duration_minutes, b.created_at, b.payment_type, b.recurring_group_id,
              m.first_name, m.last_name, a.trainer
       FROM pt_trainer_specific_bookings b
       JOIN trainer_availability a ON a.id = b.trainer_availability_id
       LEFT JOIN members m ON m.member_id = b.member_id
-    `).all() as { id: number; member_id: string; occurrence_date: string; start_time: string; session_duration_minutes: number; created_at: string | null; payment_type: string | null; first_name: string | null; last_name: string | null; trainer: string | null }[];
+    `).all() as { id: number; member_id: string; occurrence_date: string; start_time: string; session_duration_minutes: number; created_at: string | null; payment_type: string | null; recurring_group_id: string | null; first_name: string | null; last_name: string | null; trainer: string | null }[];
 
     for (const r of tsRows) {
       const member_name = [r.first_name, r.last_name].filter(Boolean).join(" ").trim() || r.member_id || "—";
@@ -73,6 +80,9 @@ export async function GET(request: NextRequest) {
       rows.push({
         source: "Trainer-specific",
         id: r.id,
+        member_id: r.member_id,
+        trainer: r.trainer ?? null,
+        recurring_group_id: r.recurring_group_id ?? null,
         member_name,
         transaction_datetime: r.created_at ?? "—",
         session_datetime: `${r.occurrence_date} ${r.start_time}`,

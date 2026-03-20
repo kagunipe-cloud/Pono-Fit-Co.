@@ -35,9 +35,9 @@ export async function POST(request: NextRequest) {
     ensurePTSlotTables(db);
 
     const open = db.prepare(
-      "SELECT id, member_id, guest_name, occurrence_date, start_time, duration_minutes, payment_type FROM pt_open_bookings WHERE id = ?"
+      "SELECT id, member_id, guest_name, occurrence_date, start_time, duration_minutes, payment_type, recurring_group_id FROM pt_open_bookings WHERE id = ?"
     ).get(open_booking_id) as
-      | { id: number; member_id: string; guest_name: string | null; occurrence_date: string; start_time: string; duration_minutes: number; payment_type: string }
+      | { id: number; member_id: string; guest_name: string | null; occurrence_date: string; start_time: string; duration_minutes: number; payment_type: string; recurring_group_id: string | null }
       | undefined;
 
     if (!open) {
@@ -83,9 +83,10 @@ export async function POST(request: NextRequest) {
     const reserved_minutes = reservedMinutes(session_duration_minutes, remainingMinutes);
     const payment_type = open.payment_type || "paid";
 
+    const recurringGroupId = open.recurring_group_id ?? null;
     db.prepare(
-      "INSERT INTO pt_trainer_specific_bookings (trainer_availability_id, occurrence_date, start_time, session_duration_minutes, reserved_minutes, member_id, payment_type) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).run(block.id, open.occurrence_date, open.start_time, session_duration_minutes, reserved_minutes, member_id, payment_type);
+      "INSERT INTO pt_trainer_specific_bookings (trainer_availability_id, occurrence_date, start_time, session_duration_minutes, reserved_minutes, member_id, payment_type, recurring_group_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(block.id, open.occurrence_date, open.start_time, session_duration_minutes, reserved_minutes, member_id, payment_type, recurringGroupId);
 
     ensureTrainerClient(db, trainer_member_id, member_id);
 

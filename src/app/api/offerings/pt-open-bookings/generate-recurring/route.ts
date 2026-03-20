@@ -64,13 +64,14 @@ export async function POST(request: NextRequest) {
     }
 
     const trainerMemberId = session.trainer ? getTrainerMemberIdByDisplayName(db, session.trainer) : null;
+    const recurringGroupId = crypto.randomUUID();
     let inserted = 0;
     const stmt = db.prepare(
-      "INSERT INTO pt_open_bookings (member_id, guest_name, occurrence_date, start_time, duration_minutes, pt_session_id, payment_type, trainer_member_id) VALUES (?, ?, ?, ?, ?, ?, 'paid', ?)"
+      "INSERT INTO pt_open_bookings (member_id, guest_name, occurrence_date, start_time, duration_minutes, pt_session_id, payment_type, trainer_member_id, recurring_group_id) VALUES (?, ?, ?, ?, ?, ?, 'paid', ?, ?)"
     );
     for (const date of dates) {
       if (isPTBookingSlotFree(db, date, startMin, duration_minutes, trainerMemberId)) {
-        stmt.run(effectiveMemberId, isGuest ? guest_name : null, date, start_time, duration_minutes, pt_session_id, trainerMemberId ?? null);
+        stmt.run(effectiveMemberId, isGuest ? guest_name : null, date, start_time, duration_minutes, pt_session_id, trainerMemberId ?? null, recurringGroupId);
         inserted++;
       }
     }

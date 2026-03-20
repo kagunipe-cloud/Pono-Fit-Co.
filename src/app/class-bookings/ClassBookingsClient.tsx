@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 
 type Row = {
   source: string;
   id: number | string;
+  member_id?: string;
+  recurring_class_id?: number | null;
   member_name: string;
   transaction_datetime: string;
   session_datetime: string;
@@ -67,6 +69,44 @@ export function ClassBookingsClient() {
     },
     [debouncedSearch, fetchData]
   );
+
+  const handleCancelAll = useCallback(
+    async (groupRows: Row[]) => {
+      const ids = groupRows.map((r) => r.cancel_id).filter((id): id is number => id != null);
+      if (ids.length === 0) return;
+      const memberName = groupRows[0]?.member_name ?? "member";
+      const className = groupRows[0]?.class_name ?? "class";
+      if (!confirm(`Cancel all ${ids.length} ${className} bookings for ${memberName}?`)) return;
+      try {
+        const res = await fetch("/api/admin/class-bookings/cancel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ occurrence_booking_ids: ids }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error ?? "Failed to cancel");
+        }
+        await fetchData(debouncedSearch);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to cancel");
+      }
+    },
+    [debouncedSearch, fetchData]
+  );
+
+  const recurringGroups = useMemo(() => {
+    const map = new Map<string, Row[]>();
+    for (const row of rows) {
+      if (row.cancel_type !== "occurrence" || row.cancel_id == null) continue;
+      if (row.member_id == null || row.recurring_class_id == null) continue;
+      const key = `${row.member_id}:${row.recurring_class_id}`;
+      const list = map.get(key) ?? [];
+      list.push(row);
+      map.set(key, list);
+    }
+    return map;
+  }, [rows]);
 
   useEffect(() => {
     fetchData(debouncedSearch);
@@ -139,13 +179,28 @@ export function ClassBookingsClient() {
                   <td className="py-3 px-4 text-stone-600">{display(row.payment_type)}</td>
                   <td className="py-3 px-4">
                     {row.cancel_type === "occurrence" && row.cancel_id != null ? (
-                      <button
-                        type="button"
-                        onClick={() => handleCancel(row)}
-                        className="text-xs px-2 py-1 rounded border border-red-200 text-red-700 hover:bg-red-50"
-                      >
-                        Cancel
-                      </button>
+                      <div className="flex flex-wrap gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleCancel(row)}
+                          className="text-xs px-2 py-1 rounded border border-red-200 text-red-700 hover:bg-red-50"
+                        >
+                          Cancel
+                        </button>
+                        {row.member_id != null &&
+                          row.recurring_class_id != null &&
+                          (recurringGroups.get(`${row.member_id}:${row.recurring_class_id}`)?.length ?? 0) >= 2 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleCancelAll(recurringGroups.get(`${row.member_id}:${row.recurring_class_id}`) ?? [])
+                              }
+                              className="text-xs px-2 py-1 rounded border border-red-300 text-red-800 hover:bg-red-100 font-medium"
+                            >
+                              Cancel all
+                            </button>
+                          )}
+                      </div>
                     ) : (
                       "—"
                     )}
