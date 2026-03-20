@@ -109,7 +109,7 @@ export default function AdminUsagePage() {
         <Link href="/" className="text-stone-500 hover:text-stone-700 text-sm mb-2 inline-block">
           ← Back to home
         </Link>
-        <h1 className="text-2xl font-bold text-stone-800">Who checked in</h1>
+        <h1 className="text-2xl font-bold text-stone-800">Check-Ins</h1>
         <p className="text-stone-500 mt-1">
           Door unlocks (Kisi webhooks) and app usage. Admin only.
         </p>

@@ -158,11 +158,11 @@ export function startOfDayInTz(dateStr: string, timeZone: string = APP_TIMEZONE)
   const d = new Date(dateStr + "T12:00:00.000Z");
   const str = d.toLocaleString("en-CA", { timeZone });
   const parts = str.split(", ");
-  const timePart = parts[1] ?? "00:00:00";
-  const [h, m, s] = timePart.split(":").map(Number);
+  const timePart = (parts[1] ?? "00:00:00").replace(/\s*(?:a\.?m\.?|p\.?m\.?)/i, "").trim();
+  const [h, m, s] = timePart.split(":").map((x) => parseInt(String(x), 10) || 0);
   const hoursIntoDay = h + m / 60 + s / 3600;
   const startMs = d.getTime() - hoursIntoDay * 60 * 60 * 1000;
-  return new Date(startMs).toISOString().slice(0, 19).replace("T", " ");
+  return new Date(startMs).toISOString().slice(0, 23);
 }
 
 /** End of day (23:59:59.999) in the given timezone as ISO string for SQL comparison. */
@@ -170,10 +170,10 @@ export function endOfDayInTz(dateStr: string, timeZone: string = APP_TIMEZONE): 
   const d = new Date(dateStr + "T12:00:00.000Z");
   const str = d.toLocaleString("en-CA", { timeZone });
   const parts = str.split(", ");
-  const timePart = parts[1] ?? "00:00:00";
-  const [h, m, s] = timePart.split(":").map(Number);
+  const timePart = (parts[1] ?? "00:00:00").replace(/\s*(?:a\.?m\.?|p\.?m\.?)/i, "").trim();
+  const [h, m, s] = timePart.split(":").map((x) => parseInt(String(x), 10) || 0);
   const hoursIntoDay = h + m / 60 + s / 3600;
   const startMs = d.getTime() - hoursIntoDay * 60 * 60 * 1000;
   const endMs = startMs + 24 * 60 * 60 * 1000 - 1;
-  return new Date(endMs).toISOString().slice(0, 19).replace("T", " ");
+  return new Date(endMs).toISOString().slice(0, 23);
 }

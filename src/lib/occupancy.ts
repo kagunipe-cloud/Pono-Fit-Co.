@@ -31,11 +31,13 @@ export function ensureOccupancyTable(db: ReturnType<typeof getDb>) {
   }
 }
 
-/** Count entries within the last hour. */
+/** Count entries within the last hour. Only counts outside unlocks (member_id set) or manual walk-ins (source = 'manual'). Excludes inside unlocks (request-to-exit) which have no member. */
 export function getOccupancyCount(db: ReturnType<typeof getDb>): number {
   ensureOccupancyTable(db);
   const row = db.prepare(
-    `SELECT COUNT(*) AS n FROM occupancy_entries WHERE entered_at > datetime('now', '-1 hour')`
+    `SELECT COUNT(*) AS n FROM occupancy_entries
+     WHERE entered_at > datetime('now', '-1 hour')
+     AND (member_id IS NOT NULL OR source = 'manual')`
   ).get() as { n: number };
   return row?.n ?? 0;
 }
@@ -66,11 +68,14 @@ export function addOccupancyEntry(
   ).run(at, source, mid);
 }
 
-/** Remove oldest entry (-1, FIFO). Returns true if one was removed. */
+/** Remove oldest entry (-1, FIFO). Only removes counted entries (member_id set or manual). Returns true if one was removed. */
 export function removeOldestOccupancyEntry(db: ReturnType<typeof getDb>): boolean {
   ensureOccupancyTable(db);
   const row = db.prepare(
-    `SELECT id FROM occupancy_entries WHERE entered_at > datetime('now', '-1 hour') ORDER BY entered_at ASC LIMIT 1`
+    `SELECT id FROM occupancy_entries
+     WHERE entered_at > datetime('now', '-1 hour')
+     AND (member_id IS NOT NULL OR source = 'manual')
+     ORDER BY entered_at ASC LIMIT 1`
   ).get() as { id: number } | undefined;
   if (!row) return false;
   db.prepare(`DELETE FROM occupancy_entries WHERE id = ?`).run(row.id);

@@ -427,7 +427,7 @@ function NavList({
                 role="menuitem"
                 onClick={() => setReportsOpen(false)}
               >
-                Who checked in
+                Check-Ins
               </Link>
             </div>,
             document.body
