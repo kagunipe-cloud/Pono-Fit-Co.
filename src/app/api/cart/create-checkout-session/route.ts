@@ -203,9 +203,17 @@ export async function POST(request: NextRequest) {
 
     const stripe = new Stripe(stripeSecret);
 
-    const origin = request.headers.get("origin") ?? request.nextUrl.origin;
-    const successUrl = `${origin}/members/${member_id}/cart/success?session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `${origin}/members/${member_id}/cart`;
+    // Use canonical app URL when set (avoids wrong origin from in-app browsers, PWAs, proxies)
+    const proto = request.headers.get("x-forwarded-proto");
+    const host = request.headers.get("x-forwarded-host");
+    const origin =
+      process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+      (proto && host ? `${proto}://${host}`.replace(/\/$/, "") : null) ||
+      request.headers.get("origin") ||
+      request.nextUrl.origin;
+    const base = origin.replace(/\/$/, "");
+    const successUrl = `${base}/members/${member_id}/cart/success?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${base}/members/${member_id}/cart`;
 
     const taxRateId = process.env.STRIPE_TAX_RATE_ID?.trim() || null;
 

@@ -23,9 +23,16 @@ export async function POST(request: NextRequest) {
     if (!row) return NextResponse.json({ error: "Member not found" }, { status: 404 });
 
     const stripe = new Stripe(stripeSecret);
-    const origin = request.headers.get("origin") ?? request.nextUrl.origin;
-    const successUrl = `${origin}/member/membership?card_updated=1&session_id={CHECKOUT_SESSION_ID}`;
-    const cancelUrl = `${origin}/member/membership`;
+    const proto = request.headers.get("x-forwarded-proto");
+    const host = request.headers.get("x-forwarded-host");
+    const origin =
+      process.env.NEXT_PUBLIC_APP_URL?.trim() ||
+      (proto && host ? `${proto}://${host}`.replace(/\/$/, "") : null) ||
+      request.headers.get("origin") ||
+      request.nextUrl.origin;
+    const base = origin.replace(/\/$/, "");
+    const successUrl = `${base}/member/membership?card_updated=1&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${base}/member/membership`;
 
     const params: Stripe.Checkout.SessionCreateParams = {
       mode: "setup",
