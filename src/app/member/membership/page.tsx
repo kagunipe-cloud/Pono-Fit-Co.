@@ -96,19 +96,25 @@ function MemberMembershipContent() {
           {updatingCard ? "Redirecting…" : "Change payment method"}
         </button>
         {cardMessage && <p className="text-sm text-stone-600 mt-2">{cardMessage}</p>}
-        <details className="mt-3">
-          <summary className="cursor-pointer text-sm text-stone-500 hover:text-stone-700">Having trouble?</summary>
-          <p className="mt-2 text-sm text-stone-600">
-            If the payment page doesn&apos;t load, try a different browser, incognito mode, or disable ad blockers. Still stuck?{" "}
-            {typeof process.env.NEXT_PUBLIC_CONTACT_PHONE === "string" && process.env.NEXT_PUBLIC_CONTACT_PHONE.trim() ? (
-              <><a href={`tel:${process.env.NEXT_PUBLIC_CONTACT_PHONE.replace(/\D/g, "")}`} className="text-brand-600 hover:underline">Call</a> or </>
-            ) : null}
-            {typeof process.env.NEXT_PUBLIC_CONTACT_EMAIL === "string" && process.env.NEXT_PUBLIC_CONTACT_EMAIL.trim() ? (
-              <a href={`mailto:${process.env.NEXT_PUBLIC_CONTACT_EMAIL.trim()}`} className="text-brand-600 hover:underline">email us</a>
-            ) : (
-              "contact us"
-            )}.
-          </p>
+        <details className="mt-4 p-4 rounded-xl border-2 border-stone-200 bg-stone-100 open:border-stone-300">
+          <summary className="cursor-pointer text-base font-semibold text-stone-700 hover:text-stone-900 list-none [&::-webkit-details-marker]:hidden">Having trouble?</summary>
+          <div className="mt-4 space-y-3 text-base text-stone-600">
+            <p>If the payment page doesn&apos;t load, try a different browser, incognito mode, or disable ad blockers.</p>
+            <div className="pt-2 border-t border-stone-200">
+              <p className="font-medium text-stone-800 mb-2">Still stuck? Call or email us:</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-1">
+                {typeof process.env.NEXT_PUBLIC_CONTACT_PHONE === "string" && process.env.NEXT_PUBLIC_CONTACT_PHONE.trim() ? (
+                  <a href={`tel:${process.env.NEXT_PUBLIC_CONTACT_PHONE.replace(/\D/g, "")}`} className="text-brand-600 hover:underline font-medium">{process.env.NEXT_PUBLIC_CONTACT_PHONE.trim()}</a>
+                ) : null}
+                {typeof process.env.NEXT_PUBLIC_CONTACT_EMAIL === "string" && process.env.NEXT_PUBLIC_CONTACT_EMAIL.trim() ? (
+                  <a href={`mailto:${process.env.NEXT_PUBLIC_CONTACT_EMAIL.trim()}`} className="text-brand-600 hover:underline font-medium">{process.env.NEXT_PUBLIC_CONTACT_EMAIL.trim()}</a>
+                ) : null}
+                {(!process.env.NEXT_PUBLIC_CONTACT_PHONE?.trim() && !process.env.NEXT_PUBLIC_CONTACT_EMAIL?.trim()) && (
+                  <span>Contact us at the front desk or see our website.</span>
+                )}
+              </div>
+            </div>
+          </div>
         </details>
       </div>
       {subs.some((s) => s.status === "Active") && (

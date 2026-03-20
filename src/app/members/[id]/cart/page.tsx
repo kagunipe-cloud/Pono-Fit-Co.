@@ -741,29 +741,31 @@ export default function MemberCartPage() {
             </p>
           </div>
 
-          <details className="mt-4 p-4 rounded-xl border border-stone-200 bg-stone-50">
-            <summary className="cursor-pointer text-sm font-medium text-stone-700 hover:text-stone-900">
+          <details className="mt-6 p-6 rounded-xl border-2 border-stone-200 bg-stone-50 open:border-stone-300">
+            <summary className="cursor-pointer text-base font-semibold text-stone-800 hover:text-stone-900 list-none [&::-webkit-details-marker]:hidden">
               Having trouble with payment?
             </summary>
-            <div className="mt-3 space-y-2 text-sm text-stone-600">
+            <div className="mt-4 space-y-4 text-base text-stone-600">
               <p>If the payment page doesn&apos;t load or you see a blank screen, try:</p>
-              <ul className="list-disc list-inside space-y-1">
+              <ul className="list-disc list-inside space-y-2">
                 <li>Opening in a different browser (Chrome, Safari, Firefox)</li>
                 <li>Using private or incognito mode</li>
                 <li>Temporarily disabling ad blockers or privacy extensions</li>
               </ul>
-              <p className="pt-2">
-                Still having issues? Call or email us to complete your purchase:
-                {typeof process.env.NEXT_PUBLIC_CONTACT_PHONE === "string" && process.env.NEXT_PUBLIC_CONTACT_PHONE.trim() ? (
-                  <> <a href={`tel:${process.env.NEXT_PUBLIC_CONTACT_PHONE.replace(/\D/g, "")}`} className="text-brand-600 hover:underline font-medium">{process.env.NEXT_PUBLIC_CONTACT_PHONE.trim()}</a></>
-                ) : null}
-                {typeof process.env.NEXT_PUBLIC_CONTACT_EMAIL === "string" && process.env.NEXT_PUBLIC_CONTACT_EMAIL.trim() ? (
-                  <>{process.env.NEXT_PUBLIC_CONTACT_PHONE?.trim() ? " or " : " "}<a href={`mailto:${process.env.NEXT_PUBLIC_CONTACT_EMAIL.trim()}`} className="text-brand-600 hover:underline font-medium">{process.env.NEXT_PUBLIC_CONTACT_EMAIL.trim()}</a></>
-                ) : null}
-                {(!process.env.NEXT_PUBLIC_CONTACT_PHONE?.trim() && !process.env.NEXT_PUBLIC_CONTACT_EMAIL?.trim()) && (
-                  <span> See our website or visit the front desk for contact details.</span>
-                )}
-              </p>
+              <div className="pt-3 border-t border-stone-200">
+                <p className="font-medium text-stone-800 mb-2">Still having issues? Call or email us to complete your purchase:</p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  {typeof process.env.NEXT_PUBLIC_CONTACT_PHONE === "string" && process.env.NEXT_PUBLIC_CONTACT_PHONE.trim() ? (
+                    <a href={`tel:${process.env.NEXT_PUBLIC_CONTACT_PHONE.replace(/\D/g, "")}`} className="text-brand-600 hover:underline font-medium text-lg">{process.env.NEXT_PUBLIC_CONTACT_PHONE.trim()}</a>
+                  ) : null}
+                  {typeof process.env.NEXT_PUBLIC_CONTACT_EMAIL === "string" && process.env.NEXT_PUBLIC_CONTACT_EMAIL.trim() ? (
+                    <a href={`mailto:${process.env.NEXT_PUBLIC_CONTACT_EMAIL.trim()}`} className="text-brand-600 hover:underline font-medium text-lg">{process.env.NEXT_PUBLIC_CONTACT_EMAIL.trim()}</a>
+                  ) : null}
+                  {(!process.env.NEXT_PUBLIC_CONTACT_PHONE?.trim() && !process.env.NEXT_PUBLIC_CONTACT_EMAIL?.trim()) && (
+                    <span>See our website or visit the front desk for contact details.</span>
+                  )}
+                </div>
+              </div>
             </div>
           </details>
 
