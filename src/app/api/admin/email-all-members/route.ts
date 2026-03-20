@@ -4,6 +4,7 @@ import { getAdminMemberId } from "@/lib/admin";
 import { sendMemberEmail, isGmailApiConfigured } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 600;
 
 /** True if SMTP env vars are set so we can send mail. */
 function isSmtpConfigured(): boolean {
@@ -74,27 +75,21 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Send all in parallel so the request finishes before server timeout (sequential was 2–3s per recipient).
-  const results = await Promise.allSettled(
-    rows.map((row) => {
-      const to = row.email?.trim();
-      if (!to) return Promise.resolve({ ok: false as const, error: "No address" });
-      return sendMemberEmail(to, subject, text);
-    })
-  );
-
+  // Send sequentially with delay to avoid Gmail API rate limits (429 concurrent, 403 quota per minute).
+  const DELAY_MS = 1500;
   let sent = 0;
   const errors: string[] = [];
-  results.forEach((outcome, i) => {
-    const to = rows[i]?.email?.trim();
-    if (!to) return;
-    if (outcome.status === "fulfilled" && outcome.value.ok) {
+  for (const row of rows) {
+    const to = row.email?.trim();
+    if (!to) continue;
+    const result = await sendMemberEmail(to, subject, text);
+    if (result.ok) {
       sent++;
     } else {
-      const err = outcome.status === "fulfilled" ? outcome.value.error : String(outcome.reason);
-      errors.push(`${to}: ${err ?? "Failed"}`);
+      errors.push(`${to}: ${result.error ?? "Failed"}`);
     }
-  });
+    await new Promise((r) => setTimeout(r, DELAY_MS));
+  }
 
   return NextResponse.json({
     sent,

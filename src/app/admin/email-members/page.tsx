@@ -411,7 +411,7 @@ export default function AdminEmailMembersPage() {
             disabled={sending}
             className="px-4 py-2.5 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
           >
-            {sending ? "Sending…" : "Send to all members"}
+            {sending ? "Sending… (may take several minutes for large lists)" : "Send to all members"}
           </button>
         </form>
       )}

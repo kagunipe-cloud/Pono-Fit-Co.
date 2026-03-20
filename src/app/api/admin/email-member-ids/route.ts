@@ -4,6 +4,7 @@ import { getAdminMemberId } from "@/lib/admin";
 import { sendAppDownloadInviteEmail, isGmailApiConfigured } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 600;
 
 function isSmtpConfigured(): boolean {
   const host = process.env.SMTP_HOST?.trim();
@@ -79,29 +80,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No members with an email address to send to" }, { status: 400 });
   }
 
-  const results = await Promise.allSettled(
-    rows.map((row) =>
-      sendAppDownloadInviteEmail({
-        to: row.email.trim(),
-        first_name: row.first_name,
-        origin,
-        member_id: row.member_id,
-      })
-    )
-  );
-
+  const DELAY_MS = 1500;
   let sent = 0;
   const errors: string[] = [];
-  results.forEach((outcome, i) => {
-    const to = rows[i]?.email?.trim();
-    if (!to) return;
-    if (outcome.status === "fulfilled" && outcome.value.ok) {
+  for (const row of rows) {
+    const to = row.email?.trim();
+    if (!to) continue;
+    const result = await sendAppDownloadInviteEmail({
+      to,
+      first_name: row.first_name,
+      origin,
+      member_id: row.member_id,
+    });
+    if (result.ok) {
       sent++;
     } else {
-      const err = outcome.status === "fulfilled" ? outcome.value.error : String(outcome.reason);
-      errors.push(`${to}: ${err ?? "Failed"}`);
+      errors.push(`${to}: ${result.error ?? "Failed"}`);
     }
-  });
+    await new Promise((r) => setTimeout(r, DELAY_MS));
+  }
 
   return NextResponse.json({
     sent,
