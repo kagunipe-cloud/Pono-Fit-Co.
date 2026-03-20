@@ -46,6 +46,28 @@ export function ClassBookingsClient() {
     }
   }, []);
 
+  const handleCancel = useCallback(
+    async (row: Row) => {
+      if (row.cancel_type !== "occurrence" || row.cancel_id == null) return;
+      if (!confirm(`Cancel this class booking for ${row.member_name}?`)) return;
+      try {
+        const res = await fetch("/api/admin/class-bookings/cancel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ occurrence_booking_id: row.cancel_id }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error ?? "Failed to cancel");
+        }
+        await fetchData(debouncedSearch);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to cancel");
+      }
+    },
+    [debouncedSearch, fetchData]
+  );
+
   useEffect(() => {
     fetchData(debouncedSearch);
   }, [debouncedSearch, fetchData]);
