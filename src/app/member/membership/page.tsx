@@ -96,6 +96,20 @@ function MemberMembershipContent() {
           {updatingCard ? "Redirecting…" : "Change payment method"}
         </button>
         {cardMessage && <p className="text-sm text-stone-600 mt-2">{cardMessage}</p>}
+        <details className="mt-3">
+          <summary className="cursor-pointer text-sm text-stone-500 hover:text-stone-700">Having trouble?</summary>
+          <p className="mt-2 text-sm text-stone-600">
+            If the payment page doesn&apos;t load, try a different browser, incognito mode, or disable ad blockers. Still stuck?{" "}
+            {typeof process.env.NEXT_PUBLIC_CONTACT_PHONE === "string" && process.env.NEXT_PUBLIC_CONTACT_PHONE.trim() ? (
+              <><a href={`tel:${process.env.NEXT_PUBLIC_CONTACT_PHONE.replace(/\D/g, "")}`} className="text-brand-600 hover:underline">Call</a> or </>
+            ) : null}
+            {typeof process.env.NEXT_PUBLIC_CONTACT_EMAIL === "string" && process.env.NEXT_PUBLIC_CONTACT_EMAIL.trim() ? (
+              <a href={`mailto:${process.env.NEXT_PUBLIC_CONTACT_EMAIL.trim()}`} className="text-brand-600 hover:underline">email us</a>
+            ) : (
+              "contact us"
+            )}.
+          </p>
+        </details>
       </div>
       {subs.some((s) => s.status === "Active") && (
         <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-stone-50">

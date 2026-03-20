@@ -48,6 +48,8 @@ In Railway → your service → **Variables**, add every variable from `.env.loc
 - `GEMINI_API_KEY` (for AI macro calculation)
 - `SERPER_API_KEY` (optional; for grounded web search — better accuracy for branded products like Musashi bars; get free key at [serper.dev](https://serper.dev))
 - `NEXT_PUBLIC_APP_URL` → set to your Railway URL, e.g. `https://your-app.up.railway.app`
+- `NEXT_PUBLIC_CONTACT_EMAIL` (optional; shown when payment page fails — e.g. ad blockers; for "call or email" fallback)
+- `NEXT_PUBLIC_CONTACT_PHONE` (optional; same as above)
 - `CRON_SECRET` (optional; same secret you’d use if you ever call cron APIs from outside; e.g. `openssl rand -hex 24`)
 
 Do **not** commit these values; only set them in Railway.

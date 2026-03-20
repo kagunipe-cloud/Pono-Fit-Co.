@@ -741,6 +741,32 @@ export default function MemberCartPage() {
             </p>
           </div>
 
+          <details className="mt-4 p-4 rounded-xl border border-stone-200 bg-stone-50">
+            <summary className="cursor-pointer text-sm font-medium text-stone-700 hover:text-stone-900">
+              Having trouble with payment?
+            </summary>
+            <div className="mt-3 space-y-2 text-sm text-stone-600">
+              <p>If the payment page doesn&apos;t load or you see a blank screen, try:</p>
+              <ul className="list-disc list-inside space-y-1">
+                <li>Opening in a different browser (Chrome, Safari, Firefox)</li>
+                <li>Using private or incognito mode</li>
+                <li>Temporarily disabling ad blockers or privacy extensions</li>
+              </ul>
+              <p className="pt-2">
+                Still having issues? Call or email us to complete your purchase:
+                {typeof process.env.NEXT_PUBLIC_CONTACT_PHONE === "string" && process.env.NEXT_PUBLIC_CONTACT_PHONE.trim() ? (
+                  <> <a href={`tel:${process.env.NEXT_PUBLIC_CONTACT_PHONE.replace(/\D/g, "")}`} className="text-brand-600 hover:underline font-medium">{process.env.NEXT_PUBLIC_CONTACT_PHONE.trim()}</a></>
+                ) : null}
+                {typeof process.env.NEXT_PUBLIC_CONTACT_EMAIL === "string" && process.env.NEXT_PUBLIC_CONTACT_EMAIL.trim() ? (
+                  <>{process.env.NEXT_PUBLIC_CONTACT_PHONE?.trim() ? " or " : " "}<a href={`mailto:${process.env.NEXT_PUBLIC_CONTACT_EMAIL.trim()}`} className="text-brand-600 hover:underline font-medium">{process.env.NEXT_PUBLIC_CONTACT_EMAIL.trim()}</a></>
+                ) : null}
+                {(!process.env.NEXT_PUBLIC_CONTACT_PHONE?.trim() && !process.env.NEXT_PUBLIC_CONTACT_EMAIL?.trim()) && (
+                  <span> See our website or visit the front desk for contact details.</span>
+                )}
+              </p>
+            </div>
+          </details>
+
           {terminalOpen && (
             <div
               className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60"
