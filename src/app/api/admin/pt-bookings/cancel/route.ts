@@ -6,7 +6,7 @@ import { sendStaffEmail, sendMemberEmail } from "../../../../../lib/email";
 
 export const dynamic = "force-dynamic";
 
-/** POST { type: "slot", id: number } | { type: "block", id: number } — Admin only. Cancels the PT booking; block bookings get credit restored. */
+/** POST { type: "slot", id: number } | { type: "block", id: number } | { type: "open", id: number } — Admin only. Cancels the PT booking; block/open credit bookings get credit restored. */
 export async function POST(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
   if (!adminId) {
@@ -16,8 +16,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const type = (body.type ?? "").trim();
     const id = parseInt(String(body.id), 10);
-    if (!["slot", "block"].includes(type) || Number.isNaN(id)) {
-      return NextResponse.json({ error: "type must be 'slot' or 'block', and id must be a number" }, { status: 400 });
+    if (!["slot", "block", "open"].includes(type) || Number.isNaN(id)) {
+      return NextResponse.json({ error: "type must be 'slot', 'block', or 'open', and id must be a number" }, { status: 400 });
     }
     const db = getDb();
     ensurePTSlotTables(db);
@@ -64,11 +64,34 @@ export async function POST(request: NextRequest) {
       } catch {
         // ignore email errors
       }
+    } else if (type === "open") {
+      const row = db.prepare("SELECT id, member_id, duration_minutes, payment_type FROM pt_open_bookings WHERE id = ?").get(id) as { id: number; member_id: string; duration_minutes: number; payment_type: string } | undefined;
+      if (!row) {
+        db.close();
+        return NextResponse.json({ error: "PT open booking not found" }, { status: 404 });
+      }
+      db.prepare("DELETE FROM pt_open_bookings WHERE id = ?").run(id);
+      if (row.payment_type === "credit") {
+        db.prepare(
+          "INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id) VALUES (?, ?, 1, ?, 'admin_cancel_open', ?)"
+        ).run(row.member_id, row.duration_minutes, "Credit restored (admin cancelled booking)", String(id));
+      }
+      try {
+        const memberRow = db
+          .prepare("SELECT email, first_name, last_name FROM members WHERE member_id = ?")
+          .get(row.member_id) as { email: string | null; first_name: string | null; last_name: string | null } | undefined;
+        const memberName = memberRow ? [memberRow.first_name, memberRow.last_name].filter(Boolean).join(" ").trim() || row.member_id : row.member_id;
+        const staffSubject = `PT booking cancelled (admin): ${memberName} → open slot`;
+        const staffBody = `An admin cancelled a PT open booking for ${memberName}.`;
+        sendStaffEmail(staffSubject, staffBody).catch(() => {});
+      } catch {
+        // ignore email failures
+      }
     } else {
       const row = db.prepare("SELECT id, member_id, session_duration_minutes, payment_type FROM pt_block_bookings WHERE id = ?").get(id) as { id: number; member_id: string; session_duration_minutes: number; payment_type: string } | undefined;
       if (!row) {
         db.close();
-        return NextResponse.json({ error: "PT block booking not found" }, { status: 404 });
+        return NextResponse.json({ error: "PT trainer-specific booking not found" }, { status: 404 });
       }
       db.prepare("DELETE FROM pt_block_bookings WHERE id = ?").run(id);
       if (row.payment_type === "credit") {
@@ -82,7 +105,7 @@ export async function POST(request: NextRequest) {
           .get(row.member_id) as { email: string | null; first_name: string | null; last_name: string | null } | undefined;
         const memberName = memberRow ? [memberRow.first_name, memberRow.last_name].filter(Boolean).join(" ").trim() || row.member_id : row.member_id;
         const staffSubject = `PT booking cancelled (admin): ${memberName} → block session`;
-        const staffBody = `An admin cancelled a PT block booking for ${memberName}.`;
+        const staffBody = `An admin cancelled a PT trainer-specific booking for ${memberName}.`;
         sendStaffEmail(staffSubject, staffBody).catch(() => {});
       } catch {
         // ignore email failures

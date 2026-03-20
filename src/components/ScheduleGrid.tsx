@@ -29,7 +29,7 @@ type CellItem =
   | { type: "class_span" }
   | { type: "unavailable"; id: number; description: string }
   | { type: "pt_segment"; blockId: number; trainer: string; start_time: string; end_time: string; booked: boolean; member_name?: string; booking_id?: number; unavailable?: boolean; description?: string; payment_type?: string }
-  | { type: "open_booked"; id?: number; member_name?: string; trainer_name?: string | null }
+  | { type: "open_booked"; id?: number; member_name?: string; trainer_name?: string | null; payment_type?: string }
   | { type: "available" }
   | { type: "trainer_not_available" };
 
@@ -81,7 +81,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
   const [occurrences, setOccurrences] = useState<Occurrence[]>([]);
   const [unavailable, setUnavailable] = useState<UnavailableOccurrence[]>([]);
   const [ptBlocks, setPtBlocks] = useState<PtBlockWithSegments[]>([]);
-  const [openBookings, setOpenBookings] = useState<{ id?: number; occurrence_date: string; start_time: string; duration_minutes: number; member_name?: string; trainer_name?: string | null; trainer_member_id?: string | null }[]>([]);
+  const [openBookings, setOpenBookings] = useState<{ id?: number; occurrence_date: string; start_time: string; duration_minutes: number; member_name?: string; trainer_name?: string | null; trainer_member_id?: string | null; payment_type?: string | null }[]>([]);
   const [loading, setLoading] = useState(true);
   const bookPtQuery = productId ? `&product=${encodeURIComponent(productId)}` : "";
   const isMaster = variant === "master";
@@ -204,9 +204,28 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
           classPlaced = true;
         }
         if (classPlaced) continue;
+        // Check open bookings (pt_open_bookings) FIRST — they can overlap trainer blocks; conflict check uses them but display previously skipped them
+        const PT_SPILLOVER = 15;
+        const openBookingAtSlot = openBookings.find((b) => {
+          if (b.occurrence_date !== date) return false;
+          const startMin = parseTimeToMinutes(b.start_time);
+          const useSpillover = effectiveTrainerId == null || (b.trainer_member_id ?? "").trim() === effectiveTrainerId.trim();
+          const endMin = startMin + b.duration_minutes + (useSpillover ? PT_SPILLOVER : 0);
+          return slotOverlaps(slotMin, startMin, endMin);
+        });
+        if (openBookingAtSlot) {
+          map.set(key, {
+            type: "open_booked",
+            ...(openBookingAtSlot.id != null && { id: openBookingAtSlot.id }),
+            ...(openBookingAtSlot.member_name != null && { member_name: openBookingAtSlot.member_name }),
+            ...(openBookingAtSlot.trainer_name != null && { trainer_name: openBookingAtSlot.trainer_name }),
+            ...(openBookingAtSlot.payment_type != null && { payment_type: openBookingAtSlot.payment_type }),
+          });
+          continue;
+        }
         const memberWithTrainerFilter = variant === "member" && effectiveTrainerId != null;
         let ptItem: CellItem | null = null;
-        // For trainer view: check PT blocks BEFORE unavailable so availability overrides default "unavailable"
+        // For trainer view: check trainer availability blocks BEFORE unavailable so availability overrides default "unavailable"
         if (isTrainer || memberWithTrainerFilter) {
           for (const block of ptBlocks) {
             if (block.date !== date || !block.segments) continue;
@@ -272,23 +291,6 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
             map.set(key, ptItem);
             continue;
           }
-        }
-        const PT_SPILLOVER = 15;
-        const openBookingAtSlot = openBookings.find((b) => {
-          if (b.occurrence_date !== date) return false;
-          const startMin = parseTimeToMinutes(b.start_time);
-          const useSpillover = effectiveTrainerId == null || (b.trainer_member_id ?? "").trim() === effectiveTrainerId.trim();
-          const endMin = startMin + b.duration_minutes + (useSpillover ? PT_SPILLOVER : 0);
-          return slotOverlaps(slotMin, startMin, endMin);
-        });
-        if (openBookingAtSlot) {
-          map.set(key, {
-            type: "open_booked",
-            ...(openBookingAtSlot.id != null && { id: openBookingAtSlot.id }),
-            ...(openBookingAtSlot.member_name != null && { member_name: openBookingAtSlot.member_name }),
-            ...(openBookingAtSlot.trainer_name != null && { trainer_name: openBookingAtSlot.trainer_name }),
-          });
-          continue;
         }
         const unavailAtSlot = unavailList.find((u) => {
           if (u.date !== date) return false;
@@ -484,7 +486,13 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-stone-800">Class</span>
             <span className="rounded-lg bg-stone-400 px-2.5 py-1 text-xs font-medium text-stone-100">Unavailable</span>
-            <span className="rounded-lg bg-red-500 px-2.5 py-1 text-xs font-medium text-red-50">Pay on arrival</span>
+            {(isMaster || isTrainer || allowAdminEdit) && (
+              <>
+                <span className="rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-medium text-amber-50">Open (needs trainer)</span>
+                <span className="rounded-lg bg-violet-500 px-2.5 py-1 text-xs font-medium text-violet-50">Trainer-specific</span>
+                <span className="rounded-lg bg-red-500 px-2.5 py-1 text-xs font-medium text-red-50">Pay on arrival</span>
+              </>
+            )}
             <span className="rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">Available</span>
           </div>
         </div>
@@ -511,7 +519,13 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
             <span className="font-medium text-stone-600">{weekLabel}</span>
             <span className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-stone-800">Class</span>
             <span className="rounded-lg bg-stone-400 px-2.5 py-1 text-xs font-medium text-stone-100">Unavailable</span>
-            <span className="rounded-lg bg-red-500 px-2.5 py-1 text-xs font-medium text-red-50">Pay on arrival</span>
+            {(isMaster || isTrainer || allowAdminEdit) && (
+              <>
+                <span className="rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-medium text-amber-50">Open (needs trainer)</span>
+                <span className="rounded-lg bg-violet-500 px-2.5 py-1 text-xs font-medium text-violet-50">Trainer-specific</span>
+                <span className="rounded-lg bg-red-500 px-2.5 py-1 text-xs font-medium text-red-50">Pay on arrival</span>
+              </>
+            )}
             <span className="rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">Available</span>
           </div>
           <div className="overflow-x-auto">
@@ -583,12 +597,18 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                           )}
                           {item.type === "open_booked" && (
                             <div
-                              className="rounded-lg bg-stone-400 min-h-[2.5rem] flex items-center px-2 py-1.5 text-stone-100"
-                              title={isMaster || isTrainer ? (item.member_name ?? "PT booked") : "Unavailable"}
+                              className={`rounded-lg min-h-[2.5rem] flex items-center px-2 py-1.5 ${
+                                item.payment_type === "pay_on_arrival" && (isMaster || isTrainer || allowAdminEdit)
+                                  ? "bg-red-500 border border-red-600 text-red-50"
+                                  : (isMaster || isTrainer || allowAdminEdit)
+                                    ? "bg-amber-500 border border-amber-600 text-amber-50"
+                                    : "bg-stone-400 text-stone-100"
+                              }`}
+                              title={isMaster || isTrainer || allowAdminEdit ? (item.payment_type === "pay_on_arrival" ? `${item.member_name ?? "PT"} (pay on arrival)` : `${item.member_name ?? "PT"} (open — assign trainer)`) : "Unavailable"}
                             >
-                              {(isMaster || isTrainer) ? (
+                              {(isMaster || isTrainer || allowAdminEdit) ? (
                                 <span className="text-xs truncate block w-full" title={item.member_name ?? "Booked"}>
-                                  {item.member_name ?? "Booked"}
+                                  {item.payment_type === "pay_on_arrival" ? `Booked: Open · Pay on arrival` : `Booked: Open`}
                                 </span>
                               ) : null}
                             </div>
@@ -597,11 +617,13 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                             <div className={`rounded-lg border px-2 py-1.5 min-h-[2.5rem] ${item.booked
                               ? (item.payment_type === "pay_on_arrival" && (isMaster || isTrainer || allowAdminEdit))
                                 ? "bg-red-500 border-red-600 text-red-50"
-                                : "bg-stone-400 border-stone-500 text-stone-100"
+                                : (isMaster || isTrainer || allowAdminEdit) && !item.unavailable
+                                  ? "bg-violet-500 border-violet-600 text-violet-50"
+                                  : "bg-stone-400 border-stone-500 text-stone-100"
                               : "bg-brand-50 border-2 border-brand-500 hover:border-brand-600"}`}>
                               {item.booked ? (isMaster || isTrainer || allowAdminEdit ? (
-                                <span className={`text-xs block truncate ${item.payment_type === "pay_on_arrival" ? "text-red-100" : "text-stone-200"}`} title={item.unavailable ? (item.description ?? "Blocked") : (item.payment_type === "pay_on_arrival" ? `${item.member_name ?? "Booked"} (pay on arrival)` : (item.member_name ?? "Booked"))}>
-                                  {item.unavailable ? (item.description ?? "Blocked") : (item.payment_type === "pay_on_arrival" ? `${item.member_name ?? "Booked"} · Pay on arrival` : (item.member_name ?? "Booked"))}
+                                <span className={`text-xs block truncate ${item.payment_type === "pay_on_arrival" ? "text-red-100" : item.unavailable ? "text-stone-200" : "text-violet-100"}`} title={item.unavailable ? (item.description ?? "Blocked") : (item.payment_type === "pay_on_arrival" ? `${item.member_name ?? "Booked"} (pay on arrival)` : `Booked: ${item.trainer}`)}>
+                                  {item.unavailable ? (item.description ?? "Blocked") : (item.payment_type === "pay_on_arrival" ? `${item.member_name ?? "Booked"} · Pay on arrival` : `Booked: ${item.trainer}`)}
                                 </span>
                               ) : null) : (
                                 <>

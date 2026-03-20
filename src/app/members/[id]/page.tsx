@@ -20,6 +20,7 @@ export default function MemberDetailPage() {
     ptBookings: LinkedRow[];
     ptSlotBookings?: LinkedRow[];
     ptBlockBookings?: LinkedRow[];
+    ptOpenBookings?: LinkedRow[];
     sales: LinkedRow[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -205,7 +206,7 @@ export default function MemberDetailPage() {
     }
   }
 
-  async function cancelPTBooking(type: "slot" | "block", id: number) {
+  async function cancelPTBooking(type: "slot" | "block" | "open", id: number) {
     setAdminAction("pt");
     try {
       const res = await fetch("/api/admin/pt-bookings/cancel", {
@@ -685,7 +686,7 @@ export default function MemberDetailPage() {
       <section className="mb-8">
         <h2 className="text-lg font-semibold text-stone-800 mb-3">PT bookings</h2>
         <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
-          {(data.ptBookings?.length ?? 0) + (data.ptSlotBookings?.length ?? 0) + (data.ptBlockBookings?.length ?? 0) === 0 ? (
+          {(data.ptBookings?.length ?? 0) + (data.ptSlotBookings?.length ?? 0) + (data.ptBlockBookings?.length ?? 0) + (data.ptOpenBookings?.length ?? 0) === 0 ? (
             <p className="p-6 text-stone-500 text-sm">No PT bookings.</p>
           ) : (
             <table className="w-full text-left text-sm">
@@ -717,10 +718,24 @@ export default function MemberDetailPage() {
                   <tr key={`block-${b.id}`} className="border-t border-stone-100">
                     <td className="py-2 px-4">{String(b.trainer ?? "—")} PT ({String(b.session_duration_minutes ?? "")} min)</td>
                     <td className="py-2 px-4">{String(b.occurrence_date ?? "—")} {String(b.start_time ?? "")}</td>
-                    <td className="py-2 px-4">—</td>
+                    <td className="py-2 px-4">{String(b.payment_type ?? "—")}</td>
                     <td className="py-2 px-4">
                       {isAdmin ? (
                         <button type="button" onClick={() => cancelPTBooking("block", Number(b.id))} disabled={!!adminAction} className="text-red-600 hover:underline text-xs font-medium disabled:opacity-50">Cancel</button>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {(data.ptOpenBookings ?? []).map((b) => (
+                  <tr key={`open-${b.id}`} className="border-t border-stone-100">
+                    <td className="py-2 px-4">{String(b.session_name ?? "—")} ({String(b.duration_minutes ?? "")} min)</td>
+                    <td className="py-2 px-4">{String(b.occurrence_date ?? "—")} {String(b.start_time ?? "")}</td>
+                    <td className="py-2 px-4">{String(b.payment_type ?? "—")}</td>
+                    <td className="py-2 px-4">
+                      {isAdmin ? (
+                        <button type="button" onClick={() => cancelPTBooking("open", Number(b.id))} disabled={!!adminAction} className="text-red-600 hover:underline text-xs font-medium disabled:opacity-50">Cancel</button>
                       ) : (
                         "—"
                       )}

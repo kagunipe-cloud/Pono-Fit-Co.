@@ -75,11 +75,19 @@ export async function GET(
       ORDER BY p.date_time DESC
     `).all(mid) as Record<string, unknown>[];
     const ptBlockBookings = db.prepare(`
-      SELECT b.id, b.occurrence_date, b.start_time, b.session_duration_minutes, a.trainer
+      SELECT b.id, b.occurrence_date, b.start_time, b.session_duration_minutes, b.payment_type, a.trainer
       FROM pt_block_bookings b
       JOIN trainer_availability a ON a.id = b.trainer_availability_id
       WHERE b.member_id = ?
       ORDER BY b.occurrence_date DESC, b.start_time DESC
+    `).all(mid) as Record<string, unknown>[];
+
+    const ptOpenBookings = db.prepare(`
+      SELECT ob.id, ob.occurrence_date, ob.start_time, ob.duration_minutes, ob.payment_type, p.session_name
+      FROM pt_open_bookings ob
+      JOIN pt_sessions p ON p.id = ob.pt_session_id
+      WHERE ob.member_id = ?
+      ORDER BY ob.occurrence_date DESC, ob.start_time DESC
     `).all(mid) as Record<string, unknown>[];
 
     const sales = db.prepare(`
@@ -95,6 +103,7 @@ export async function GET(
       ptBookings,
       ptSlotBookings,
       ptBlockBookings,
+      ptOpenBookings,
       sales,
     });
   } catch (err) {
@@ -234,6 +243,7 @@ export async function DELETE(
       ensurePTSlotTables(db);
       if (!hasPt) hasPt = (db.prepare("SELECT 1 FROM pt_slot_bookings WHERE member_id = ? LIMIT 1").get(mid) as unknown) != null;
       if (!hasPt) hasPt = (db.prepare("SELECT 1 FROM pt_block_bookings WHERE member_id = ? LIMIT 1").get(mid) as unknown) != null;
+      if (!hasPt) hasPt = (db.prepare("SELECT 1 FROM pt_open_bookings WHERE member_id = ? LIMIT 1").get(mid) as unknown) != null;
     } catch {
       /* ignore */
     }

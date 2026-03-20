@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 type Member = { member_id: string; first_name: string | null; last_name: string | null; email: string | null };
-type PtSession = { id: number; session_name: string; duration_minutes: number; price: string; trainer: string | null };
+type PtSession = { id: number; session_name: string; duration_minutes: number; price: string; trainer: string | null; trainer_member_id?: string | null };
 type Trainer = { member_id: string; display_name: string };
 
 function normalizeTimeToHHmm(t: string): string {
@@ -91,9 +91,15 @@ function AdminBookPTForMemberContent() {
     setError(null);
     setUseCreditSubmitting(true);
     try {
-      if (block) {
-        const blockId = parseInt(block, 10);
-        if (Number.isNaN(blockId)) throw new Error("Invalid block ID");
+      let blockId: number | null = block ? parseInt(block, 10) : null;
+      const effectiveTrainerId = selectedTrainerId || selectedSession?.trainer_member_id;
+      if (!block && effectiveTrainerId) {
+        const findRes = await fetch(`/api/pt-bookings/find-block?date=${encodeURIComponent(date)}&time=${encodeURIComponent(startTime)}&trainer_member_id=${encodeURIComponent(effectiveTrainerId)}`);
+        const findData = await findRes.json();
+        blockId = findData.block_id ?? null;
+        if (!blockId) throw new Error("This trainer has no availability at that date/time. Choose a different time or leave trainer as no preference.");
+      }
+      if (blockId && !Number.isNaN(blockId)) {
         const res = await fetch("/api/pt-bookings/book-block", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -140,9 +146,15 @@ function AdminBookPTForMemberContent() {
     setError(null);
     setPayOnArrivalSubmitting(true);
     try {
-      if (block) {
-        const blockId = parseInt(block, 10);
-        if (Number.isNaN(blockId)) throw new Error("Invalid block ID");
+      let blockId: number | null = block ? parseInt(block, 10) : null;
+      const effectiveTrainerId = selectedTrainerId || selectedSession?.trainer_member_id;
+      if (!block && effectiveTrainerId) {
+        const findRes = await fetch(`/api/pt-bookings/find-block?date=${encodeURIComponent(date)}&time=${encodeURIComponent(startTime)}&trainer_member_id=${encodeURIComponent(effectiveTrainerId)}`);
+        const findData = await findRes.json();
+        blockId = findData.block_id ?? null;
+        if (!blockId) throw new Error("This trainer has no availability at that date/time. Choose a different time or leave trainer as no preference.");
+      }
+      if (blockId && !Number.isNaN(blockId)) {
         const res = await fetch("/api/pt-bookings/book-block", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -278,14 +290,14 @@ function AdminBookPTForMemberContent() {
             onChange={(e) => setSelectedTrainerId(e.target.value)}
             className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-white"
           >
-            <option value="">— No preference (leave open) —</option>
+            <option value="">— No preference (open booking) —</option>
             {trainers.map((t) => (
               <option key={t.member_id} value={t.member_id}>
                 {t.display_name}
               </option>
             ))}
           </select>
-          <p className="text-xs text-stone-500 mt-1">Leave open to assign later from the Master Schedule.</p>
+          <p className="text-xs text-stone-500 mt-1">Select a trainer to book into their block. Leave as no preference for an open booking (assign trainer later from schedule).</p>
         </div>
       </div>
 
