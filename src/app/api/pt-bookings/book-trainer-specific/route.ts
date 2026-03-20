@@ -83,13 +83,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: `No ${session_duration_minutes}-min PT credits. Purchase a pack or pay.` }, { status: 400 });
       }
       db.prepare(
-        "INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id) VALUES (?, ?, -1, ?, 'pt_block_booking', ?)"
+        "INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id) VALUES (?, ?, -1, ?, 'trainer_specific_booking', ?)"
       ).run(member_id, session_duration_minutes, `Booked ${session_duration_minutes}-min PT`, String(trainer_availability_id + "-" + occurrence_date + "-" + start_time));
     }
 
     const payment_type = pay_on_arrival ? "pay_on_arrival" : use_credit ? "credit" : "paid";
     db.prepare(
-      "INSERT INTO pt_block_bookings (trainer_availability_id, occurrence_date, start_time, session_duration_minutes, reserved_minutes, member_id, payment_type) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO pt_trainer_specific_bookings (trainer_availability_id, occurrence_date, start_time, session_duration_minutes, reserved_minutes, member_id, payment_type) VALUES (?, ?, ?, ?, ?, ?, ?)"
     ).run(trainer_availability_id, occurrence_date, start_time, session_duration_minutes, reserved_minutes, member_id, payment_type);
 
     const trainerMemberId = (block.trainer_member_id ?? "").trim();

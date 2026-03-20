@@ -10,7 +10,7 @@ function hasPurchase(db: ReturnType<typeof getDb>, memberId: string): boolean {
     "SELECT 1 FROM subscriptions WHERE member_id = ? LIMIT 1",
     "SELECT 1 FROM class_bookings WHERE member_id = ? LIMIT 1",
     "SELECT 1 FROM occurrence_bookings WHERE member_id = ? LIMIT 1",
-    "SELECT 1 FROM pt_block_bookings WHERE member_id = ? LIMIT 1",
+    "SELECT 1 FROM pt_trainer_specific_bookings WHERE member_id = ? LIMIT 1",
     "SELECT 1 FROM pt_open_bookings WHERE member_id = ? LIMIT 1",
     "SELECT 1 FROM class_credit_ledger WHERE member_id = ? LIMIT 1",
     "SELECT 1 FROM pt_credit_ledger WHERE member_id = ? LIMIT 1",

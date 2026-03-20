@@ -100,7 +100,7 @@ function AdminBookPTForMemberContent() {
         if (!blockId) throw new Error("This trainer has no availability at that date/time. Choose a different time or leave trainer as no preference.");
       }
       if (blockId && !Number.isNaN(blockId)) {
-        const res = await fetch("/api/pt-bookings/book-block", {
+        const res = await fetch("/api/pt-bookings/book-trainer-specific", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -155,7 +155,7 @@ function AdminBookPTForMemberContent() {
         if (!blockId) throw new Error("This trainer has no availability at that date/time. Choose a different time or leave trainer as no preference.");
       }
       if (blockId && !Number.isNaN(blockId)) {
-        const res = await fetch("/api/pt-bookings/book-block", {
+        const res = await fetch("/api/pt-bookings/book-trainer-specific", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

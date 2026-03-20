@@ -10,7 +10,7 @@ Use consistent terminology to avoid confusion:
 
 - **Trainer availability block** — A block of time when a trainer is available (from `trainer_availability`). These are **bookable**; PT sessions are booked within them. Do NOT use "block slot" or bare "block" when referring to these.
 
-- **Trainer-specific booking** (`pt_block_bookings`) — PT session booked within a trainer availability block. Created when a trainer is selected. Display: gray (or red if pay on arrival). Do NOT use "block booking" in user-facing text.
+- **Trainer-specific booking** (`pt_trainer_specific_bookings`) — PT session booked within a trainer availability block. Created when a trainer is selected. Display: gray (or red if pay on arrival). Do NOT use "block booking" in user-facing text.
 
 - **Open booking** (`pt_open_bookings`) — PT session with **no trainer preference**; trainer can be assigned later from the schedule. Display: orange for admin/trainer (needs trainer), gray for members.
 

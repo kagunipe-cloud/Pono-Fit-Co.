@@ -92,7 +92,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    db.prepare("DELETE FROM pt_block_bookings WHERE trainer_availability_id = ?").run(numericId);
+    db.prepare("DELETE FROM pt_trainer_specific_bookings WHERE trainer_availability_id = ?").run(numericId);
     db.prepare("DELETE FROM trainer_availability WHERE id = ?").run(numericId);
     db.close();
     return NextResponse.json({ ok: true });

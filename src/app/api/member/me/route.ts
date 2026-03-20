@@ -86,25 +86,25 @@ export async function GET() {
       /* pt_bookings table may not exist */
     }
 
-    let ptBlockBookingsFormatted: Record<string, unknown>[] = [];
+    let ptTrainerSpecificBookingsFormatted: Record<string, unknown>[] = [];
     let ptOpenBookingsFormatted: Record<string, unknown>[] = [];
     try {
       ensurePTSlotTables(db);
-      const ptBlockBookings = db.prepare(`
+      const ptTrainerSpecificBookings = db.prepare(`
         SELECT b.id, b.occurrence_date, b.start_time, b.session_duration_minutes, b.payment_type, b.created_at, a.trainer
-        FROM pt_block_bookings b
+        FROM pt_trainer_specific_bookings b
         JOIN trainer_availability a ON a.id = b.trainer_availability_id
         WHERE b.member_id = ?
         ORDER BY b.occurrence_date DESC, b.start_time DESC
       `).all(memberId) as { id: number; occurrence_date: string; start_time: string; session_duration_minutes: number; payment_type: string; created_at: string; trainer: string }[];
 
-      ptBlockBookingsFormatted = ptBlockBookings.map((b) => ({
+      ptTrainerSpecificBookingsFormatted = ptTrainerSpecificBookings.map((b) => ({
         id: b.id,
         session_name: `${b.trainer} PT (${b.session_duration_minutes} min)`,
         session_date: `${b.occurrence_date} ${b.start_time}`,
         booking_date: b.occurrence_date,
         payment_status: b.payment_type,
-        source: "block",
+        source: "trainer_specific",
       }));
 
       const ptOpenBookings = db.prepare(`
@@ -127,7 +127,7 @@ export async function GET() {
       /* pt tables may not exist */
     }
 
-    const ptBookings = [...ptBookingsLegacy, ...ptBlockBookingsFormatted, ...ptOpenBookingsFormatted].sort((a, b) => {
+    const ptBookings = [...ptBookingsLegacy, ...ptTrainerSpecificBookingsFormatted, ...ptOpenBookingsFormatted].sort((a, b) => {
       const dA = String(a.session_date ?? a.booking_date ?? "");
       const dB = String(b.session_date ?? b.booking_date ?? "");
       return dB.localeCompare(dA);

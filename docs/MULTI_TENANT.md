@@ -26,7 +26,7 @@ All tenant-scoped tables have `gym_id INTEGER DEFAULT 1`:
 
 **Core:** `members`, `subscriptions`, `membership_plans`, `sales`, `payment_failures`, `trainers`, `cart`, `cart_items`, `door_access_events`, `app_usage_events`
 
-**PT:** `pt_sessions`, `pt_bookings`, `trainer_availability`, `pt_block_bookings`, `pt_slot_bookings`, `pt_credit_ledger`, `pt_pack_products`, `pt_open_bookings`, `unavailable_blocks`
+**PT:** `pt_sessions`, `pt_bookings`, `trainer_availability`, `pt_trainer_specific_bookings`, `pt_slot_bookings`, `pt_credit_ledger`, `pt_pack_products`, `pt_open_bookings`, `unavailable_blocks`
 
 **Classes:** `classes`, `recurring_classes`, `class_bookings`, `class_occurrences`, `class_pack_products`, `class_credit_ledger`, `occurrence_bookings`
 

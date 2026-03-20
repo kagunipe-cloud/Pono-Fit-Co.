@@ -1,5 +1,5 @@
 /**
- * PT: trainer availability blocks, block bookings (30/60/90 min with reserve rules), and credits.
+ * PT: trainer availability blocks, trainer-specific bookings (30/60/90 min with reserve rules), and credits.
  */
 
 import { getDb } from "./db";
@@ -81,8 +81,17 @@ export function ensurePTSlotTables(db: ReturnType<typeof getDb>) {
   } catch {
     /* already exists */
   }
+  // Migrate: pt_block_bookings → pt_trainer_specific_bookings
+  try {
+    const exists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='pt_block_bookings'").get();
+    if (exists) {
+      db.exec("ALTER TABLE pt_block_bookings RENAME TO pt_trainer_specific_bookings");
+    }
+  } catch {
+    /* ignore */
+  }
   db.exec(`
-    CREATE TABLE IF NOT EXISTS pt_block_bookings (
+    CREATE TABLE IF NOT EXISTS pt_trainer_specific_bookings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       trainer_availability_id INTEGER NOT NULL,
       occurrence_date TEXT NOT NULL,
@@ -94,8 +103,8 @@ export function ensurePTSlotTables(db: ReturnType<typeof getDb>) {
       created_at TEXT DEFAULT (datetime('now')),
       FOREIGN KEY (trainer_availability_id) REFERENCES trainer_availability(id)
     );
-    CREATE INDEX IF NOT EXISTS idx_pt_block_bookings_avail ON pt_block_bookings(trainer_availability_id, occurrence_date);
-    CREATE INDEX IF NOT EXISTS idx_pt_block_bookings_member ON pt_block_bookings(member_id);
+    CREATE INDEX IF NOT EXISTS idx_pt_trainer_specific_bookings_avail ON pt_trainer_specific_bookings(trainer_availability_id, occurrence_date);
+    CREATE INDEX IF NOT EXISTS idx_pt_trainer_specific_bookings_member ON pt_trainer_specific_bookings(member_id);
     CREATE TABLE IF NOT EXISTS pt_slot_bookings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       pt_session_id INTEGER NOT NULL UNIQUE,

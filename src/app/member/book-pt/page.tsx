@@ -115,7 +115,7 @@ function MemberBookPTContent() {
           alert("Invalid slot. Please try again from the schedule.");
           return;
         }
-        res = await fetch("/api/pt-bookings/book-block", {
+        res = await fetch("/api/pt-bookings/book-trainer-specific", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

@@ -65,15 +65,26 @@ export async function POST(request: NextRequest) {
         db.close();
         return NextResponse.json({ error: `No ${duration_minutes}-min PT credits. Purchase a pack or add to cart.` }, { status: 400 });
       }
-      db.prepare(
-        "INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id) VALUES (?, ?, -1, ?, 'pt_open_booking', ?)"
-      ).run(member_id, duration_minutes, `Booked ${duration_minutes}-min PT`, String(pt_session_id));
     }
 
     const payment_type = pay_on_arrival ? "pay_on_arrival" : "credit";
-    db.prepare(
-      "INSERT INTO pt_open_bookings (member_id, occurrence_date, start_time, duration_minutes, pt_session_id, payment_type, trainer_member_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).run(member_id, occurrence_date, start_time, duration_minutes, pt_session_id, payment_type, trainerMemberId ?? null);
+    db.prepare("BEGIN").run();
+    try {
+      const insert = db.prepare(
+        "INSERT INTO pt_open_bookings (member_id, occurrence_date, start_time, duration_minutes, pt_session_id, payment_type, trainer_member_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      ).run(member_id, occurrence_date, start_time, duration_minutes, pt_session_id, payment_type, trainerMemberId ?? null);
+      const open_booking_id = insert.lastInsertRowid as number;
+
+      if (!pay_on_arrival) {
+        db.prepare(
+          "INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id) VALUES (?, ?, -1, ?, 'pt_open_booking', ?)"
+        ).run(member_id, duration_minutes, `Booked ${duration_minutes}-min PT`, `open:${open_booking_id}`);
+      }
+      db.prepare("COMMIT").run();
+    } catch (e) {
+      db.prepare("ROLLBACK").run();
+      throw e;
+    }
 
     if (trainerMemberId) ensureTrainerClient(db, trainerMemberId, member_id);
 

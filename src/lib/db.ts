@@ -371,7 +371,7 @@ const GYM_ID_TABLES = [
   "class_bookings",
   // PT slots
   "trainer_availability",
-  "pt_block_bookings",
+  "pt_trainer_specific_bookings",
   "pt_slot_bookings",
   "pt_credit_ledger",
   "pt_pack_products",

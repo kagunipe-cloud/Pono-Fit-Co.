@@ -380,12 +380,13 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
   }
 
   async function handleAssignTrainer(bookingId: number, trainerMemberId: string) {
+    if (!trainerMemberId) return;
     setAssignTrainerSubmitting(true);
     try {
-      const res = await fetch(`/api/offerings/pt-open-bookings/${bookingId}`, {
-        method: "PATCH",
+      const res = await fetch("/api/pt-bookings/convert-open-to-trainer-specific", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trainer_member_id: trainerMemberId || null }),
+        body: JSON.stringify({ open_booking_id: bookingId, trainer_member_id: trainerMemberId }),
       });
       if (res.ok) {
         setLocalRefreshKey((k) => k + 1);
@@ -422,7 +423,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
       const res = await fetch("/api/admin/pt-bookings/cancel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "block", id }),
+        body: JSON.stringify({ type: "trainer_specific", id }),
       });
       if (res.ok) {
         setLocalRefreshKey((k) => k + 1);
@@ -608,7 +609,9 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                             >
                               {(isMaster || isTrainer || allowAdminEdit) ? (
                                 <span className="text-xs truncate block w-full" title={item.member_name ?? "Booked"}>
-                                  {item.payment_type === "pay_on_arrival" ? `Booked: Open · Pay on arrival` : `Booked: Open`}
+                                  {item.payment_type === "pay_on_arrival"
+                                    ? `Booked: ${item.trainer_name ?? "Open"} · Pay on arrival`
+                                    : `Booked: ${item.trainer_name ?? "Open"}`}
                                 </span>
                               ) : null}
                             </div>

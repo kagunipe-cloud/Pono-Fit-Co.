@@ -37,7 +37,7 @@ export async function GET(
 
   const blockBookings = db.prepare(`
     SELECT b.id, b.occurrence_date, b.start_time, b.session_duration_minutes, b.payment_type, b.created_at, a.trainer
-    FROM pt_block_bookings b
+    FROM pt_trainer_specific_bookings b
     JOIN trainer_availability a ON a.id = b.trainer_availability_id
     WHERE b.member_id = ?
     ORDER BY b.occurrence_date ASC, b.start_time ASC
@@ -64,12 +64,12 @@ export async function GET(
     ORDER BY p.date_time ASC
   `).all(clientMemberId) as { id: number; date_time: string | null; session_name: string | null; trainer: string | null }[];
 
-  type BookingItem = { type: "block" | "open" | "slot"; sortKey: string; label: string; trainer?: string | null };
+  type BookingItem = { type: "trainer_specific" | "open" | "slot"; sortKey: string; label: string; trainer?: string | null };
   const items: BookingItem[] = [];
 
   for (const b of blockBookings) {
     items.push({
-      type: "block",
+      type: "trainer_specific",
       sortKey: `${b.occurrence_date}T${b.start_time}`,
       label: `${b.occurrence_date} ${b.start_time} — ${b.session_duration_minutes} min`,
       trainer: b.trainer,

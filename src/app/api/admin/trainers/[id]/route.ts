@@ -163,7 +163,7 @@ export async function DELETE(
     if (trainerRow) {
       const blockIds = db.prepare("SELECT id FROM trainer_availability WHERE trainer_member_id = ?").all(memberId) as { id: number }[];
       for (const b of blockIds) {
-        db.prepare("DELETE FROM pt_block_bookings WHERE trainer_availability_id = ?").run(b.id);
+        db.prepare("DELETE FROM pt_trainer_specific_bookings WHERE trainer_availability_id = ?").run(b.id);
       }
       db.prepare("DELETE FROM trainer_availability WHERE trainer_member_id = ?").run(memberId);
       db.prepare("DELETE FROM trainer_clients WHERE trainer_member_id = ?").run(memberId);

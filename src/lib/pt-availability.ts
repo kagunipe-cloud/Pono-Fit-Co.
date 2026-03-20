@@ -122,7 +122,7 @@ export function getUnavailableInRange(from: string, to: string): UnavailableOccu
 
 export function getBookingsForBlock(db: ReturnType<typeof getDb>, trainer_availability_id: number, occurrence_date: string): { start_time: string; reserved_minutes: number }[] {
   const rows = db.prepare(
-    "SELECT start_time, reserved_minutes FROM pt_block_bookings WHERE trainer_availability_id = ? AND occurrence_date = ? ORDER BY start_time"
+    "SELECT start_time, reserved_minutes FROM pt_trainer_specific_bookings WHERE trainer_availability_id = ? AND occurrence_date = ? ORDER BY start_time"
   ).all(trainer_availability_id, occurrence_date) as { start_time: string; reserved_minutes: number }[];
   return rows;
 }
@@ -211,7 +211,7 @@ export function getBlockSegments(
   const blockDesc = block.description ?? undefined;
   const bookingRows = db.prepare(
     `SELECT b.id, b.start_time, b.reserved_minutes, b.member_id, b.payment_type, m.first_name, m.last_name
-     FROM pt_block_bookings b LEFT JOIN members m ON m.member_id = b.member_id
+     FROM pt_trainer_specific_bookings b LEFT JOIN members m ON m.member_id = b.member_id
      WHERE b.trainer_availability_id = ? AND b.occurrence_date = ? ORDER BY b.start_time`
   ).all(block.id, occurrence_date) as { id: number; start_time: string; reserved_minutes: number; member_id: string; payment_type: string; first_name: string | null; last_name: string | null }[];
   const bookings = bookingRows.map((b) => ({ start_time: b.start_time, reserved_minutes: b.reserved_minutes }));

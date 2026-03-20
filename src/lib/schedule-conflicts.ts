@@ -74,7 +74,7 @@ export function hasClassAtSlot(db: ReturnType<typeof getDb>, date: string, timeM
 
 /**
  * Returns true if [startMin, startMin+durationMinutes] is free for a PT booking.
- * No overlap with classes, unavailable, block bookings, or other PT open bookings.
+ * No overlap with classes, unavailable, trainer-specific bookings, or other PT open bookings.
  * PT buffer (15 min): only applies when the conflicting booking is the SAME trainer.
  * When trainerMemberId is null, buffer applies to all (backward compat).
  */
@@ -111,7 +111,7 @@ export function isPTBookingSlotFree(
     if (useBuffer && bStart > endMin && bStart <= endMin + PT_BUFFER_MINUTES) return false;
   }
   const blockBookings = db
-    .prepare("SELECT start_time, reserved_minutes FROM pt_block_bookings WHERE occurrence_date = ?")
+    .prepare("SELECT start_time, reserved_minutes FROM pt_trainer_specific_bookings WHERE occurrence_date = ?")
     .all(date) as { start_time: string; reserved_minutes: number }[];
   for (const b of blockBookings) {
     const bStart = parseTimeToMinutes(b.start_time);

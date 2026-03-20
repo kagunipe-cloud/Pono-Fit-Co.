@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
       let my_booking: { start_time: string; session_duration_minutes: number; reserved_minutes: number } | null = null;
       if (member_id) {
         const rows = db.prepare(
-          "SELECT start_time, session_duration_minutes, reserved_minutes FROM pt_block_bookings WHERE trainer_availability_id = ? AND occurrence_date = ? AND member_id = ?"
+          "SELECT start_time, session_duration_minutes, reserved_minutes FROM pt_trainer_specific_bookings WHERE trainer_availability_id = ? AND occurrence_date = ? AND member_id = ?"
         ).all(block.id, block.date, member_id) as { start_time: string; session_duration_minutes: number; reserved_minutes: number }[];
         if (rows.length > 0) my_booking = rows[0];
       }

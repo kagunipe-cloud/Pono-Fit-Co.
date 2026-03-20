@@ -61,8 +61,8 @@ function getMemberTypesMap(db: ReturnType<typeof getDb>): Map<string, MemberType
     ptSlot.forEach((r) => add(r.member_id, "PT client"));
   } catch { /* ignore */ }
   try {
-    const ptBlock = db.prepare("SELECT DISTINCT member_id FROM pt_block_bookings").all() as { member_id: string }[];
-    ptBlock.forEach((r) => add(r.member_id, "PT client"));
+    const ptTrainerSpecific = db.prepare("SELECT DISTINCT member_id FROM pt_trainer_specific_bookings").all() as { member_id: string }[];
+    ptTrainerSpecific.forEach((r) => add(r.member_id, "PT client"));
   } catch { /* ignore */ }
   try {
     const ptLedger = db.prepare("SELECT DISTINCT member_id FROM pt_credit_ledger").all() as { member_id: string }[];
