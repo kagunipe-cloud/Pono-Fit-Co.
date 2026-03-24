@@ -33,6 +33,21 @@ function addDuration(startDate: Date, length: string, unit: string): Date {
   return d;
 }
 
+/** Resolve Stripe Customer id from a paid Checkout Session (expand customer + payment_intent). */
+function stripeCustomerIdFromCheckoutSession(session: Stripe.Checkout.Session): string | null {
+  const c = session.customer;
+  if (typeof c === "string") return c;
+  if (c && typeof c === "object" && "deleted" in c && (c as { deleted?: boolean }).deleted) return null;
+  if (c && typeof c === "object" && "id" in c) return (c as Stripe.Customer).id;
+  const pi = session.payment_intent;
+  if (pi && typeof pi === "object") {
+    const pic = (pi as Stripe.PaymentIntent).customer;
+    if (typeof pic === "string") return pic;
+    if (pic && typeof pic === "object" && "id" in pic) return (pic as Stripe.Customer).id;
+  }
+  return null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -41,6 +56,7 @@ export async function POST(request: NextRequest) {
     const payment_intent_id = (body.payment_intent_id ?? "").trim() || null;
     let stripeSession: Stripe.Checkout.Session | null = null;
     let paymentIntentAmount: number | null = null;
+    let terminalStripeCustomerId: string | null = null;
 
     if (stripe_session_id) {
       const stripeSecret = process.env.STRIPE_SECRET_KEY;
@@ -48,7 +64,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Stripe not configured" }, { status: 500 });
       }
       const stripe = new Stripe(stripeSecret);
-      const session = await stripe.checkout.sessions.retrieve(stripe_session_id);
+      const session = await stripe.checkout.sessions.retrieve(stripe_session_id, {
+        expand: ["customer", "payment_intent"],
+      });
       if (session.payment_status !== "paid") {
         return NextResponse.json(
           { error: "Payment not completed. Only paid Stripe sessions can be fulfilled." },
@@ -58,23 +76,13 @@ export async function POST(request: NextRequest) {
       stripeSession = session;
       const metaMemberId = session.metadata?.member_id;
       if (metaMemberId) member_id = metaMemberId;
-      // If they opted in to save card, store Stripe customer id on member for renewals
-      const saveCard = session.metadata?.save_card_for_future === "1";
-      const stripeCustomerId = typeof session.customer === "string" ? session.customer : session.customer?.id;
-      if (saveCard && stripeCustomerId) {
-        const dbForCustomer = getDb();
-        ensureMembersStripeColumn(dbForCustomer);
-        ensureMembersAutoRenewColumn(dbForCustomer);
-        dbForCustomer.prepare("UPDATE members SET stripe_customer_id = ?, auto_renew = 1 WHERE member_id = ?").run(stripeCustomerId, member_id);
-        dbForCustomer.close();
-      }
     } else if (payment_intent_id) {
       const stripeSecret = process.env.STRIPE_SECRET_KEY;
       if (!stripeSecret) {
         return NextResponse.json({ error: "Stripe not configured" }, { status: 500 });
       }
       const stripe = new Stripe(stripeSecret);
-      const pi = await stripe.paymentIntents.retrieve(payment_intent_id);
+      const pi = await stripe.paymentIntents.retrieve(payment_intent_id, { expand: ["customer"] });
       if (pi.status !== "succeeded") {
         return NextResponse.json(
           { error: "Payment not completed. Only succeeded Terminal payments can be fulfilled." },
@@ -83,6 +91,10 @@ export async function POST(request: NextRequest) {
       }
       const metaMemberId = pi.metadata?.member_id;
       if (metaMemberId) member_id = metaMemberId;
+      if (typeof pi.customer === "string") terminalStripeCustomerId = pi.customer;
+      else if (pi.customer && typeof pi.customer === "object" && "id" in pi.customer) {
+        terminalStripeCustomerId = (pi.customer as Stripe.Customer).id;
+      }
       paymentIntentAmount = (pi.amount_received ?? pi.amount) / 100;
       // Tax for terminal payments is stored in PI metadata (we add it in terminal charge route)
       if (pi.metadata?.tax_amount != null) {
@@ -99,6 +111,29 @@ export async function POST(request: NextRequest) {
     const isAdmin = !!(await getAdminMemberId(request));
     if (sessionMemberId !== member_id && !isAdmin) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // Always persist Stripe Customer id after a successful online Checkout (metadata "save for future"
+    // only controls auto_renew + off_session; returning customers often send save_card_for_future: false).
+    if (stripe_session_id && stripeSession) {
+      const cid = stripeCustomerIdFromCheckoutSession(stripeSession);
+      const saveCard = stripeSession.metadata?.save_card_for_future === "1";
+      if (cid && member_id) {
+        const dbStripe = getDb();
+        ensureMembersStripeColumn(dbStripe);
+        ensureMembersAutoRenewColumn(dbStripe);
+        if (saveCard) {
+          dbStripe.prepare("UPDATE members SET stripe_customer_id = ?, auto_renew = 1 WHERE member_id = ?").run(cid, member_id);
+        } else {
+          dbStripe.prepare("UPDATE members SET stripe_customer_id = ? WHERE member_id = ?").run(cid, member_id);
+        }
+        dbStripe.close();
+      }
+    } else if (terminalStripeCustomerId && member_id) {
+      const dbStripe = getDb();
+      ensureMembersStripeColumn(dbStripe);
+      dbStripe.prepare("UPDATE members SET stripe_customer_id = ? WHERE member_id = ?").run(terminalStripeCustomerId, member_id);
+      dbStripe.close();
     }
 
     const db = getDb();
