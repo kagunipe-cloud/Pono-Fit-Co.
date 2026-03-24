@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, usePathname } from "next/navigation";
 import { formatPrice, toTitleCase } from "@/lib/format";
 import { BRAND } from "@/lib/branding";
+import { EMAIL_POLICY_MESSAGE } from "@/lib/email-policy";
 
 type ProductInfo = {
   name: string;
@@ -181,6 +182,9 @@ export default function BuyProductPage() {
               {memberId
                 ? "Add this to your cart and complete your purchase in the app."
                 : `Create a free account to add this to your cart and complete your purchase in the ${BRAND.name} app.`}
+            </p>
+            <p className="text-stone-600 text-xs leading-relaxed mt-3 p-3 rounded-lg bg-stone-50 border border-stone-100">
+              {EMAIL_POLICY_MESSAGE}
             </p>
             {memberId ? (
               <button

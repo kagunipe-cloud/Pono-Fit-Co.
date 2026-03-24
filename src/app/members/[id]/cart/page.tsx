@@ -7,6 +7,7 @@ import { formatPrice } from "@/lib/format";
 import { computeCcFee } from "@/lib/cc-fees";
 import { todayInAppTz, weekStartInAppTz, addDaysToDateStr, formatDateForDisplay } from "@/lib/app-timezone";
 import { useAppTimezone, useOpenHours } from "@/lib/settings-context";
+import { EMAIL_POLICY_MESSAGE } from "@/lib/email-policy";
 
 type CartItem = {
   id: number;
@@ -400,7 +401,12 @@ export default function MemberCartPage() {
     <div className="max-w-2xl mx-auto">
       <Link href={`/members/${id}`} className="text-stone-500 hover:text-stone-700 text-sm mb-4 inline-block">← Back to member</Link>
       <h1 className="text-2xl font-bold text-stone-800 mb-1">Cart for {memberName}</h1>
-      <p className="text-stone-500 text-sm mb-6">Add membership, class, or PT session. Click Pay with Stripe to complete payment; when payment succeeds, we’ll activate the membership and notify Kisi for door access.</p>
+      <p className="text-stone-500 text-sm mb-3">
+        Add membership, class, or PT session. Click Pay with Stripe to complete payment; when payment succeeds, we’ll activate the membership and notify Kisi for door access.
+      </p>
+      <p className="text-stone-600 text-xs leading-relaxed mb-6 p-3 rounded-lg bg-stone-50 border border-stone-100 max-w-xl">
+        {EMAIL_POLICY_MESSAGE}
+      </p>
 
       <div className="mb-6 flex flex-wrap gap-2">
         <button

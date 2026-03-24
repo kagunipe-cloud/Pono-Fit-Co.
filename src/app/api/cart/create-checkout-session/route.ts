@@ -253,15 +253,11 @@ export async function POST(request: NextRequest) {
       metadata: { member_id },
       ...(save_card_for_future ? { setup_future_usage: "off_session" as const } : {}),
     };
-    if (save_card_for_future) {
-      if (existingStripeCustomerId) {
-        sessionParams.customer = existingStripeCustomerId;
-      } else if (customerEmail) {
-        sessionParams.customer_email = customerEmail;
-      }
-    }
-    // Always prefill email when we have it (for Kisi and receipts)
-    if (!sessionParams.customer && !sessionParams.customer_email && customerEmail) {
+    // Always attach existing Stripe Customer when we have one so Checkout can show saved cards.
+    // (Previously we only passed customer when "save for future" was checked, so PT/add-on checkouts skipped it.)
+    if (existingStripeCustomerId) {
+      sessionParams.customer = existingStripeCustomerId;
+    } else if (customerEmail) {
       sessionParams.customer_email = customerEmail;
     }
 

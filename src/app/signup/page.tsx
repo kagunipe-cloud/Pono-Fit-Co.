@@ -4,6 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import InstallAppBanner from "@/components/InstallAppBanner";
+import { EMAIL_POLICY_MESSAGE } from "@/lib/email-policy";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -69,8 +70,11 @@ function SignupContent() {
       <InstallAppBanner variant="banner" />
       <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-6">
         <h1 className="text-xl font-bold text-stone-800 mb-1">Create account</h1>
-        <p className="text-stone-500 text-sm mb-6">
+        <p className="text-stone-500 text-sm mb-3">
           Sign up to browse classes, book sessions, and manage your membership.
+        </p>
+        <p className="text-stone-600 text-xs leading-relaxed mb-6 p-3 rounded-lg bg-stone-50 border border-stone-100">
+          {EMAIL_POLICY_MESSAGE}
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
