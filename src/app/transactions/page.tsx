@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { formatDateForDisplay } from "@/lib/app-timezone";
 import { useAppTimezone } from "@/lib/settings-context";
 
@@ -32,21 +32,58 @@ function todayYMD(tz: string): string {
 
 export default function TransactionsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const tz = useAppTimezone();
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [adminMemberId, setAdminMemberId] = useState("");
   const [refundingId, setRefundingId] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState("");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
+  const [category, setCategory] = useState("");
 
   useEffect(() => {
-    if (!selectedDate && tz) setSelectedDate(todayYMD(tz));
-  }, [tz, selectedDate]);
+    const from = searchParams.get("from")?.trim();
+    const to = searchParams.get("to")?.trim();
+    const cat = searchParams.get("category")?.trim();
+    const dateAll = searchParams.get("date") === "all";
+    if (dateAll) {
+      setFromDate("all");
+      setToDate("all");
+    } else if (from || to) {
+      setFromDate(from ?? todayYMD(tz));
+      setToDate(to ?? from ?? todayYMD(tz));
+    } else if (tz) {
+      const t = todayYMD(tz);
+      setFromDate(t);
+      setToDate(t);
+    }
+    if (cat) setCategory(cat);
+  }, [searchParams, tz]);
+
+  useEffect(() => {
+    if (tz && !fromDate && !searchParams.get("from")) {
+      const t = todayYMD(tz);
+      setFromDate(t);
+      setToDate(t);
+    }
+  }, [tz, fromDate, searchParams]);
 
   const fetchSales = useCallback(() => {
-    if (!selectedDate) return;
+    const useAll = fromDate === "all" || toDate === "all";
+    const from = useAll ? null : (fromDate || toDate);
+    const to = useAll ? null : (toDate || fromDate);
+    if (!useAll && (!from || !to || from > to)) return;
     setLoading(true);
-    fetch(`/api/admin/sales?date=${encodeURIComponent(selectedDate)}`)
+    const params = new URLSearchParams();
+    if (useAll) {
+      params.set("date", "all");
+    } else {
+      params.set("from", from!);
+      params.set("to", to!);
+    }
+    if (category) params.set("category", category);
+    fetch(`/api/admin/sales?${params.toString()}`)
       .then((r) => {
         if (r.status === 401) {
           router.replace("/login");
@@ -57,7 +94,7 @@ export default function TransactionsPage() {
       .then((data) => setSales(Array.isArray(data) ? data : []))
       .catch(() => setSales([]))
       .finally(() => setLoading(false));
-  }, [selectedDate, router]);
+  }, [fromDate, toDate, category, router]);
 
   useEffect(() => {
     fetchSales();
@@ -80,29 +117,67 @@ export default function TransactionsPage() {
     }
   }
 
+  const isAllTime = fromDate === "all" || toDate === "all";
+  const rangeLabel =
+    isAllTime
+      ? "All time"
+      : fromDate && toDate
+        ? fromDate === toDate
+          ? formatDateForDisplay(fromDate, tz) || fromDate
+          : `${formatDateForDisplay(fromDate, tz) || fromDate} – ${formatDateForDisplay(toDate, tz) || toDate}`
+        : "";
+
   return (
     <div className="max-w-5xl mx-auto p-6">
       <h1 className="text-2xl font-bold text-stone-800 mb-2">Transactions</h1>
-      <p className="text-stone-500 mb-4">Purchase history. Filter by date. To refund, enter your Admin member ID and click Refund (admin only).</p>
+      <p className="text-stone-500 mb-4">Purchase history. Filter by date range. To refund, enter your Admin member ID and click Refund (admin only).</p>
       <div className="flex flex-wrap items-end gap-4 mb-4">
         <div>
-          <label className="block text-xs font-medium text-stone-500 mb-1">Date</label>
-          <div className="flex gap-2">
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="px-3 py-2 rounded-lg border border-stone-200 text-sm"
-            />
-            <button
-              type="button"
-              onClick={() => setSelectedDate(todayYMD(tz))}
-              className="px-3 py-2 rounded-lg border border-stone-200 text-sm font-medium hover:bg-stone-50"
-            >
-              Today
-            </button>
-          </div>
+          <label className="block text-xs font-medium text-stone-500 mb-1">From</label>
+          <input
+            type="date"
+            value={isAllTime ? "" : fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            disabled={isAllTime}
+            className="px-3 py-2 rounded-lg border border-stone-200 text-sm disabled:opacity-60"
+          />
         </div>
+        <div>
+          <label className="block text-xs font-medium text-stone-500 mb-1">To</label>
+          <input
+            type="date"
+            value={isAllTime ? "" : toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            disabled={isAllTime}
+            className="px-3 py-2 rounded-lg border border-stone-200 text-sm disabled:opacity-60"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            const t = todayYMD(tz);
+            setFromDate(t);
+            setToDate(t);
+          }}
+          className="px-3 py-2 rounded-lg border border-stone-200 text-sm font-medium hover:bg-stone-50"
+        >
+          Today
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setFromDate("all");
+            setToDate("all");
+          }}
+          className={`px-3 py-2 rounded-lg border text-sm font-medium ${isAllTime ? "bg-brand-600 text-white border-brand-600" : "border-stone-200 hover:bg-stone-50"}`}
+        >
+          All time
+        </button>
+        {category && (
+          <span className="px-3 py-2 rounded-lg bg-brand-100 text-brand-800 text-sm font-medium">
+            {category} only
+          </span>
+        )}
         <div className="p-3 rounded-lg border border-amber-200 bg-amber-50/80">
           <label className="block text-xs font-medium text-stone-600 mb-1">Admin member ID (for Refund)</label>
           <input
@@ -117,7 +192,7 @@ export default function TransactionsPage() {
       {loading ? (
         <div className="p-12 text-center text-stone-500">Loading…</div>
       ) : sales.length === 0 ? (
-        <p className="p-6 text-stone-500">No transactions for {formatDateForDisplay(selectedDate, tz) || selectedDate}.</p>
+        <p className="p-6 text-stone-500">No transactions for {rangeLabel || "selected date range"}.</p>
       ) : (
         <div className="rounded-xl border border-stone-200 bg-white overflow-x-auto">
           <table className="w-full text-left text-sm min-w-[700px]">

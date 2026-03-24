@@ -1,10 +1,20 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 type CategoryRow = { category: string; count: number; revenue: number; netRevenue: number };
+type Sale = {
+  sales_id: string;
+  date_time: string;
+  member_id: string;
+  member_name?: string | null;
+  status: string;
+  grand_total?: string;
+  item_total?: string | null;
+  tax_amount?: string | null;
+};
 type Report = {
   totalCount: number;
   totalRevenue: number;
@@ -18,6 +28,12 @@ type Report = {
 function formatMoney(n: number): string {
   if (Number.isNaN(n) || n === 0) return "$0";
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(n);
+}
+
+function formatSaleMoney(v: string | null | undefined): string {
+  if (v == null || v === "") return "—";
+  const n = parseFloat(String(v).replace(/[^0-9.-]/g, ""));
+  return Number.isNaN(n) ? "—" : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(n);
 }
 
 function toYMD(d: Date): string {
@@ -77,6 +93,40 @@ export default function SalesPage() {
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
   const [activePreset, setActivePreset] = useState<"today" | "this-week" | "this-month" | "last-week" | "last-month" | "custom" | null>(null);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [categorySales, setCategorySales] = useState<Record<string, { loading: boolean; sales: Sale[] }>>({});
+
+  const fetchCategorySales = useCallback((category: string) => {
+    const fromVal = report?.from ?? "";
+    const toVal = report?.to ?? "";
+    const useAll = !fromVal || !toVal;
+    setCategorySales((prev) => ({ ...prev, [category]: { ...prev[category], loading: true } }));
+    const params = new URLSearchParams();
+    if (useAll) params.set("date", "all");
+    else {
+      params.set("from", fromVal);
+      params.set("to", toVal);
+    }
+    params.set("category", category);
+    fetch(`/api/admin/sales?${params.toString()}`)
+      .then((r) => {
+        if (r.status === 401) router.replace("/login");
+        return r.ok ? r.json() : [];
+      })
+      .then((data) => setCategorySales((prev) => ({ ...prev, [category]: { loading: false, sales: Array.isArray(data) ? data : [] } })))
+      .catch(() => setCategorySales((prev) => ({ ...prev, [category]: { loading: false, sales: [] } })));
+  }, [report?.from, report?.to, router]);
+
+  function toggleCategory(row: CategoryRow) {
+    if (expandedCategory === row.category) {
+      setExpandedCategory(null);
+      return;
+    }
+    setExpandedCategory(row.category);
+    if (!categorySales[row.category]?.sales && !categorySales[row.category]?.loading) {
+      fetchCategorySales(row.category);
+    }
+  }
 
   const fetchReport = useCallback((fromVal: string, toVal: string) => {
     setLoading(true);
@@ -100,6 +150,8 @@ export default function SalesPage() {
 
   useEffect(() => {
     fetchReport(from, to);
+    setExpandedCategory(null);
+    setCategorySales({});
   }, [from, to, fetchReport]);
 
   function applyPreset(preset: "today" | "this-week" | "this-month" | "last-week" | "last-month") {
@@ -248,14 +300,72 @@ export default function SalesPage() {
                 </tr>
               </thead>
               <tbody>
-                {report.byCategory.map((row) => (
-                  <tr key={row.category} className="border-t border-stone-100">
-                    <td className="py-2 px-4 font-medium text-stone-800">{row.category}</td>
-                    <td className="py-2 px-4">{row.count}</td>
-                    <td className="py-2 px-4">{formatMoney(row.revenue)}</td>
-                    <td className="py-2 px-4">{formatMoney(row.netRevenue ?? row.revenue)}</td>
-                  </tr>
-                ))}
+                {report.byCategory.map((row) => {
+                  const isExpanded = expandedCategory === row.category;
+                  const canExpand = row.count > 0;
+                  const { loading: salesLoading, sales } = categorySales[row.category] ?? { loading: false, sales: [] };
+                  return (
+                    <React.Fragment key={row.category}>
+                      <tr
+                        className={`border-t border-stone-100 ${canExpand ? "cursor-pointer hover:bg-stone-50" : ""}`}
+                        onClick={() => canExpand && toggleCategory(row)}
+                      >
+                        <td className="py-2 px-4 font-medium text-stone-800">
+                          {canExpand ? (
+                            <span className="text-brand-600 inline-flex items-center gap-1">
+                              {isExpanded ? "▼" : "▶"} {row.category}
+                            </span>
+                          ) : (
+                            row.category
+                          )}
+                        </td>
+                        <td className="py-2 px-4">{row.count}</td>
+                        <td className="py-2 px-4">{formatMoney(row.revenue)}</td>
+                        <td className="py-2 px-4">{formatMoney(row.netRevenue ?? row.revenue)}</td>
+                      </tr>
+                      {isExpanded && (
+                        <tr className="bg-stone-50/50">
+                          <td colSpan={4} className="py-3 px-4">
+                            {salesLoading ? (
+                              <p className="text-sm text-stone-500">Loading transactions…</p>
+                            ) : sales.length === 0 ? (
+                              <p className="text-sm text-stone-500">No transactions in this category.</p>
+                            ) : (
+                              <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="text-stone-500 text-xs">
+                                      <th className="text-left py-1.5 pr-3">Member</th>
+                                      <th className="text-left py-1.5 pr-3">Date</th>
+                                      <th className="text-left py-1.5 pr-3">Total</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {sales.map((s) => (
+                                      <tr key={s.sales_id} className="border-t border-stone-100">
+                                        <td className="py-1.5 pr-3">
+                                          <Link
+                                            href={`/members/${encodeURIComponent(s.member_id)}`}
+                                            className="text-brand-600 hover:underline block"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            {(s.member_name && s.member_name.trim()) || s.member_id}
+                                          </Link>
+                                        </td>
+                                        <td className="py-1.5 pr-3">{s.date_time ?? "—"}</td>
+                                        <td className="py-1.5 pr-3">{formatSaleMoney(s.grand_total)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
