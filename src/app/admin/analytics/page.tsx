@@ -25,6 +25,15 @@ type AnalyticsData = {
   open_hour_max: number;
 } | null;
 
+type TodayCheckInsData = {
+  date: string;
+  timezone: string;
+  totalToday: number;
+  byHour: { hour: number; count: number }[];
+  open_hour_min: number;
+  open_hour_max: number;
+} | null;
+
 function getHourLabel(hour: number): string {
   const h = hour % 12 || 12;
   const ampm = hour < 12 ? "am" : "pm";
@@ -51,25 +60,46 @@ function getNiceYAxis(maxVal: number): { domain: [number, number]; ticks: number
 export default function AdminAnalyticsPage() {
   const router = useRouter();
   const [data, setData] = useState<AnalyticsData>(null);
+  const [todayCheckIns, setTodayCheckIns] = useState<TodayCheckInsData>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/admin/occupancy-analytics?days=${days}`)
-      .then((r) => {
+    let cancelled = false;
+    setLoading(true);
+    Promise.all([
+      fetch(`/api/admin/occupancy-analytics?days=${days}`).then((r) => {
         if (r.status === 401) {
           router.replace("/login");
           return null;
         }
         return r.json();
-      })
-      .then((json) => {
+      }),
+      fetch("/api/admin/check-ins-today").then((r) => {
+        if (r.status === 401) return null;
+        return r.json();
+      }),
+    ])
+      .then(([json, todayJson]) => {
+        if (cancelled) return;
         if (json?.dayHourByDay) setData(json);
         else setData(null);
+        if (todayJson?.byHour) setTodayCheckIns(todayJson);
+        else setTodayCheckIns(null);
       })
-      .catch(() => setData(null))
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (!cancelled) {
+          setData(null);
+          setTodayCheckIns(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [router, days]);
 
   if (loading) return <div className="p-8 text-stone-500">Loading…</div>;
@@ -125,6 +155,67 @@ export default function AdminAnalyticsPage() {
           </select>
         </div>
       </header>
+
+      {todayCheckIns && (
+        <section className="mb-8">
+          <h2 className="text-lg font-semibold text-stone-800 mb-1">Today: door check-ins by hour</h2>
+          <p className="text-sm text-stone-500 mb-2">
+            Total successful unlocks today ({todayCheckIns.date}) in {todayCheckIns.timezone}:{" "}
+            <strong className="text-stone-800">{todayCheckIns.totalToday}</strong>. Resets at midnight (gym timezone).
+            Each row in the Kisi webhook counts once; this is not the same as Coconut Count (see below).
+          </p>
+          <div className="overflow-x-auto mb-3">
+            <div
+              className="min-w-[480px] grid gap-px bg-stone-200 rounded-lg overflow-hidden"
+              style={{ gridTemplateColumns: `4rem repeat(${todayCheckIns.byHour.length}, minmax(2rem, 1fr))` }}
+            >
+              <div className="p-2 bg-stone-100 text-xs font-medium text-stone-600">Today</div>
+              {todayCheckIns.byHour.map(({ hour }) => (
+                <div key={hour} className="p-1 bg-stone-100 text-[10px] font-medium text-stone-600 text-center">
+                  {getHourLabel(hour)}
+                </div>
+              ))}
+              <div className="p-2 bg-stone-100 text-xs font-medium text-stone-600">Count</div>
+              {todayCheckIns.byHour.map(({ hour, count }) => {
+                const maxH = Math.max(...todayCheckIns.byHour.map((x) => x.count), 1);
+                const pct = Math.min(1, count / maxH);
+                const r = Math.round(34 + (110 - 34) * (1 - pct));
+                const g = Math.round(197 + (255 - 197) * (1 - pct));
+                const b = Math.round(94 + (255 - 94) * (1 - pct));
+                const bg = `rgb(${r}, ${g}, ${b})`;
+                return (
+                  <div
+                    key={hour}
+                    className="p-1.5 min-h-[2rem] flex items-center justify-center text-xs font-medium"
+                    style={{ backgroundColor: bg, color: count > maxH * 0.5 ? "white" : "inherit" }}
+                    title={`${getHourLabel(hour)}: ${count} check-in${count === 1 ? "" : "s"}`}
+                  >
+                    {count > 0 ? count : "—"}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <details className="rounded-lg border border-stone-200 bg-stone-50/80 p-3 text-sm text-stone-600">
+            <summary className="cursor-pointer font-medium text-stone-800">Coconut Count vs. this chart</summary>
+            <ul className="mt-2 list-disc list-inside space-y-1">
+              <li>
+                <strong>Coconut Count</strong> (dashboard widget) shows how many people are estimated on-site in the{" "}
+                <em>last rolling hour</em> (entries expire after 1 hour). The same member tapping the door again within 60 minutes
+                does not add another coconut — that avoids double-counting when someone re-enters quickly.
+              </li>
+              <li>
+                <strong>This chart</strong> uses every successful door unlock from <code className="text-xs bg-stone-200 px-1 rounded">door_access_events</code> (Kisi webhook). Three taps → three cells in the hour totals (if the webhook is configured and deliveries succeed).
+              </li>
+              <li>
+                If unlocks appear in Kisi but not here, verify the webhook URL{" "}
+                <code className="text-xs bg-stone-200 px-1 rounded">/api/kisi/webhook</code> and{" "}
+                <code className="text-xs bg-stone-200 px-1 rounded">KISI_WEBHOOK_SECRET</code> (signature must match).
+              </li>
+            </ul>
+          </details>
+        </section>
+      )}
 
       {!hasData && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-800 text-sm mb-6">
