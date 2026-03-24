@@ -74,7 +74,9 @@ export default function AdminLeadsPage() {
                     </td>
                     <td className="py-3 px-4 text-stone-600">{email}</td>
                     <td className="py-3 px-4 text-stone-600 text-sm">
-                      {lead.created_at ? formatDateForDisplay(lead.created_at, tz) : "—"}
+                      {lead.created_at
+                        ? formatDateForDisplay(lead.created_at, tz) || "—"
+                        : "—"}
                     </td>
                     <td className="py-3 px-4">
                       {link ? (

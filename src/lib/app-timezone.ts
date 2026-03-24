@@ -46,12 +46,18 @@ export function formatDateOnlyInAppTz(
   return formatInAppTz(new Date(dateStr + "T12:00:00Z"), options, timeZone);
 }
 
-/** Format a YYYY-MM-DD date string for display as MM/DD/YYYY. Returns "" for null/invalid. */
+/** Format a YYYY-MM-DD date string for display as MM/DD/YYYY. Returns "" for null/invalid.
+ *  Also accepts SQLite/datetime strings (`YYYY-MM-DD HH:MM:SS`) and ISO timestamps — not only date-only. */
 export function formatDateForDisplay(dateStr: string | null | undefined, timeZone: string = APP_TIMEZONE): string {
   if (!dateStr || typeof dateStr !== "string") return "";
   const s = dateStr.trim();
   if (!s) return "";
-  const d = new Date(s + "T12:00:00Z");
+  let d: Date;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    d = new Date(`${s}T12:00:00Z`);
+  } else {
+    d = new Date(s.includes("T") ? s : s.replace(" ", "T"));
+  }
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric", timeZone });
 }
