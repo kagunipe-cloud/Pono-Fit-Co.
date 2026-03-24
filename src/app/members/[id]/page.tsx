@@ -564,6 +564,25 @@ export default function MemberDetailPage() {
                   </dd>
                 </div>
               )}
+              {isAdmin && (
+                <div className="sm:col-span-2">
+                  <dt className="text-stone-500">Stripe customer ID</dt>
+                  <dd className="font-mono text-xs break-all text-stone-800 mt-0.5">
+                    {(member.stripe_customer_id as string | null | undefined)?.toString().trim() ? (
+                      <a
+                        href={`https://dashboard.stripe.com/customers/${encodeURIComponent(String(member.stripe_customer_id).trim())}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-brand-600 hover:underline"
+                      >
+                        {String(member.stripe_customer_id).trim()}
+                      </a>
+                    ) : (
+                      "—"
+                    )}
+                  </dd>
+                </div>
+              )}
             </dl>
           )}
         </div>
