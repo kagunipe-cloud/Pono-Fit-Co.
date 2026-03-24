@@ -67,7 +67,11 @@ export default function AdminLeadsPage() {
                 const link = mailtoLink(lead);
                 return (
                   <tr key={lead.member_id} className="border-t border-stone-100 hover:bg-brand-50/30">
-                    <td className="py-3 px-4 font-medium text-stone-800">{name}</td>
+                    <td className="py-3 px-4 font-medium">
+                      <Link href={`/members/${lead.member_id}`} className="text-brand-600 hover:underline">
+                        {name}
+                      </Link>
+                    </td>
                     <td className="py-3 px-4 text-stone-600">{email}</td>
                     <td className="py-3 px-4 text-stone-600 text-sm">
                       {lead.created_at ? formatDateForDisplay(lead.created_at, tz) : "—"}
