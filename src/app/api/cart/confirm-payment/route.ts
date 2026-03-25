@@ -11,8 +11,9 @@ import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz, formatDateForStorag
 import { formatPrice } from "../../../../lib/format";
 import { computeCcFee } from "../../../../lib/cc-fees";
 import { getMemberIdFromSession } from "../../../../lib/session";
-import { getAdminMemberId } from "../../../../lib/admin";
+import { getTrainerMemberId } from "../../../../lib/admin";
 import { randomUUID } from "crypto";
+import { stripeCustomerIdForApi } from "../../../../lib/stripe-customer";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
@@ -108,31 +109,44 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "member_id required" }, { status: 400 });
     }
     const sessionMemberId = await getMemberIdFromSession();
-    const isAdmin = !!(await getAdminMemberId(request));
-    if (sessionMemberId !== member_id && !isAdmin) {
+    const isStaff = !!(await getTrainerMemberId(request));
+    if (sessionMemberId !== member_id && !isStaff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Always persist Stripe Customer id after a successful online Checkout (metadata "save for future"
-    // only controls auto_renew + off_session; returning customers often send save_card_for_future: false).
+    // Persist Stripe Customer id; auto_renew follows monthly_recurring when cart included monthly membership.
+    // Legacy sessions: only save_card_for_future in metadata (no monthly_recurring) still maps save_card → auto_renew.
     if (stripe_session_id && stripeSession) {
       const cid = stripeCustomerIdFromCheckoutSession(stripeSession);
-      const saveCard = stripeSession.metadata?.save_card_for_future === "1";
-      if (cid && member_id) {
+      const cidApi = stripeCustomerIdForApi(cid);
+      const monthlyRenew = stripeSession.metadata?.monthly_recurring;
+      const saveCardLegacy = stripeSession.metadata?.save_card_for_future === "1";
+      const flowV2 = stripeSession.metadata?.stripe_checkout_flow === "v2";
+      if (cidApi && member_id) {
         const dbStripe = getDb();
         ensureMembersStripeColumn(dbStripe);
         ensureMembersAutoRenewColumn(dbStripe);
-        if (saveCard) {
-          dbStripe.prepare("UPDATE members SET stripe_customer_id = ?, auto_renew = 1 WHERE member_id = ?").run(cid, member_id);
+        let autoRenew: number | null = null;
+        if (monthlyRenew === "1") autoRenew = 1;
+        else if (monthlyRenew === "0") autoRenew = 0;
+        else if (flowV2) autoRenew = null;
+        else if (saveCardLegacy) autoRenew = 1;
+        if (autoRenew === null) {
+          dbStripe.prepare("UPDATE members SET stripe_customer_id = ? WHERE member_id = ?").run(cidApi, member_id);
         } else {
-          dbStripe.prepare("UPDATE members SET stripe_customer_id = ? WHERE member_id = ?").run(cid, member_id);
+          dbStripe.prepare("UPDATE members SET stripe_customer_id = ?, auto_renew = ? WHERE member_id = ?").run(
+            cidApi,
+            autoRenew,
+            member_id
+          );
         }
         dbStripe.close();
       }
-    } else if (terminalStripeCustomerId && member_id) {
+    } else if (stripeCustomerIdForApi(terminalStripeCustomerId) && member_id) {
+      const termApi = stripeCustomerIdForApi(terminalStripeCustomerId)!;
       const dbStripe = getDb();
       ensureMembersStripeColumn(dbStripe);
-      dbStripe.prepare("UPDATE members SET stripe_customer_id = ? WHERE member_id = ?").run(terminalStripeCustomerId, member_id);
+      dbStripe.prepare("UPDATE members SET stripe_customer_id = ? WHERE member_id = ?").run(termApi, member_id);
       dbStripe.close();
     }
 

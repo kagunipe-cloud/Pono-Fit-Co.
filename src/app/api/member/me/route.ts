@@ -4,6 +4,7 @@ import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../lib/recurring-classes";
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { todayInAppTz } from "../../../../lib/app-timezone";
+import { hasBillableStripeCustomer } from "../../../../lib/stripe-customer";
 
 export const dynamic = "force-dynamic";
 
@@ -155,7 +156,7 @@ export async function GET() {
       classCredits,
       ptBookings,
       hasAccess,
-      has_saved_card: !!(member.stripe_customer_id?.trim()),
+      has_saved_card: hasBillableStripeCustomer(member.stripe_customer_id),
       auto_renew: (member.auto_renew ?? 0) === 1,
     });
   } catch (err) {
