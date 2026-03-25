@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { getWeightComparisonWithArticle } from "@/lib/workout-congrats";
 import { milesToKm, kmToMiles } from "@/lib/workouts";
 import { PRBadge } from "@/components/PRBadge";
+import { LiftSetPrPercent } from "@/components/LiftSetPrPercent";
 
 type LiftSetRow = { reps: string; weight: string; drops?: { reps: string; weight: string }[] };
 type CardioSetRow = { time: string; distance: string };
@@ -174,6 +175,8 @@ export default function MemberWorkoutDetailPage() {
   const [prBadgesByEx, setPrBadgesByEx] = useState<Record<number, ("Reps" | "Auto 1RM" | "My 1RM")[]>>({});
   /** Finished-workout PR lines keyed by workout_exercise id → set_order → lines (from pr-badges API). */
   const [prSetNotesByEx, setPrSetNotesByEx] = useState<Record<number, Record<number, string[]>>>({});
+  /** Bumped after workout JSON reload so LiftSetPrPercent refetches PR-at-weight. */
+  const [prInvalidateKey, setPrInvalidateKey] = useState(0);
 
   /** Map of source workout sets by a stable exercise key so \"last time\" stays attached even if you delete/reorder exercises. */
   const sourceSetsByExerciseKey = useMemo(() => {
@@ -196,7 +199,10 @@ export default function MemberWorkoutDetailPage() {
         if (!res.ok) throw new Error("Not found");
         return res.json();
       })
-      .then(setWorkout)
+      .then((data) => {
+        setWorkout(data);
+        setPrInvalidateKey((k) => k + 1);
+      })
       .catch(() => setWorkout(null))
       .finally(() => setLoading(false));
   }
@@ -361,6 +367,7 @@ export default function MemberWorkoutDetailPage() {
         }
         const data = await refetch.json();
         setWorkout(data);
+        setPrInvalidateKey((k) => k + 1);
         alert("Workout not found. The page has been refreshed.");
       } else {
         const err = await res.json().catch(() => ({}));
@@ -855,93 +862,117 @@ export default function MemberWorkoutDetailPage() {
               <div className="mt-4 space-y-2">
                 {mode === "lift" ? (
                   (sets as LiftSetRow[]).map((row, i) => (
-                    <div key={i} className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm text-stone-500 w-10">Set {i + 1}</span>
-                      <input
-                        type="text"
-                        placeholder="Weight (lbs)"
-                        value={row.weight}
-                        onChange={(e) =>
-                          setSets((s) =>
-                            s.map((row, ri) => (ri === i ? { ...(row as LiftSetRow), weight: e.target.value } : row))
-                          )
-                        }
-                        className="w-24 px-2 py-1.5 rounded border border-stone-200"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Reps"
-                        value={row.reps}
-                        onChange={(e) =>
-                          setSets((s) =>
-                            s.map((row, ri) => (ri === i ? { ...(row as LiftSetRow), reps: e.target.value } : row))
-                          )
-                        }
-                        className="w-20 px-2 py-1.5 rounded border border-stone-200"
-                      />
-                      <PRInfo
-                        exerciseId={selectedOfficialId}
-                        exerciseName={exerciseName.trim()}
-                        weight={row.weight}
-                        excludeWorkoutId={workout?.id ?? null}
-                      />
-                      <AutoImplied1RMDisplay reps={row.reps} weight={row.weight} />
-                      {(row.drops ?? []).map((drop, di) => (
-                        <span key={di} className="flex items-center gap-1">
-                          <span className="text-stone-400">↓</span>
+                    <div key={i} className="space-y-1 w-full">
+                      <div className="flex flex-wrap items-center gap-y-2 gap-x-2 w-full justify-between">
+                        <div className="flex flex-wrap items-center gap-2 min-w-0">
+                          <span className="text-sm text-stone-500 w-10 shrink-0">Set {i + 1}</span>
                           <input
                             type="text"
-                            placeholder="lbs"
-                            value={drop.weight}
+                            placeholder="Weight (lbs)"
+                            value={row.weight}
                             onChange={(e) =>
                               setSets((s) =>
-                                s.map((row, ri) => {
-                                  if (ri !== i) return row;
-                                  const r = row as LiftSetRow;
-                                  const drops = [...(r.drops ?? [])];
-                                  drops[di] = { ...drops[di]!, weight: e.target.value };
-                                  return { ...r, drops };
-                                })
+                                s.map((row, ri) => (ri === i ? { ...(row as LiftSetRow), weight: e.target.value } : row))
                               )
                             }
-                            className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                            className="w-24 px-2 py-1.5 rounded border border-stone-200"
                           />
                           <input
                             type="text"
                             placeholder="Reps"
-                            value={drop.reps}
+                            value={row.reps}
                             onChange={(e) =>
+                              setSets((s) =>
+                                s.map((row, ri) => (ri === i ? { ...(row as LiftSetRow), reps: e.target.value } : row))
+                              )
+                            }
+                            className="w-20 px-2 py-1.5 rounded border border-stone-200"
+                          />
+                          <PRInfo
+                            exerciseId={selectedOfficialId}
+                            exerciseName={exerciseName.trim()}
+                            weight={row.weight}
+                            excludeWorkoutId={workout?.id ?? null}
+                          />
+                          <AutoImplied1RMDisplay reps={row.reps} weight={row.weight} />
+                        </div>
+                        <LiftSetPrPercent
+                          exerciseId={selectedOfficialId}
+                          exerciseName={exerciseName.trim()}
+                          weightStr={row.weight}
+                          repsStr={row.reps}
+                          excludeWorkoutId={workout?.id ?? null}
+                          invalidateKey={prInvalidateKey}
+                        />
+                      </div>
+                      {(row.drops ?? []).map((drop, di) => (
+                        <div key={di} className="flex flex-wrap items-center gap-y-2 gap-x-2 pl-10 w-full justify-between">
+                          <div className="flex flex-wrap items-center gap-2 min-w-0">
+                            <span className="text-stone-400">↓</span>
+                            <input
+                              type="text"
+                              placeholder="lbs"
+                              value={drop.weight}
+                              onChange={(e) =>
+                                setSets((s) =>
+                                  s.map((row, ri) => {
+                                    if (ri !== i) return row;
+                                    const r = row as LiftSetRow;
+                                    const drops = [...(r.drops ?? [])];
+                                    drops[di] = { ...drops[di]!, weight: e.target.value };
+                                    return { ...r, drops };
+                                  })
+                                )
+                              }
+                              className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                            />
+                            <input
+                              type="text"
+                              placeholder="Reps"
+                              value={drop.reps}
+                              onChange={(e) =>
+                                setSets((s) =>
+                                  s.map((row, ri) => {
+                                    if (ri !== i) return row;
+                                    const r = row as LiftSetRow;
+                                    const drops = [...(r.drops ?? [])];
+                                    drops[di] = { ...drops[di]!, reps: e.target.value };
+                                    return { ...r, drops };
+                                  })
+                                )
+                              }
+                              className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                            />
+                            <AutoImplied1RMDisplay reps={drop.reps} weight={drop.weight} />
+                          </div>
+                          <LiftSetPrPercent
+                            exerciseId={selectedOfficialId}
+                            exerciseName={exerciseName.trim()}
+                            weightStr={drop.weight}
+                            repsStr={drop.reps}
+                            excludeWorkoutId={workout?.id ?? null}
+                            invalidateKey={prInvalidateKey}
+                          />
+                        </div>
+                      ))}
+                      {(row.drops?.length ?? 0) < 2 && (
+                        <div className="pl-10">
+                          <button
+                            type="button"
+                            onClick={() =>
                               setSets((s) =>
                                 s.map((row, ri) => {
                                   if (ri !== i) return row;
                                   const r = row as LiftSetRow;
-                                  const drops = [...(r.drops ?? [])];
-                                  drops[di] = { ...drops[di]!, reps: e.target.value };
-                                  return { ...r, drops };
+                                  return { ...r, drops: [...(r.drops ?? []), { reps: "", weight: "" }] };
                                 })
                               )
                             }
-                            className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
-                          />
-                          <AutoImplied1RMDisplay reps={drop.reps} weight={drop.weight} />
-                        </span>
-                      ))}
-                      {(row.drops?.length ?? 0) < 2 && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSets((s) =>
-                              s.map((row, ri) => {
-                                if (ri !== i) return row;
-                                const r = row as LiftSetRow;
-                                return { ...r, drops: [...(r.drops ?? []), { reps: "", weight: "" }] };
-                              })
-                            )
-                          }
-                          className="text-xs text-brand-600 hover:underline"
-                        >
-                          Add dropset
-                        </button>
+                            className="text-xs text-brand-600 hover:underline"
+                          >
+                            Add dropset
+                          </button>
+                        </div>
                       )}
                     </div>
                   ))
@@ -1079,91 +1110,115 @@ export default function MemberWorkoutDetailPage() {
                         <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Sets</p>
                         {editType === "lift"
                           ? (editSets as LiftSetRow[]).map((row, i) => (
-                              <div key={i} className="flex flex-wrap items-center gap-2">
-                                <span className="text-sm text-stone-500 w-10">Set {i + 1}</span>
-                                <input
-                                  type="text"
-                                  placeholder="Weight (lbs)"
-                                  value={row.weight}
-                                  onChange={(e) =>
-                                    setEditSets((s) =>
-                                      s.map((r, ri) => (ri === i ? { ...(r as LiftSetRow), weight: e.target.value } : r))
-                                    )
-                                  }
-                                  className="w-24 px-2 py-1.5 rounded border border-stone-200"
-                                />
-                                <input
-                                  type="text"
-                                  placeholder="Reps"
-                                  value={row.reps}
-                                  onChange={(e) =>
-                                    setEditSets((s) =>
-                                      s.map((r, ri) => (ri === i ? { ...(r as LiftSetRow), reps: e.target.value } : r))
-                                    )
-                                  }
-                                  className="w-20 px-2 py-1.5 rounded border border-stone-200"
-                                />
-                                <PRInfo
-                                  exerciseId={editingExId != null ? workout?.exercises.find((e) => e.id === editingExId)?.exercise_id ?? null : null}
-                                  exerciseName={editName}
-                                  weight={row.weight}
-                                  excludeWorkoutId={workout?.id ?? null}
-                                />
-                                <AutoImplied1RMDisplay reps={row.reps} weight={row.weight} />
-                                {(row.drops ?? []).map((drop, di) => (
-                                  <span key={di} className="flex items-center gap-1">
-                                    <span className="text-stone-400">↓</span>
+                              <div key={i} className="space-y-1 w-full">
+                                <div className="flex flex-wrap items-center gap-y-2 gap-x-2 w-full justify-between">
+                                  <div className="flex flex-wrap items-center gap-2 min-w-0">
+                                    <span className="text-sm text-stone-500 w-10 shrink-0">Set {i + 1}</span>
                                     <input
                                       type="text"
-                                      placeholder="lbs"
-                                      value={drop.weight}
+                                      placeholder="Weight (lbs)"
+                                      value={row.weight}
                                       onChange={(e) =>
                                         setEditSets((s) =>
-                                          s.map((r, ri) => {
-                                            if (ri !== i) return r;
-                                            const row = r as LiftSetRow;
-                                            const drops = [...(row.drops ?? [])];
-                                            drops[di] = { ...drops[di]!, weight: e.target.value };
-                                            return { ...row, drops };
-                                          })
+                                          s.map((r, ri) => (ri === i ? { ...(r as LiftSetRow), weight: e.target.value } : r))
                                         )
                                       }
-                                      className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                                      className="w-24 px-2 py-1.5 rounded border border-stone-200"
                                     />
                                     <input
                                       type="text"
                                       placeholder="Reps"
-                                      value={drop.reps}
+                                      value={row.reps}
                                       onChange={(e) =>
                                         setEditSets((s) =>
-                                          s.map((r, ri) => {
-                                            if (ri !== i) return r;
-                                            const row = r as LiftSetRow;
-                                            const drops = [...(row.drops ?? [])];
-                                            drops[di] = { ...drops[di]!, reps: e.target.value };
-                                            return { ...row, drops };
-                                          })
+                                          s.map((r, ri) => (ri === i ? { ...(r as LiftSetRow), reps: e.target.value } : r))
                                         )
                                       }
-                                      className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                                      className="w-20 px-2 py-1.5 rounded border border-stone-200"
                                     />
-                                    <AutoImplied1RMDisplay reps={drop.reps} weight={drop.weight} />
-                                  </span>
+                                    <PRInfo
+                                      exerciseId={editingExId != null ? workout?.exercises.find((e) => e.id === editingExId)?.exercise_id ?? null : null}
+                                      exerciseName={editName}
+                                      weight={row.weight}
+                                      excludeWorkoutId={workout?.id ?? null}
+                                    />
+                                    <AutoImplied1RMDisplay reps={row.reps} weight={row.weight} />
+                                  </div>
+                                  <LiftSetPrPercent
+                                    exerciseId={editingExId != null ? workout?.exercises.find((e) => e.id === editingExId)?.exercise_id ?? null : null}
+                                    exerciseName={editName}
+                                    weightStr={row.weight}
+                                    repsStr={row.reps}
+                                    excludeWorkoutId={workout?.id ?? null}
+                                    invalidateKey={prInvalidateKey}
+                                  />
+                                </div>
+                                {(row.drops ?? []).map((drop, di) => (
+                                  <div key={di} className="flex flex-wrap items-center gap-y-2 gap-x-2 pl-10 w-full justify-between">
+                                    <div className="flex flex-wrap items-center gap-2 min-w-0">
+                                      <span className="text-stone-400">↓</span>
+                                      <input
+                                        type="text"
+                                        placeholder="lbs"
+                                        value={drop.weight}
+                                        onChange={(e) =>
+                                          setEditSets((s) =>
+                                            s.map((r, ri) => {
+                                              if (ri !== i) return r;
+                                              const row = r as LiftSetRow;
+                                              const drops = [...(row.drops ?? [])];
+                                              drops[di] = { ...drops[di]!, weight: e.target.value };
+                                              return { ...row, drops };
+                                            })
+                                          )
+                                        }
+                                        className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                                      />
+                                      <input
+                                        type="text"
+                                        placeholder="Reps"
+                                        value={drop.reps}
+                                        onChange={(e) =>
+                                          setEditSets((s) =>
+                                            s.map((r, ri) => {
+                                              if (ri !== i) return r;
+                                              const row = r as LiftSetRow;
+                                              const drops = [...(row.drops ?? [])];
+                                              drops[di] = { ...drops[di]!, reps: e.target.value };
+                                              return { ...row, drops };
+                                            })
+                                          )
+                                        }
+                                        className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                                      />
+                                      <AutoImplied1RMDisplay reps={drop.reps} weight={drop.weight} />
+                                    </div>
+                                    <LiftSetPrPercent
+                                      exerciseId={editingExId != null ? workout?.exercises.find((e) => e.id === editingExId)?.exercise_id ?? null : null}
+                                      exerciseName={editName}
+                                      weightStr={drop.weight}
+                                      repsStr={drop.reps}
+                                      excludeWorkoutId={workout?.id ?? null}
+                                      invalidateKey={prInvalidateKey}
+                                    />
+                                  </div>
                                 ))}
                                 {(row.drops?.length ?? 0) < 2 && (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setEditSets((s) =>
-                                        s.map((r, ri) =>
-                                          ri === i ? { ...(r as LiftSetRow), drops: [...((r as LiftSetRow).drops ?? []), { reps: "", weight: "" }] } : r
+                                  <div className="pl-10">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setEditSets((s) =>
+                                          s.map((r, ri) =>
+                                            ri === i ? { ...(r as LiftSetRow), drops: [...((r as LiftSetRow).drops ?? []), { reps: "", weight: "" }] } : r
+                                          )
                                         )
-                                      )
-                                    }
-                                    className="text-xs text-brand-600 hover:underline"
-                                  >
-                                    Add dropset
-                                  </button>
+                                      }
+                                      className="text-xs text-brand-600 hover:underline"
+                                    >
+                                      Add dropset
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             ))
@@ -1335,23 +1390,34 @@ export default function MemberWorkoutDetailPage() {
                                 const setOrder = group[0]?.set_order ?? i;
                                 const prLines = prSetNotesByEx[ex.id]?.[setOrder] ?? [];
                                 return (
-                                <li key={i}>
-                                  <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                                    <span>
-                                      Set {i + 1}: {group.map((s, j) => (
-                                        <span key={s.id ?? j}>
-                                          {j > 0 && " ↓ "}
-                                          {s.weight_kg != null ? s.weight_kg + " lbs" : "—"} × {s.reps ?? "—"} reps
-                                        </span>
-                                      ))}
-                                    </span>
-                                    {prLines.length > 0 && (
-                                      <span className="text-xs text-stone-600" title={prLines.join(" · ")}>
-                                        <span aria-hidden>🍍</span>{" "}
-                                        {prLines.join(" · ")}
+                                <li key={i} className="space-y-1">
+                                  {group.map((s, j) => (
+                                    <div
+                                      key={s.id ?? j}
+                                      className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 text-sm text-stone-600 w-full"
+                                    >
+                                      <span>
+                                        {j === 0 ? `Set ${i + 1}: ` : "↓ "}
+                                        {s.weight_kg != null ? s.weight_kg + " lbs" : "—"} × {s.reps ?? "—"} reps
                                       </span>
-                                    )}
-                                  </span>
+                                      <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 justify-end shrink-0 text-right">
+                                        <LiftSetPrPercent
+                                          exerciseId={ex.exercise_id ?? null}
+                                          exerciseName={ex.exercise_name}
+                                          weightStr={s.weight_kg != null ? String(s.weight_kg) : ""}
+                                          repsStr={s.reps != null ? String(s.reps) : ""}
+                                          excludeWorkoutId={workout?.id ?? null}
+                                          invalidateKey={prInvalidateKey}
+                                          showPineapple={prLines.length === 0 || j > 0}
+                                        />
+                                        {j === 0 && prLines.length > 0 && (
+                                          <span className="text-xs text-stone-600 max-w-[min(100%,20rem)]" title={prLines.join(" · ")}>
+                                            <span aria-hidden>🍍</span> {prLines.join(" · ")}
+                                          </span>
+                                        )}
+                                      </span>
+                                    </div>
+                                  ))}
                                 </li>
                               );
                               })
@@ -1377,96 +1443,130 @@ export default function MemberWorkoutDetailPage() {
                         <div className="mt-3 space-y-2">
                           {ex.type === "lift"
                             ? (addSetsRows as LiftSetRow[]).map((row, i) => (
-                                <div key={i} className="flex flex-wrap items-center gap-2">
-                                  <span className="text-sm text-stone-500 w-8">Set {i + 1}</span>
-                                  <input
-                                    type="text"
-                                    placeholder="Weight (lbs)"
-                                    value={row.weight}
-                                    onChange={(e) =>
-                                      setAddSetsRows((s) =>
-                                        s.map((r, ri) => (ri === i ? { ...(r as LiftSetRow), weight: e.target.value } : r))
-                                      )
-                                    }
-                                    className="w-24 px-2 py-1.5 rounded border border-stone-200"
-                                  />
-                                  <input
-                                    type="text"
-                                    placeholder="Reps"
-                                    value={row.reps}
-                                    onChange={(e) =>
-                                      setAddSetsRows((s) =>
-                                        s.map((r, ri) => (ri === i ? { ...(r as LiftSetRow), reps: e.target.value } : r))
-                                      )
-                                    }
-                                    className="w-20 px-2 py-1.5 rounded border border-stone-200"
-                                  />
-                                  {addSetsForExId != null && (() => {
-                                    const ex = workout?.exercises.find((e) => e.id === addSetsForExId);
-                                    return ex ? (
-                                      <PRInfo
-                                        exerciseId={ex.exercise_id ?? null}
-                                        exerciseName={ex.exercise_name}
-                                        weight={row.weight}
-                                        excludeWorkoutId={workout?.id ?? null}
-                                      />
-                                    ) : null;
-                                  })()}
-                                  <AutoImplied1RMDisplay reps={row.reps} weight={row.weight} />
-                                  {(row.drops ?? []).map((drop, di) => (
-                                    <span key={di} className="flex items-center gap-1">
-                                      <span className="text-stone-400">↓</span>
+                                <div key={i} className="space-y-1 w-full">
+                                  <div className="flex flex-wrap items-center gap-y-2 gap-x-2 w-full justify-between">
+                                    <div className="flex flex-wrap items-center gap-2 min-w-0">
+                                      <span className="text-sm text-stone-500 w-8 shrink-0">Set {i + 1}</span>
                                       <input
                                         type="text"
-                                        placeholder="lbs"
-                                        value={drop.weight}
+                                        placeholder="Weight (lbs)"
+                                        value={row.weight}
                                         onChange={(e) =>
                                           setAddSetsRows((s) =>
-                                            s.map((r, ri) => {
-                                              if (ri !== i) return r;
-                                              const row = r as LiftSetRow;
-                                              const drops = [...(row.drops ?? [])];
-                                              drops[di] = { ...drops[di]!, weight: e.target.value };
-                                              return { ...row, drops };
-                                            })
+                                            s.map((r, ri) => (ri === i ? { ...(r as LiftSetRow), weight: e.target.value } : r))
                                           )
                                         }
-                                        className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                                        className="w-24 px-2 py-1.5 rounded border border-stone-200"
                                       />
                                       <input
                                         type="text"
                                         placeholder="Reps"
-                                        value={drop.reps}
+                                        value={row.reps}
                                         onChange={(e) =>
                                           setAddSetsRows((s) =>
-                                            s.map((r, ri) => {
-                                              if (ri !== i) return r;
-                                              const row = r as LiftSetRow;
-                                              const drops = [...(row.drops ?? [])];
-                                              drops[di] = { ...drops[di]!, reps: e.target.value };
-                                              return { ...row, drops };
-                                            })
+                                            s.map((r, ri) => (ri === i ? { ...(r as LiftSetRow), reps: e.target.value } : r))
                                           )
                                         }
-                                        className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                                        className="w-20 px-2 py-1.5 rounded border border-stone-200"
                                       />
-                                      <AutoImplied1RMDisplay reps={drop.reps} weight={drop.weight} />
-                                    </span>
+                                      {addSetsForExId != null && (() => {
+                                        const exForPr = workout?.exercises.find((e) => e.id === addSetsForExId);
+                                        return exForPr ? (
+                                          <PRInfo
+                                            exerciseId={exForPr.exercise_id ?? null}
+                                            exerciseName={exForPr.exercise_name}
+                                            weight={row.weight}
+                                            excludeWorkoutId={workout?.id ?? null}
+                                          />
+                                        ) : null;
+                                      })()}
+                                      <AutoImplied1RMDisplay reps={row.reps} weight={row.weight} />
+                                    </div>
+                                    {addSetsForExId != null && (() => {
+                                      const exForPr = workout?.exercises.find((e) => e.id === addSetsForExId);
+                                      return exForPr ? (
+                                        <LiftSetPrPercent
+                                          exerciseId={exForPr.exercise_id ?? null}
+                                          exerciseName={exForPr.exercise_name}
+                                          weightStr={row.weight}
+                                          repsStr={row.reps}
+                                          excludeWorkoutId={workout?.id ?? null}
+                                          invalidateKey={prInvalidateKey}
+                                        />
+                                      ) : null;
+                                    })()}
+                                  </div>
+                                  {(row.drops ?? []).map((drop, di) => (
+                                    <div key={di} className="flex flex-wrap items-center gap-y-2 gap-x-2 pl-8 w-full justify-between">
+                                      <div className="flex flex-wrap items-center gap-2 min-w-0">
+                                        <span className="text-stone-400">↓</span>
+                                        <input
+                                          type="text"
+                                          placeholder="lbs"
+                                          value={drop.weight}
+                                          onChange={(e) =>
+                                            setAddSetsRows((s) =>
+                                              s.map((r, ri) => {
+                                                if (ri !== i) return r;
+                                                const row = r as LiftSetRow;
+                                                const drops = [...(row.drops ?? [])];
+                                                drops[di] = { ...drops[di]!, weight: e.target.value };
+                                                return { ...row, drops };
+                                              })
+                                            )
+                                          }
+                                          className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                                        />
+                                        <input
+                                          type="text"
+                                          placeholder="Reps"
+                                          value={drop.reps}
+                                          onChange={(e) =>
+                                            setAddSetsRows((s) =>
+                                              s.map((r, ri) => {
+                                                if (ri !== i) return r;
+                                                const row = r as LiftSetRow;
+                                                const drops = [...(row.drops ?? [])];
+                                                drops[di] = { ...drops[di]!, reps: e.target.value };
+                                                return { ...row, drops };
+                                              })
+                                            )
+                                          }
+                                          className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                                        />
+                                        <AutoImplied1RMDisplay reps={drop.reps} weight={drop.weight} />
+                                      </div>
+                                      {addSetsForExId != null && (() => {
+                                        const exForPr = workout?.exercises.find((e) => e.id === addSetsForExId);
+                                        return exForPr ? (
+                                          <LiftSetPrPercent
+                                            exerciseId={exForPr.exercise_id ?? null}
+                                            exerciseName={exForPr.exercise_name}
+                                            weightStr={drop.weight}
+                                            repsStr={drop.reps}
+                                            excludeWorkoutId={workout?.id ?? null}
+                                            invalidateKey={prInvalidateKey}
+                                          />
+                                        ) : null;
+                                      })()}
+                                    </div>
                                   ))}
                                   {(row.drops?.length ?? 0) < 2 && (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        setAddSetsRows((s) =>
-                                          s.map((r, ri) =>
-                                            ri === i ? { ...(r as LiftSetRow), drops: [...((r as LiftSetRow).drops ?? []), { reps: "", weight: "" }] } : r
+                                    <div className="pl-8">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setAddSetsRows((s) =>
+                                            s.map((r, ri) =>
+                                              ri === i ? { ...(r as LiftSetRow), drops: [...((r as LiftSetRow).drops ?? []), { reps: "", weight: "" }] } : r
+                                            )
                                           )
-                                        )
-                                      }
-                                      className="text-xs text-brand-600 hover:underline"
-                                    >
-                                      Add dropset
-                                    </button>
+                                        }
+                                        className="text-xs text-brand-600 hover:underline"
+                                      >
+                                        Add dropset
+                                      </button>
+                                    </div>
                                   )}
                                 </div>
                               ))
