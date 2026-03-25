@@ -161,6 +161,8 @@ export default function MemberWorkoutDetailPage() {
   const [savingWorkoutName, setSavingWorkoutName] = useState(false);
   const [congratsMessage, setCongratsMessage] = useState<string | null>(null);
   const [congratsPrCount, setCongratsPrCount] = useState<number>(0);
+  /** Exercise name + badge types for CHEE HOO modal */
+  const [congratsPrLines, setCongratsPrLines] = useState<{ exercise_name: string; badges: string[] }[]>([]);
   const [shareEmail, setShareEmail] = useState("");
   const [sharing, setSharing] = useState(false);
   const [shareResult, setShareResult] = useState<{ ok: boolean; message?: string } | null>(null);
@@ -366,13 +368,19 @@ export default function MemberWorkoutDetailPage() {
         const phrase = volume > 0 ? getWeightComparisonWithArticle(volume) : null;
         const prRes = await fetch(`/api/member/workouts/${id}/pr-badges`);
         const prData = prRes.ok ? await prRes.json() : null;
-        // Count total PR badges (Reps, Auto 1RM, My 1RM) across all exercises
-        const prCount = Array.isArray(prData?.exercises)
-          ? prData.exercises.reduce((sum: number, e: { badges?: string[] }) => sum + (e.badges?.length ?? 0), 0)
-          : 0;
+        const prLines = Array.isArray(prData?.exercises)
+          ? (prData.exercises as { exercise_name?: string; badges?: string[] }[])
+              .filter((e) => (e.badges?.length ?? 0) > 0)
+              .map((e) => ({
+                exercise_name: (e.exercise_name ?? "Exercise").trim() || "Exercise",
+                badges: e.badges ?? [],
+              }))
+          : [];
+        const prCount = prLines.reduce((sum, e) => sum + e.badges.length, 0);
         if (phrase || prCount > 0) {
           setCongratsMessage(phrase);
           setCongratsPrCount(prCount);
+          setCongratsPrLines(prLines);
         } else {
           router.push("/member/workouts");
         }
@@ -1576,7 +1584,7 @@ export default function MemberWorkoutDetailPage() {
           aria-labelledby="congrats-title"
         >
           <div
-            className="bg-white rounded-xl shadow-lg max-w-sm w-full p-6 text-center"
+            className={`bg-white rounded-xl shadow-lg w-full p-6 text-center ${congratsPrLines.length > 2 ? "max-w-md" : "max-w-sm"}`}
             onClick={(e) => e.stopPropagation()}
           >
             {congratsPrCount > 0 && (
@@ -1594,6 +1602,16 @@ export default function MemberWorkoutDetailPage() {
                     ? "You made a PR today!"
                     : `You made ${congratsPrCount} PRs today!`}
                 </p>
+                {congratsPrLines.length > 0 && (
+                  <ul className="mt-4 w-full text-left text-sm text-stone-700 space-y-2 border-t border-stone-100 pt-4">
+                    {congratsPrLines.map((line, i) => (
+                      <li key={i}>
+                        <span className="font-semibold text-stone-900">{line.exercise_name}</span>
+                        <span className="text-stone-500"> — {line.badges.join(", ")}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
             <h2 id="congrats-title" className="text-xl font-semibold text-stone-800 mb-2">
@@ -1610,6 +1628,7 @@ export default function MemberWorkoutDetailPage() {
               onClick={() => {
                 setCongratsMessage(null);
                 setCongratsPrCount(0);
+                setCongratsPrLines([]);
                 router.push("/member/workouts");
               }}
               className="w-full px-4 py-3 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700"
