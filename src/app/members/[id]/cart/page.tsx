@@ -78,8 +78,8 @@ export default function MemberCartPage() {
   const [ptPacks, setPtPacks] = useState<PTPack[]>([]);
   const [addMode, setAddMode] = useState<"membership_plan" | "pt_session" | "class" | "class_pack" | "pt_pack" | null>(null);
   const [hasSavedCard, setHasSavedCard] = useState(false);
-  /** Staff checkout for another member: monthly plan renews automatically vs one period only. */
-  const [adminMonthlyRecurring, setAdminMonthlyRecurring] = useState(true);
+  /** Monthly membership: auto-renew vs one billing period only (member self + staff checkout). */
+  const [monthlyRecurring, setMonthlyRecurring] = useState(true);
   const [promoCode, setPromoCode] = useState("");
   const [promoError, setPromoError] = useState<string | null>(null);
   const [discount, setDiscount] = useState<{ code: string; percent_off: number; description?: string | null } | null>(null);
@@ -343,7 +343,7 @@ export default function MemberCartPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           member_id: memberId,
-          ...(!isOwnCart && hasMonthlyMembershipInCart ? { monthly_recurring: adminMonthlyRecurring } : {}),
+          ...(hasMonthlyMembershipInCart ? { monthly_recurring: monthlyRecurring } : {}),
         }),
       });
       const data = await res.json();
@@ -705,42 +705,42 @@ export default function MemberCartPage() {
             <Link href="/terms" className="text-brand-600 hover:underline">Terms of Service</Link>. Card payments are
             processed by Stripe; we do not store your full card number on our servers.
           </p>
-          {!isOwnCart && hasMonthlyMembershipInCart && (
-            <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-white">
-              <p className="text-sm font-medium text-stone-800 mb-2">Monthly membership billing</p>
-              <p className="text-stone-500 text-xs mb-3">
-                Only the monthly membership renews (not classes or PT in this cart). Choose whether this member&apos;s
-                monthly plan should auto-renew or cover this billing period only.
+          {hasMonthlyMembershipInCart && (
+            <div className="mb-6 p-5 rounded-xl border-2 border-stone-200 bg-white shadow-sm">
+              <h2 className="text-2xl sm:text-3xl font-bold text-stone-900 mb-1 tracking-tight">Monthly Membership:</h2>
+              <p className="text-stone-500 text-sm mb-4">
+                {isOwnCart
+                  ? "Classes or PT in this cart are one-time — this choice applies to your monthly membership only."
+                  : "Classes or PT in this cart are one-time; this choice applies to the monthly plan only."}
               </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
+              <div className="flex flex-col gap-4">
+                <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-stone-200 p-3 hover:bg-stone-50 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50/40">
                   <input
                     type="radio"
-                    name="admin_monthly_recurring"
-                    checked={adminMonthlyRecurring === true}
-                    onChange={() => setAdminMonthlyRecurring(true)}
-                    className="text-brand-600"
+                    name="monthly_recurring_choice"
+                    checked={monthlyRecurring === true}
+                    onChange={() => setMonthlyRecurring(true)}
+                    className="text-brand-600 mt-1.5 shrink-0"
                   />
-                  <span className="text-sm font-medium">Recurring — auto-renew each month</span>
+                  <div>
+                    <span className="text-xl font-bold text-stone-900 block">Opt-in for Auto-Renew</span>
+                    <p className="text-sm text-stone-600 mt-2 leading-snug">
+                      Cancel by email/text/phone anytime. Only monthly memberships are eligible for auto-renew.
+                    </p>
+                  </div>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-stone-200 p-3 hover:bg-stone-50 has-[:checked]:border-brand-600 has-[:checked]:bg-brand-50/40">
                   <input
                     type="radio"
-                    name="admin_monthly_recurring"
-                    checked={adminMonthlyRecurring === false}
-                    onChange={() => setAdminMonthlyRecurring(false)}
-                    className="text-brand-600"
+                    name="monthly_recurring_choice"
+                    checked={monthlyRecurring === false}
+                    onChange={() => setMonthlyRecurring(false)}
+                    className="text-brand-600 mt-1.5 shrink-0"
                   />
-                  <span className="text-sm font-medium">One-time — this period only (no auto-renew)</span>
+                  <span className="text-xl font-bold text-stone-900 pt-0.5">Pay for One Month</span>
                 </label>
               </div>
             </div>
-          )}
-          {isOwnCart && hasMonthlyMembershipInCart && (
-            <p className="mb-6 text-sm text-stone-600 p-3 rounded-lg bg-stone-50 border border-stone-100">
-              Monthly memberships renew automatically on each billing date. You can turn off auto-renew or update your
-              card anytime under membership settings.
-            </p>
           )}
           <div className="flex flex-wrap gap-3 items-center">
             <button

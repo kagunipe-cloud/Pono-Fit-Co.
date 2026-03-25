@@ -51,7 +51,6 @@ export async function POST(request: NextRequest) {
     }
     const sessionMemberId = await getMemberIdFromSession();
     const isStaff = !!(await getTrainerMemberId(request));
-    const isStaffCheckoutForOtherMember = !!(isStaff && sessionMemberId && sessionMemberId !== member_id);
     if (sessionMemberId !== member_id && !isStaff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -228,11 +227,7 @@ export async function POST(request: NextRequest) {
     /** Only monthly membership subscriptions use auto_renew; classes/PT in the same cart are one-time. */
     let monthlyRecurringMeta: string | undefined;
     if (hasMonthlyMembershipInCart) {
-      if (isStaffCheckoutForOtherMember) {
-        monthlyRecurringMeta = monthly_recurring_body === false ? "0" : "1";
-      } else {
-        monthlyRecurringMeta = "1";
-      }
+      monthlyRecurringMeta = monthly_recurring_body === false ? "0" : "1";
     }
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
