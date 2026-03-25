@@ -4,8 +4,9 @@ import { ensureRecurringClassesTables, ensureClassesRecurringColumns, ensureClas
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureDiscountsTable } from "../../../../lib/discounts";
 import { getMemberIdFromSession } from "../../../../lib/session";
-import { getAdminMemberId } from "../../../../lib/admin";
+import { getTrainerMemberId } from "../../../../lib/admin";
 import { computeCcFee } from "../../../../lib/cc-fees";
+import { stripeCustomerIdForApi } from "../../../../lib/stripe-customer";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
@@ -43,13 +44,15 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const member_id = (body.member_id ?? "").trim();
-    const save_card_for_future = Boolean(body.save_card_for_future);
+    /** Staff-only: false = one-time monthly period (no auto-renew). Omitted or true = recurring. */
+    const monthly_recurring_body = body.monthly_recurring as boolean | undefined;
     if (!member_id) {
       return NextResponse.json({ error: "member_id required" }, { status: 400 });
     }
     const sessionMemberId = await getMemberIdFromSession();
-    const isAdmin = !!(await getAdminMemberId(request));
-    if (sessionMemberId !== member_id && !isAdmin) {
+    const isStaff = !!(await getTrainerMemberId(request));
+    const isStaffCheckoutForOtherMember = !!(isStaff && sessionMemberId && sessionMemberId !== member_id);
+    if (sessionMemberId !== member_id && !isStaff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -70,7 +73,7 @@ export async function POST(request: NextRequest) {
 
     const memberRow = db.prepare("SELECT email, stripe_customer_id FROM members WHERE member_id = ?").get(member_id) as { email: string | null; stripe_customer_id: string | null } | undefined;
     const customerEmail = memberRow?.email?.trim() || undefined;
-    const existingStripeCustomerId = memberRow?.stripe_customer_id?.trim() || undefined;
+    const existingStripeCustomerId = stripeCustomerIdForApi(memberRow?.stripe_customer_id);
 
     const cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member_id) as { id: number; promo_code?: string | null } | undefined;
     if (!cart) {
@@ -85,16 +88,21 @@ export async function POST(request: NextRequest) {
       quantity: number;
     }[];
 
+    let hasMonthlyMembershipInCart = false;
     // ACH allowed when: (a) cart has ONLY monthly membership plans, OR (b) member has active monthly membership (Option A)
     let achAllowed = rawItems.length > 0;
-    let cartOnlyMonthly = true;
+    let cartOnlyMonthly = rawItems.length > 0;
     for (const it of rawItems) {
       if (it.product_type !== "membership_plan") {
         cartOnlyMonthly = false;
-        break;
+        continue;
       }
       const plan = db.prepare("SELECT unit FROM membership_plans WHERE id = ?").get(it.product_id) as { unit: string } | undefined;
-      if (plan?.unit !== "Month") {
+      if (plan?.unit === "Month") hasMonthlyMembershipInCart = true;
+      else cartOnlyMonthly = false;
+    }
+    for (const it of rawItems) {
+      if (it.product_type !== "membership_plan") {
         cartOnlyMonthly = false;
         break;
       }
@@ -217,6 +225,16 @@ export async function POST(request: NextRequest) {
 
     const taxRateId = process.env.STRIPE_TAX_RATE_ID?.trim() || null;
 
+    /** Only monthly membership subscriptions use auto_renew; classes/PT in the same cart are one-time. */
+    let monthlyRecurringMeta: string | undefined;
+    if (hasMonthlyMembershipInCart) {
+      if (isStaffCheckoutForOtherMember) {
+        monthlyRecurringMeta = monthly_recurring_body === false ? "0" : "1";
+      } else {
+        monthlyRecurringMeta = "1";
+      }
+    }
+
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: achAllowed ? ["card", "us_bank_account"] : ["card"],
       mode: "payment",
@@ -244,21 +262,31 @@ export async function POST(request: NextRequest) {
       cancel_url: cancelUrl,
       metadata: {
         member_id,
-        save_card_for_future: save_card_for_future ? "1" : "0",
+        stripe_checkout_flow: "v2",
+        save_card_for_future: "1",
+        ...(monthlyRecurringMeta != null ? { monthly_recurring: monthlyRecurringMeta } : {}),
         ...(promoCode ? { promo_code: promoCode } : {}),
       },
     };
 
     sessionParams.payment_intent_data = {
-      metadata: { member_id },
-      ...(save_card_for_future ? { setup_future_usage: "off_session" as const } : {}),
+      metadata: {
+        member_id,
+        ...(monthlyRecurringMeta != null ? { monthly_recurring: monthlyRecurringMeta } : {}),
+      },
+      setup_future_usage: "off_session",
     };
     // Always attach existing Stripe Customer when we have one so Checkout can show saved cards.
-    // (Previously we only passed customer when "save for future" was checked, so PT/add-on checkouts skipped it.)
     if (existingStripeCustomerId) {
       sessionParams.customer = existingStripeCustomerId;
     } else if (customerEmail) {
       sessionParams.customer_email = customerEmail;
+      sessionParams.customer_creation = "always";
+    } else {
+      return NextResponse.json(
+        { error: "Member needs an email address for Stripe checkout. Add one on the member profile." },
+        { status: 400 }
+      );
     }
 
     const session = await stripe.checkout.sessions.create(sessionParams);

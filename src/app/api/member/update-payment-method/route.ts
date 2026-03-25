@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, ensureMembersStripeColumn } from "../../../../lib/db";
 import { getMemberIdFromSession } from "../../../../lib/session";
+import { stripeCustomerIdForApi } from "../../../../lib/stripe-customer";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
       metadata: { member_id: memberId },
     };
 
-    const existingCustomerId = row.stripe_customer_id?.trim();
+    const existingCustomerId = stripeCustomerIdForApi(row.stripe_customer_id);
     if (existingCustomerId) {
       params.customer = existingCustomerId;
     } else if (row.email?.trim()) {

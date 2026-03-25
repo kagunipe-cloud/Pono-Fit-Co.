@@ -3,6 +3,7 @@ import { getDb, getAppTimezone, ensureMembersStripeColumn } from "../../../../..
 import { formatDateForDisplay } from "../../../../../lib/app-timezone";
 import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../../lib/recurring-classes";
 import { getMemberIdFromSession } from "../../../../../lib/session";
+import { hasBillableStripeCustomer } from "../../../../../lib/stripe-customer";
 import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
 import { ensureDiscountsTable } from "../../../../../lib/discounts";
 
@@ -64,13 +65,28 @@ export async function GET(
     }
 
     const rawItems = db.prepare("SELECT * FROM cart_items WHERE cart_id = ?").all(cart.id) as { id: number; product_type: string; product_id: number; quantity: number }[];
-    const items: { id: number; product_type: string; product_id: number; quantity: number; name: string; price: string }[] = [];
+    const items: {
+      id: number;
+      product_type: string;
+      product_id: number;
+      quantity: number;
+      name: string;
+      price: string;
+      plan_unit?: string;
+    }[] = [];
     for (const it of rawItems) {
       let name = "—";
       let price = "—";
+      let plan_unit: string | undefined;
       if (it.product_type === "membership_plan") {
-        const row = db.prepare("SELECT plan_name, price FROM membership_plans WHERE id = ?").get(it.product_id) as { plan_name: string; price: string } | undefined;
-        if (row) { name = row.plan_name ?? "—"; price = row.price ?? "—"; }
+        const row = db.prepare("SELECT plan_name, price, unit FROM membership_plans WHERE id = ?").get(it.product_id) as
+          | { plan_name: string; price: string; unit: string }
+          | undefined;
+        if (row) {
+          name = row.plan_name ?? "—";
+          price = row.price ?? "—";
+          plan_unit = row.unit ?? undefined;
+        }
       } else if (it.product_type === "pt_session") {
         const row = db.prepare("SELECT session_name, price FROM pt_sessions WHERE id = ?").get(it.product_id) as { session_name: string; price: string } | undefined;
         if (row) { name = row.session_name ?? "—"; price = row.price ?? "—"; }
@@ -98,10 +114,15 @@ export async function GET(
         const row = db.prepare("SELECT name, price, credits, duration_minutes FROM pt_pack_products WHERE id = ?").get(it.product_id) as { name: string; price: string; credits: number; duration_minutes: number } | undefined;
         if (row) { name = `${row.name ?? "—"} (${row.credits}×${row.duration_minutes} min)`; price = row.price ?? "—"; }
       }
-      items.push({ ...it, name, price });
+      items.push({ ...it, name, price, ...(plan_unit != null ? { plan_unit } : {}) });
     }
 
-    const plans = db.prepare("SELECT id, plan_name, price FROM membership_plans ORDER BY id").all() as { id: number; plan_name: string; price: string }[];
+    const plans = db.prepare("SELECT id, plan_name, price, unit FROM membership_plans ORDER BY id").all() as {
+      id: number;
+      plan_name: string;
+      price: string;
+      unit: string;
+    }[];
     const sessions = db.prepare("SELECT id, session_name, price FROM pt_sessions ORDER BY id").all() as { id: number; session_name: string; price: string }[];
     const classes = db.prepare("SELECT id, class_name, price FROM classes ORDER BY id").all() as { id: number; class_name: string; price: string }[];
     const classPacks = db.prepare("SELECT id, name, price, credits FROM class_pack_products ORDER BY credits ASC").all() as { id: number; name: string; price: string; credits: number }[];
@@ -124,7 +145,9 @@ export async function GET(
     db.close();
 
     const memberName = [member.first_name, member.last_name].filter(Boolean).join(" ") || "Member";
-    const has_saved_card = !!(member as { stripe_customer_id?: string | null }).stripe_customer_id?.trim();
+    const has_saved_card = hasBillableStripeCustomer(
+      (member as { stripe_customer_id?: string | null }).stripe_customer_id
+    );
     return NextResponse.json({
       memberId: member.member_id,
       memberName,

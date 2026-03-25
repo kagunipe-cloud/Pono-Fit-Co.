@@ -5,6 +5,7 @@ import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
 import { formatDateTimeInAppTz, todayInAppTz, formatDateForStorage } from "../../../../lib/app-timezone";
 import { computeCcFee } from "../../../../lib/cc-fees";
 import { randomUUID } from "crypto";
+import { stripeCustomerIdForApi } from "../../../../lib/stripe-customer";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
@@ -78,7 +79,13 @@ export async function GET(request: NextRequest) {
   for (const sub of expiring) {
     const amountCents = parsePriceToCents(sub.plan_price) * Math.max(1, sub.quantity);
     const memberRow = db.prepare("SELECT stripe_customer_id, email, first_name, auto_renew FROM members WHERE member_id = ?").get(sub.member_id) as { stripe_customer_id: string | null; email: string; first_name: string | null; auto_renew?: number | null } | undefined;
-    if (!memberRow?.stripe_customer_id) {
+    if (!memberRow) {
+      results.push({ member_id: sub.member_id, status: "skipped", message: "No saved card" });
+      insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "No saved card", null);
+      continue;
+    }
+    const stripeCustomerId = stripeCustomerIdForApi(memberRow.stripe_customer_id);
+    if (!stripeCustomerId) {
       results.push({ member_id: sub.member_id, status: "skipped", message: "No saved card" });
       insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "No saved card", null);
       continue;
@@ -113,7 +120,7 @@ export async function GET(request: NextRequest) {
 
     try {
       const paymentMethods = await stripe.paymentMethods.list({
-        customer: memberRow.stripe_customer_id,
+        customer: stripeCustomerId,
         type: "card",
       });
       const pm = paymentMethods.data[0];
@@ -126,7 +133,7 @@ export async function GET(request: NextRequest) {
       const paymentIntent = await stripe.paymentIntents.create({
         amount: chargeCents,
         currency: "usd",
-        customer: memberRow.stripe_customer_id,
+        customer: stripeCustomerId,
         payment_method: pm.id,
         off_session: true,
         confirm: true,

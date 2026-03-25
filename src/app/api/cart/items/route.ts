@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
 import { getMemberIdFromSession } from "../../../../lib/session";
-import { getAdminMemberId } from "../../../../lib/admin";
+import { getTrainerMemberId } from "../../../../lib/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -38,8 +38,8 @@ export async function POST(request: NextRequest) {
     const quantity = Math.max(1, parseInt(String(body.quantity), 10) || 1);
 
     const sessionMemberId = await getMemberIdFromSession();
-    const isAdmin = !!(await getAdminMemberId(request));
-    if (sessionMemberId !== member_id && !isAdmin) {
+    const isStaff = !!(await getTrainerMemberId(request));
+    if (sessionMemberId !== member_id && !isStaff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

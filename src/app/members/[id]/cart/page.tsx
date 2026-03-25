@@ -16,9 +16,10 @@ type CartItem = {
   quantity: number;
   name: string;
   price: string;
+  plan_unit?: string;
 };
 
-type Plan = { id: number; plan_name: string; price: string };
+type Plan = { id: number; plan_name: string; price: string; unit: string };
 type Session = { id: number; session_name: string; price: string };
 type ClassPack = { id: number; name: string; price: string; credits: number };
 type PTPack = { id: number; name: string; price: string; credits: number; duration_minutes: number };
@@ -76,8 +77,9 @@ export default function MemberCartPage() {
   const [classPacks, setClassPacks] = useState<ClassPack[]>([]);
   const [ptPacks, setPtPacks] = useState<PTPack[]>([]);
   const [addMode, setAddMode] = useState<"membership_plan" | "pt_session" | "class" | "class_pack" | "pt_pack" | null>(null);
-  const [saveCardForFuture, setSaveCardForFuture] = useState<boolean | null>(null);
   const [hasSavedCard, setHasSavedCard] = useState(false);
+  /** Staff checkout for another member: monthly plan renews automatically vs one period only. */
+  const [adminMonthlyRecurring, setAdminMonthlyRecurring] = useState(true);
   const [promoCode, setPromoCode] = useState("");
   const [promoError, setPromoError] = useState<string | null>(null);
   const [discount, setDiscount] = useState<{ code: string; percent_off: number; description?: string | null } | null>(null);
@@ -142,7 +144,6 @@ export default function MemberCartPage() {
         setDiscount(data.discount ?? null);
         setClassCredits(data.class_credits ?? 0);
         setIsOwnCart(Boolean(data.is_own_cart));
-        if (data.has_saved_card) setSaveCardForFuture(false);
       })
       .catch(() => {
         if (!cancelled) setMemberId(null);
@@ -164,6 +165,14 @@ export default function MemberCartPage() {
       .catch(() => setClassOccurrences([]))
       .finally(() => setClassScheduleLoading(false));
   }, [addMode, classScheduleFrom, classScheduleTo]);
+
+  const hasMonthlyMembershipInCart = useMemo(
+    () =>
+      items.some(
+        (it) => it.product_type === "membership_plan" && String(it.plan_unit ?? "").trim() === "Month"
+      ),
+    [items]
+  );
 
   const classScheduleDayDates = useMemo(
     () => [0, 1, 2, 3, 4, 5, 6].map((i) => addDaysToDateStr(classScheduleWeekStart, i)),
@@ -327,13 +336,15 @@ export default function MemberCartPage() {
 
   async function goToStripeCheckout() {
     if (!memberId || items.length === 0) return;
-    if (!hasSavedCard && saveCardForFuture === null) return;
     setCheckoutLoading(true);
     try {
       const res = await fetch("/api/cart/create-checkout-session", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ member_id: memberId, save_card_for_future: saveCardForFuture === true }),
+        body: JSON.stringify({
+          member_id: memberId,
+          ...(!isOwnCart && hasMonthlyMembershipInCart ? { monthly_recurring: adminMonthlyRecurring } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to start checkout");
@@ -691,44 +702,51 @@ export default function MemberCartPage() {
           <p className="text-stone-500 text-sm mb-4">
             By paying you agree to our{" "}
             <Link href="/privacy" className="text-brand-600 hover:underline">Privacy Policy</Link> and{" "}
-            <Link href="/terms" className="text-brand-600 hover:underline">Terms of Service</Link>.
+            <Link href="/terms" className="text-brand-600 hover:underline">Terms of Service</Link>. Card payments are
+            processed by Stripe; we do not store your full card number on our servers.
           </p>
-          {!hasSavedCard && (
+          {!isOwnCart && hasMonthlyMembershipInCart && (
             <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-white">
-              <p className="text-sm font-medium text-stone-800 mb-2">Use this card for future payments?</p>
-              <p className="text-stone-500 text-xs mb-3">We will use the card on file to auto-charge your membership on the next billing date. You must choose one before paying.</p>
-              <div className="flex gap-6">
+              <p className="text-sm font-medium text-stone-800 mb-2">Monthly membership billing</p>
+              <p className="text-stone-500 text-xs mb-3">
+                Only the monthly membership renews (not classes or PT in this cart). Choose whether this member&apos;s
+                monthly plan should auto-renew or cover this billing period only.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="radio"
-                    name="save_card"
-                    checked={saveCardForFuture === true}
-                    onChange={() => setSaveCardForFuture(true)}
+                    name="admin_monthly_recurring"
+                    checked={adminMonthlyRecurring === true}
+                    onChange={() => setAdminMonthlyRecurring(true)}
                     className="text-brand-600"
                   />
-                  <span className="text-sm font-medium">Yes — save for renewals</span>
+                  <span className="text-sm font-medium">Recurring — auto-renew each month</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="radio"
-                    name="save_card"
-                    checked={saveCardForFuture === false}
-                    onChange={() => setSaveCardForFuture(false)}
+                    name="admin_monthly_recurring"
+                    checked={adminMonthlyRecurring === false}
+                    onChange={() => setAdminMonthlyRecurring(false)}
                     className="text-brand-600"
                   />
-                  <span className="text-sm font-medium">No — one-time only</span>
+                  <span className="text-sm font-medium">One-time — this period only (no auto-renew)</span>
                 </label>
               </div>
-              {saveCardForFuture === null && (
-                <p className="text-brand-600 text-xs mt-2">Please select Yes or No above.</p>
-              )}
             </div>
+          )}
+          {isOwnCart && hasMonthlyMembershipInCart && (
+            <p className="mb-6 text-sm text-stone-600 p-3 rounded-lg bg-stone-50 border border-stone-100">
+              Monthly memberships renew automatically on each billing date. You can turn off auto-renew or update your
+              card anytime under membership settings.
+            </p>
           )}
           <div className="flex flex-wrap gap-3 items-center">
             <button
               type="button"
               onClick={goToStripeCheckout}
-              disabled={checkoutLoading || (!hasSavedCard && saveCardForFuture === null)}
+              disabled={checkoutLoading}
               className="px-6 py-3 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 disabled:opacity-50"
             >
               {checkoutLoading ? "Redirecting to Stripe…" : "Pay with Stripe"}

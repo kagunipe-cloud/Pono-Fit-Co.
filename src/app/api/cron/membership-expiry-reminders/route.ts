@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone, ensureMembersStripeColumn } from "../../../../lib/db";
 import { formatDateForStorage, todayInAppTz } from "../../../../lib/app-timezone";
 import { sendMembershipExpiryReminder } from "../../../../lib/email";
+import { hasBillableStripeCustomer } from "../../../../lib/stripe-customer";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
-    const has_card_on_file = !!(member.stripe_customer_id?.trim());
+    const has_card_on_file = hasBillableStripeCustomer(member.stripe_customer_id);
     const r = await sendMembershipExpiryReminder({
       to: member.email.trim(),
       first_name: member.first_name,

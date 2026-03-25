@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../lib/db";
 import { getMemberIdFromSession } from "../../../lib/session";
-import { getAdminMemberId } from "../../../lib/admin";
+import { getTrainerMemberId } from "../../../lib/admin";
 import { ensureDiscountsTable } from "../../../lib/discounts";
 
 export const dynamic = "force-dynamic";
@@ -41,8 +41,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "member_id required" }, { status: 400 });
   }
   const sessionMemberId = await getMemberIdFromSession();
-  const isAdmin = !!(await getAdminMemberId(request));
-  if (sessionMemberId !== member_id && !isAdmin) {
+  const isStaff = !!(await getTrainerMemberId(request));
+  if (sessionMemberId !== member_id && !isStaff) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   try {
@@ -112,8 +112,8 @@ export async function PATCH(request: NextRequest) {
     if (!member_id) return NextResponse.json({ error: "member_id required" }, { status: 400 });
 
     const sessionMemberId = await getMemberIdFromSession();
-    const isAdmin = !!(await getAdminMemberId(request));
-    if (sessionMemberId !== member_id && !isAdmin) {
+    const isStaff = !!(await getTrainerMemberId(request));
+    if (sessionMemberId !== member_id && !isStaff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

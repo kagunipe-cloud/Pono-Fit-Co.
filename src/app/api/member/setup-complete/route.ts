@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, ensureMembersStripeColumn } from "../../../../lib/db";
 import { getMemberIdFromSession } from "../../../../lib/session";
+import { stripeCustomerIdForApi } from "../../../../lib/stripe-customer";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
@@ -26,20 +27,27 @@ export async function POST(request: NextRequest) {
 
     const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id;
     if (!customerId) return NextResponse.json({ error: "No customer on session" }, { status: 400 });
+    const customerIdApi = stripeCustomerIdForApi(customerId);
+    if (!customerIdApi) {
+      return NextResponse.json(
+        { error: "This Stripe profile is a guest record and cannot be used for saved billing. Use checkout or add a card again." },
+        { status: 400 }
+      );
+    }
 
     const setupIntent = session.setup_intent;
     const paymentMethodId = typeof setupIntent === "object" && setupIntent?.status === "succeeded"
       ? (typeof setupIntent.payment_method === "string" ? setupIntent.payment_method : setupIntent.payment_method?.id)
       : null;
     if (paymentMethodId) {
-      await stripe.customers.update(customerId, {
+      await stripe.customers.update(customerIdApi, {
         invoice_settings: { default_payment_method: paymentMethodId },
       });
     }
 
     const db = getDb();
     ensureMembersStripeColumn(db);
-    db.prepare("UPDATE members SET stripe_customer_id = ? WHERE member_id = ?").run(customerId, memberId);
+    db.prepare("UPDATE members SET stripe_customer_id = ? WHERE member_id = ?").run(customerIdApi, memberId);
     db.close();
 
     return NextResponse.json({ ok: true });
