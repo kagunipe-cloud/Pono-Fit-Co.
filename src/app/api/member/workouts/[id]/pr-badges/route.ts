@@ -7,9 +7,23 @@ export const dynamic = "force-dynamic";
 
 type PRBadgeType = "Reps" | "Auto 1RM" | "My 1RM";
 
+function fmtWeightLbs(w: number): string {
+  if (Number.isInteger(w)) return String(w);
+  return String(Math.round(w * 10) / 10);
+}
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+function estNear(a: number, b: number): boolean {
+  return Math.abs(a - b) < 1e-3;
+}
+
 /**
  * GET — Returns PR badges for a finished workout.
- * { exercises: [{ id, exercise_id, exercise_name, badges: PRBadgeType[] }], workoutBadges: PRBadgeType[] }
+ * { exercises: [{ id, exercise_id, exercise_name, badges: PRBadgeType[], pr_by_set_order?: Record<string, string[]> }], workoutBadges: PRBadgeType[] }
+ * pr_by_set_order maps set_order (string keys) to human-readable PR lines for that set row.
  * Only for finished workouts. workoutBadges is the union of all exercise badges (for history cards).
  */
 export async function GET(
@@ -42,18 +56,34 @@ export async function GET(
     const setCols = (db.prepare("PRAGMA table_info(workout_sets)").all() as { name: string }[]).map((c) => c.name);
     const hasDropIndex = setCols.includes("drop_index");
     const setSelect = hasDropIndex
-      ? "SELECT reps, weight_kg FROM workout_sets WHERE workout_exercise_id = ?"
-      : "SELECT reps, weight_kg FROM workout_sets WHERE workout_exercise_id = ?";
+      ? "SELECT reps, weight_kg, set_order, drop_index FROM workout_sets WHERE workout_exercise_id = ? ORDER BY set_order, drop_index, id"
+      : "SELECT reps, weight_kg, set_order FROM workout_sets WHERE workout_exercise_id = ? ORDER BY set_order, id";
 
     const weightTol = 0.05;
     const workoutBadgesSet = new Set<PRBadgeType>();
-    const exerciseBadges: { id: number; exercise_id: number | null; exercise_name: string; badges: PRBadgeType[] }[] = [];
+    const exerciseBadges: {
+      id: number;
+      exercise_id: number | null;
+      exercise_name: string;
+      badges: PRBadgeType[];
+      pr_by_set_order?: Record<string, string[]>;
+    }[] = [];
 
     for (const ex of exercises) {
-      const sets = db.prepare(setSelect).all(ex.id) as { reps: number | null; weight_kg: number | null }[];
+      const sets = db.prepare(setSelect).all(ex.id) as {
+        reps: number | null;
+        weight_kg: number | null;
+        set_order: number;
+        drop_index?: number;
+      }[];
       const badges = new Set<PRBadgeType>();
+      const prNotesByOrder = new Map<number, Set<string>>();
+      const addNote = (setOrder: number, line: string) => {
+        if (!prNotesByOrder.has(setOrder)) prNotesByOrder.set(setOrder, new Set());
+        prNotesByOrder.get(setOrder)!.add(line);
+      };
 
-      // Reps PR: any set has reps > previous max at that weight (excluding this workout)
+      // Reps PR: first set (in order) with reps > previous max at that weight (excluding this workout)
       for (const s of sets) {
         const reps = s.reps ?? 0;
         const w = s.weight_kg ?? 0;
@@ -86,6 +116,11 @@ export async function GET(
         }
         if (reps > prevMaxReps) {
           badges.add("Reps");
+          const note =
+            prevMaxReps > 0
+              ? `Reps PR — ${reps} reps @ ${fmtWeightLbs(w)} lbs (was ${prevMaxReps})`
+              : `Reps PR — ${reps} reps @ ${fmtWeightLbs(w)} lbs`;
+          addNote(s.set_order, note);
           break;
         }
       }
@@ -141,10 +176,18 @@ export async function GET(
         }
         if (thisMax1RM > prevMax1RM) {
           badges.add("Auto 1RM");
+          const line = `Auto 1RM PR — ~${round1(thisMax1RM)} lbs est`;
+          for (const s of sets) {
+            const r = s.reps ?? 0;
+            const w = s.weight_kg ?? 0;
+            if (w <= 0 || r <= 0) continue;
+            const est = estimate1RM(w, Math.min(36, r));
+            if (est != null && estNear(est, thisMax1RM)) addNote(s.set_order, line);
+          }
         }
       }
 
-      // My 1RM PR: exercise is use_for_my_1rm and this set's max > previous My 1RM
+      // My 1RM PR: exercise is use_for_my_1rm and max estimated 1RM > previous My 1RM record
       if ((ex.use_for_my_1rm ?? 0) === 1 && ex.exercise_id != null && thisMax1RM != null && thisMax1RM > 0) {
         const prevRecords = db.prepare(`
           SELECT estimated_1rm_lbs FROM member_1rm_records
@@ -153,12 +196,30 @@ export async function GET(
         const prevMy1RM = prevRecords.length > 0 ? Math.max(...prevRecords.map((r) => r.estimated_1rm_lbs)) : 0;
         if (thisMax1RM > prevMy1RM) {
           badges.add("My 1RM");
+          const line = `My 1RM PR — ~${round1(thisMax1RM)} lbs est`;
+          for (const s of sets) {
+            const r = s.reps ?? 0;
+            const w = s.weight_kg ?? 0;
+            if (w <= 0 || r <= 0) continue;
+            const est = estimate1RM(w, Math.min(36, r));
+            if (est != null && estNear(est, thisMax1RM)) addNote(s.set_order, line);
+          }
         }
       }
 
       const badgeArr = [...badges];
       badgeArr.forEach((b) => workoutBadgesSet.add(b));
-      exerciseBadges.push({ id: ex.id, exercise_id: ex.exercise_id, exercise_name: ex.exercise_name, badges: badgeArr });
+      const pr_by_set_order: Record<string, string[]> = {};
+      for (const [ord, noteSet] of prNotesByOrder) {
+        pr_by_set_order[String(ord)] = [...noteSet];
+      }
+      exerciseBadges.push({
+        id: ex.id,
+        exercise_id: ex.exercise_id,
+        exercise_name: ex.exercise_name,
+        badges: badgeArr,
+        ...(Object.keys(pr_by_set_order).length > 0 ? { pr_by_set_order } : {}),
+      });
     }
 
     db.close();

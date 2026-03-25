@@ -172,6 +172,8 @@ export default function MemberWorkoutDetailPage() {
   const [useForMy1rmEdit, setUseForMy1rmEdit] = useState(false);
   const [my1rmList, setMy1rmList] = useState<{ exercise_name: string; current_1rm_lbs: number }[]>([]);
   const [prBadgesByEx, setPrBadgesByEx] = useState<Record<number, ("Reps" | "Auto 1RM" | "My 1RM")[]>>({});
+  /** Finished-workout PR lines keyed by workout_exercise id → set_order → lines (from pr-badges API). */
+  const [prSetNotesByEx, setPrSetNotesByEx] = useState<Record<number, Record<number, string[]>>>({});
 
   /** Map of source workout sets by a stable exercise key so \"last time\" stays attached even if you delete/reorder exercises. */
   const sourceSetsByExerciseKey = useMemo(() => {
@@ -220,18 +222,33 @@ export default function MemberWorkoutDetailPage() {
   useEffect(() => {
     if (!workout?.finished_at || !id) {
       setPrBadgesByEx({});
+      setPrSetNotesByEx({});
       return;
     }
     fetch(`/api/member/workouts/${id}/pr-badges`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         const map: Record<number, ("Reps" | "Auto 1RM" | "My 1RM")[]> = {};
+        const notesMap: Record<number, Record<number, string[]>> = {};
         for (const ex of d?.exercises ?? []) {
           if (ex?.id != null && Array.isArray(ex.badges)) map[ex.id] = ex.badges;
+          if (ex?.id != null && ex.pr_by_set_order && typeof ex.pr_by_set_order === "object") {
+            const inner: Record<number, string[]> = {};
+            for (const [k, lines] of Object.entries(ex.pr_by_set_order as Record<string, unknown>)) {
+              const ord = Number(k);
+              if (Number.isNaN(ord)) continue;
+              inner[ord] = Array.isArray(lines) ? (lines as string[]).filter((x) => typeof x === "string") : [];
+            }
+            if (Object.keys(inner).length > 0) notesMap[ex.id] = inner;
+          }
         }
         setPrBadgesByEx(map);
+        setPrSetNotesByEx(notesMap);
       })
-      .catch(() => setPrBadgesByEx({}));
+      .catch(() => {
+        setPrBadgesByEx({});
+        setPrSetNotesByEx({});
+      });
   }, [workout?.id, workout?.finished_at, id]);
 
   useEffect(() => {
@@ -1314,16 +1331,30 @@ export default function MemberWorkoutDetailPage() {
                       <>
                         <ul className="mt-0.5 space-y-0.5 text-sm text-stone-600">
                           {ex.type === "lift"
-                            ? groupLiftSets(ex.sets).map((group, i) => (
+                            ? groupLiftSets(ex.sets).map((group, i) => {
+                                const setOrder = group[0]?.set_order ?? i;
+                                const prLines = prSetNotesByEx[ex.id]?.[setOrder] ?? [];
+                                return (
                                 <li key={i}>
-                                  Set {i + 1}: {group.map((s, j) => (
-                                    <span key={s.id ?? j}>
-                                      {j > 0 && " ↓ "}
-                                      {s.weight_kg != null ? s.weight_kg + " lbs" : "—"} × {s.reps ?? "—"} reps
+                                  <span className="inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                                    <span>
+                                      Set {i + 1}: {group.map((s, j) => (
+                                        <span key={s.id ?? j}>
+                                          {j > 0 && " ↓ "}
+                                          {s.weight_kg != null ? s.weight_kg + " lbs" : "—"} × {s.reps ?? "—"} reps
+                                        </span>
+                                      ))}
                                     </span>
-                                  ))}
+                                    {prLines.length > 0 && (
+                                      <span className="text-xs text-stone-600" title={prLines.join(" · ")}>
+                                        <span aria-hidden>🍍</span>{" "}
+                                        {prLines.join(" · ")}
+                                      </span>
+                                    )}
+                                  </span>
                                 </li>
-                              ))
+                              );
+                              })
                             : ex.sets.map((s, i) => (
                                 <li key={s.id}>
                                   Set {i + 1}: {s.time_seconds != null ? Math.round(s.time_seconds / 60) + " min" : "—"}
