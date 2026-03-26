@@ -46,18 +46,36 @@ export default function TrainerCreateWorkoutForClientPage() {
   const [useForMy1rm, setUseForMy1rm] = useState(false);
 
   useEffect(() => {
-    if (!mode || !exerciseName.trim()) {
+    if (!mode) {
       setExerciseSuggestions([]);
       return;
     }
+    if (!exerciseName.trim()) {
+      let cancelled = false;
+      fetch(
+        `/api/member/exercises/frequent?type=${mode}&limit=20&for_member_id=${encodeURIComponent(clientId)}`
+      )
+        .then((r) => (r.ok ? r.json() : { exercises: [] }))
+        .then((d: { exercises?: OfficialExercise[] }) => {
+          if (!cancelled) setExerciseSuggestions(Array.isArray(d.exercises) ? d.exercises : []);
+        })
+        .catch(() => {
+          if (!cancelled) setExerciseSuggestions([]);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
     const t = setTimeout(() => {
-      fetch(`/api/exercises?q=${encodeURIComponent(exerciseName.trim())}&type=${mode}`)
+      fetch(
+        `/api/exercises?q=${encodeURIComponent(exerciseName.trim())}&type=${mode}&boost_member=1&boost_for_member_id=${encodeURIComponent(clientId)}`
+      )
         .then((r) => (r.ok ? r.json() : []))
         .then((list: OfficialExercise[]) => setExerciseSuggestions(list))
         .catch(() => setExerciseSuggestions([]));
     }, 200);
     return () => clearTimeout(t);
-  }, [mode, exerciseName]);
+  }, [mode, exerciseName, clientId]);
 
   function startAddLift() {
     setMode("lift");
@@ -266,6 +284,9 @@ export default function TrainerCreateWorkoutForClientPage() {
                   placeholder="e.g. Bench Press, Treadmill"
                   autoComplete="off"
                 />
+                {exerciseSuggestions.length > 0 && !exerciseName.trim() && (
+                  <p className="mt-2 text-xs font-semibold text-stone-600">Pinned &amp; often used by this client</p>
+                )}
                 {exerciseSuggestions.length > 0 && (
                   <ul className="mt-1 border border-stone-200 rounded-lg bg-white shadow-sm max-h-40 overflow-auto">
                     {exerciseSuggestions.map((ex) => (

@@ -195,6 +195,16 @@ export function ensureWorkoutTables(db: ReturnType<typeof getDb>) {
     );
     CREATE INDEX IF NOT EXISTS idx_member_1rm_records_member ON member_1rm_records(member_id);
   `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS member_exercise_favorites (
+      member_id TEXT NOT NULL,
+      exercise_id INTEGER NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (member_id, exercise_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_member_ex_fav_member ON member_exercise_favorites(member_id);
+  `);
 }
 
 /** Cardio distance: DB stores km; UI uses miles. */

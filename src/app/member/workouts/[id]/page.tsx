@@ -177,6 +177,8 @@ export default function MemberWorkoutDetailPage() {
   const [prSetNotesByEx, setPrSetNotesByEx] = useState<Record<number, Record<number, string[]>>>({});
   /** Bumped after workout JSON reload so LiftSetPrPercent refetches PR-at-weight. */
   const [prInvalidateKey, setPrInvalidateKey] = useState(0);
+  /** Pinned exercises (autocomplete boost); loaded when Add Lift/Cardio opens. */
+  const [favoriteExerciseIds, setFavoriteExerciseIds] = useState<Set<number>>(new Set());
 
   /** Map of source workout sets by a stable exercise key so \"last time\" stays attached even if you delete/reorder exercises. */
   const sourceSetsByExerciseKey = useMemo(() => {
@@ -288,18 +290,64 @@ export default function MemberWorkoutDetailPage() {
   }
 
   useEffect(() => {
-    if (!mode || !exerciseName.trim()) {
+    if (!mode) return;
+    fetch("/api/member/exercises/favorites")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { ids?: number[] } | null) => {
+        if (Array.isArray(d?.ids)) setFavoriteExerciseIds(new Set(d.ids));
+      })
+      .catch(() => {});
+  }, [mode]);
+
+  useEffect(() => {
+    if (!mode) {
       setExerciseSuggestions([]);
       return;
     }
+    if (!exerciseName.trim()) {
+      let cancelled = false;
+      fetch(`/api/member/exercises/frequent?type=${mode}&limit=20`)
+        .then((r) => (r.ok ? r.json() : { exercises: [] }))
+        .then((d: { exercises?: OfficialExercise[] }) => {
+          if (!cancelled) setExerciseSuggestions(Array.isArray(d.exercises) ? d.exercises : []);
+        })
+        .catch(() => {
+          if (!cancelled) setExerciseSuggestions([]);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
     const t = setTimeout(() => {
-      fetch(`/api/exercises?q=${encodeURIComponent(exerciseName.trim())}&type=${mode}`)
-        .then((r) => r.ok ? r.json() : [])
+      fetch(
+        `/api/exercises?q=${encodeURIComponent(exerciseName.trim())}&type=${mode}&boost_member=1`
+      )
+        .then((r) => (r.ok ? r.json() : []))
         .then((list: OfficialExercise[]) => setExerciseSuggestions(list))
         .catch(() => setExerciseSuggestions([]));
     }, 200);
     return () => clearTimeout(t);
   }, [mode, exerciseName]);
+
+  async function toggleExerciseFavorite(exerciseId: number, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const res = await fetch("/api/member/exercises/favorites", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ exercise_id: exerciseId }),
+    });
+    if (res.ok) {
+      const d = (await res.json()) as { ids?: number[] };
+      if (Array.isArray(d.ids)) setFavoriteExerciseIds(new Set(d.ids));
+      if (mode && !exerciseName.trim()) {
+        const fr = await fetch(`/api/member/exercises/frequent?type=${mode}&limit=20`);
+        const fd = fr.ok ? await fr.json() : null;
+        const list = Array.isArray(fd?.exercises) ? fd.exercises : [];
+        setExerciseSuggestions(list);
+      }
+    }
+  }
 
   function pickOfficialExercise(ex: OfficialExercise) {
     setExerciseName(ex.name);
@@ -782,14 +830,26 @@ export default function MemberWorkoutDetailPage() {
                 <option key={ex.id} value={ex.name} />
               ))}
             </datalist>
+            {exerciseSuggestions.length > 0 && !exerciseName.trim() && (
+              <p className="mt-2 text-xs font-semibold text-stone-600">Pinned &amp; often used — ☆ to pin any exercise</p>
+            )}
             {exerciseSuggestions.length > 0 && (
-              <ul className="mt-1 border border-stone-200 rounded-lg bg-white shadow-sm max-h-40 overflow-auto">
+              <ul className="mt-1 border border-stone-200 rounded-lg bg-white shadow-sm max-h-40 overflow-auto divide-y divide-stone-100">
                 {exerciseSuggestions.map((ex) => (
-                  <li key={ex.id}>
+                  <li key={ex.id} className="flex items-stretch">
+                    <button
+                      type="button"
+                      onClick={(e) => toggleExerciseFavorite(ex.id, e)}
+                      className="shrink-0 px-2.5 text-amber-600 hover:bg-amber-50 text-lg leading-none tabular-nums"
+                      title={favoriteExerciseIds.has(ex.id) ? "Unpin" : "Pin to top of suggestions"}
+                      aria-label={favoriteExerciseIds.has(ex.id) ? "Unpin exercise" : "Pin exercise"}
+                    >
+                      {favoriteExerciseIds.has(ex.id) ? "★" : "☆"}
+                    </button>
                     <button
                       type="button"
                       onClick={() => pickOfficialExercise(ex)}
-                      className="w-full text-left px-3 py-2 text-sm text-stone-800 hover:bg-stone-100"
+                      className="flex-1 min-w-0 text-left px-2 py-2 text-sm text-stone-800 hover:bg-stone-100"
                     >
                       {ex.name}
                     </button>
@@ -829,7 +889,9 @@ export default function MemberWorkoutDetailPage() {
                     try {
                       let exerciseId = selectedOfficialId ?? null;
                       if (exerciseId == null) {
-                        const searchRes = await fetch(`/api/exercises?q=${encodeURIComponent(exerciseName.trim())}&type=${mode}`);
+                        const searchRes = await fetch(
+                          `/api/exercises?q=${encodeURIComponent(exerciseName.trim())}&type=${mode}&boost_member=1`
+                        );
                         if (searchRes.ok) {
                           const list = await searchRes.json();
                           const match = Array.isArray(list) && list.length > 0 ? list.find((e: { name: string }) => e.name.toLowerCase() === exerciseName.trim().toLowerCase()) ?? list[0] : null;
@@ -1308,7 +1370,9 @@ export default function MemberWorkoutDetailPage() {
                             try {
                               let exerciseId = ex.exercise_id ?? null;
                               if (exerciseId == null) {
-                                const searchRes = await fetch(`/api/exercises?q=${encodeURIComponent(ex.exercise_name)}&type=${ex.type}`);
+                                const searchRes = await fetch(
+                                  `/api/exercises?q=${encodeURIComponent(ex.exercise_name)}&type=${ex.type}&boost_member=1`
+                                );
                                 if (searchRes.ok) {
                                   const list = await searchRes.json();
                                   const match = Array.isArray(list) && list.length > 0 ? list.find((e: { name: string }) => e.name.toLowerCase() === ex.exercise_name.toLowerCase()) ?? list[0] : null;
