@@ -148,6 +148,8 @@ Treat **`exp_next_payment_date`** as **informational** until **`subscriptions`**
 
 ## Onboarding CSV (bulk import)
 
+**Templates on this screen:** On **Settings → Onboarding docs**, use the **CSV templates** box to download the minimal, full, and example files (same as `docs/onboarding-import-*.csv` and `/onboarding-import-*.csv` in the app).
+
 Run **Import members (Glofox CSV)** first so each row has `email`, name, `join_date`, `phone`, and `exp_next_payment_date`. Then use **Import onboarding (CSV)** with a short second file.
 
 ### Recommended: minimal columns
@@ -179,6 +181,6 @@ Use **`membership_product_id`** + **`subscription_expiry_date`** when you want e
 | `subscription_expiry_date` | Required with `membership_product_id`. |
 | `subscription_quantity`, `subscription_price` | Optional. |
 
-**Templates:** `docs/onboarding-import-template.csv` (minimal), `docs/onboarding-import-full-template.csv` (full), `public/onboarding-import-example.csv` (example). Downloads also live under **Settings → Import onboarding (CSV)**.
+**Templates:** `docs/onboarding-import-template.csv` (minimal), `docs/onboarding-import-full-template.csv` (full), `public/onboarding-import-example.csv` (example). Download from **Settings → Onboarding docs** (CSV templates) or **Settings → Import onboarding (CSV)**.
 
 **Admin:** **Settings → Import onboarding (CSV)** (`/admin/import-onboarding`) — paste or upload the CSV. Existing members are updated by email; Active subscriptions for that `product_id` are updated or inserted.
