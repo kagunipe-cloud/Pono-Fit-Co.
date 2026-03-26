@@ -144,4 +144,41 @@ Treat **`exp_next_payment_date`** as **informational** until **`subscriptions`**
 - Door access + Kisi: **`KISI.md`** (root).
 - Stripe webhooks (if you extend): **`docs/STRIPE_WEBHOOK.md`**.
 
-If you later add a **bulk tool** in admin to set `stripe_customer_id` + insert `subscriptions` from CSV, keep **`product_id`** values identical to **`membership_plans.product_id`** in your database.
+---
+
+## Onboarding CSV (bulk import)
+
+Run **Import members (Glofox CSV)** first so each row has `email`, name, `join_date`, `phone`, and `exp_next_payment_date`. Then use **Import onboarding (CSV)** with a short second file.
+
+### Recommended: minimal columns
+
+| Column | Purpose |
+|--------|---------|
+| `email` | **Required.** Must match an existing member (from Glofox import). |
+| `auto_renew` | Optional. `1` / `0`, or `yes` / `no`. |
+| `stripe_customer_id` | Optional. `cus_…` after Stripe migration. |
+| `membership_plan_name` | **Required** for a subscription row — must match **`membership_plans.plan_name`** exactly (same spelling as **Membership plans** in the app). The app resolves **`product_id`** and plan price. |
+| `subscription_quantity` | Optional; default `1`. |
+| `notes` | Ignored. |
+
+**Subscription dates:** The import uses the member’s **`exp_next_payment_date`** (from Glofox) as **`subscription_expiry_date`**, unless you override with `subscription_expiry_date` or `exp_next_payment_date` on this row. **Start date** is derived by stepping back one billing period from that expiry using the plan’s **length** and **unit** (same rules as checkout).
+
+If two plans share the same name, rename one in **Membership plans** or use full mode below.
+
+### Full mode (optional)
+
+Use **`membership_product_id`** + **`subscription_expiry_date`** when you want explicit IDs and dates. Do **not** put **`membership_plan_name`** and **`membership_product_id`** on the same row. See `docs/onboarding-import-full-template.csv`.
+
+| Column | Purpose |
+|--------|---------|
+| `email` | **Required.** Match key; can create member if missing. |
+| `first_name`, `last_name`, `phone`, `join_date`, `exp_next_payment_date` | Optional on update; merged with existing member when blank. |
+| `stripe_customer_id`, `auto_renew` | Optional. |
+| `membership_product_id` | Must match **`membership_plans.product_id`**. |
+| `subscription_start_date` | Optional; defaults to `join_date` or today. |
+| `subscription_expiry_date` | Required with `membership_product_id`. |
+| `subscription_quantity`, `subscription_price` | Optional. |
+
+**Templates:** `docs/onboarding-import-template.csv` (minimal), `docs/onboarding-import-full-template.csv` (full), `public/onboarding-import-example.csv` (example). Downloads also live under **Settings → Import onboarding (CSV)**.
+
+**Admin:** **Settings → Import onboarding (CSV)** (`/admin/import-onboarding`) — paste or upload the CSV. Existing members are updated by email; Active subscriptions for that `product_id` are updated or inserted.

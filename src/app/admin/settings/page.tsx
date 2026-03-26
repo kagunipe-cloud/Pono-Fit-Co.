@@ -116,7 +116,14 @@ export default function AdminSettingsPage() {
           className="block p-4 rounded-xl border border-stone-200 bg-white hover:border-brand-300 hover:bg-brand-50/30 transition-colors"
         >
           <h2 className="font-semibold text-stone-800">Import members</h2>
-          <p className="text-sm text-stone-500 mt-0.5">Import members from a CSV file.</p>
+          <p className="text-sm text-stone-500 mt-0.5">Import members from a Glofox-style CSV file.</p>
+        </Link>
+        <Link
+          href="/admin/import-onboarding"
+          className="block p-4 rounded-xl border border-stone-200 bg-white hover:border-brand-300 hover:bg-brand-50/30 transition-colors"
+        >
+          <h2 className="font-semibold text-stone-800">Import onboarding (CSV)</h2>
+          <p className="text-sm text-stone-500 mt-0.5">Stripe customer id, auto-renew, and optional subscription rows for migration.</p>
         </Link>
         <Link
           href="/discounts"

@@ -25,6 +25,13 @@ export default function AdminOnboardingDocsPage() {
           Checklists and guidance for new gyms (Stripe migration, renewals, and go-live). Content ships with the app from{" "}
           <code className="text-sm font-mono bg-stone-100 px-1 rounded">docs/POST_MIGRATION_GLOFOX_STRIPE.md</code>.
         </p>
+        <p className="mt-3 text-sm">
+          <Link href="/admin/import-onboarding" className="text-brand-600 hover:underline font-medium">
+            Import onboarding CSV
+          </Link>
+          {" — "}
+          paste filled rows (Stripe id, subscriptions, auto-renew) into the app.
+        </p>
       </header>
 
       {error ? (
