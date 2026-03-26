@@ -73,7 +73,7 @@ function SignupContent() {
         <p className="text-stone-500 text-sm mb-3">
           Sign up to browse classes, book sessions, and manage your membership.
         </p>
-        <p className="text-stone-600 text-xs leading-relaxed mb-6 p-3 rounded-lg bg-stone-50 border border-stone-100">
+        <p className="text-stone-800 text-base sm:text-lg font-bold leading-snug mb-6 p-4 rounded-lg bg-stone-50 border border-stone-200">
           {EMAIL_POLICY_MESSAGE}
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
