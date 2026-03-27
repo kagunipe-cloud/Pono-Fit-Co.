@@ -12,6 +12,8 @@ type MemberMe = {
   email: string | null;
   name: string;
   role?: string | null;
+  /** Admin: false when Settings → hide onboarding. Omitted/true = show link. */
+  show_onboarding_nav?: boolean;
 } | null;
 
 function NavList({
@@ -260,7 +262,9 @@ function NavList({
       {isAdmin && <li>{link("/admin/analytics", "Analytics")}</li>}
       {isAdmin && <li>{link("/admin/leads", "Leads")}</li>}
       {isAdmin && <li>{link("/admin/settings", "Settings")}</li>}
-      {isAdmin && <li>{link("/admin/settings/onboarding", "Onboarding docs")}</li>}
+      {isAdmin && member?.show_onboarding_nav !== false && (
+        <li>{link("/admin/settings/onboarding", "Onboarding docs")}</li>
+      )}
       {isAdmin && <li>{link("/admin/email-members", "Email all members")}</li>}
       {mainSections.map((s) => (
         <React.Fragment key={s.slug}>
@@ -464,10 +468,15 @@ export default function Sidebar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
-    fetch("/api/auth/member-me")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setMember(data ?? null))
-      .catch(() => setMember(null));
+    function loadMember() {
+      fetch("/api/auth/member-me")
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => setMember(data ?? null))
+        .catch(() => setMember(null));
+    }
+    loadMember();
+    window.addEventListener("member-me-refresh", loadMember);
+    return () => window.removeEventListener("member-me-refresh", loadMember);
   }, [pathname]);
 
   useEffect(() => {

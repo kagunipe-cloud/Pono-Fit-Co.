@@ -11,22 +11,26 @@ export async function GET(request: NextRequest) {
   try {
     const db = getDb();
     const row = db.prepare("SELECT value FROM app_settings WHERE key = ?").get("timezone") as { value: string } | undefined;
+    const hiddenRow = db.prepare("SELECT value FROM app_settings WHERE key = ?").get("onboarding_nav_hidden") as { value: string } | undefined;
     const { openHourMin, openHourMax } = getOpenHours(db);
     db.close();
     const timezone = row?.value?.trim() || "Pacific/Honolulu";
-    return NextResponse.json({ timezone, open_hour_min: openHourMin, open_hour_max: openHourMax });
+    const onboardingNavHidden = hiddenRow?.value?.trim() === "1";
+    return NextResponse.json({ timezone, open_hour_min: openHourMin, open_hour_max: openHourMax, onboarding_nav_hidden: onboardingNavHidden });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: "Failed to load settings" }, { status: 500 });
   }
 }
 
-/** PATCH — admin: update settings. Body: { timezone?: string, open_hour_min?: number, open_hour_max?: number }. */
+/** PATCH — admin: update settings. Body: { timezone?, open_hour_min?, open_hour_max?, onboarding_nav_hidden? }. */
 export async function PATCH(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
   if (!adminId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const body = await request.json().catch(() => ({}));
+    const onboardingNavHidden =
+      typeof body.onboarding_nav_hidden === "boolean" ? body.onboarding_nav_hidden : null;
     const timezone = typeof body.timezone === "string" ? body.timezone.trim() : null;
     if (timezone === "") {
       return NextResponse.json({ error: "timezone cannot be empty" }, { status: 400 });
@@ -41,6 +45,12 @@ export async function PATCH(request: NextRequest) {
     }
 
     const db = getDb();
+    if (onboardingNavHidden !== null) {
+      db.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(
+        "onboarding_nav_hidden",
+        onboardingNavHidden ? "1" : "0"
+      );
+    }
     if (timezone !== null) {
       try {
         Intl.DateTimeFormat(undefined, { timeZone: timezone });

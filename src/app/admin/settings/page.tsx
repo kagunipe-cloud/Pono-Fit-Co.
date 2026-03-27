@@ -29,18 +29,59 @@ export default function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [onboardingNavHidden, setOnboardingNavHidden] = useState(false);
+  const [onboardingToggling, setOnboardingToggling] = useState(false);
+  const [onboardingMessage, setOnboardingMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/settings")
       .then((r) => (r.ok ? r.json() : null))
-      .then((data: { timezone?: string; open_hour_min?: number; open_hour_max?: number } | null) => {
-        if (data?.timezone) setTimezone(data.timezone);
-        if (typeof data?.open_hour_min === "number") setOpenHourMin(data.open_hour_min);
-        if (typeof data?.open_hour_max === "number") setOpenHourMax(data.open_hour_max);
-      })
+      .then(
+        (data: {
+          timezone?: string;
+          open_hour_min?: number;
+          open_hour_max?: number;
+          onboarding_nav_hidden?: boolean;
+        } | null) => {
+          if (data?.timezone) setTimezone(data.timezone);
+          if (typeof data?.open_hour_min === "number") setOpenHourMin(data.open_hour_min);
+          if (typeof data?.open_hour_max === "number") setOpenHourMax(data.open_hour_max);
+          if (typeof data?.onboarding_nav_hidden === "boolean") setOnboardingNavHidden(data.onboarding_nav_hidden);
+        }
+      )
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  async function handleToggleOnboardingNav() {
+    setOnboardingMessage(null);
+    setOnboardingToggling(true);
+    try {
+      const next = !onboardingNavHidden;
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ onboarding_nav_hidden: next }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setOnboardingMessage({ type: "err", text: data.error ?? "Failed to update." });
+        return;
+      }
+      setOnboardingNavHidden(next);
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new Event("member-me-refresh"));
+      }
+      setOnboardingMessage({
+        type: "ok",
+        text: next ? "Onboarding docs hidden from the sidebar." : "Onboarding docs shown in the sidebar.",
+      });
+    } catch {
+      setOnboardingMessage({ type: "err", text: "Something went wrong." });
+    } finally {
+      setOnboardingToggling(false);
+    }
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -133,6 +174,32 @@ export default function AdminSettingsPage() {
           <p className="text-sm text-stone-500 mt-0.5">Edit auto-sent emails and waiver documents (privacy, terms, gym).</p>
         </Link>
       </div>
+
+      {!loading && (
+        <section className="mb-8 rounded-xl border border-stone-200 bg-white p-5 shadow-sm">
+          <h2 className="text-lg font-semibold text-stone-800 mb-1">Onboarding</h2>
+          <p className="text-sm text-stone-500 mb-3">
+            After migration, hide <strong>Onboarding docs</strong> in the admin sidebar. You can show it again anytime. Pages like{" "}
+            <Link href="/admin/import-onboarding" className="text-brand-600 hover:underline">
+              Import onboarding
+            </Link>{" "}
+            still work via URL or bookmark.
+          </p>
+          <button
+            type="button"
+            onClick={handleToggleOnboardingNav}
+            disabled={onboardingToggling}
+            className="px-4 py-2.5 rounded-lg border border-stone-300 bg-white text-stone-800 text-sm font-medium hover:bg-stone-50 disabled:opacity-50"
+          >
+            {onboardingToggling ? "Saving…" : onboardingNavHidden ? "Show onboarding" : "Hide onboarding"}
+          </button>
+          {onboardingMessage && (
+            <p className={`mt-2 text-sm ${onboardingMessage.type === "ok" ? "text-green-700" : "text-red-600"}`}>
+              {onboardingMessage.text}
+            </p>
+          )}
+        </section>
+      )}
 
       <section className="mb-8">
         <h2 className="text-lg font-semibold text-stone-800 mb-3">General</h2>

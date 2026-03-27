@@ -53,6 +53,13 @@ export async function GET() {
     const privacyTermsAccepted = !!(member.privacy_terms_accepted_at ?? "").trim();
     const purchased = hasPurchase(db, memberId);
     const needsWaiver = purchased && !waiverSigned;
+
+    let showOnboardingNav = true;
+    if ((member.role ?? "Member") === "Admin") {
+      const hidden = db.prepare("SELECT value FROM app_settings WHERE key = ?").get("onboarding_nav_hidden") as { value: string } | undefined;
+      if (hidden?.value?.trim() === "1") showOnboardingNav = false;
+    }
+
     db.close();
 
     return NextResponse.json({
@@ -66,6 +73,7 @@ export async function GET() {
       privacy_terms_accepted_at: member.privacy_terms_accepted_at ?? null,
       privacy_terms_accepted: privacyTermsAccepted,
       needs_waiver: needsWaiver,
+      show_onboarding_nav: showOnboardingNav,
     });
   } catch (err) {
     console.error(err);
