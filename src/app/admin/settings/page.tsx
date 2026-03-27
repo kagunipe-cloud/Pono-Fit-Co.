@@ -119,13 +119,6 @@ export default function AdminSettingsPage() {
           <p className="text-sm text-stone-500 mt-0.5">Import members from a Glofox-style CSV file.</p>
         </Link>
         <Link
-          href="/admin/import-onboarding"
-          className="block p-4 rounded-xl border border-stone-200 bg-white hover:border-brand-300 hover:bg-brand-50/30 transition-colors"
-        >
-          <h2 className="font-semibold text-stone-800">Import onboarding (CSV)</h2>
-          <p className="text-sm text-stone-500 mt-0.5">Stripe customer id, auto-renew, and optional subscription rows for migration.</p>
-        </Link>
-        <Link
           href="/discounts"
           className="block p-4 rounded-xl border border-stone-200 bg-white hover:border-brand-300 hover:bg-brand-50/30 transition-colors"
         >
@@ -138,15 +131,6 @@ export default function AdminSettingsPage() {
         >
           <h2 className="font-semibold text-stone-800">Emails & Documents</h2>
           <p className="text-sm text-stone-500 mt-0.5">Edit auto-sent emails and waiver documents (privacy, terms, gym).</p>
-        </Link>
-        <Link
-          href="/admin/settings/onboarding"
-          className="block p-4 rounded-xl border border-stone-200 bg-white hover:border-brand-300 hover:bg-brand-50/30 transition-colors sm:col-span-2"
-        >
-          <h2 className="font-semibold text-stone-800">Onboarding docs</h2>
-          <p className="text-sm text-stone-500 mt-0.5">
-            Post-migration checklist (Stripe, subscriptions, auto-renew). Print or save as PDF from the page.
-          </p>
         </Link>
       </div>
 
