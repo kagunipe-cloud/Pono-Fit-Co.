@@ -498,9 +498,14 @@ export default function Sidebar() {
   const isTrainer = member?.role === "Trainer" || member?.role === "Admin";
   const inMemberArea = pathname === "/member" || pathname?.startsWith("/member/");
   const inTrainerArea = pathname === "/trainer" || pathname?.startsWith("/trainer/");
-  // Prior to login: show member nav so visitors see what the app offers. After login, show member nav in member area or admin nav elsewhere.
-  // When an admin clicks Schedule from member nav, keep member nav so it doesn't feel like leaving member space.
-  const showMemberNav = !isMember || inMemberArea || (isAdmin && pathname === "/schedule");
+  /** Staff (admin or trainer) always get the staff sidebar except inside /member/* or admin Schedule shortcut. Regular members never see staff nav. */
+  const isStaff = isAdmin || member?.role === "Trainer";
+  // Prior to login: show member nav so visitors see what the app offers. Logged-in regular members always use member nav (not staff).
+  const showMemberNav =
+    !isMember ||
+    inMemberArea ||
+    (isAdmin && pathname === "/schedule") ||
+    (isMember && !isStaff);
 
   const logoHref = isMember ? (showMemberNav ? "/member" : inTrainerArea ? "/trainer" : "/") : "/";
   const navProps = { pathname, member: member ?? null, isMember, isAdmin, isTrainer, showMemberNav, onLogout: handleLogout };
