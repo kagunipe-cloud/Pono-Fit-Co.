@@ -8,7 +8,8 @@
 
 import { getDb } from "./db";
 
-const DEDUPE_MINUTES = 60;
+/** Same window as duplicate door taps for analytics "unique check-ins" and occupancy +1 dedupe. */
+export const OCCUPANCY_DEDUPE_MINUTES = 60;
 
 export function ensureOccupancyTable(db: ReturnType<typeof getDb>) {
   db.exec(`
@@ -31,19 +32,18 @@ export function ensureOccupancyTable(db: ReturnType<typeof getDb>) {
   }
 }
 
-/** Count entries within the last hour. Only counts outside unlocks (member_id set) or manual walk-ins (source = 'manual'). Excludes inside unlocks (request-to-exit) which have no member. */
+/** Count entries within the last hour (rolling). Includes Kisi unlocks with or without linked member_id — every +1 row counts. */
 export function getOccupancyCount(db: ReturnType<typeof getDb>): number {
   ensureOccupancyTable(db);
   const row = db.prepare(
     `SELECT COUNT(*) AS n FROM occupancy_entries
-     WHERE entered_at > datetime('now', '-1 hour')
-     AND (member_id IS NOT NULL OR source = 'manual')`
+     WHERE entered_at > datetime('now', '-1 hour')`
   ).get() as { n: number };
   return row?.n ?? 0;
 }
 
 /** Add an entry (+1). Source: 'kisi' (door unlock) or 'manual' (walk-in). enteredAt: optional ISO string (default: now).
- * memberId: optional — if provided, skips adding if same member has an entry in the last DEDUPE_MINUTES (avoids double-count). */
+ * memberId: optional — if provided, skips adding if same member has an entry in the last OCCUPANCY_DEDUPE_MINUTES (avoids double-count). */
 export function addOccupancyEntry(
   db: ReturnType<typeof getDb>,
   source: "kisi" | "manual",
@@ -60,7 +60,7 @@ export function addOccupancyEntry(
   if (mid) {
     const recent = db.prepare(
       `SELECT 1 FROM occupancy_entries WHERE member_id = ? AND entered_at > datetime('now', ?) LIMIT 1`
-    ).get(mid, `-${DEDUPE_MINUTES} minutes`) as { "1"?: number } | undefined;
+    ).get(mid, `-${OCCUPANCY_DEDUPE_MINUTES} minutes`) as { "1"?: number } | undefined;
     if (recent) return;
   }
   db.prepare(
@@ -68,13 +68,12 @@ export function addOccupancyEntry(
   ).run(at, source, mid);
 }
 
-/** Remove oldest entry (-1, FIFO). Only removes counted entries (member_id set or manual). Returns true if one was removed. */
+/** Remove oldest entry (-1, FIFO) among entries still in the rolling 1h window. Returns true if one was removed. */
 export function removeOldestOccupancyEntry(db: ReturnType<typeof getDb>): boolean {
   ensureOccupancyTable(db);
   const row = db.prepare(
     `SELECT id FROM occupancy_entries
      WHERE entered_at > datetime('now', '-1 hour')
-     AND (member_id IS NOT NULL OR source = 'manual')
      ORDER BY entered_at ASC LIMIT 1`
   ).get() as { id: number } | undefined;
   if (!row) return false;

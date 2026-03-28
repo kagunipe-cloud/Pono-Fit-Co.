@@ -80,8 +80,12 @@ export async function POST(request: NextRequest) {
       happenedAt
     );
 
+    // Coconut / occupancy: only "real" member unlocks. Kisi sends actor_type null for request-to-exit
+    // (no user) and GroupLink for access links — those still log above but must not +1 headcount.
     ensureOccupancyTable(db);
-    addOccupancyEntry(db, "kisi", happenedAt, memberId);
+    if (body.success === true && body.actor_type === "User") {
+      addOccupancyEntry(db, "kisi", happenedAt, memberId);
+    }
 
     db.close();
 

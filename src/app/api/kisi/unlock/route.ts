@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     const secret = await createLoginForUser(member.email);
     await unlockWithUserSecret(secret);
 
-    // Add +1 to coconut count (Kisi may not send webhook for API-triggered unlocks). Dedupes same member within 10 min.
+    // Add +1 to coconut count (Kisi may not send webhook for API-triggered unlocks). Dedupes same member within 60 min.
     try {
       const dbOcc = getDb();
       ensureOccupancyTable(dbOcc);

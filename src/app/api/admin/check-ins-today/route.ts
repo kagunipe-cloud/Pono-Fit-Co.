@@ -3,10 +3,42 @@ import { getDb, getAppTimezone, getOpenHours } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
 import { ensureUsageTables } from "@/lib/usage";
 import { todayInAppTz } from "@/lib/app-timezone";
+import { OCCUPANCY_DEDUPE_MINUTES } from "@/lib/occupancy";
 
 export const dynamic = "force-dynamic";
 
-/** GET: Count of successful door unlocks today (app timezone), binned by hour. Resets every calendar day. Admin only. */
+type DoorRow = {
+  happened_at: string;
+  member_id: string | null;
+  uuid: string;
+};
+
+/** Same identity rule as occupancy +1: linked members dedupe by member_id; unlinked events are one row each (uuid). */
+function identityKey(r: DoorRow): string {
+  const mid = r.member_id?.trim();
+  if (mid) return `m:${mid}`;
+  return `u:${r.uuid}`;
+}
+
+/** Keep first event per identity, then another only if ≥ OCCUPANCY_DEDUPE_MINUTES after the last kept (chronological). */
+function dedupeUniqueCheckIns(rows: DoorRow[]): DoorRow[] {
+  const ms = OCCUPANCY_DEDUPE_MINUTES * 60 * 1000;
+  const sorted = [...rows].sort((a, b) => Date.parse(a.happened_at) - Date.parse(b.happened_at));
+  const lastKeptMs = new Map<string, number>();
+  const kept: DoorRow[] = [];
+  for (const row of sorted) {
+    const t = Date.parse(row.happened_at);
+    if (Number.isNaN(t)) continue;
+    const key = identityKey(row);
+    const prev = lastKeptMs.get(key);
+    if (prev !== undefined && t - prev < ms) continue;
+    lastKeptMs.set(key, t);
+    kept.push(row);
+  }
+  return kept;
+}
+
+/** GET: Unique successful door check-ins today (app timezone), binned by hour, same dedupe window as Coconut Count (+1). Admin only. */
 export async function GET(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
   if (!adminId) {
@@ -21,22 +53,26 @@ export async function GET(request: NextRequest) {
     const todayYmd = todayInAppTz(tz);
 
     const rows = db.prepare(
-      `SELECT happened_at FROM door_access_events
+      `SELECT happened_at, member_id, uuid FROM door_access_events
        WHERE success = 1 AND happened_at >= datetime('now', '-4 days')
        ORDER BY happened_at ASC`
-    ).all() as { happened_at: string }[];
+    ).all() as DoorRow[];
 
     db.close();
 
-    const countsByHour = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: 0 }));
-    let totalToday = 0;
+    const todayRows = rows.filter((r) => {
+      const parsed = parseHappenedAt(r.happened_at, tz);
+      return parsed && parsed.ymd === todayYmd;
+    });
 
-    for (const { happened_at } of rows) {
-      const parsed = parseHappenedAt(happened_at, tz);
-      if (!parsed || parsed.ymd !== todayYmd) continue;
+    const uniqueToday = dedupeUniqueCheckIns(todayRows);
+
+    const countsByHour = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: 0 }));
+    for (const r of uniqueToday) {
+      const parsed = parseHappenedAt(r.happened_at, tz);
+      if (!parsed) continue;
       const h = clampHour(parsed.hour);
       countsByHour[h].count += 1;
-      totalToday += 1;
     }
 
     const hoursInRange = Array.from({ length: openHourMax - openHourMin + 1 }, (_, i) => openHourMin + i);
@@ -44,6 +80,8 @@ export async function GET(request: NextRequest) {
       hour,
       count: countsByHour[hour].count,
     }));
+
+    const totalToday = byHour.reduce((sum, { count }) => sum + count, 0);
 
     return NextResponse.json({
       date: todayYmd,

@@ -160,9 +160,11 @@ export default function AdminAnalyticsPage() {
         <section className="mb-8">
           <h2 className="text-lg font-semibold text-stone-800 mb-1">Today: door check-ins by hour</h2>
           <p className="text-sm text-stone-500 mb-2">
-            Total successful unlocks today ({todayCheckIns.date}) in {todayCheckIns.timezone}:{" "}
-            <strong className="text-stone-800">{todayCheckIns.totalToday}</strong>. Resets at midnight (gym timezone).
-            Each row in the Kisi webhook counts once; this is not the same as Coconut Count (see below).
+            <strong className="text-stone-800">Total Check-ins</strong> today ({todayCheckIns.date}) in {todayCheckIns.timezone}:{" "}
+            <strong className="text-stone-800">{todayCheckIns.totalToday}</strong> (unique — same member within 60 minutes
+            counts once; matches the +1 rule used for Coconut Count). Hourly cells sum to this total. Resets at midnight
+            (gym timezone). Only hours {getHourLabel(todayCheckIns.open_hour_min)}–{getHourLabel(todayCheckIns.open_hour_max)}{" "}
+            are shown.
           </p>
           <div className="overflow-x-auto mb-3">
             <div
@@ -197,15 +199,17 @@ export default function AdminAnalyticsPage() {
             </div>
           </div>
           <details className="rounded-lg border border-stone-200 bg-stone-50/80 p-3 text-sm text-stone-600">
-            <summary className="cursor-pointer font-medium text-stone-800">Coconut Count vs. this chart</summary>
+            <summary className="cursor-pointer font-medium text-stone-800">Coconut Count vs. Total Check-ins</summary>
             <ul className="mt-2 list-disc list-inside space-y-1">
               <li>
-                <strong>Coconut Count</strong> (dashboard widget) shows how many people are estimated on-site in the{" "}
-                <em>last rolling hour</em> (entries expire after 1 hour). The same member tapping the door again within 60 minutes
-                does not add another coconut — that avoids double-counting when someone re-enters quickly.
+                <strong>Coconut Count</strong> (dashboard) is a <em>live</em> estimate: rows in the last rolling hour (each
+                entry drops off after an hour). It is not a daily running total — it will not equal &quot;Total Check-ins&quot;
+                for the day, but duplicate taps use the same 60-minute rule as this chart for linked members.
               </li>
               <li>
-                <strong>This chart</strong> uses every successful door unlock from <code className="text-xs bg-stone-200 px-1 rounded">door_access_events</code> (Kisi webhook). Three taps → three cells in the hour totals (if the webhook is configured and deliveries succeed).
+                <strong>Total Check-ins</strong> is today&apos;s unique successful unlocks from{" "}
+                <code className="text-xs bg-stone-200 px-1 rounded">door_access_events</code>, deduped like Coconut +1 for
+                members with a linked account. Unlinked Kisi actors count each distinct webhook (no member to dedupe against).
               </li>
               <li>
                 If unlocks appear in Kisi but not here, verify the webhook URL{" "}
