@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn, ensureSalesStripePaymentIntentColumn, ensureSalesPromoCodeColumn, ensureSalesItemTotalCcFeeColumns } from "../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn, ensureSalesStripePaymentIntentColumn, ensureSalesPromoCodeColumn, ensureSalesItemTotalCcFeeColumns, ensureSubscriptionRenewalPromoColumns } from "../../../../lib/db";
+import { ensureCartTables } from "../../../../lib/cart";
+import { getEffectiveUnitPriceString } from "../../../../lib/cart-line-prices";
 import { sendPostPurchaseEmail, sendStaffEmail, sendMemberEmail } from "../../../../lib/email";
 import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../lib/kisi";
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
@@ -151,6 +153,7 @@ export async function POST(request: NextRequest) {
     }
 
     const db = getDb();
+    ensureCartTables(db);
 
     const cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member_id) as { id: number } | undefined;
     if (!cart) {
@@ -158,7 +161,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No cart for this member" }, { status: 404 });
     }
 
-    const items = db.prepare("SELECT * FROM cart_items WHERE cart_id = ?").all(cart.id) as { id: number; product_type: string; product_id: number; quantity: number; slot_json?: string | null }[];
+    const items = db.prepare("SELECT * FROM cart_items WHERE cart_id = ?").all(cart.id) as {
+      id: number;
+      product_type: string;
+      product_id: number;
+      quantity: number;
+      slot_json?: string | null;
+      unit_price_override?: string | null;
+      price_override_months?: number | null;
+      price_override_indefinite?: number | null;
+    }[];
     if (items.length === 0) {
       db.close();
       return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
@@ -199,19 +211,45 @@ export async function POST(request: NextRequest) {
         if (it.product_type === "membership_plan") {
           const plan = db.prepare("SELECT * FROM membership_plans WHERE id = ?").get(it.product_id) as { plan_name: string; price: string; length: string; unit: string; product_id: string } | undefined;
           if (plan) {
-            const price = parsePrice(plan.price) * it.quantity;
-            grand_total += price;
-            emailLineItems.push({ name: plan.plan_name ?? "Membership", quantity: it.quantity, price: formatPrice(plan.price) });
+            const effUnit = getEffectiveUnitPriceString(db, it);
+            const unitNum = parsePrice(effUnit);
+            grand_total += unitNum * it.quantity;
+            emailLineItems.push({ name: plan.plan_name ?? "Membership", quantity: it.quantity, price: formatPrice(effUnit) });
             const start_date = new Date();
             const expiry_date = addDuration(start_date, plan.length || "1", plan.unit || "Month");
             const startStr = formatDateForStorage(start_date, tz);
             const expiryStr = formatDateForStorage(expiry_date, tz);
             const daysRemaining = Math.ceil((expiry_date.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
             const sub_id = randomUUID().slice(0, 8);
+            ensureSubscriptionRenewalPromoColumns(db);
+            const hasStaffPrice = !!(it.unit_price_override ?? "").trim();
+            const isMonth = (plan.unit || "").trim() === "Month";
+            let promoRenewals: number | null = null;
+            let renewalIndef = 0;
+            if (isMonth && hasStaffPrice) {
+              if ((it.price_override_indefinite ?? 0) === 1) {
+                renewalIndef = 1;
+              } else {
+                const m = it.price_override_months != null ? it.price_override_months : 1;
+                promoRenewals = Math.max(0, m - 1);
+              }
+            }
             db.prepare(`
-              INSERT INTO subscriptions (subscription_id, member_id, product_id, status, start_date, expiry_date, days_remaining, price, sales_id, quantity)
-              VALUES (?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?)
-            `).run(sub_id, member_id, plan.product_id, startStr, expiryStr, String(daysRemaining), plan.price, sales_id, it.quantity);
+              INSERT INTO subscriptions (subscription_id, member_id, product_id, status, start_date, expiry_date, days_remaining, price, sales_id, quantity, promo_renewals_remaining, renewal_price_indefinite)
+              VALUES (?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              sub_id,
+              member_id,
+              plan.product_id,
+              startStr,
+              expiryStr,
+              String(daysRemaining),
+              effUnit,
+              sales_id,
+              it.quantity,
+              promoRenewals,
+              renewalIndef
+            );
             db.prepare("UPDATE members SET exp_next_payment_date = ? WHERE member_id = ?").run(expiryStr, member_id);
             kisiGrants.push({ valid_until: expiry_date });
           }
@@ -219,8 +257,9 @@ export async function POST(request: NextRequest) {
           ensurePTSlotTables(db);
           const session = db.prepare("SELECT * FROM pt_sessions WHERE id = ?").get(it.product_id) as { id: number; price: string; session_name?: string; product_id: string; duration_minutes?: number; trainer?: string | null } | undefined;
           if (session) {
-            grand_total += parsePrice(session.price) * it.quantity;
-            emailLineItems.push({ name: session.session_name ?? "PT Session", quantity: it.quantity, price: formatPrice(session.price) });
+            const effUnit = getEffectiveUnitPriceString(db, it);
+            grand_total += parsePrice(effUnit) * it.quantity;
+            emailLineItems.push({ name: session.session_name ?? "PT Session", quantity: it.quantity, price: formatPrice(effUnit) });
             let slot: { date: string; start_time: string; duration_minutes: number; trainer_member_id?: string } | null = null;
             if (it.slot_json) {
               try {
@@ -260,7 +299,7 @@ export async function POST(request: NextRequest) {
                 db.prepare(`
                   INSERT INTO pt_bookings (pt_booking_id, product_id, member_id, payment_status, booking_date, sales_id, price, quantity)
                   VALUES (?, ?, ?, 'Paid', ?, ?, ?, ?)
-                `).run(pt_booking_id, session.product_id, member_id, date_time, sales_id, session.price, it.quantity);
+                `).run(pt_booking_id, session.product_id, member_id, date_time, sales_id, effUnit, it.quantity);
               } catch {
                 /* pt_bookings table may not exist in all envs */
               }
@@ -277,13 +316,14 @@ export async function POST(request: NextRequest) {
         } else if (it.product_type === "class") {
           const cls = db.prepare("SELECT * FROM classes WHERE id = ?").get(it.product_id) as { price: string; product_id: string; class_name?: string | null; date?: string | null; time?: string | null; trainer_member_id?: string | null } | undefined;
           if (cls) {
-            grand_total += parsePrice(cls.price) * it.quantity;
-            emailLineItems.push({ name: cls.class_name ?? "Class", quantity: it.quantity, price: formatPrice(cls.price) });
+            const effUnit = getEffectiveUnitPriceString(db, it);
+            grand_total += parsePrice(effUnit) * it.quantity;
+            emailLineItems.push({ name: cls.class_name ?? "Class", quantity: it.quantity, price: formatPrice(effUnit) });
             const class_booking_id = randomUUID().slice(0, 8);
             db.prepare(`
               INSERT INTO class_bookings (class_booking_id, product_id, member_id, payment_status, booking_date, sales_id, price, quantity)
               VALUES (?, ?, ?, 'Paid', ?, ?, ?, ?)
-            `).run(class_booking_id, cls.product_id, member_id, date_time, sales_id, cls.price, it.quantity);
+            `).run(class_booking_id, cls.product_id, member_id, date_time, sales_id, effUnit, it.quantity);
             classBookingEvents.push({
               member_id,
               class_name: String((cls as any).class_name ?? "Class"),
@@ -296,9 +336,10 @@ export async function POST(request: NextRequest) {
           ensureRecurringClassesTables(db);
           const pack = db.prepare("SELECT * FROM class_pack_products WHERE id = ?").get(it.product_id) as { name?: string; credits: number; price: string } | undefined;
           if (pack) {
+            const effUnit = getEffectiveUnitPriceString(db, it);
             const totalCredits = pack.credits * it.quantity;
-            grand_total += parsePrice(pack.price) * it.quantity;
-            emailLineItems.push({ name: pack.name ? `${pack.name} (${pack.credits} credits)` : `Class pack (${pack.credits} credits)`, quantity: it.quantity, price: formatPrice(pack.price) });
+            grand_total += parsePrice(effUnit) * it.quantity;
+            emailLineItems.push({ name: pack.name ? `${pack.name} (${pack.credits} credits)` : `Class pack (${pack.credits} credits)`, quantity: it.quantity, price: formatPrice(effUnit) });
             db.prepare(`
               INSERT INTO class_credit_ledger (member_id, amount, reason, reference_type, reference_id)
               VALUES (?, ?, 'purchase', 'sale', ?)
@@ -319,8 +360,9 @@ export async function POST(request: NextRequest) {
             WHERE o.id = ?
           `).get(it.product_id) as { id: number; price: string; occurrence_date: string; occurrence_time: string | null; class_name: string | null; trainer_member_id: string | null } | undefined;
           if (occ) {
-            grand_total += parsePrice(occ.price) * it.quantity;
-            emailLineItems.push({ name: `${occ.class_name ?? "Class"} — ${occ.occurrence_date} ${occ.occurrence_time ?? ""}`, quantity: it.quantity, price: formatPrice(occ.price) });
+            const effUnit = getEffectiveUnitPriceString(db, it);
+            grand_total += parsePrice(effUnit) * it.quantity;
+            emailLineItems.push({ name: `${occ.class_name ?? "Class"} — ${occ.occurrence_date} ${occ.occurrence_time ?? ""}`, quantity: it.quantity, price: formatPrice(effUnit) });
             try {
               db.prepare("INSERT INTO occurrence_bookings (member_id, class_occurrence_id) VALUES (?, ?)").run(member_id, occ.id);
             } catch {
@@ -338,9 +380,10 @@ export async function POST(request: NextRequest) {
           ensurePTSlotTables(db);
           const pack = db.prepare("SELECT id, name, duration_minutes, credits, price FROM pt_pack_products WHERE id = ?").get(it.product_id) as { name?: string; duration_minutes: number; credits: number; price: string } | undefined;
           if (pack) {
+            const effUnit = getEffectiveUnitPriceString(db, it);
             const totalCredits = pack.credits * it.quantity;
-            grand_total += parsePrice(pack.price) * it.quantity;
-            emailLineItems.push({ name: pack.name ? `${pack.name} (${pack.credits}×${pack.duration_minutes} min)` : `PT pack (${pack.credits}×${pack.duration_minutes} min)`, quantity: it.quantity, price: formatPrice(pack.price) });
+            grand_total += parsePrice(effUnit) * it.quantity;
+            emailLineItems.push({ name: pack.name ? `${pack.name} (${pack.credits}×${pack.duration_minutes} min)` : `PT pack (${pack.credits}×${pack.duration_minutes} min)`, quantity: it.quantity, price: formatPrice(effUnit) });
             db.prepare(`
               INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id)
               VALUES (?, ?, ?, 'purchase', 'sale', ?)

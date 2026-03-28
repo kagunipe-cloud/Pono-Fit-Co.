@@ -1,36 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone, ensureMembersStripeColumn } from "../../../../../lib/db";
+import { ensureCartTables } from "../../../../../lib/cart";
+import { getCatalogUnitPriceString, getEffectiveUnitPriceString } from "../../../../../lib/cart-line-prices";
 import { formatDateForDisplay } from "../../../../../lib/app-timezone";
 import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../../lib/recurring-classes";
 import { getMemberIdFromSession } from "../../../../../lib/session";
+import { getTrainerMemberId } from "../../../../../lib/admin";
 import { hasBillableStripeCustomer } from "../../../../../lib/stripe-customer";
 import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
 import { ensureDiscountsTable } from "../../../../../lib/discounts";
 
 export const dynamic = "force-dynamic";
-
-function ensureCartTables(db: ReturnType<typeof getDb>) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS cart (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      member_id TEXT NOT NULL UNIQUE,
-      created_at TEXT DEFAULT (datetime('now'))
-    );
-    CREATE TABLE IF NOT EXISTS cart_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      cart_id INTEGER NOT NULL,
-      product_type TEXT NOT NULL,
-      product_id INTEGER NOT NULL,
-      quantity INTEGER DEFAULT 1,
-      FOREIGN KEY (cart_id) REFERENCES cart(id)
-    );
-  `);
-  try {
-    db.exec("ALTER TABLE cart ADD COLUMN promo_code TEXT");
-  } catch {
-    /* already exists */
-  }
-}
 
 export async function GET(
   _req: NextRequest,
@@ -64,7 +44,15 @@ export async function GET(
       cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member.member_id) as { id: number; promo_code?: string | null };
     }
 
-    const rawItems = db.prepare("SELECT * FROM cart_items WHERE cart_id = ?").all(cart.id) as { id: number; product_type: string; product_id: number; quantity: number }[];
+    const rawItems = db.prepare("SELECT * FROM cart_items WHERE cart_id = ?").all(cart.id) as {
+      id: number;
+      product_type: string;
+      product_id: number;
+      quantity: number;
+      unit_price_override?: string | null;
+      price_override_months?: number | null;
+      price_override_indefinite?: number | null;
+    }[];
     const items: {
       id: number;
       product_type: string;
@@ -72,49 +60,61 @@ export async function GET(
       quantity: number;
       name: string;
       price: string;
+      catalog_price: string;
+      unit_price_override?: string | null;
+      price_override_months?: number | null;
+      price_override_indefinite?: boolean;
       plan_unit?: string;
     }[] = [];
     for (const it of rawItems) {
       let name = "—";
-      let price = "—";
       let plan_unit: string | undefined;
       if (it.product_type === "membership_plan") {
-        const row = db.prepare("SELECT plan_name, price, unit FROM membership_plans WHERE id = ?").get(it.product_id) as
-          | { plan_name: string; price: string; unit: string }
+        const row = db.prepare("SELECT plan_name, unit FROM membership_plans WHERE id = ?").get(it.product_id) as
+          | { plan_name: string; unit: string }
           | undefined;
         if (row) {
           name = row.plan_name ?? "—";
-          price = row.price ?? "—";
           plan_unit = row.unit ?? undefined;
         }
       } else if (it.product_type === "pt_session") {
-        const row = db.prepare("SELECT session_name, price FROM pt_sessions WHERE id = ?").get(it.product_id) as { session_name: string; price: string } | undefined;
-        if (row) { name = row.session_name ?? "—"; price = row.price ?? "—"; }
+        const row = db.prepare("SELECT session_name FROM pt_sessions WHERE id = ?").get(it.product_id) as { session_name: string } | undefined;
+        if (row) name = row.session_name ?? "—";
       } else if (it.product_type === "class") {
-        const row = db.prepare("SELECT class_name, price FROM classes WHERE id = ?").get(it.product_id) as { class_name: string; price: string } | undefined;
-        if (row) { name = row.class_name ?? "—"; price = row.price ?? "—"; }
+        const row = db.prepare("SELECT class_name FROM classes WHERE id = ?").get(it.product_id) as { class_name: string } | undefined;
+        if (row) name = row.class_name ?? "—";
       } else if (it.product_type === "class_pack") {
-        const row = db.prepare("SELECT name, price, credits FROM class_pack_products WHERE id = ?").get(it.product_id) as { name: string; price: string; credits: number } | undefined;
-        if (row) { name = `${row.name ?? "—"} (${row.credits} credits)`; price = row.price ?? "—"; }
+        const row = db.prepare("SELECT name, credits FROM class_pack_products WHERE id = ?").get(it.product_id) as { name: string; credits: number } | undefined;
+        if (row) name = `${row.name ?? "—"} (${row.credits} credits)`;
       } else if (it.product_type === "class_occurrence") {
         const row = db.prepare(`
-          SELECT COALESCE(c.class_name, r.name) AS name, COALESCE(c.price, '0') AS price, o.occurrence_date, o.occurrence_time
+          SELECT COALESCE(c.class_name, r.name) AS name, o.occurrence_date, o.occurrence_time
           FROM class_occurrences o
           LEFT JOIN classes c ON c.id = o.class_id
           LEFT JOIN recurring_classes r ON r.id = o.recurring_class_id
           WHERE o.id = ?
-        `).get(it.product_id) as { name: string; price: string; occurrence_date: string; occurrence_time: string } | undefined;
+        `).get(it.product_id) as { name: string; occurrence_date: string; occurrence_time: string } | undefined;
         if (row) {
           const tz = getAppTimezone(db);
           name = `${row.name ?? "Class"} — ${formatDateForDisplay(row.occurrence_date, tz)} ${row.occurrence_time}`;
-          price = row.price ?? "—";
         }
       } else if (it.product_type === "pt_pack") {
         ensurePTSlotTables(db);
-        const row = db.prepare("SELECT name, price, credits, duration_minutes FROM pt_pack_products WHERE id = ?").get(it.product_id) as { name: string; price: string; credits: number; duration_minutes: number } | undefined;
-        if (row) { name = `${row.name ?? "—"} (${row.credits}×${row.duration_minutes} min)`; price = row.price ?? "—"; }
+        const row = db.prepare("SELECT name, credits, duration_minutes FROM pt_pack_products WHERE id = ?").get(it.product_id) as { name: string; credits: number; duration_minutes: number } | undefined;
+        if (row) name = `${row.name ?? "—"} (${row.credits}×${row.duration_minutes} min)`;
       }
-      items.push({ ...it, name, price, ...(plan_unit != null ? { plan_unit } : {}) });
+      const catalog_price = getCatalogUnitPriceString(db, it);
+      const price = getEffectiveUnitPriceString(db, it);
+      items.push({
+        ...it,
+        name,
+        price,
+        catalog_price,
+        unit_price_override: it.unit_price_override ?? null,
+        price_override_months: it.price_override_months ?? null,
+        price_override_indefinite: (it.price_override_indefinite ?? 0) === 1,
+        ...(plan_unit != null ? { plan_unit } : {}),
+      });
     }
 
     const plans = db.prepare("SELECT id, plan_name, price, unit FROM membership_plans ORDER BY id").all() as {
@@ -142,6 +142,7 @@ export async function GET(
     const class_credits = getMemberCreditBalance(db, member.member_id);
     const sessionMemberId = await getMemberIdFromSession();
     const is_own_cart = !!sessionMemberId && sessionMemberId === member.member_id;
+    const is_staff = !!(await getTrainerMemberId(_req));
     db.close();
 
     const memberName = [member.first_name, member.last_name].filter(Boolean).join(" ") || "Member";
@@ -154,6 +155,7 @@ export async function GET(
       has_saved_card,
       class_credits,
       is_own_cart,
+      is_staff,
       items,
       plans,
       sessions,

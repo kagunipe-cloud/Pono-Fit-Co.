@@ -1,39 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../lib/db";
+import { ensureCartTables } from "../../../lib/cart";
 import { getMemberIdFromSession } from "../../../lib/session";
 import { getTrainerMemberId } from "../../../lib/admin";
 import { ensureDiscountsTable } from "../../../lib/discounts";
 
 export const dynamic = "force-dynamic";
-
-function ensureCartTables(db: ReturnType<typeof getDb>) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS cart (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      member_id TEXT NOT NULL UNIQUE,
-      created_at TEXT DEFAULT (datetime('now'))
-    );
-    CREATE TABLE IF NOT EXISTS cart_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      cart_id INTEGER NOT NULL,
-      product_type TEXT NOT NULL,
-      product_id INTEGER NOT NULL,
-      quantity INTEGER DEFAULT 1,
-      slot_json TEXT,
-      FOREIGN KEY (cart_id) REFERENCES cart(id)
-    );
-  `);
-  try {
-    db.exec("ALTER TABLE cart_items ADD COLUMN slot_json TEXT");
-  } catch {
-    /* already exists */
-  }
-  try {
-    db.exec("ALTER TABLE cart ADD COLUMN promo_code TEXT");
-  } catch {
-    /* already exists */
-  }
-}
 
 export async function GET(request: NextRequest) {
   const member_id = request.nextUrl.searchParams.get("member_id");

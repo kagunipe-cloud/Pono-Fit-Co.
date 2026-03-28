@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, ensureMembersStripeColumn } from "../../../../lib/db";
+import { ensureCartTables } from "../../../../lib/cart";
+import { getEffectiveUnitPriceString } from "../../../../lib/cart-line-prices";
 import { ensureRecurringClassesTables, ensureClassesRecurringColumns, ensureClassOccurrencesClassId } from "../../../../lib/recurring-classes";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureDiscountsTable } from "../../../../lib/discounts";
@@ -10,29 +12,6 @@ import { stripeCustomerIdForApi } from "../../../../lib/stripe-customer";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
-
-function ensureCartTables(db: ReturnType<typeof getDb>) {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS cart (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      member_id TEXT NOT NULL UNIQUE,
-      created_at TEXT DEFAULT (datetime('now'))
-    );
-    CREATE TABLE IF NOT EXISTS cart_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      cart_id INTEGER NOT NULL,
-      product_type TEXT NOT NULL,
-      product_id INTEGER NOT NULL,
-      quantity INTEGER DEFAULT 1,
-      FOREIGN KEY (cart_id) REFERENCES cart(id)
-    );
-  `);
-  try {
-    db.exec("ALTER TABLE cart ADD COLUMN promo_code TEXT");
-  } catch {
-    /* already exists */
-  }
-}
 
 function parsePriceToCents(p: string | null): number {
   if (p == null || p === "") return 0;
@@ -85,6 +64,7 @@ export async function POST(request: NextRequest) {
       product_type: string;
       product_id: number;
       quantity: number;
+      unit_price_override?: string | null;
     }[];
 
     let hasMonthlyMembershipInCart = false;
@@ -122,52 +102,36 @@ export async function POST(request: NextRequest) {
     const lineItems: { name: string; price: string; quantity: number }[] = [];
     for (const it of rawItems) {
       let name = "Item";
-      let price = "0";
       if (it.product_type === "membership_plan") {
-        const row = db.prepare("SELECT plan_name, price FROM membership_plans WHERE id = ?").get(it.product_id) as { plan_name: string; price: string } | undefined;
-        if (row) {
-          name = row.plan_name ?? "Membership";
-          price = row.price ?? "0";
-        }
+        const row = db.prepare("SELECT plan_name FROM membership_plans WHERE id = ?").get(it.product_id) as { plan_name: string } | undefined;
+        if (row) name = row.plan_name ?? "Membership";
       } else if (it.product_type === "pt_session") {
-        const row = db.prepare("SELECT session_name, price FROM pt_sessions WHERE id = ?").get(it.product_id) as { session_name: string; price: string } | undefined;
-        if (row) {
-          name = row.session_name ?? "PT Session";
-          price = row.price ?? "0";
-        }
+        const row = db.prepare("SELECT session_name FROM pt_sessions WHERE id = ?").get(it.product_id) as { session_name: string } | undefined;
+        if (row) name = row.session_name ?? "PT Session";
       } else if (it.product_type === "class") {
-        const row = db.prepare("SELECT class_name, price FROM classes WHERE id = ?").get(it.product_id) as { class_name: string; price: string } | undefined;
-        if (row) {
-          name = row.class_name ?? "Class";
-          price = row.price ?? "0";
-        }
+        const row = db.prepare("SELECT class_name FROM classes WHERE id = ?").get(it.product_id) as { class_name: string } | undefined;
+        if (row) name = row.class_name ?? "Class";
       } else if (it.product_type === "class_pack") {
-        const row = db.prepare("SELECT name, price FROM class_pack_products WHERE id = ?").get(it.product_id) as { name: string; price: string } | undefined;
-        if (row) {
-          name = row.name ?? "Class pack";
-          price = row.price ?? "0";
-        }
+        const row = db.prepare("SELECT name FROM class_pack_products WHERE id = ?").get(it.product_id) as { name: string } | undefined;
+        if (row) name = row.name ?? "Class pack";
       } else if (it.product_type === "class_occurrence") {
         const occ = db.prepare(`
-          SELECT o.id, o.occurrence_date, o.occurrence_time,
-                 COALESCE(c.class_name, r.name) AS class_name, COALESCE(c.price, '0') AS price
+          SELECT o.occurrence_date, o.occurrence_time,
+                 COALESCE(c.class_name, r.name) AS class_name
           FROM class_occurrences o
           LEFT JOIN classes c ON c.id = o.class_id
           LEFT JOIN recurring_classes r ON r.id = o.recurring_class_id
           WHERE o.id = ?
-        `).get(it.product_id) as { class_name: string; price: string; occurrence_date: string; occurrence_time: string } | undefined;
+        `).get(it.product_id) as { class_name: string; occurrence_date: string; occurrence_time: string } | undefined;
         if (occ) {
           name = `${occ.class_name ?? "Class"} — ${occ.occurrence_date} ${occ.occurrence_time}`;
-          price = occ.price ?? "0";
         }
       } else if (it.product_type === "pt_pack") {
         ensurePTSlotTables(db);
-        const row = db.prepare("SELECT name, price FROM pt_pack_products WHERE id = ?").get(it.product_id) as { name: string; price: string } | undefined;
-        if (row) {
-          name = row.name ?? "PT pack";
-          price = row.price ?? "0";
-        }
+        const row = db.prepare("SELECT name FROM pt_pack_products WHERE id = ?").get(it.product_id) as { name: string } | undefined;
+        if (row) name = row.name ?? "PT pack";
       }
+      const price = getEffectiveUnitPriceString(db, it);
       lineItems.push({ name, price, quantity: Math.max(1, it.quantity) });
     }
 

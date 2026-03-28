@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { ensureCartTables } from "@/lib/cart";
+import { getEffectiveUnitPriceString } from "@/lib/cart-line-prices";
 import { ensureDiscountsTable } from "@/lib/discounts";
 import { ensurePTSlotTables } from "@/lib/pt-slots";
 import { ensureRecurringClassesTables, ensureClassesRecurringColumns, ensureClassOccurrencesClassId } from "@/lib/recurring-classes";
@@ -52,36 +53,12 @@ export async function POST(request: NextRequest) {
     product_type: string;
     product_id: number;
     quantity: number;
+    unit_price_override?: string | null;
   }[];
 
   let subtotal = 0;
   for (const it of rawItems) {
-    let price = "0";
-    if (it.product_type === "membership_plan") {
-      const row = db.prepare("SELECT price FROM membership_plans WHERE id = ?").get(it.product_id) as { price: string } | undefined;
-      price = row?.price ?? "0";
-    } else if (it.product_type === "pt_session") {
-      const row = db.prepare("SELECT price FROM pt_sessions WHERE id = ?").get(it.product_id) as { price: string } | undefined;
-      price = row?.price ?? "0";
-    } else if (it.product_type === "class") {
-      const row = db.prepare("SELECT price FROM classes WHERE id = ?").get(it.product_id) as { price: string } | undefined;
-      price = row?.price ?? "0";
-    } else if (it.product_type === "class_pack") {
-      const row = db.prepare("SELECT price FROM class_pack_products WHERE id = ?").get(it.product_id) as { price: string } | undefined;
-      price = row?.price ?? "0";
-    } else if (it.product_type === "class_occurrence") {
-      const occ = db.prepare(`
-        SELECT COALESCE(c.price, r.price, '0') AS price
-        FROM class_occurrences o
-        LEFT JOIN classes c ON c.id = o.class_id
-        LEFT JOIN recurring_classes r ON r.id = o.recurring_class_id
-        WHERE o.id = ?
-      `).get(it.product_id) as { price: string } | undefined;
-      price = occ?.price ?? "0";
-    } else if (it.product_type === "pt_pack") {
-      const row = db.prepare("SELECT price FROM pt_pack_products WHERE id = ?").get(it.product_id) as { price: string } | undefined;
-      price = row?.price ?? "0";
-    }
+    const price = getEffectiveUnitPriceString(db, it);
     subtotal += parsePrice(price) * Math.max(1, it.quantity);
   }
 

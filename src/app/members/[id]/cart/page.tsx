@@ -16,6 +16,10 @@ type CartItem = {
   quantity: number;
   name: string;
   price: string;
+  catalog_price: string;
+  unit_price_override?: string | null;
+  price_override_months?: number | null;
+  price_override_indefinite?: boolean;
   plan_unit?: string;
 };
 
@@ -86,6 +90,23 @@ export default function MemberCartPage() {
   const [canUseTerminal, setCanUseTerminal] = useState(false);
   const [classCredits, setClassCredits] = useState(0);
   const [isOwnCart, setIsOwnCart] = useState(false);
+  const [isStaff, setIsStaff] = useState(false);
+  const [staffPriceSavingId, setStaffPriceSavingId] = useState<number | null>(null);
+  const [staffDrafts, setStaffDrafts] = useState<
+    Record<number, { price: string; months: string; indef: boolean }>
+  >({});
+
+  useEffect(() => {
+    const next: Record<number, { price: string; months: string; indef: boolean }> = {};
+    for (const it of items) {
+      next[it.id] = {
+        price: it.unit_price_override?.trim() || it.catalog_price || "",
+        months: String(it.price_override_months ?? 1),
+        indef: !!it.price_override_indefinite,
+      };
+    }
+    setStaffDrafts(next);
+  }, [items]);
   const [useCreditLoadingId, setUseCreditLoadingId] = useState<number | null>(null);
   const [useCreditConfirm, setUseCreditConfirm] = useState<{ cartItemId: number; occurrenceId: number; itemName: string } | null>(null);
   const [terminalEstimate, setTerminalEstimate] = useState<{
@@ -144,6 +165,7 @@ export default function MemberCartPage() {
         setDiscount(data.discount ?? null);
         setClassCredits(data.class_credits ?? 0);
         setIsOwnCart(Boolean(data.is_own_cart));
+        setIsStaff(Boolean(data.is_staff));
       })
       .catch(() => {
         if (!cancelled) setMemberId(null);
@@ -405,6 +427,58 @@ export default function MemberCartPage() {
     }
   }
 
+  async function saveStaffLinePrice(it: CartItem) {
+    if (!memberId) return;
+    const d = staffDrafts[it.id];
+    if (!d) return;
+    const isMonth = it.product_type === "membership_plan" && String(it.plan_unit ?? "").trim() === "Month";
+    const monthsNum = Math.max(1, parseInt(d.months, 10) || 1);
+    setStaffPriceSavingId(it.id);
+    try {
+      const res = await fetch(`/api/cart/items/${it.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          member_id: memberId,
+          unit_price_override: d.price.trim(),
+          ...(isMonth
+            ? {
+                price_override_indefinite: d.indef,
+                ...(!d.indef ? { price_override_months: monthsNum } : {}),
+              }
+            : {}),
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error ?? "Could not save");
+      const cartData = await fetch(`/api/members/${id}/cart-data`).then((r) => r.json());
+      setItems(cartData.items ?? []);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setStaffPriceSavingId(null);
+    }
+  }
+
+  async function clearStaffLinePrice(it: CartItem) {
+    if (!memberId) return;
+    setStaffPriceSavingId(it.id);
+    try {
+      const res = await fetch(`/api/cart/items/${it.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ member_id: memberId, unit_price_override: "" }),
+      });
+      if (!res.ok) throw new Error("Could not clear");
+      const cartData = await fetch(`/api/members/${id}/cart-data`).then((r) => r.json());
+      setItems(cartData.items ?? []);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Clear failed");
+    } finally {
+      setStaffPriceSavingId(null);
+    }
+  }
+
   if (loading && !memberId) return <div className="p-12 text-center text-stone-500">Loading…</div>;
   if (!memberId) return <div className="p-12 text-center text-red-600">Member not found.</div>;
 
@@ -599,23 +673,107 @@ export default function MemberCartPage() {
         ) : (
           <ul className="divide-y divide-stone-100">
             {items.map((it) => (
-              <li key={it.id} className="p-4 flex justify-between items-center gap-3">
-                <span className="flex-1 min-w-0">{it.name} × {it.quantity} — {formatPrice(it.price)}</span>
-                <div className="flex items-center gap-1 shrink-0">
-                  {it.product_type === "class_occurrence" && isOwnCart && classCredits >= 1 && (
-                    <button
-                      type="button"
-                      onClick={() => setUseCreditConfirm({ cartItemId: it.id, occurrenceId: it.product_id, itemName: it.name })}
-                      disabled={useCreditLoadingId === it.id}
-                      className="px-2 py-1 rounded text-sm font-medium text-brand-600 hover:bg-brand-50 border border-brand-200 disabled:opacity-50"
-                    >
-                      {useCreditLoadingId === it.id ? "…" : "Use credit"}
+              <li key={it.id} className="p-4 flex flex-col gap-2">
+                <div className="flex justify-between items-center gap-3">
+                  <span className="flex-1 min-w-0">
+                    {it.name} × {it.quantity} — {formatPrice(it.price)}
+                    {isStaff && (it.unit_price_override?.trim() || it.price !== it.catalog_price) && (
+                      <span className="block text-xs text-stone-500 mt-0.5">
+                        List: {formatPrice(it.catalog_price)}
+                      </span>
+                    )}
+                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    {it.product_type === "class_occurrence" && isOwnCart && classCredits >= 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setUseCreditConfirm({ cartItemId: it.id, occurrenceId: it.product_id, itemName: it.name })}
+                        disabled={useCreditLoadingId === it.id}
+                        className="px-2 py-1 rounded text-sm font-medium text-brand-600 hover:bg-brand-50 border border-brand-200 disabled:opacity-50"
+                      >
+                        {useCreditLoadingId === it.id ? "…" : "Use credit"}
+                      </button>
+                    )}
+                    <button type="button" onClick={() => removeItem(it.id)} className="text-red-600 hover:text-red-700 p-1 rounded" title="Remove" aria-label="Remove item">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
                     </button>
-                  )}
-                  <button type="button" onClick={() => removeItem(it.id)} className="text-red-600 hover:text-red-700 p-1 rounded" title="Remove" aria-label="Remove item">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
-                  </button>
+                  </div>
                 </div>
+                {isStaff && staffDrafts[it.id] && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-sm space-y-2">
+                    <p className="text-xs font-medium text-amber-900">Staff: custom price (before promo %)</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="flex items-center gap-1">
+                        <span className="text-stone-600">$</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          className="w-24 px-2 py-1 rounded border border-stone-200"
+                          value={staffDrafts[it.id].price}
+                          onChange={(e) =>
+                            setStaffDrafts((s) => ({
+                              ...s,
+                              [it.id]: { ...s[it.id], price: e.target.value },
+                            }))
+                          }
+                        />
+                      </label>
+                      {it.product_type === "membership_plan" && String(it.plan_unit ?? "").trim() === "Month" && (
+                        <>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={staffDrafts[it.id].indef}
+                              onChange={(e) =>
+                                setStaffDrafts((s) => ({
+                                  ...s,
+                                  [it.id]: { ...s[it.id], indef: e.target.checked },
+                                }))
+                              }
+                            />
+                            <span className="text-stone-700">Indefinite at this price (auto-renew)</span>
+                          </label>
+                          {!staffDrafts[it.id].indef && (
+                            <label className="flex items-center gap-1">
+                              <span className="text-stone-600">Months at this price</span>
+                              <input
+                                type="number"
+                                min={1}
+                                className="w-16 px-2 py-1 rounded border border-stone-200"
+                                value={staffDrafts[it.id].months}
+                                onChange={(e) =>
+                                  setStaffDrafts((s) => ({
+                                    ...s,
+                                    [it.id]: { ...s[it.id], months: e.target.value },
+                                  }))
+                                }
+                              />
+                              <span className="text-xs text-stone-500">then catalog price on renewal</span>
+                            </label>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => saveStaffLinePrice(it)}
+                        disabled={staffPriceSavingId === it.id}
+                        className="px-3 py-1.5 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+                      >
+                        {staffPriceSavingId === it.id ? "Saving…" : "Save price"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => clearStaffLinePrice(it)}
+                        disabled={staffPriceSavingId === it.id}
+                        className="px-3 py-1.5 rounded-lg border border-stone-300 text-stone-700 text-sm hover:bg-white disabled:opacity-50"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

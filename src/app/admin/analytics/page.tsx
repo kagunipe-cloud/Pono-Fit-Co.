@@ -64,6 +64,9 @@ export default function AdminAnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [clearing, setClearing] = useState(false);
+  const [clearMessage, setClearMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,7 +103,30 @@ export default function AdminAnalyticsPage() {
     return () => {
       cancelled = true;
     };
-  }, [router, days]);
+  }, [router, days, refreshTrigger]);
+
+  async function clearOccupancyAnalytics() {
+    if (
+      !confirm(
+        "Delete all Coconut Count entries, occupancy chart snapshots, and door unlock history? This cannot be undone. New data will accumulate with the updated logic."
+      )
+    ) {
+      return;
+    }
+    setClearing(true);
+    setClearMessage(null);
+    try {
+      const res = await fetch("/api/admin/clear-occupancy-analytics", { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "Request failed");
+      setClearMessage("Cleared. Charts will repopulate as people visit and cron runs.");
+      setRefreshTrigger((t) => t + 1);
+    } catch (e) {
+      setClearMessage(e instanceof Error ? e.message : "Failed to clear");
+    } finally {
+      setClearing(false);
+    }
+  }
 
   if (loading) return <div className="p-8 text-stone-500">Loading…</div>;
   if (!data) return <div className="p-8 text-stone-500">Failed to load analytics.</div>;
@@ -141,19 +167,34 @@ export default function AdminAnalyticsPage() {
           Occupancy and usage insights. Add more granular data over time.
           {data.timezone && ` Timezone: ${data.timezone}`}
         </p>
-        <div className="mt-3 flex items-center gap-2">
-          <label className="text-sm text-stone-600">Last</label>
-          <select
-            value={days}
-            onChange={(e) => setDays(parseInt(e.target.value, 10))}
-            className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm"
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-stone-600">Last</label>
+            <select
+              value={days}
+              onChange={(e) => setDays(parseInt(e.target.value, 10))}
+              className="rounded-lg border border-stone-200 px-3 py-1.5 text-sm"
+            >
+              <option value={7}>7 days</option>
+              <option value={14}>14 days</option>
+              <option value={30}>30 days</option>
+              <option value={90}>90 days</option>
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={() => void clearOccupancyAnalytics()}
+            disabled={clearing}
+            className="text-sm px-3 py-1.5 rounded-lg border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
           >
-            <option value={7}>7 days</option>
-            <option value={14}>14 days</option>
-            <option value={30}>30 days</option>
-            <option value={90}>90 days</option>
-          </select>
+            {clearing ? "Clearing…" : "Reset coconut & door analytics data"}
+          </button>
         </div>
+        {clearMessage && (
+          <p className={`mt-2 text-sm ${clearMessage.startsWith("Cleared") ? "text-emerald-700" : "text-red-600"}`}>
+            {clearMessage}
+          </p>
+        )}
       </header>
 
       {todayCheckIns && (

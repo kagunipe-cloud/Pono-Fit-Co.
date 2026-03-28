@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn, ensurePaymentFailuresTable, ensureSalesItemTotalCcFeeColumns, ensureSalesTypeColumn } from "../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn, ensurePaymentFailuresTable, ensureSalesItemTotalCcFeeColumns, ensureSalesTypeColumn, ensureSubscriptionRenewalPromoColumns } from "../../../../lib/db";
 import { grantAccess as kisiGrantAccess } from "../../../../lib/kisi";
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
 import { formatDateTimeInAppTz, todayInAppTz, formatDateForStorage } from "../../../../lib/app-timezone";
@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
   ensureMembersStripeColumn(db);
   ensureMembersAutoRenewColumn(db);
   ensurePaymentFailuresTable(db);
+  ensureSubscriptionRenewalPromoColumns(db);
 
   const tz = getAppTimezone(db);
   const insertFailure = db.prepare(`
@@ -56,6 +57,7 @@ export async function GET(request: NextRequest) {
   // Only auto-renew monthly memberships (not yearly, daily, or other plan types)
   const expiring = db.prepare(`
     SELECT s.subscription_id, s.member_id, s.product_id, s.expiry_date, s.price as sub_price, s.quantity,
+           s.promo_renewals_remaining, s.renewal_price_indefinite,
            p.plan_name, p.price as plan_price, p.length, p.unit
     FROM subscriptions s
     JOIN membership_plans p ON p.product_id = s.product_id
@@ -67,6 +69,8 @@ export async function GET(request: NextRequest) {
     expiry_date: string;
     sub_price: string;
     quantity: number;
+    promo_renewals_remaining: number | null;
+    renewal_price_indefinite: number | null;
     plan_name: string;
     plan_price: string;
     length: string;
@@ -77,7 +81,11 @@ export async function GET(request: NextRequest) {
   const results: { member_id: string; status: "renewed" | "skipped" | "error"; message?: string }[] = [];
 
   for (const sub of expiring) {
-    const amountCents = parsePriceToCents(sub.plan_price) * Math.max(1, sub.quantity);
+    const useNegotiatedPrice =
+      (sub.promo_renewals_remaining != null && sub.promo_renewals_remaining > 0) ||
+      (sub.renewal_price_indefinite ?? 0) === 1;
+    const priceStr = useNegotiatedPrice ? sub.sub_price : sub.plan_price;
+    const amountCents = parsePriceToCents(priceStr) * Math.max(1, sub.quantity);
     const memberRow = db.prepare("SELECT stripe_customer_id, email, first_name, auto_renew FROM members WHERE member_id = ?").get(sub.member_id) as { stripe_customer_id: string | null; email: string; first_name: string | null; auto_renew?: number | null } | undefined;
     if (!memberRow) {
       results.push({ member_id: sub.member_id, status: "skipped", message: "No saved card" });
@@ -160,7 +168,32 @@ export async function GET(request: NextRequest) {
       ensureSalesTypeColumn(db);
       db.exec("BEGIN TRANSACTION");
       try {
-        db.prepare("UPDATE subscriptions SET expiry_date = ?, days_remaining = ? WHERE subscription_id = ?").run(expiryStr, String(daysRemaining), sub.subscription_id);
+        const pr = sub.promo_renewals_remaining;
+        const indef = (sub.renewal_price_indefinite ?? 0) === 1;
+        if (pr != null && pr > 0) {
+          const next = pr - 1;
+          if (next === 0) {
+            db.prepare(
+              `UPDATE subscriptions SET expiry_date = ?, days_remaining = ?, promo_renewals_remaining = NULL, renewal_price_indefinite = 0, price = ? WHERE subscription_id = ?`
+            ).run(expiryStr, String(daysRemaining), sub.plan_price, sub.subscription_id);
+          } else {
+            db.prepare(
+              `UPDATE subscriptions SET expiry_date = ?, days_remaining = ?, promo_renewals_remaining = ? WHERE subscription_id = ?`
+            ).run(expiryStr, String(daysRemaining), next, sub.subscription_id);
+          }
+        } else if (indef) {
+          db.prepare("UPDATE subscriptions SET expiry_date = ?, days_remaining = ? WHERE subscription_id = ?").run(
+            expiryStr,
+            String(daysRemaining),
+            sub.subscription_id
+          );
+        } else {
+          db.prepare("UPDATE subscriptions SET expiry_date = ?, days_remaining = ? WHERE subscription_id = ?").run(
+            expiryStr,
+            String(daysRemaining),
+            sub.subscription_id
+          );
+        }
         const date_time = formatDateTimeInAppTz(new Date(), undefined, tz);
         db.prepare(`
           INSERT INTO sales (sales_id, date_time, member_id, grand_total, tax_amount, item_total, cc_fee, email, status, sale_date, sale_type)

@@ -28,4 +28,24 @@ export function ensureCartTables(db: ReturnType<typeof getDb>) {
   } catch {
     /* already exists */
   }
+  ensureCartLinePriceOverrides(db);
+}
+
+/** Staff-edited line price and (for monthly membership) how long the price applies on auto-renew. */
+export function ensureCartLinePriceOverrides(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE cart_items ADD COLUMN unit_price_override TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE cart_items ADD COLUMN price_override_months INTEGER");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE cart_items ADD COLUMN price_override_indefinite INTEGER");
+  } catch {
+    /* already exists */
+  }
 }

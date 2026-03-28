@@ -287,6 +287,20 @@ export function ensureSubscriptionsSalesIdColumn(db: ReturnType<typeof getDb>) {
   }
 }
 
+/** Staff-negotiated monthly price: remaining renewals at subscriptions.price before reverting to catalog plan price. */
+export function ensureSubscriptionRenewalPromoColumns(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN promo_renewals_remaining INTEGER");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN renewal_price_indefinite INTEGER DEFAULT 0");
+  } catch {
+    /* already exists */
+  }
+}
+
 /** Add waiver columns to members if missing (liability waiver before Kisi access). */
 export function ensureMembersWaiverColumns(db: ReturnType<typeof getDb>) {
   try {
