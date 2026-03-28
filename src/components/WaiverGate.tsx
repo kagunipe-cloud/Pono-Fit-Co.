@@ -63,12 +63,18 @@ export function WaiverGate({ children }: { children: React.ReactNode }) {
           setChecked(true);
           return;
         }
+        const returnTo =
+          typeof window !== "undefined" ? window.location.pathname + window.location.search : pathname ?? "";
+        const redirectQ =
+          returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//") && returnTo !== "/"
+            ? `?redirect=${encodeURIComponent(returnTo)}`
+            : "";
         if (!data.privacy_terms_accepted) {
-          router.replace("/accept-privacy-terms");
+          router.replace(`/accept-privacy-terms${redirectQ}`);
           return;
         }
         if (data.needs_waiver) {
-          router.replace("/sign-waiver-required");
+          router.replace(`/sign-waiver-required${redirectQ}`);
           return;
         }
         const waiverSigned = !!(data.waiver_signed_at ?? "").trim();

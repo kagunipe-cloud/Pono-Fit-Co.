@@ -137,7 +137,15 @@ export default function BuyProductPage() {
     }
   }
 
-  const signupUrl = `/signup?redirect=${encodeURIComponent(config?.browsePath ?? "/member")}`;
+  /** After signup / waiver, land on browse page with optional ?plan= for single-product focus (membership & day-pass). */
+  const browseRedirect =
+    config &&
+    (productType === "membership" || productType === "day-pass") &&
+    productId &&
+    !Number.isNaN(parseInt(productId, 10))
+      ? `${config.browsePath}?plan=${encodeURIComponent(productId)}`
+      : config?.browsePath ?? "/member";
+  const signupUrl = `/signup?redirect=${encodeURIComponent(browseRedirect)}`;
   const loginUrl = `/login?next=${encodeURIComponent(pathname || `/buy/${productType}/${productId}`)}`;
 
   if (loading) {

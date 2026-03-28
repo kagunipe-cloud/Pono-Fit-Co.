@@ -54,17 +54,22 @@ function LoginContent() {
         setError(data.error ?? "Login failed.");
         return;
       }
+      const nextPath = searchParams.get("next")?.trim();
+      const nextSafe = nextPath && nextPath.startsWith("/") && !nextPath.includes("//") ? nextPath : null;
       if (!data.privacy_terms_accepted) {
-        window.location.href = "/accept-privacy-terms";
+        window.location.href = nextSafe
+          ? `/accept-privacy-terms?redirect=${encodeURIComponent(nextSafe)}`
+          : "/accept-privacy-terms";
         return;
       }
       if (data.needs_waiver) {
-        window.location.href = "/sign-waiver-required";
+        window.location.href = nextSafe
+          ? `/sign-waiver-required?redirect=${encodeURIComponent(nextSafe)}`
+          : "/sign-waiver-required";
         return;
       }
-      const nextPath = searchParams.get("next")?.trim();
       const defaultDest = data.role === "Admin" ? "/" : "/member";
-      const dest = nextPath && nextPath.startsWith("/") && !nextPath.includes("//") ? nextPath : defaultDest;
+      const dest = nextSafe ?? defaultDest;
       // Full page redirect so the session cookie is sent on the next request (avoids "sign in twice")
       window.location.href = dest;
     } catch {

@@ -42,6 +42,12 @@ function isMemberPath(pathname: string): boolean {
   return pathname === "/member" || pathname.startsWith("/member/") || pathname === "/sign-waiver-required" || pathname === "/accept-privacy-terms";
 }
 
+/** Cart & Stripe success live under /members/[id]/cart — allow the signed-in member (or staff) without Admin role. */
+function isOwnMemberCartPath(pathname: string, sessionMemberId: string | null): boolean {
+  if (!sessionMemberId) return false;
+  return pathname === `/members/${sessionMemberId}/cart` || pathname === `/members/${sessionMemberId}/cart/success`;
+}
+
 function isPublicPath(pathname: string): boolean {
   const publicPaths = ["/login", "/signup", "/set-password", "/bootstrap", "/install", "/schedule", "/unlock", "/privacy", "/terms", "/sign-waiver"];
   if (publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))) return true;
@@ -65,9 +71,14 @@ export async function middleware(request: NextRequest) {
   const checkRes = await fetch(`${internalOrigin}/api/auth/check-session`, {
     headers: { cookie },
   });
-  const data = (await checkRes.json().catch(() => ({}))) as { ok?: boolean; role?: string };
+  const data = (await checkRes.json().catch(() => ({}))) as { ok?: boolean; role?: string; member_id?: string };
   const ok = data.ok === true;
   const role = data.role ?? "Member";
+  const sessionMemberId = typeof data.member_id === "string" ? data.member_id : null;
+
+  if (ok && isOwnMemberCartPath(pathname, sessionMemberId)) {
+    return NextResponse.next();
+  }
 
   if (isMemberPath(pathname)) {
     if (!ok) {
