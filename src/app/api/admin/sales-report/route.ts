@@ -53,9 +53,12 @@ export async function GET(request: NextRequest) {
       let memAmt = 0;
       let classAmt = 0;
       let ptAmt = 0;
+      let subRows: { price: string | number | null; quantity: string | number | null }[] = [];
+      let clsRows: { price: string | number | null; quantity: string | number | null }[] = [];
+      let ptRows: { price: string | number | null; quantity: string | number | null }[] = [];
 
       try {
-        const subRows = db.prepare(
+        subRows = db.prepare(
           "SELECT price, quantity FROM subscriptions WHERE sales_id = ?"
         ).all(sid) as { price: string | number | null; quantity: string | number | null }[];
         for (const r of subRows) {
@@ -68,7 +71,7 @@ export async function GET(request: NextRequest) {
       }
 
       try {
-        const clsRows = db.prepare(
+        clsRows = db.prepare(
           "SELECT price, quantity FROM class_bookings WHERE sales_id = ?"
         ).all(sid) as { price: string | number | null; quantity: string | number | null }[];
         for (const r of clsRows) {
@@ -81,7 +84,7 @@ export async function GET(request: NextRequest) {
       }
 
       try {
-        const ptRows = db.prepare(
+        ptRows = db.prepare(
           "SELECT price, quantity FROM pt_bookings WHERE sales_id = ?"
         ).all(sid) as { price: string | number | null; quantity: string | number | null }[];
         for (const r of ptRows) {
@@ -94,6 +97,8 @@ export async function GET(request: NextRequest) {
       }
 
       const lineTotal = memAmt + classAmt + ptAmt;
+      const saleType = (sale as { sale_type?: string | null }).sale_type ?? "";
+
       if (lineTotal > 0) {
         const memPct = memAmt / lineTotal;
         const classPct = classAmt / lineTotal;
@@ -104,10 +109,29 @@ export async function GET(request: NextRequest) {
         categoryNetRevenue.Membership += netTotal * memPct;
         categoryNetRevenue.Class += netTotal * classPct;
         categoryNetRevenue.PT += netTotal * ptPct;
-      } else if ((sale as { sale_type?: string | null }).sale_type === "renewal") {
+      } else if (saleType === "renewal") {
         categoryCounts.Membership += 1;
         categoryRevenue.Membership += grandTotal;
         categoryNetRevenue.Membership += netTotal;
+      } else if (saleType === "complimentary") {
+        /** Complimentary rows store price 0 on line items; bucket by what was granted (matches transactions category filters). */
+        if (subRows.length > 0) {
+          categoryCounts.Membership += subRows.length;
+          categoryRevenue.Membership += grandTotal;
+          categoryNetRevenue.Membership += netTotal;
+        } else if (clsRows.length > 0) {
+          categoryCounts.Class += clsRows.length;
+          categoryRevenue.Class += grandTotal;
+          categoryNetRevenue.Class += netTotal;
+        } else if (ptRows.length > 0) {
+          categoryCounts.PT += ptRows.length;
+          categoryRevenue.PT += grandTotal;
+          categoryNetRevenue.PT += netTotal;
+        } else {
+          categoryCounts.Other += 1;
+          categoryRevenue.Other += grandTotal;
+          categoryNetRevenue.Other += netTotal;
+        }
       } else {
         categoryCounts.Other += 1;
         categoryRevenue.Other += grandTotal;
