@@ -428,6 +428,10 @@ export default function MemberWorkoutDetailPage() {
 
   async function finishWorkout() {
     if (!workout) return;
+    const confirmMsg = workout.assigned_by_trainer_member_id
+      ? "Finish this workout and send it to your trainer?"
+      : "Finish this workout and save it to your past workouts?";
+    if (!confirm(confirmMsg)) return;
     setFinishing(true);
     try {
       const res = await fetch(`/api/member/workouts/${id}`, {
