@@ -2,6 +2,7 @@ import { BRAND } from "@/lib/branding";
 import { SettingsProvider } from "@/lib/settings-context";
 import { WaiverGate } from "@/components/WaiverGate";
 import AppShell from "@/components/AppShell";
+import PwaRegister from "@/components/PwaRegister";
 import "./globals.css";
 
 export const metadata = {
@@ -32,6 +33,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-gradient-to-r from-white to-brand-200 text-stone-900 antialiased">
+        <PwaRegister />
         <SettingsProvider>
         <WaiverGate>
           <AppShell>{children}</AppShell>

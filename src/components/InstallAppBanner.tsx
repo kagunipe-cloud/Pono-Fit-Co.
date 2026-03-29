@@ -19,7 +19,7 @@ export default function InstallAppBanner({
   showInstallLink = true,
 }: {
   variant?: "banner" | "inline";
-  /** When true, show "Install app" / "Add to Home Screen" link to /install (for iOS or when prompt not yet available). */
+  /** When true, show link to /install (iOS has no install API; Android may fall back if prompt never fires). */
   showInstallLink?: boolean;
 }) {
   const [mounted, setMounted] = useState(false);
@@ -59,18 +59,17 @@ export default function InstallAppBanner({
     else if (isIOS) setPlatform("ios");
     else setPlatform("other");
 
-    // Only show banner on mobile (optional: show on desktop too with showInstallLink)
-    const isMobile = isAndroid || isIOS || (typeof window !== "undefined" && window.innerWidth < 768);
-    if (!isMobile) {
-      setDismissed(true);
-      return;
+    const isMobile =
+      isAndroid || isIOS || (typeof window !== "undefined" && window.innerWidth < 768);
+    if (isMobile) {
+      setDismissed(false);
     }
-
-    setDismissed(false);
+    /** Desktop: stay hidden until `beforeinstallprompt` (native install sheet). */
 
     const onBeforeInstall = (e: Event) => {
       e.preventDefault();
       setInstallPrompt(e as BeforeInstallPromptEvent);
+      setDismissed(false);
     };
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
     return () => window.removeEventListener("beforeinstallprompt", onBeforeInstall);
@@ -100,15 +99,19 @@ export default function InstallAppBanner({
   if (!mounted || dismissed) return null;
 
   const isBanner = variant === "banner";
-  const showAndroidButton = platform === "android" && installPrompt != null;
+  /** Chromium (Android + desktop): one-tap when beforeinstallprompt fired. */
+  const showNativeInstallButton = installPrompt != null;
   const showIOSLink = platform === "ios" && showInstallLink;
-  const showGenericInstallLink = (platform === "other" || (platform === "android" && !installPrompt)) && showInstallLink;
+  const showGenericInstallLink =
+    showInstallLink &&
+    !showNativeInstallButton &&
+    (platform === "other" || platform === "android");
 
-  if (!showAndroidButton && !showIOSLink && !showGenericInstallLink) return null;
+  if (!showNativeInstallButton && !showIOSLink && !showGenericInstallLink) return null;
 
   const content = (
     <>
-      {showAndroidButton && (
+      {showNativeInstallButton && (
         <button
           data-dumbbell-btn
           type="button"
@@ -116,7 +119,7 @@ export default function InstallAppBanner({
           disabled={installing}
           className="w-full py-2.5 px-4 rounded-lg font-medium text-sm"
         >
-          {installing ? "Opening…" : "Install app"}
+          {installing ? "Opening…" : "Add to Home Screen"}
         </button>
       )}
       {(showIOSLink || showGenericInstallLink) && (
@@ -125,7 +128,7 @@ export default function InstallAppBanner({
           data-dumbbell-btn
           className="block w-full py-2.5 px-4 rounded-lg font-medium text-center text-sm"
         >
-          {platform === "ios" ? "Add to Home Screen" : "Install app"}
+          {platform === "ios" ? "Add to Home Screen" : "Install help"}
         </Link>
       )}
     </>
@@ -142,7 +145,9 @@ export default function InstallAppBanner({
             <p className="text-xs text-stone-500 mt-0.5">
               {platform === "ios"
                 ? "Tap below for quick steps to add this app."
-                : "One tap to install and open like an app."}
+                : installPrompt
+                  ? "Use the button below — same as other apps’ “Add to Home screen” prompts."
+                  : "Opens like an app from your home screen."}
             </p>
             <div className="mt-3 flex flex-col gap-2">
               {content}
