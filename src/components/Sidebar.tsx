@@ -143,6 +143,7 @@ function NavList({
     return (
       <ul className="space-y-0.5">
         <li>{link("/member", "Home", pathname === "/member")}</li>
+        <li>{link("/member/profile", "Profile", pathname === "/member/profile")}</li>
         <li>{link("/member/membership", "My Membership")}</li>
         <li>
           <Link

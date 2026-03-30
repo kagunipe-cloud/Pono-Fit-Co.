@@ -1,5 +1,7 @@
 import nodemailer from "nodemailer";
 import { getDb } from "@/lib/db";
+import { formatDateOnlyInAppTz } from "@/lib/app-timezone";
+import { BRAND } from "@/lib/branding";
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -159,6 +161,127 @@ export async function sendMemberEmail(to: string, subject: string, text: string)
     console.error("[email] sendMemberEmail failed:", msg);
     return { ok: false, error: msg };
   }
+}
+
+/** Format HH:MM or HH:MM:SS for plain-text email (locale 12h). */
+export function formatBookingTimeForEmail(timeRaw: string | null | undefined): string {
+  const t = (timeRaw ?? "").trim();
+  if (!t) return "—";
+  const m = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(t);
+  if (!m) return t;
+  const h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  if (Number.isNaN(h) || Number.isNaN(min)) return t;
+  const d = new Date(2000, 0, 1, h, min, 0);
+  return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+/** Trainer full name from `members.member_id`, or null. */
+export function getTrainerDisplayNameFromMemberId(
+  db: ReturnType<typeof getDb>,
+  trainerMemberId: string | null | undefined
+): string | null {
+  const id = (trainerMemberId ?? "").trim();
+  if (!id) return null;
+  const row = db.prepare("SELECT first_name, last_name FROM members WHERE member_id = ?").get(id) as
+    | { first_name: string | null; last_name: string | null }
+    | undefined;
+  const n = row ? [row.first_name, row.last_name].filter(Boolean).join(" ").trim() : "";
+  return n || null;
+}
+
+/** Default templates (match admin Settings → email defaults when DB empty). */
+const BOOKING_EMAIL_FALLBACK = {
+  initial: {
+    subject: "Booking confirmed: {{session_title}} — {{date}}",
+    body: `Hi{{first_name}},
+
+Your booking is confirmed.
+
+{{session_title}} ({{kind_label}})
+Date: {{date}}
+Time: {{time}}
+Trainer: {{trainer}}
+
+You can view details in the {{brand_short}} app.
+
+— {{brand_name}}`,
+  },
+  trainer_assigned: {
+    subject: "Trainer assigned: {{session_title}} — {{date}}",
+    body: `Hi{{first_name}},
+
+A trainer has been assigned to your session.
+
+{{session_title}} ({{kind_label}})
+Date: {{date}}
+Time: {{time}}
+Trainer: {{trainer}}
+
+You can view details in the {{brand_short}} app.
+
+— {{brand_name}}`,
+  },
+} as const;
+
+/**
+ * Confirmation to the member who was booked (class or PT).
+ * Uses Settings → Email templates when set (`email_booking_confirmation_*` or `email_booking_trainer_assigned_*`).
+ * Placeholders: {{first_name}} (leading space if set), {{session_title}}, {{kind_label}}, {{date}}, {{time}}, {{trainer}}, {{brand_short}}, {{brand_name}}
+ */
+export async function sendMemberBookingConfirmationEmail(params: {
+  to: string;
+  memberFirstName?: string | null;
+  kind: "class" | "pt";
+  sessionTitle: string;
+  dateYmd: string;
+  timeRaw: string;
+  trainerDisplayName: string | null;
+  timeZone: string;
+  /** Use when staff assigns a trainer after an open booking (second email). Falls back to confirmation template if trainer-assigned template is empty. */
+  variant?: "initial" | "trainer_assigned";
+}): Promise<{ ok: boolean; error?: string }> {
+  const dateLine = params.dateYmd.trim()
+    ? formatDateOnlyInAppTz(
+        params.dateYmd,
+        { weekday: "short", month: "short", day: "numeric", year: "numeric" },
+        params.timeZone
+      )
+    : "—";
+  const timeLine = formatBookingTimeForEmail(params.timeRaw);
+  const trainerLine = params.trainerDisplayName?.trim() || "TBD";
+  const kindLabel = params.kind === "class" ? "Class" : "PT session";
+  const variant = params.variant ?? "initial";
+  const fn = params.memberFirstName?.trim() ? ` ${params.memberFirstName.trim()}` : "";
+
+  const vars: Record<string, string> = {
+    first_name: fn,
+    session_title: params.sessionTitle,
+    kind_label: kindLabel,
+    date: dateLine,
+    time: timeLine,
+    trainer: trainerLine,
+    brand_short: BRAND.shortName,
+    brand_name: BRAND.name,
+  };
+
+  const subKey =
+    variant === "trainer_assigned" ? "email_booking_trainer_assigned_subject" : "email_booking_confirmation_subject";
+  const bodyKey =
+    variant === "trainer_assigned" ? "email_booking_trainer_assigned_body" : "email_booking_confirmation_body";
+
+  let subjectTpl = getEmailSetting(subKey);
+  let bodyTpl = getEmailSetting(bodyKey);
+  if (variant === "trainer_assigned") {
+    if (!subjectTpl) subjectTpl = getEmailSetting("email_booking_confirmation_subject");
+    if (!bodyTpl) bodyTpl = getEmailSetting("email_booking_confirmation_body");
+  }
+  if (!subjectTpl) subjectTpl = BOOKING_EMAIL_FALLBACK[variant].subject;
+  if (!bodyTpl) bodyTpl = BOOKING_EMAIL_FALLBACK[variant].body;
+
+  const subject = applyPlaceholders(subjectTpl, vars);
+  const text = applyPlaceholders(bodyTpl, vars);
+  return sendMemberEmail(params.to, subject, text);
 }
 
 /** Send membership expiring in 2 days reminder. Card on file: remind them they're set if card is valid. No card: payment due on expiry date. */

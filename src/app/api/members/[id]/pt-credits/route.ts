@@ -5,7 +5,7 @@ import { getAdminMemberId } from "../../../../../lib/admin";
 
 export const dynamic = "force-dynamic";
 
-/** GET: returns { 30: number, 60: number, 90: number } for the member. Admin only. */
+/** GET: PT credit balances keyed by duration_minutes. Admin only. */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

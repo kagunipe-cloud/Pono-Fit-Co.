@@ -37,7 +37,7 @@ function MemberBookPTContent() {
   const productIdFromUrl = productFromUrl ? parseInt(productFromUrl, 10) : null;
 
   const [memberId, setMemberId] = useState<string | null>(null);
-  const [credits, setCredits] = useState<Record<number, number>>({ 30: 0, 60: 0, 90: 0 });
+  const [credits, setCredits] = useState<Record<number, number>>({});
   const [sessionProducts, setSessionProducts] = useState<PtSessionProduct[]>([]);
   const [trainers, setTrainers] = useState<TrainerOption[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
@@ -54,7 +54,7 @@ function MemberBookPTContent() {
   useEffect(() => {
     Promise.all([
       fetch("/api/auth/member-me").then((r) => (r.ok ? r.json() : null)),
-      fetch("/api/member/pt-credits").then((r) => (r.ok ? r.json() : { 30: 0, 60: 0, 90: 0 })),
+      fetch("/api/member/pt-credits").then((r) => (r.ok ? r.json() : {})),
     ])
       .then(([me, cred]) => {
         if (!me?.member_id) {
@@ -62,7 +62,7 @@ function MemberBookPTContent() {
           return;
         }
         setMemberId(me.member_id);
-        setCredits(cred ?? { 30: 0, 60: 0, 90: 0 });
+        setCredits(cred && typeof cred === "object" ? (cred as Record<number, number>) : {});
       })
       .catch(() => router.replace("/login"));
   }, [router]);
@@ -88,6 +88,14 @@ function MemberBookPTContent() {
     () => (selectedProductId != null ? sessionProducts.find((p) => p.id === selectedProductId) ?? null : null),
     [sessionProducts, selectedProductId]
   );
+
+  const ptCreditsSummary = useMemo(() => {
+    const parts = Object.entries(credits)
+      .filter(([, n]) => n > 0)
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([mins, n]) => `${n}×${mins} min`);
+    return parts.length ? parts.join(", ") : "no PT credits yet";
+  }, [credits]);
 
   const [slotFree, setSlotFree] = useState<boolean | null>(null);
   const slotFromOpenSchedule = slotFromSchedule && !block; // date+time from "Available" (no block)
@@ -307,7 +315,10 @@ function MemberBookPTContent() {
           )}
           <p className="text-stone-600 mb-6">
             {trainers.length > 0 ? (
-              <>After you pick a time on a trainer’s schedule, you can book here with a credit or add to cart. You have <strong>{credits[30]}×30min</strong>, <strong>{credits[60]}×60min</strong>, <strong>{credits[90]}×90min</strong> credits.</>
+              <>
+                After you pick a time on a trainer’s schedule, you can book here with a credit or add to cart. Your PT credits:{" "}
+                <strong>{ptCreditsSummary}</strong>. (Credits are per session length — book a slot that matches the pack you bought.)
+              </>
             ) : (
               <>
                 Pick an{" "}
@@ -317,7 +328,7 @@ function MemberBookPTContent() {
                 >
                   available time on the Schedule
                 </Link>{" "}
-                to book a PT session. You have <strong>{credits[30]}×30min</strong>, <strong>{credits[60]}×60min</strong>, <strong>{credits[90]}×90min</strong> credits.
+                to book a PT session. Your PT credits: <strong>{ptCreditsSummary}</strong>.
               </>
             )}
           </p>

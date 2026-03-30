@@ -7,6 +7,26 @@ import { formatDateTimeInAppTz } from "@/lib/app-timezone";
 import { useAppTimezone } from "@/lib/settings-context";
 
 type Member = Record<string, unknown>;
+
+function buildMemberEditForm(m: Record<string, unknown>) {
+  return {
+    first_name: String(m.first_name ?? ""),
+    last_name: String(m.last_name ?? ""),
+    email: String(m.email ?? ""),
+    phone: String(m.phone ?? ""),
+    role: String(m.role ?? "Member"),
+    join_date: String(m.join_date ?? ""),
+    exp_next_payment_date: String(m.exp_next_payment_date ?? ""),
+    preferred_name: String(m.preferred_name ?? ""),
+    pronouns: String(m.pronouns ?? ""),
+    birthday: String(m.birthday ?? ""),
+    mailing_address: String(m.mailing_address ?? ""),
+    emergency_contact_name: String(m.emergency_contact_name ?? ""),
+    emergency_contact_phone: String(m.emergency_contact_phone ?? ""),
+    emergency_info: String(m.emergency_info ?? ""),
+    spirit_animal: String(m.spirit_animal ?? ""),
+  };
+}
 type LinkedRow = Record<string, unknown>;
 
 export default function MemberDetailPage() {
@@ -87,15 +107,7 @@ export default function MemberDetailPage() {
       }
       const json = await res.json();
       setData(json);
-      setEditForm({
-        first_name: String(json.member?.first_name ?? ""),
-        last_name: String(json.member?.last_name ?? ""),
-        email: String(json.member?.email ?? ""),
-        phone: String(json.member?.phone ?? ""),
-        role: String(json.member?.role ?? "Member"),
-        join_date: String(json.member?.join_date ?? ""),
-        exp_next_payment_date: String(json.member?.exp_next_payment_date ?? ""),
-      });
+      setEditForm(buildMemberEditForm((json.member ?? {}) as Record<string, unknown>));
     } catch {
       setError("Something went wrong");
     } finally {
@@ -281,12 +293,11 @@ export default function MemberDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editForm),
       });
-      if (!res.ok) throw new Error("Failed to update");
       const updated = await res.json();
-      const { kisi_sync_warning, ...memberData } = updated;
-      setData((d) => (d ? { ...d, member: memberData } : null));
+      if (!res.ok) throw new Error("Failed to update");
+      if (updated.kisi_sync_warning) alert(updated.kisi_sync_warning);
       setEditing(false);
-      if (kisi_sync_warning) alert(kisi_sync_warning);
+      await fetchMember();
     } catch {
       setError("Failed to save");
     }
@@ -296,7 +307,8 @@ export default function MemberDetailPage() {
   if (error || !data) return <div className="p-12 text-center text-red-600">{error ?? "Not found"}</div>;
 
   const member = data.member;
-  const name = [member.first_name, member.last_name].filter(Boolean).join(" ") || "Member";
+  const legalName = [member.first_name, member.last_name].filter(Boolean).join(" ") || "Member";
+  const displayHeading = String(member.preferred_name ?? "").trim() || legalName;
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -391,7 +403,10 @@ export default function MemberDetailPage() {
       <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden mb-8">
         <div className="p-6 border-b border-stone-100 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-stone-800">{name}</h1>
+            <h1 className="text-2xl font-bold text-stone-800">{displayHeading}</h1>
+            {String(member.preferred_name ?? "").trim() ? (
+              <p className="text-sm text-stone-500 mt-0.5">Legal name: {legalName}</p>
+            ) : null}
             <p className="text-stone-500 mt-1 font-mono text-sm">{member.member_id as string}</p>
             {isAdmin && (
               <span
@@ -463,7 +478,11 @@ export default function MemberDetailPage() {
                   Save
                 </button>
                 <button
-                  onClick={() => setEditing(false)}
+                  type="button"
+                  onClick={() => {
+                    if (data?.member) setEditForm(buildMemberEditForm(data.member as Record<string, unknown>));
+                    setEditing(false);
+                  }}
                   className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50"
                 >
                   Cancel
@@ -546,6 +565,79 @@ export default function MemberDetailPage() {
                   className="w-full px-3 py-2 rounded-lg border border-stone-200"
                 />
               </div>
+              <div className="sm:col-span-2 border-t border-stone-100 pt-4 mt-1">
+                <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide mb-3">Profile &amp; emergency</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-stone-600 mb-1">Preferred name</label>
+                    <input
+                      value={editForm.preferred_name ?? ""}
+                      onChange={(e) => setEditForm((f) => ({ ...f, preferred_name: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-stone-600 mb-1">Pronouns</label>
+                    <input
+                      value={editForm.pronouns ?? ""}
+                      onChange={(e) => setEditForm((f) => ({ ...f, pronouns: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-stone-600 mb-1">Birthday (YYYY-MM-DD)</label>
+                    <input
+                      type="date"
+                      value={editForm.birthday ?? ""}
+                      onChange={(e) => setEditForm((f) => ({ ...f, birthday: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-stone-600 mb-1">Mailing address</label>
+                    <textarea
+                      value={editForm.mailing_address ?? ""}
+                      onChange={(e) => setEditForm((f) => ({ ...f, mailing_address: e.target.value }))}
+                      rows={2}
+                      className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-stone-600 mb-1">Emergency contact name</label>
+                    <input
+                      value={editForm.emergency_contact_name ?? ""}
+                      onChange={(e) => setEditForm((f) => ({ ...f, emergency_contact_name: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-stone-600 mb-1">Emergency contact phone</label>
+                    <input
+                      type="tel"
+                      value={editForm.emergency_contact_phone ?? ""}
+                      onChange={(e) => setEditForm((f) => ({ ...f, emergency_contact_phone: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-stone-600 mb-1">Medical notes / allergies</label>
+                    <textarea
+                      value={editForm.emergency_info ?? ""}
+                      onChange={(e) => setEditForm((f) => ({ ...f, emergency_info: e.target.value }))}
+                      rows={3}
+                      className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-stone-600 mb-1">Spirit animal</label>
+                    <input
+                      value={editForm.spirit_animal ?? ""}
+                      onChange={(e) => setEditForm((f) => ({ ...f, spirit_animal: e.target.value }))}
+                      className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           ) : (
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
@@ -554,6 +646,54 @@ export default function MemberDetailPage() {
               <div><dt className="text-stone-500">Role</dt><dd><span className={`px-2 py-0.5 rounded text-xs font-medium ${member.role === "Admin" ? "bg-brand-100 text-brand-800" : "bg-stone-100"}`}>{String(member.role ?? "—")}</span></dd></div>
               <div><dt className="text-stone-500">Join date</dt><dd className="font-medium">{String(member.join_date ?? "—")}</dd></div>
               <div><dt className="text-stone-500">Renewal date</dt><dd className="font-medium">{String(member.exp_next_payment_date ?? "—")}</dd></div>
+              <div className="sm:col-span-2 border-t border-stone-100 pt-3 mt-1">
+                <p className="text-xs font-semibold text-stone-500 uppercase tracking-wide">Profile &amp; emergency</p>
+              </div>
+              <div>
+                <dt className="text-stone-500">Preferred name</dt>
+                <dd className="font-medium">{String(member.preferred_name ?? "").trim() || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-stone-500">Pronouns</dt>
+                <dd className="font-medium">{String(member.pronouns ?? "").trim() || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-stone-500">Birthday</dt>
+                <dd className="font-medium">
+                  {(() => {
+                    const t = String(member.birthday ?? "").trim();
+                    if (!t) return "—";
+                    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) {
+                      return new Date(`${t}T12:00:00`).toLocaleDateString("en-US", {
+                        month: "long",
+                        day: "numeric",
+                        year: "numeric",
+                      });
+                    }
+                    return t;
+                  })()}
+                </dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="text-stone-500">Mailing address</dt>
+                <dd className="font-medium whitespace-pre-wrap">{String(member.mailing_address ?? "").trim() || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-stone-500">Emergency contact</dt>
+                <dd className="font-medium">{String(member.emergency_contact_name ?? "").trim() || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-stone-500">Emergency phone</dt>
+                <dd className="font-medium">{String(member.emergency_contact_phone ?? "").trim() || "—"}</dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="text-stone-500">Medical notes / allergies</dt>
+                <dd className="font-medium whitespace-pre-wrap">{String(member.emergency_info ?? "").trim() || "—"}</dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="text-stone-500">Spirit animal</dt>
+                <dd className="font-medium">{String(member.spirit_animal ?? "").trim() || "—"}</dd>
+              </div>
               {isAdmin && (
                 <div>
                   <dt className="text-stone-500">Waiver</dt>

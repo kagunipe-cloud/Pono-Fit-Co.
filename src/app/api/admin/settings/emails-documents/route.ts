@@ -22,6 +22,10 @@ const EMAIL_KEYS = [
   "email_app_download_body",
   "email_liability_waiver_subject",
   "email_liability_waiver_body",
+  "email_booking_confirmation_subject",
+  "email_booking_confirmation_body",
+  "email_booking_trainer_assigned_subject",
+  "email_booking_trainer_assigned_body",
 ] as const;
 
 function getSetting(db: ReturnType<typeof getDb>, key: string): string | null {
@@ -88,6 +92,32 @@ Please sign the liability waiver to activate your door access. Open the link bel
 {{waiver_url}}
 
 — Pono Fit Co.`,
+  email_booking_confirmation_subject: "Booking confirmed: {{session_title}} — {{date}}",
+  email_booking_confirmation_body: `Hi{{first_name}},
+
+Your booking is confirmed.
+
+{{session_title}} ({{kind_label}})
+Date: {{date}}
+Time: {{time}}
+Trainer: {{trainer}}
+
+You can view details in the {{brand_short}} app.
+
+— {{brand_name}}`,
+  email_booking_trainer_assigned_subject: "Trainer assigned: {{session_title}} — {{date}}",
+  email_booking_trainer_assigned_body: `Hi{{first_name}},
+
+A trainer has been assigned to your session.
+
+{{session_title}} ({{kind_label}})
+Date: {{date}}
+Time: {{time}}
+Trainer: {{trainer}}
+
+You can view details in the {{brand_short}} app.
+
+— {{brand_name}}`,
   document_privacy_default: "Built-in privacy policy (see /privacy page when no custom content).",
   document_terms_default: "Built-in terms of service (see /terms page when no custom content).",
   document_gym_waiver_default: "waiver.pdf from public folder (or custom upload/text above).",

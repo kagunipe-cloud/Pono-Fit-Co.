@@ -33,6 +33,10 @@ export default function EmailsDocumentsPage() {
   const [emailAppDownloadBody, setEmailAppDownloadBody] = useState("");
   const [emailLiabilityWaiverSubject, setEmailLiabilityWaiverSubject] = useState("");
   const [emailLiabilityWaiverBody, setEmailLiabilityWaiverBody] = useState("");
+  const [emailBookingConfirmationSubject, setEmailBookingConfirmationSubject] = useState("");
+  const [emailBookingConfirmationBody, setEmailBookingConfirmationBody] = useState("");
+  const [emailBookingTrainerAssignedSubject, setEmailBookingTrainerAssignedSubject] = useState("");
+  const [emailBookingTrainerAssignedBody, setEmailBookingTrainerAssignedBody] = useState("");
   const [defaults, setDefaults] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -55,6 +59,10 @@ export default function EmailsDocumentsPage() {
           setEmailAppDownloadBody(data.email_app_download_body ?? "");
           setEmailLiabilityWaiverSubject(data.email_liability_waiver_subject ?? "");
           setEmailLiabilityWaiverBody(data.email_liability_waiver_body ?? "");
+          setEmailBookingConfirmationSubject(data.email_booking_confirmation_subject ?? "");
+          setEmailBookingConfirmationBody(data.email_booking_confirmation_body ?? "");
+          setEmailBookingTrainerAssignedSubject(data.email_booking_trainer_assigned_subject ?? "");
+          setEmailBookingTrainerAssignedBody(data.email_booking_trainer_assigned_body ?? "");
         }
       })
       .catch(() => {})
@@ -84,6 +92,10 @@ export default function EmailsDocumentsPage() {
           email_app_download_body: emailAppDownloadBody || null,
           email_liability_waiver_subject: emailLiabilityWaiverSubject || null,
           email_liability_waiver_body: emailLiabilityWaiverBody || null,
+          email_booking_confirmation_subject: emailBookingConfirmationSubject || null,
+          email_booking_confirmation_body: emailBookingConfirmationBody || null,
+          email_booking_trainer_assigned_subject: emailBookingTrainerAssignedSubject || null,
+          email_booking_trainer_assigned_body: emailBookingTrainerAssignedBody || null,
         }),
       });
       const data = await res.json();
@@ -255,7 +267,7 @@ export default function EmailsDocumentsPage() {
           <section className="space-y-6">
             <h2 className="text-lg font-semibold text-stone-800">Email Templates</h2>
             <p className="text-sm text-stone-500">
-              Placeholders: {"{{first_name}}"}, {"{{member_id}}"}, {"{{email}}"}, {"{{origin}}"}, {"{{install_url}}"}, {"{{set_password_url}}"}, {"{{expiry_date}}"}, {"{{waiver_url}}"}, {"{{card_message}}"} (for membership expiry).
+              Placeholders: {"{{first_name}}"}, {"{{member_id}}"}, {"{{email}}"}, {"{{origin}}"}, {"{{install_url}}"}, {"{{set_password_url}}"}, {"{{expiry_date}}"}, {"{{waiver_url}}"}, {"{{card_message}}"} (membership expiry), and for booking emails: {"{{session_title}}"}, {"{{kind_label}}"}, {"{{date}}"}, {"{{time}}"}, {"{{trainer}}"}, {"{{brand_short}}"}, {"{{brand_name}}"}.
             </p>
 
             <div className="border border-stone-200 rounded-lg p-4 space-y-3">
@@ -352,6 +364,78 @@ export default function EmailsDocumentsPage() {
                   <details className="mt-2">
                     <summary className="text-xs text-stone-500 cursor-pointer hover:text-stone-700">Show default body</summary>
                     <pre className="mt-1 p-3 rounded-lg bg-stone-50 border border-stone-100 text-xs text-stone-600 overflow-x-auto whitespace-pre-wrap font-mono">{defaults.email_app_download_body}</pre>
+                  </details>
+                )}
+              </div>
+            </div>
+
+            <div className="border border-stone-200 rounded-lg p-4 space-y-3">
+              <h3 className="font-semibold text-stone-800">Booking confirmation (class &amp; PT)</h3>
+              <p className="text-sm text-stone-500">
+                Sent when a member books. Trainer may show as TBD for open PT slots until staff assigns someone.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-1">Subject</label>
+                <input
+                  type="text"
+                  value={emailBookingConfirmationSubject}
+                  onChange={(e) => setEmailBookingConfirmationSubject(e.target.value)}
+                  placeholder="Leave blank to use default"
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                />
+                {defaults.email_booking_confirmation_subject && (
+                  <p className="mt-1 text-xs text-stone-500">Default: {defaults.email_booking_confirmation_subject}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-1">Body</label>
+                <textarea
+                  value={emailBookingConfirmationBody}
+                  onChange={(e) => setEmailBookingConfirmationBody(e.target.value)}
+                  rows={10}
+                  placeholder="Leave blank to use default"
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200 font-mono text-sm"
+                />
+                {defaults.email_booking_confirmation_body && (
+                  <details className="mt-2">
+                    <summary className="text-xs text-stone-500 cursor-pointer hover:text-stone-700">Show default body</summary>
+                    <pre className="mt-1 p-3 rounded-lg bg-stone-50 border border-stone-100 text-xs text-stone-600 overflow-x-auto whitespace-pre-wrap font-mono">{defaults.email_booking_confirmation_body}</pre>
+                  </details>
+                )}
+              </div>
+            </div>
+
+            <div className="border border-stone-200 rounded-lg p-4 space-y-3">
+              <h3 className="font-semibold text-stone-800">Trainer assigned (open PT follow-up)</h3>
+              <p className="text-sm text-stone-500">
+                Sent when staff assigns a trainer to an open PT booking the member already holds. If you leave these blank, the booking confirmation template above is used.
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-1">Subject</label>
+                <input
+                  type="text"
+                  value={emailBookingTrainerAssignedSubject}
+                  onChange={(e) => setEmailBookingTrainerAssignedSubject(e.target.value)}
+                  placeholder="Leave blank to use default"
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                />
+                {defaults.email_booking_trainer_assigned_subject && (
+                  <p className="mt-1 text-xs text-stone-500">Default: {defaults.email_booking_trainer_assigned_subject}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-1">Body</label>
+                <textarea
+                  value={emailBookingTrainerAssignedBody}
+                  onChange={(e) => setEmailBookingTrainerAssignedBody(e.target.value)}
+                  rows={10}
+                  placeholder="Leave blank to use default"
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200 font-mono text-sm"
+                />
+                {defaults.email_booking_trainer_assigned_body && (
+                  <details className="mt-2">
+                    <summary className="text-xs text-stone-500 cursor-pointer hover:text-stone-700">Show default body</summary>
+                    <pre className="mt-1 p-3 rounded-lg bg-stone-50 border border-stone-100 text-xs text-stone-600 overflow-x-auto whitespace-pre-wrap font-mono">{defaults.email_booking_trainer_assigned_body}</pre>
                   </details>
                 )}
               </div>

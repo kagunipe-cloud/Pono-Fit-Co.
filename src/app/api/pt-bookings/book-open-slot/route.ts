@@ -1,12 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "../../../../lib/db";
+import { getDb, getAppTimezone } from "../../../../lib/db";
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { getAdminMemberId } from "../../../../lib/admin";
 import { ensurePTSlotTables, getPTCreditBalance } from "../../../../lib/pt-slots";
 import { isPTBookingSlotFree } from "../../../../lib/schedule-conflicts";
 import { timeToMinutes } from "../../../../lib/pt-slots";
-import { sendStaffEmail, sendMemberEmail } from "../../../../lib/email";
+import {
+  sendStaffEmail,
+  sendMemberEmail,
+  sendMemberBookingConfirmationEmail,
+  getTrainerDisplayNameFromMemberId,
+} from "../../../../lib/email";
 import { ensureTrainerClient, getTrainerMemberIdByDisplayName } from "../../../../lib/trainer-clients";
+
+function trainerDisplayForOpen(
+  db: ReturnType<typeof getDb>,
+  trainerMemberId: string | null,
+  trainerDisplayFromSession: string | null
+): string | null {
+  const fromMember = getTrainerDisplayNameFromMemberId(db, trainerMemberId);
+  if (fromMember) return fromMember;
+  const t = (trainerDisplayFromSession ?? "").trim();
+  return t || null;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -119,6 +135,22 @@ export async function POST(request: NextRequest) {
           const trainerBody = `${memberName} booked ${displaySessionName} with you on ${whenStr}.`;
           sendMemberEmail(trainerEmail, trainerSubject, trainerBody).catch(() => {});
         }
+      }
+
+      const memberEmail = memberRow?.email?.trim();
+      if (memberEmail) {
+        const tz = getAppTimezone(db);
+        const trainerDisplay = trainerDisplayForOpen(db, trainerMemberId, session.trainer);
+        sendMemberBookingConfirmationEmail({
+          to: memberEmail,
+          memberFirstName: memberRow?.first_name,
+          kind: "pt",
+          sessionTitle: displaySessionName,
+          dateYmd: occurrence_date,
+          timeRaw: start_time,
+          trainerDisplayName: trainerDisplay,
+          timeZone: tz,
+        }).catch(() => {});
       }
     } catch {
       // ignore email failures

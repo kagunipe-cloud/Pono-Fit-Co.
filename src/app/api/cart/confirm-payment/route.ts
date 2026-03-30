@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn, ensureSalesStripePaymentIntentColumn, ensureSalesPromoCodeColumn, ensureSalesItemTotalCcFeeColumns, ensureSubscriptionRenewalPromoColumns } from "../../../../lib/db";
 import { ensureCartTables } from "../../../../lib/cart";
 import { getEffectiveUnitPriceString } from "../../../../lib/cart-line-prices";
-import { sendPostPurchaseEmail, sendStaffEmail, sendMemberEmail } from "../../../../lib/email";
+import {
+  sendPostPurchaseEmail,
+  sendStaffEmail,
+  sendMemberEmail,
+  sendMemberBookingConfirmationEmail,
+  getTrainerDisplayNameFromMemberId,
+} from "../../../../lib/email";
 import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../lib/kisi";
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
 import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
@@ -198,7 +204,7 @@ export async function POST(request: NextRequest) {
     }[] = [];
     const ptBookingEvents: {
       member_id: string;
-      trainerName?: string | null;
+      trainerName: string | null;
       session_name: string;
       date: string;
       time: string;
@@ -281,6 +287,15 @@ export async function POST(request: NextRequest) {
               db.prepare(
                 "INSERT INTO pt_open_bookings (member_id, occurrence_date, start_time, duration_minutes, pt_session_id, payment_type, trainer_member_id) VALUES (?, ?, ?, ?, ?, 'paid', ?)"
               ).run(member_id, slot.date, slot.start_time, slot.duration_minutes, session.id, trainerMemberId);
+              const trainerDisplayForMember =
+                getTrainerDisplayNameFromMemberId(db, trainerMemberId) || (session.trainer ?? "").trim() || null;
+              ptBookingEvents.push({
+                member_id,
+                session_name: session.session_name || `${slot.duration_minutes} min PT`,
+                date: slot.date,
+                time: slot.start_time,
+                trainerName: trainerDisplayForMember,
+              });
               if (trainerMemberId) {
                 ensureTrainerClient(db, trainerMemberId, member_id);
                 const memberRow = db.prepare("SELECT first_name, last_name FROM members WHERE member_id = ?").get(member_id) as { first_name: string | null; last_name: string | null } | undefined;
@@ -484,6 +499,40 @@ export async function POST(request: NextRequest) {
       // Fire-and-forget booking notification emails after commit
       (async () => {
         try {
+          const memberEmail = memberRow?.email?.trim();
+          if (memberEmail && (classBookingEvents.length > 0 || ptBookingEvents.length > 0)) {
+            const dbb = getDb();
+            try {
+              for (const ev of classBookingEvents) {
+                const trainerDisplay = getTrainerDisplayNameFromMemberId(dbb, ev.trainer_member_id);
+                await sendMemberBookingConfirmationEmail({
+                  to: memberEmail,
+                  memberFirstName: memberRow?.first_name,
+                  kind: "class",
+                  sessionTitle: ev.class_name,
+                  dateYmd: ev.date,
+                  timeRaw: ev.time,
+                  trainerDisplayName: trainerDisplay,
+                  timeZone: tz,
+                });
+              }
+              for (const ev of ptBookingEvents) {
+                await sendMemberBookingConfirmationEmail({
+                  to: memberEmail,
+                  memberFirstName: memberRow?.first_name,
+                  kind: "pt",
+                  sessionTitle: ev.session_name,
+                  dateYmd: ev.date,
+                  timeRaw: ev.time,
+                  trainerDisplayName: ev.trainerName,
+                  timeZone: tz,
+                });
+              }
+            } finally {
+              dbb.close();
+            }
+          }
+
           const memberName = memberRow ? [memberRow.first_name, memberRow.last_name].filter(Boolean).join(" ").trim() || member_id : member_id;
           // Class bookings
           for (const ev of classBookingEvents) {

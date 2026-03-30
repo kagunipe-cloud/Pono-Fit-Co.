@@ -157,6 +157,7 @@ export function getDb() {
   ensureSubscriptionsSalesIdColumn(db);
   ensureMembersWaiverColumns(db);
   ensureMembersPhoneColumn(db);
+  ensureMembersProfileColumns(db);
   ensureMembersCreatedAtColumn(db);
   ensurePaymentFailuresTable(db);
   ensureMembersMemberIdUnique(db);
@@ -340,6 +341,27 @@ export function ensureMembersPhoneColumn(db: ReturnType<typeof getDb>) {
     db.exec("ALTER TABLE members ADD COLUMN phone TEXT");
   } catch {
     // Column already exists
+  }
+}
+
+/** Member-editable profile: emergency contacts, spirit animal, preferred name, etc. */
+export function ensureMembersProfileColumns(db: ReturnType<typeof getDb>) {
+  const cols = [
+    "preferred_name TEXT",
+    "emergency_contact_name TEXT",
+    "emergency_contact_phone TEXT",
+    "emergency_info TEXT",
+    "spirit_animal TEXT",
+    "pronouns TEXT",
+    "birthday TEXT",
+    "mailing_address TEXT",
+  ];
+  for (const col of cols) {
+    try {
+      db.exec(`ALTER TABLE members ADD COLUMN ${col}`);
+    } catch {
+      /* already exists */
+    }
   }
 }
 

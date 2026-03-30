@@ -103,6 +103,15 @@ export default function MemberHomePage() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Link
+          href="/member/profile"
+          className="block p-4 rounded-xl border border-brand-200 bg-brand-50 hover:bg-brand-100 transition-colors"
+        >
+          <h3 className="font-semibold text-brand-gray">Profile</h3>
+          <p className="text-sm text-brand-gray mt-1">
+            Name, contact, emergency info, spirit animal, password
+          </p>
+        </Link>
+        <Link
           href="/member/membership"
           className="block p-4 rounded-xl border border-brand-200 bg-brand-50 hover:bg-brand-100 transition-colors"
         >

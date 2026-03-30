@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "../../../../lib/db";
+import { getDb, getAppTimezone } from "../../../../lib/db";
 import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../lib/recurring-classes";
 import { getMemberIdFromSession } from "../../../../lib/session";
-import { sendStaffEmail, sendMemberEmail } from "../../../../lib/email";
+import {
+  sendStaffEmail,
+  sendMemberEmail,
+  sendMemberBookingConfirmationEmail,
+  getTrainerDisplayNameFromMemberId,
+} from "../../../../lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -89,6 +94,22 @@ export async function POST(request: NextRequest) {
           const trainerBody = `${memberName} booked your class "${className}" on ${whenStr || occurrence.occurrence_date}.`;
           sendMemberEmail(trainerEmail, trainerSubject, trainerBody).catch(() => {});
         }
+      }
+
+      const memberEmail = memberRow?.email?.trim();
+      if (memberEmail) {
+        const tz = getAppTimezone(db);
+        const trainerDisplay = getTrainerDisplayNameFromMemberId(db, occurrence.trainer_member_id);
+        sendMemberBookingConfirmationEmail({
+          to: memberEmail,
+          memberFirstName: memberRow?.first_name,
+          kind: "class",
+          sessionTitle: className,
+          dateYmd: occurrence.occurrence_date,
+          timeRaw: occurrence.occurrence_time ?? "",
+          trainerDisplayName: trainerDisplay,
+          timeZone: tz,
+        }).catch(() => {});
       }
     } catch {
       // Don't block booking on email issues

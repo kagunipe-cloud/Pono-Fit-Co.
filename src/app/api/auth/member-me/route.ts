@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDb } from "../../../../lib/db";
+import { getDb, ensureMembersProfileColumns } from "../../../../lib/db";
 import { getMemberIdFromSession } from "../../../../lib/session";
 
 export const dynamic = "force-dynamic";
@@ -32,12 +32,14 @@ export async function GET() {
     }
 
     const db = getDb();
+    ensureMembersProfileColumns(db);
     const member = db.prepare(
-      "SELECT member_id, first_name, last_name, email, role, waiver_signed_at, privacy_terms_accepted_at FROM members WHERE member_id = ?"
+      "SELECT member_id, first_name, last_name, preferred_name, email, role, waiver_signed_at, privacy_terms_accepted_at FROM members WHERE member_id = ?"
     ).get(memberId) as {
       member_id: string;
       first_name: string | null;
       last_name: string | null;
+      preferred_name: string | null;
       email: string | null;
       role: string | null;
       waiver_signed_at: string | null;
@@ -62,12 +64,15 @@ export async function GET() {
 
     db.close();
 
+    const legalName = [member.first_name, member.last_name].filter(Boolean).join(" ") || "Member";
+    const displayName = (member.preferred_name ?? "").trim() || legalName;
+
     return NextResponse.json({
       member_id: member.member_id,
       email: member.email,
       first_name: member.first_name,
       last_name: member.last_name,
-      name: [member.first_name, member.last_name].filter(Boolean).join(" ") || "Member",
+      name: displayName,
       role: member.role ?? "Member",
       waiver_signed_at: member.waiver_signed_at ?? null,
       privacy_terms_accepted_at: member.privacy_terms_accepted_at ?? null,

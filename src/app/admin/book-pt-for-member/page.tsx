@@ -33,7 +33,7 @@ function AdminBookPTForMemberContent() {
   const [useCreditSubmitting, setUseCreditSubmitting] = useState(false);
   const [payOnArrivalSubmitting, setPayOnArrivalSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [credits, setCredits] = useState<Record<number, number>>({ 30: 0, 60: 0, 90: 0 });
+  const [credits, setCredits] = useState<Record<number, number>>({});
 
   useEffect(() => {
     fetch("/api/members")
@@ -67,17 +67,22 @@ function AdminBookPTForMemberContent() {
 
   useEffect(() => {
     if (!selectedMemberId) {
-      setCredits({ 30: 0, 60: 0, 90: 0 });
+      setCredits({});
       return;
     }
     fetch(`/api/members/${encodeURIComponent(selectedMemberId)}/pt-credits`)
-      .then((r) => (r.ok ? r.json() : { 30: 0, 60: 0, 90: 0 }))
-      .then((b) => setCredits(b ?? { 30: 0, 60: 0, 90: 0 }))
-      .catch(() => setCredits({ 30: 0, 60: 0, 90: 0 }));
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((b) => setCredits(b && typeof b === "object" ? (b as Record<number, number>) : {}))
+      .catch(() => setCredits({}));
   }, [selectedMemberId]);
 
   const duration = selectedSession?.duration_minutes ?? 60;
-  const hasCredit = (credits[duration as keyof typeof credits] ?? 0) >= 1;
+  const hasCredit = (credits[duration] ?? 0) >= 1;
+  const ptCreditSummary = Object.entries(credits)
+    .filter(([, n]) => n > 0)
+    .sort(([a], [b]) => Number(a) - Number(b))
+    .map(([mins, n]) => `${n}×${mins} min`)
+    .join(", ");
 
   async function handleUseCredit() {
     if (!selectedMemberId || !selectedSessionId || !date || !startTime) {
@@ -335,9 +340,17 @@ function AdminBookPTForMemberContent() {
         </Link>
       </div>
 
-      <p className="mt-4 text-stone-500 text-xs">
-        {hasCredit ? `Member has ${credits[duration as keyof typeof credits] ?? 0}×${duration}-min credit(s). ` : ""}
-        &quot;Pay on arrival&quot; holds the slot (red on schedule); they pay when they arrive. &quot;Add to cart&quot; charges now.
+      <p className="mt-4 text-stone-500 text-xs space-y-1">
+        {hasCredit ? (
+          <span className="block">Member has {credits[duration]}×{duration}-min credit(s). </span>
+        ) : selectedSession && ptCreditSummary ? (
+          <span className="block text-amber-800">
+            PT credits on file ({ptCreditSummary}) don&apos;t match this session length ({duration} min). Credits are per duration — choose a session type with the same length as the pack they bought, or use Pay on arrival / Add to cart.
+          </span>
+        ) : null}
+        <span className="block">
+          &quot;Pay on arrival&quot; holds the slot (red on schedule); they pay when they arrive. &quot;Add to cart&quot; charges now.
+        </span>
       </p>
     </div>
   );

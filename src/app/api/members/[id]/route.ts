@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, expiryDateSortableSql, ensureMembersAutoRenewColumn } from "../../../../lib/db";
+import { getDb, expiryDateSortableSql, ensureMembersAutoRenewColumn, ensureMembersProfileColumns } from "../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { updateKisiUser, ensureKisiUser } from "../../../../lib/kisi";
+import { parseBirthday } from "../../../../lib/member-birthday";
 
 export const dynamic = "force-dynamic";
 
@@ -17,14 +18,17 @@ export async function GET(
   try {
     const db = getDb();
     ensureMembersAutoRenewColumn(db);
+    ensureMembersProfileColumns(db);
 
     // If id contains non-digits (e.g. "103eec15"), treat ONLY as member_id. Otherwise parseInt("103eec15")→103
     // would incorrectly match member id=103 (Colin) instead of member_id="103eec15" (DC ACRES).
     const isPurelyNumeric = /^\d+$/.test(id);
     const memberStmt = db.prepare(`
-      SELECT m.id, m.member_id, m.first_name, m.last_name, m.email, m.phone, m.kisi_id, m.kisi_group_id, m.join_date,
+      SELECT m.id, m.member_id, m.first_name, m.last_name, m.preferred_name, m.email, m.phone, m.kisi_id, m.kisi_group_id, m.join_date,
         COALESCE(m.exp_next_payment_date, (SELECT s.expiry_date FROM subscriptions s WHERE s.member_id = m.member_id AND s.status = 'Active' ORDER BY ${expiryDateSortableSql("s.expiry_date")} DESC LIMIT 1)) AS exp_next_payment_date,
-        m.role, m.created_at, m.waiver_signed_at, m.stripe_customer_id, m.auto_renew
+        m.role, m.created_at, m.waiver_signed_at, m.stripe_customer_id, m.auto_renew,
+        m.emergency_contact_name, m.emergency_contact_phone, m.emergency_info, m.spirit_animal,
+        m.pronouns, m.birthday, m.mailing_address
       FROM members m WHERE ${isPurelyNumeric ? "m.id = ? OR m.member_id = ?" : "m.member_id = ?"}
     `);
     const member = (isPurelyNumeric
@@ -126,6 +130,7 @@ export async function PATCH(
 
   try {
     const db = getDb();
+    ensureMembersProfileColumns(db);
     const isPurelyNumeric = /^\d+$/.test(id);
     const existing = (isPurelyNumeric
       ? db.prepare("SELECT id FROM members WHERE id = ? OR member_id = ?").get(parseInt(id, 10), id)
@@ -136,7 +141,16 @@ export async function PATCH(
     }
     const memberId = existing.id;
 
-    const body = await request.json();
+    const body = await request.json() as Record<string, unknown>;
+    if (body.birthday !== undefined) {
+      const r = parseBirthday(String(body.birthday ?? ""));
+      if (!r.ok) {
+        db.close();
+        return NextResponse.json({ error: r.message }, { status: 400 });
+      }
+      body.birthday = r.value;
+    }
+
     const updates: string[] = [];
     const values: unknown[] = [];
 
@@ -150,10 +164,23 @@ export async function PATCH(
       "join_date",
       "exp_next_payment_date",
       "role",
+      "preferred_name",
+      "emergency_contact_name",
+      "emergency_contact_phone",
+      "emergency_info",
+      "spirit_animal",
+      "pronouns",
+      "birthday",
+      "mailing_address",
     ] as const;
     for (const field of fields) {
       if (body[field] !== undefined) {
-        const val = typeof body[field] === "string" ? body[field].trim() || null : body[field];
+        const val =
+          field === "birthday"
+            ? (body.birthday as string | null)
+            : typeof body[field] === "string"
+              ? (body[field] as string).trim() || null
+              : body[field];
         if (field === "email" && (val == null || val === "")) {
           db.close();
           return NextResponse.json(
@@ -176,8 +203,20 @@ export async function PATCH(
     `);
     stmt.run(...values);
     const row = db.prepare(
-      "SELECT id, member_id, first_name, last_name, email, phone, kisi_id, kisi_group_id, join_date, exp_next_payment_date, role, created_at FROM members WHERE id = ?"
-    ).get(memberId) as { id: number; member_id: string; first_name: string | null; last_name: string | null; email: string | null; phone: string | null; kisi_id: string | null } | undefined;
+      `SELECT id, member_id, first_name, last_name, preferred_name, email, phone, kisi_id, kisi_group_id, join_date, exp_next_payment_date, role, created_at,
+              waiver_signed_at, stripe_customer_id, auto_renew,
+              emergency_contact_name, emergency_contact_phone, emergency_info, spirit_animal,
+              pronouns, birthday, mailing_address
+       FROM members WHERE id = ?`
+    ).get(memberId) as {
+      id: number;
+      member_id: string;
+      first_name: string | null;
+      last_name: string | null;
+      email: string | null;
+      phone: string | null;
+      kisi_id: string | null;
+    } | undefined;
 
     // Sync email/name to Kisi regardless of current door access (handles cancel-and-return members)
     const profileChanged = body.email !== undefined || body.first_name !== undefined || body.last_name !== undefined;

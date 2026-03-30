@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "../../../../lib/db";
+import { getDb, getAppTimezone } from "../../../../lib/db";
 import { getAdminMemberId } from "../../../../lib/admin";
 import { ensurePTSlotTables, reservedMinutes } from "../../../../lib/pt-slots";
 import { ensureTrainerClient } from "../../../../lib/trainer-clients";
 import { getBlocksInRange, getBookingsForBlock, getFreeIntervals } from "../../../../lib/pt-availability";
 import { timeToMinutes } from "../../../../lib/pt-slots";
-import { sendMemberEmail } from "../../../../lib/email";
+import {
+  sendMemberEmail,
+  sendMemberBookingConfirmationEmail,
+  getTrainerDisplayNameFromMemberId,
+} from "../../../../lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -101,7 +105,11 @@ export async function POST(request: NextRequest) {
     db.prepare("DELETE FROM pt_open_bookings WHERE id = ?").run(open_booking_id);
 
     try {
-      const memberRow = db.prepare("SELECT first_name, last_name FROM members WHERE member_id = ?").get(member_id) as { first_name: string | null; last_name: string | null } | undefined;
+      const memberRow = db.prepare("SELECT email, first_name, last_name FROM members WHERE member_id = ?").get(member_id) as {
+        email: string | null;
+        first_name: string | null;
+        last_name: string | null;
+      } | undefined;
       const trainerRow = db.prepare("SELECT email, first_name, last_name FROM members WHERE member_id = ?").get(trainer_member_id) as { email: string | null; first_name: string | null; last_name: string | null } | undefined;
       const memberName = memberRow ? [memberRow.first_name, memberRow.last_name].filter(Boolean).join(" ").trim() || "A client" : "A client";
       const trainerEmail = trainerRow?.email?.trim();
@@ -109,6 +117,22 @@ export async function POST(request: NextRequest) {
         const subject = `PT session assigned: ${memberName} — ${open.occurrence_date} at ${open.start_time}`;
         const text = `You've been assigned a PT session with ${memberName} on ${open.occurrence_date} at ${open.start_time}.`;
         sendMemberEmail(trainerEmail, subject, text).catch(() => {});
+      }
+      const memberEmail = memberRow?.email?.trim();
+      if (memberEmail) {
+        const tz = getAppTimezone(db);
+        const trainerDisplay = getTrainerDisplayNameFromMemberId(db, trainer_member_id);
+        sendMemberBookingConfirmationEmail({
+          to: memberEmail,
+          memberFirstName: memberRow?.first_name,
+          kind: "pt",
+          sessionTitle: `${session_duration_minutes} min PT`,
+          dateYmd: open.occurrence_date,
+          timeRaw: open.start_time,
+          trainerDisplayName: trainerDisplay,
+          timeZone: tz,
+          variant: "trainer_assigned",
+        }).catch(() => {});
       }
     } catch {
       /* ignore email errors */

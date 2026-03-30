@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "../../../../lib/db";
+import { getDb, getAppTimezone } from "../../../../lib/db";
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { getAdminMemberId } from "../../../../lib/admin";
 import { ensurePTSlotTables, getPTCreditBalance, reservedMinutes } from "../../../../lib/pt-slots";
 import { ensureTrainerClient } from "../../../../lib/trainer-clients";
 import { getBlocksInRange, getFreeIntervals, getBookingsForBlock } from "../../../../lib/pt-availability";
 import { timeToMinutes } from "../../../../lib/pt-slots";
-import { sendStaffEmail, sendMemberEmail } from "../../../../lib/email";
+import {
+  sendStaffEmail,
+  sendMemberEmail,
+  sendMemberBookingConfirmationEmail,
+  getTrainerDisplayNameFromMemberId,
+} from "../../../../lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -119,6 +124,23 @@ export async function POST(request: NextRequest) {
           const trainerBody = `${memberName} booked a ${session_duration_minutes}-minute PT session with you on ${whenStr}.`;
           sendMemberEmail(trainerEmail, trainerSubject, trainerBody).catch(() => {});
         }
+      }
+
+      const memberEmail = memberRow?.email?.trim();
+      if (memberEmail) {
+        const tz = getAppTimezone(db);
+        const trainerDisplay =
+          (block.trainer ?? "").trim() || getTrainerDisplayNameFromMemberId(db, block.trainer_member_id);
+        sendMemberBookingConfirmationEmail({
+          to: memberEmail,
+          memberFirstName: memberRow?.first_name,
+          kind: "pt",
+          sessionTitle: `${session_duration_minutes} min PT with ${block.trainer}`,
+          dateYmd: occurrence_date,
+          timeRaw: start_time,
+          trainerDisplayName: trainerDisplay,
+          timeZone: tz,
+        }).catch(() => {});
       }
     } catch {
       // ignore email errors

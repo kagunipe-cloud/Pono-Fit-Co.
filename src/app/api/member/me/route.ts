@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensureMembersAutoRenewColumn } from "../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersAutoRenewColumn, ensureMembersProfileColumns } from "../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../lib/recurring-classes";
 import { getMemberIdFromSession } from "../../../../lib/session";
@@ -17,9 +17,18 @@ export async function GET() {
 
     const db = getDb();
     ensureMembersAutoRenewColumn(db);
+    ensureMembersProfileColumns(db);
     const member = db.prepare(
-      "SELECT member_id, first_name, last_name, email, stripe_customer_id, auto_renew FROM members WHERE member_id = ?"
-    ).get(memberId) as { member_id: string; first_name: string | null; last_name: string | null; email: string | null; stripe_customer_id: string | null; auto_renew?: number | null } | undefined;
+      "SELECT member_id, first_name, last_name, preferred_name, email, stripe_customer_id, auto_renew FROM members WHERE member_id = ?"
+    ).get(memberId) as {
+      member_id: string;
+      first_name: string | null;
+      last_name: string | null;
+      preferred_name: string | null;
+      email: string | null;
+      stripe_customer_id: string | null;
+      auto_renew?: number | null;
+    } | undefined;
     if (!member) {
       db.close();
       return NextResponse.json({ error: "Member not found" }, { status: 401 });
@@ -142,13 +151,17 @@ export async function GET() {
       (s) => s.status === "Active" && String(s.expiry_date ?? "") >= today
     );
 
+    const legalName = [member.first_name, member.last_name].filter(Boolean).join(" ") || "Member";
+    const displayName = (member.preferred_name ?? "").trim() || legalName;
+
     return NextResponse.json({
       member: {
         member_id: member.member_id,
         first_name: member.first_name,
         last_name: member.last_name,
         email: member.email,
-        name: [member.first_name, member.last_name].filter(Boolean).join(" ") || "Member",
+        name: displayName,
+        legal_name: legalName,
       },
       subscriptions,
       classBookings,

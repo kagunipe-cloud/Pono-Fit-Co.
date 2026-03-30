@@ -5,7 +5,7 @@ import { ensurePTSlotTables, getPTCreditBalances } from "../../../../lib/pt-slot
 
 export const dynamic = "force-dynamic";
 
-/** GET: returns { 30: number, 60: number, 90: number } for the logged-in member. */
+/** GET: PT credit balances keyed by duration_minutes (e.g. 30, 60, 90, 120). Always includes 30/60/90 at 0 when unused; other durations appear when the member has those credits. */
 export async function GET() {
   try {
     const memberId = await getMemberIdFromSession();
