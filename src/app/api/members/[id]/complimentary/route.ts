@@ -111,7 +111,7 @@ export async function POST(
         db.close();
         return NextResponse.json({ error: "PT session not found" }, { status: 404 });
       }
-      const duration = [30, 60, 90].includes(Number(session.duration_minutes)) ? Number(session.duration_minutes) : 60;
+      const duration = Math.max(1, Math.round(Number(session.duration_minutes ?? 60)));
       db.prepare(`
         INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id)
         VALUES (?, ?, ?, 'complimentary', 'sale', ?)

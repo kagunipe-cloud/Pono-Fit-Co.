@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
-import { ensurePTSlotTables, getPTCreditBalance } from "../../../../lib/pt-slots";
+import { ensurePTSlotTables, getPTCreditBalance, normalizePtDurationMinutes } from "../../../../lib/pt-slots";
 
 export const dynamic = "force-dynamic";
 
@@ -37,11 +37,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "This slot is already booked" }, { status: 409 });
     }
 
-    const duration = session.duration_minutes ?? 60;
-    if (![30, 60, 90].includes(duration)) {
-      db.close();
-      return NextResponse.json({ error: "Invalid session duration" }, { status: 400 });
-    }
+    const duration = normalizePtDurationMinutes(session.duration_minutes, 60);
 
     if (use_credit) {
       const balance = getPTCreditBalance(db, member_id, duration);

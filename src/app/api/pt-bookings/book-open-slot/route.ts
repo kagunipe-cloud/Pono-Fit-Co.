@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone } from "../../../../lib/db";
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { getAdminMemberId } from "../../../../lib/admin";
-import { ensurePTSlotTables, getPTCreditBalance } from "../../../../lib/pt-slots";
+import { ensurePTSlotTables, getPTCreditBalance, normalizePtDurationMinutes } from "../../../../lib/pt-slots";
 import { isPTBookingSlotFree } from "../../../../lib/schedule-conflicts";
 import { timeToMinutes } from "../../../../lib/pt-slots";
 import {
@@ -27,7 +27,7 @@ function trainerDisplayForOpen(
 export const dynamic = "force-dynamic";
 
 /**
- * POST { member_id, occurrence_date, start_time, duration_minutes (30|60|90), pt_session_id, pay_on_arrival? }
+ * POST { member_id, occurrence_date, start_time, duration_minutes (must match session), pt_session_id, pay_on_arrival? }
  * Books an "open" slot (from schedule). Uses 1 PT credit unless pay_on_arrival (admin only).
  */
 export async function POST(request: NextRequest) {
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     const member_id = (body.member_id ?? "").trim();
     const occurrence_date = (body.occurrence_date ?? "").trim();
     const start_time = (body.start_time ?? "").trim();
-    const duration_minutes = [30, 60, 90].includes(Number(body.duration_minutes)) ? Number(body.duration_minutes) : 60;
+    const duration_minutes = normalizePtDurationMinutes(body.duration_minutes, 60);
     const pt_session_id = parseInt(String(body.pt_session_id), 10);
     const pay_on_arrival = !!body.pay_on_arrival;
 

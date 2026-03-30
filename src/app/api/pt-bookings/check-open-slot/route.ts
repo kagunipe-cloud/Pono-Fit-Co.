@@ -1,20 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
-import { ensurePTSlotTables } from "../../../../lib/pt-slots";
+import { ensurePTSlotTables, normalizePtDurationMinutes, timeToMinutes } from "../../../../lib/pt-slots";
 import { isPTBookingSlotFree } from "../../../../lib/schedule-conflicts";
-import { timeToMinutes } from "../../../../lib/pt-slots";
 import { getTrainerMemberIdByDisplayName } from "../../../../lib/trainer-clients";
 
 export const dynamic = "force-dynamic";
 
-/** GET ?date=YYYY-MM-DD&time=HH:mm&duration_minutes=30|60|90&pt_session_id= — Check if an open PT slot has enough contiguous time. pt_session_id optional; when provided, buffer only applies to same trainer. */
+/** GET ?date=YYYY-MM-DD&time=HH:mm&duration_minutes=&pt_session_id= — Check if an open PT slot has enough contiguous time. pt_session_id optional; when provided, buffer only applies to same trainer. */
 export async function GET(request: NextRequest) {
   try {
     const date = request.nextUrl.searchParams.get("date")?.trim();
     const time = request.nextUrl.searchParams.get("time")?.trim();
-    const duration_minutes = [30, 60, 90].includes(Number(request.nextUrl.searchParams.get("duration_minutes")))
-      ? Number(request.nextUrl.searchParams.get("duration_minutes"))
-      : 60;
+    const duration_minutes = normalizePtDurationMinutes(request.nextUrl.searchParams.get("duration_minutes"), 60);
     const pt_session_id = parseInt(String(request.nextUrl.searchParams.get("pt_session_id")), 10);
     if (!date || !time) {
       return NextResponse.json({ error: "date and time required" }, { status: 400 });

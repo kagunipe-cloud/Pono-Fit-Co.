@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone } from "../../../../lib/db";
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { getAdminMemberId } from "../../../../lib/admin";
-import { ensurePTSlotTables, getPTCreditBalance, reservedMinutes } from "../../../../lib/pt-slots";
+import { ensurePTSlotTables, getPTCreditBalance, normalizePtDurationMinutes, reservedMinutes } from "../../../../lib/pt-slots";
 import { ensureTrainerClient } from "../../../../lib/trainer-clients";
 import { getBlocksInRange, getFreeIntervals, getBookingsForBlock } from "../../../../lib/pt-availability";
 import { timeToMinutes } from "../../../../lib/pt-slots";
@@ -16,7 +16,7 @@ import {
 export const dynamic = "force-dynamic";
 
 /**
- * POST { trainer_availability_id, occurrence_date, start_time, session_duration_minutes (30|60|90), member_id, use_credit?, pay_on_arrival? }
+ * POST { trainer_availability_id, occurrence_date, start_time, session_duration_minutes, member_id, use_credit?, pay_on_arrival? }
  * Books a PT session within trainer availability. Reserves 45/75/120 min (or exact if only that much left).
  * pay_on_arrival: admin only — books without payment or credit; member pays when they arrive.
  */
@@ -26,9 +26,7 @@ export async function POST(request: NextRequest) {
     const trainer_availability_id = parseInt(String(body.trainer_availability_id), 10);
     const occurrence_date = (body.occurrence_date ?? "").trim();
     const start_time = (body.start_time ?? "").trim();
-    const session_duration_minutes = [30, 60, 90].includes(Number(body.session_duration_minutes))
-      ? Number(body.session_duration_minutes)
-      : 60;
+    const session_duration_minutes = normalizePtDurationMinutes(body.session_duration_minutes, 60);
     const member_id = (body.member_id ?? "").trim();
     const use_credit = !!body.use_credit;
     const pay_on_arrival = !!body.pay_on_arrival;

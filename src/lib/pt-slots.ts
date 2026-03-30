@@ -7,6 +7,13 @@ import { getDb } from "./db";
 export const PT_DURATIONS = [30, 60, 90] as const;
 export type PTDuration = (typeof PT_DURATIONS)[number];
 
+/** Parse duration from API/client; must match the pt_sessions row and credit bucket. */
+export function normalizePtDurationMinutes(raw: unknown, fallback = 60): number {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n) || n <= 0 || n > 24 * 60) return fallback;
+  return Math.round(n);
+}
+
 /** Reserve minutes when booking: 30→45, 60→75, 90→120. If only exact time left in block, use exact. */
 export const RESERVE_MINUTES: Record<number, number> = { 30: 45, 60: 75, 90: 120 };
 
@@ -21,13 +28,10 @@ export function minutesToTime(m: number): string {
   return `${h.toString().padStart(2, "0")}:${min.toString().padStart(2, "0")}`;
 }
 
-/** For a session of `duration` min, return reserved minutes: 45/75/120, or exact if `remainingMinutes` equals 30/60/90. */
+/** For a session of `duration` min, return reserved minutes: 45/75/120 for 30/60/90, else `duration`. If the block ends exactly at the session length, use that length. */
 export function reservedMinutes(duration: number, remainingMinutes: number): number {
-  const reserve = RESERVE_MINUTES[duration] ?? duration;
-  if (duration === 30 && remainingMinutes === 30) return 30;
-  if (duration === 60 && remainingMinutes === 60) return 60;
-  if (duration === 90 && remainingMinutes === 90) return 90;
-  return reserve;
+  if (duration === remainingMinutes) return duration;
+  return RESERVE_MINUTES[duration as keyof typeof RESERVE_MINUTES] ?? duration;
 }
 
 export function ensurePTSlotTables(db: ReturnType<typeof getDb>) {

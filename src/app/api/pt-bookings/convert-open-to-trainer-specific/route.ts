@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone } from "../../../../lib/db";
 import { getAdminMemberId } from "../../../../lib/admin";
-import { ensurePTSlotTables, reservedMinutes } from "../../../../lib/pt-slots";
+import { ensurePTSlotTables, normalizePtDurationMinutes, reservedMinutes } from "../../../../lib/pt-slots";
 import { ensureTrainerClient } from "../../../../lib/trainer-clients";
 import { getBlocksInRange, getBookingsForBlock, getFreeIntervals } from "../../../../lib/pt-availability";
 import { timeToMinutes } from "../../../../lib/pt-slots";
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
     }
 
     const remainingMinutes = interval.endMin - startMin;
-    const session_duration_minutes = [30, 60, 90].includes(open.duration_minutes) ? open.duration_minutes : 60;
+    const session_duration_minutes = normalizePtDurationMinutes(open.duration_minutes, 60);
     if (remainingMinutes < session_duration_minutes) {
       db.close();
       return NextResponse.json({ error: "Not enough time left in the trainer's block for this duration" }, { status: 400 });

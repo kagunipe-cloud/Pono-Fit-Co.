@@ -65,6 +65,12 @@ export default function MemberDetailPage() {
   const [compFreeMonths, setCompFreeMonths] = useState<number | "">("");
   const [compSubmitting, setCompSubmitting] = useState(false);
   const [compMessage, setCompMessage] = useState<string | null>(null);
+  const [ptCreditBalances, setPtCreditBalances] = useState<Record<number, number> | null>(null);
+  const [ptGrantDuration, setPtGrantDuration] = useState("");
+  const [ptGrantAmount, setPtGrantAmount] = useState(1);
+  const [ptGrantNote, setPtGrantNote] = useState("");
+  const [ptGrantSubmitting, setPtGrantSubmitting] = useState(false);
+  const [ptGrantMessage, setPtGrantMessage] = useState<string | null>(null);
   const [sendingWaiver, setSendingWaiver] = useState(false);
   const [togglingAutoRenew, setTogglingAutoRenew] = useState(false);
   const [waiverResult, setWaiverResult] = useState<{ message: string; url?: string } | null>(null);
@@ -151,6 +157,17 @@ export default function MemberDetailPage() {
       .then((json) => setUnlocks(json?.unlocks ?? []))
       .catch(() => setUnlocks([]));
   }, [id]);
+
+  useEffect(() => {
+    if (!id || currentUser?.role !== "Admin") return;
+    fetch(`/api/members/${id}/pt-credits`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (json && typeof json === "object" && !("error" in json)) setPtCreditBalances(json as Record<number, number>);
+        else setPtCreditBalances({});
+      })
+      .catch(() => setPtCreditBalances({}));
+  }, [id, currentUser?.role]);
 
   async function handleUnlock() {
     const mid = data?.member?.member_id as string;
@@ -247,6 +264,42 @@ export default function MemberDetailPage() {
       else alert(json.error ?? "Failed");
     } finally {
       setAdminAction(null);
+    }
+  }
+
+  async function grantPtCredits() {
+    const dm = parseInt(ptGrantDuration, 10);
+    if (Number.isNaN(dm) || dm < 1 || dm > 24 * 60) {
+      setPtGrantMessage("Enter session length in minutes (1–1440), e.g. 60 or 90.");
+      return;
+    }
+    const amt = Math.max(1, Math.min(99, Math.floor(ptGrantAmount)));
+    setPtGrantMessage(null);
+    setPtGrantSubmitting(true);
+    try {
+      const res = await fetch(`/api/members/${id}/pt-credits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          duration_minutes: dm,
+          amount: amt,
+          ...(ptGrantNote.trim() ? { note: ptGrantNote.trim() } : {}),
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.balances) {
+        setPtCreditBalances(json.balances as Record<number, number>);
+        setPtGrantMessage(`Granted ${amt}×${dm}-min credit(s).`);
+        setPtGrantDuration("");
+        setPtGrantAmount(1);
+        setPtGrantNote("");
+      } else {
+        setPtGrantMessage(json.error ?? "Could not grant credits.");
+      }
+    } catch {
+      setPtGrantMessage("Request failed.");
+    } finally {
+      setPtGrantSubmitting(false);
     }
   }
 
@@ -396,6 +449,85 @@ export default function MemberDetailPage() {
             <p className={`mt-3 text-sm ${compMessage.startsWith("Complimentary") ? "text-emerald-700" : "text-amber-700"}`}>
               {compMessage}
             </p>
+          )}
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="mb-6 p-4 rounded-xl border border-brand-200 bg-brand-50/50">
+          <h2 className="text-base font-semibold text-stone-800 mb-2">PT credits</h2>
+          <p className="text-xs text-stone-600 mb-3">
+            Balances used when booking PT by session length. Grant one-off credits here (e.g. after a purchase that didn&apos;t record correctly).
+          </p>
+          {ptCreditBalances === null ? (
+            <p className="text-sm text-stone-500">Loading balances…</p>
+          ) : (
+            <>
+              <div className="text-sm text-stone-700 mb-3">
+                {Object.entries(ptCreditBalances).filter(([, n]) => n > 0).length === 0 ? (
+                  <span className="text-stone-500">No PT credits on file.</span>
+                ) : (
+                  <ul className="space-y-0.5">
+                    {Object.entries(ptCreditBalances)
+                      .filter(([, n]) => n > 0)
+                      .sort(([a], [b]) => Number(a) - Number(b))
+                      .map(([mins, n]) => (
+                        <li key={mins}>
+                          <strong>{n}</strong> × {mins}-minute session{Number(n) !== 1 ? "s" : ""}
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </div>
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-stone-500 mb-1">Session length (minutes)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={1440}
+                    value={ptGrantDuration}
+                    onChange={(e) => setPtGrantDuration(e.target.value)}
+                    placeholder="e.g. 90"
+                    className="w-28 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-stone-500 mb-1">Credits to add</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    value={ptGrantAmount}
+                    onChange={(e) => setPtGrantAmount(Math.max(1, Math.min(99, parseInt(e.target.value, 10) || 1)))}
+                    className="w-20 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                  />
+                </div>
+                <div className="flex-1 min-w-[180px]">
+                  <label className="block text-xs font-medium text-stone-500 mb-1">Note (optional)</label>
+                  <input
+                    type="text"
+                    value={ptGrantNote}
+                    onChange={(e) => setPtGrantNote(e.target.value)}
+                    placeholder="e.g. Fitness assessment purchase Mar 2026"
+                    className="w-full px-2 py-1.5 rounded border border-stone-200 text-sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={grantPtCredits}
+                  disabled={ptGrantSubmitting || ptCreditBalances === null}
+                  className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
+                >
+                  {ptGrantSubmitting ? "Saving…" : "Grant credits"}
+                </button>
+              </div>
+              {ptGrantMessage && (
+                <p className={`mt-3 text-sm ${ptGrantMessage.startsWith("Granted") ? "text-emerald-700" : "text-amber-700"}`}>
+                  {ptGrantMessage}
+                </p>
+              )}
+            </>
           )}
         </div>
       )}

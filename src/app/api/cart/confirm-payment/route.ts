@@ -318,11 +318,15 @@ export async function POST(request: NextRequest) {
               } catch {
                 /* pt_bookings table may not exist in all envs */
               }
-              try {
-                db.prepare("INSERT INTO pt_slot_bookings (pt_session_id, member_id, payment_type) VALUES (?, ?, 'paid')").run(session.id, member_id);
-              } catch {
-                /* already booked */
-              }
+              const durationMinutes = Math.max(
+                1,
+                Math.round(Number(session.duration_minutes ?? 60))
+              );
+              const qty = Math.max(1, Math.floor(Number(it.quantity) || 1));
+              db.prepare(`
+                INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id)
+                VALUES (?, ?, ?, 'purchase', 'sale', ?)
+              `).run(member_id, durationMinutes, qty, sales_id);
               const trainerName = (session.trainer ?? "").trim();
               const trainerMemberId = trainerName ? getTrainerMemberIdByDisplayName(db, trainerName) : null;
               if (trainerMemberId) ensureTrainerClient(db, trainerMemberId, member_id);
