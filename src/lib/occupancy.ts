@@ -57,15 +57,22 @@ export function addOccupancyEntry(
     ? new Date().toISOString().slice(0, 19).replace("T", " ")
     : d.toISOString().slice(0, 19).replace("T", " ");
   const mid = memberId?.trim() || null;
-  if (mid) {
-    const recent = db.prepare(
-      `SELECT 1 FROM occupancy_entries WHERE member_id = ? AND entered_at > datetime('now', ?) LIMIT 1`
-    ).get(mid, `-${OCCUPANCY_DEDUPE_MINUTES} minutes`) as { "1"?: number } | undefined;
-    if (recent) return;
-  }
-  db.prepare(
+  const insertStmt = db.prepare(
     `INSERT INTO occupancy_entries (entered_at, source, member_id) VALUES (?, ?, ?)`
-  ).run(at, source, mid);
+  );
+  const checkRecentStmt = db.prepare(
+    `SELECT 1 FROM occupancy_entries WHERE member_id = ? AND entered_at > datetime('now', ?) LIMIT 1`
+  );
+  // BEGIN IMMEDIATE serializes writers so concurrent unlock taps cannot all pass the dedupe check
+  // before any insert (check-then-insert race across connections).
+  const run = db.transaction(() => {
+    if (mid) {
+      const recent = checkRecentStmt.get(mid, `-${OCCUPANCY_DEDUPE_MINUTES} minutes`) as { "1"?: number } | undefined;
+      if (recent) return;
+    }
+    insertStmt.run(at, source, mid);
+  }).immediate;
+  run();
 }
 
 /** Remove oldest entry (-1, FIFO) among entries still in the rolling 1h window. Returns true if one was removed. */
