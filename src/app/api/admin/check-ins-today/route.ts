@@ -3,7 +3,7 @@ import { getDb, getAppTimezone, getOpenHours } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
 import { ensureUsageTables } from "@/lib/usage";
 import { todayInAppTz } from "@/lib/app-timezone";
-import { OCCUPANCY_DEDUPE_MINUTES } from "@/lib/occupancy";
+import { ensureOccupancyTable, OCCUPANCY_DEDUPE_MINUTES } from "@/lib/occupancy";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +38,7 @@ function dedupeUniqueCheckIns(rows: DoorRow[]): DoorRow[] {
   return kept;
 }
 
-/** GET: Unique successful door check-ins today (app timezone), binned by hour, same dedupe window as Coconut Count (+1). Admin only. */
+/** GET: Unique successful door unlocks + manual walk-in +1s today (app timezone), binned by hour. Door rows use same 60m dedupe as Coconut +1; manual rows are one count per +1. Admin only. */
 export async function GET(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
   if (!adminId) {
@@ -48,6 +48,7 @@ export async function GET(request: NextRequest) {
   try {
     const db = getDb();
     ensureUsageTables(db);
+    ensureOccupancyTable(db);
     const tz = getAppTimezone(db, 1);
     const { openHourMin, openHourMax } = getOpenHours(db);
     const todayYmd = todayInAppTz(tz);
@@ -58,6 +59,10 @@ export async function GET(request: NextRequest) {
        ORDER BY happened_at ASC`
     ).all() as DoorRow[];
 
+    const manualRows = db.prepare(
+      `SELECT entered_at FROM occupancy_entries WHERE source = 'manual' AND entered_at >= datetime('now', '-4 days') ORDER BY entered_at ASC`
+    ).all() as { entered_at: string }[];
+
     db.close();
 
     const todayRows = rows.filter((r) => {
@@ -67,26 +72,41 @@ export async function GET(request: NextRequest) {
 
     const uniqueToday = dedupeUniqueCheckIns(todayRows);
 
-    const countsByHour = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: 0 }));
+    const countsByHour = Array.from({ length: 24 }, (_, h) => ({ hour: h, count: 0, door: 0, manual: 0 }));
     for (const r of uniqueToday) {
       const parsed = parseHappenedAt(r.happened_at, tz);
       if (!parsed) continue;
       const h = clampHour(parsed.hour);
       countsByHour[h].count += 1;
+      countsByHour[h].door += 1;
+    }
+
+    for (const r of manualRows) {
+      const parsed = parseOccupancyEnteredAtUtc(r.entered_at, tz);
+      if (!parsed || parsed.ymd !== todayYmd) continue;
+      const h = clampHour(parsed.hour);
+      countsByHour[h].count += 1;
+      countsByHour[h].manual += 1;
     }
 
     const hoursInRange = Array.from({ length: openHourMax - openHourMin + 1 }, (_, i) => openHourMin + i);
     const byHour = hoursInRange.map((hour) => ({
       hour,
       count: countsByHour[hour].count,
+      door: countsByHour[hour].door,
+      manual: countsByHour[hour].manual,
     }));
 
     const totalToday = byHour.reduce((sum, { count }) => sum + count, 0);
+    const totalDoor = byHour.reduce((sum, { door }) => sum + door, 0);
+    const totalManual = byHour.reduce((sum, { manual }) => sum + manual, 0);
 
     return NextResponse.json({
       date: todayYmd,
       timezone: tz,
       totalToday,
+      totalDoor,
+      totalManual,
       byHour,
       open_hour_min: openHourMin,
       open_hour_max: openHourMax,
@@ -107,6 +127,21 @@ function parseHappenedAt(happened_at: string, tz: string): { ymd: string; hour: 
   if (!raw) return null;
   const d = new Date(raw);
   if (Number.isNaN(d.getTime())) return null;
+  return formatYmdHourInTz(d, tz);
+}
+
+/** occupancy_entries.entered_at is stored as UTC wall time (from toISOString slice); interpret as UTC then convert to gym local. */
+function parseOccupancyEnteredAtUtc(entered_at: string, tz: string): { ymd: string; hour: number } | null {
+  const raw = (entered_at ?? "").trim();
+  if (!raw) return null;
+  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+  const withZ = normalized.endsWith("Z") || /[+-]\d{2}:?\d{2}$/.test(normalized) ? normalized : `${normalized}Z`;
+  const d = new Date(withZ);
+  if (Number.isNaN(d.getTime())) return null;
+  return formatYmdHourInTz(d, tz);
+}
+
+function formatYmdHourInTz(d: Date, tz: string): { ymd: string; hour: number } | null {
   const fmt = new Intl.DateTimeFormat("en-CA", {
     timeZone: tz,
     year: "numeric",

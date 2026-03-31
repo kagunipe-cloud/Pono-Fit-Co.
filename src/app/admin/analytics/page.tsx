@@ -29,7 +29,9 @@ type TodayCheckInsData = {
   date: string;
   timezone: string;
   totalToday: number;
-  byHour: { hour: number; count: number }[];
+  totalDoor?: number;
+  totalManual?: number;
+  byHour: { hour: number; count: number; door?: number; manual?: number }[];
   open_hour_min: number;
   open_hour_max: number;
 } | null;
@@ -199,39 +201,50 @@ export default function AdminAnalyticsPage() {
 
       {todayCheckIns && (
         <section className="mb-8">
-          <h2 className="text-lg font-semibold text-stone-800 mb-1">Today: door check-ins by hour</h2>
+          <h2 className="text-lg font-semibold text-stone-800 mb-1">Today: check-ins by hour</h2>
           <p className="text-sm text-stone-500 mb-2">
-            <strong className="text-stone-800">Total Check-ins</strong> today ({todayCheckIns.date}) in {todayCheckIns.timezone}:{" "}
-            <strong className="text-stone-800">{todayCheckIns.totalToday}</strong> (unique — same member within 60 minutes
-            counts once; matches the +1 rule used for Coconut Count). Hourly cells sum to this total. Resets at midnight
-            (gym timezone). Only hours {getHourLabel(todayCheckIns.open_hour_min)}–{getHourLabel(todayCheckIns.open_hour_max)}{" "}
-            are shown.
+            <strong className="text-stone-800">Total arrivals</strong> today ({todayCheckIns.date}) in {todayCheckIns.timezone}:{" "}
+            <strong className="text-stone-800">{todayCheckIns.totalToday}</strong>
+            {todayCheckIns.totalDoor != null && todayCheckIns.totalManual != null && (
+              <>
+                {" "}
+                ({todayCheckIns.totalDoor} door
+                {todayCheckIns.totalManual > 0 ? `, ${todayCheckIns.totalManual} manual +1` : ""})
+              </>
+            )}
+            . Door unlocks: unique per member within 60 minutes (same as Coconut +1). Manual walk-in +1: one count per +1.
+            Hourly cells sum to the total. Resets at midnight (gym timezone). Hours shown:{" "}
+            {getHourLabel(todayCheckIns.open_hour_min)}–{getHourLabel(todayCheckIns.open_hour_max)}.
           </p>
           <div className="overflow-x-auto mb-3">
             <div
               className="min-w-[480px] grid gap-px bg-stone-200 rounded-lg overflow-hidden"
               style={{ gridTemplateColumns: `4rem repeat(${todayCheckIns.byHour.length}, minmax(2rem, 1fr))` }}
             >
-              <div className="p-2 bg-stone-100 text-xs font-medium text-stone-600">Today</div>
+              <div className="p-2 bg-stone-100 text-xs font-medium text-stone-600">Today (door + manual)</div>
               {todayCheckIns.byHour.map(({ hour }) => (
                 <div key={hour} className="p-1 bg-stone-100 text-[10px] font-medium text-stone-600 text-center">
                   {getHourLabel(hour)}
                 </div>
               ))}
               <div className="p-2 bg-stone-100 text-xs font-medium text-stone-600">Count</div>
-              {todayCheckIns.byHour.map(({ hour, count }) => {
+              {todayCheckIns.byHour.map(({ hour, count, door = 0, manual = 0 }) => {
                 const maxH = Math.max(...todayCheckIns.byHour.map((x) => x.count), 1);
                 const pct = Math.min(1, count / maxH);
                 const r = Math.round(34 + (110 - 34) * (1 - pct));
                 const g = Math.round(197 + (255 - 197) * (1 - pct));
                 const b = Math.round(94 + (255 - 94) * (1 - pct));
                 const bg = `rgb(${r}, ${g}, ${b})`;
+                const tip =
+                  manual > 0
+                    ? `${getHourLabel(hour)}: ${count} total (${door} door, ${manual} manual)`
+                    : `${getHourLabel(hour)}: ${count} arrival${count === 1 ? "" : "s"}`;
                 return (
                   <div
                     key={hour}
                     className="p-1.5 min-h-[2rem] flex items-center justify-center text-xs font-medium"
                     style={{ backgroundColor: bg, color: count > maxH * 0.5 ? "white" : "inherit" }}
-                    title={`${getHourLabel(hour)}: ${count} check-in${count === 1 ? "" : "s"}`}
+                    title={tip}
                   >
                     {count > 0 ? count : "—"}
                   </div>
@@ -240,17 +253,18 @@ export default function AdminAnalyticsPage() {
             </div>
           </div>
           <details className="rounded-lg border border-stone-200 bg-stone-50/80 p-3 text-sm text-stone-600">
-            <summary className="cursor-pointer font-medium text-stone-800">Coconut Count vs. Total Check-ins</summary>
+            <summary className="cursor-pointer font-medium text-stone-800">Coconut Count vs. Today&apos;s arrivals</summary>
             <ul className="mt-2 list-disc list-inside space-y-1">
               <li>
                 <strong>Coconut Count</strong> (dashboard) is a <em>live</em> estimate: rows in the last rolling hour (each
-                entry drops off after an hour). It is not a daily running total — it will not equal &quot;Total Check-ins&quot;
-                for the day, but duplicate taps use the same 60-minute rule as this chart for linked members.
+                entry drops off after an hour). It is not a daily running total — it will not equal &quot;Total arrivals&quot;
+                for the day, but duplicate taps use the same 60-minute rule as door counts for linked members.
               </li>
               <li>
-                <strong>Total Check-ins</strong> is today&apos;s unique successful unlocks from{" "}
-                <code className="text-xs bg-stone-200 px-1 rounded">door_access_events</code>, deduped like Coconut +1 for
-                members with a linked account. Unlinked Kisi actors count each distinct webhook (no member to dedupe against).
+                <strong>Today&apos;s chart</strong> counts everyone who entered for the day: unique successful door unlocks
+                from <code className="text-xs bg-stone-200 px-1 rounded">door_access_events</code> (deduped) plus each{" "}
+                <strong>manual +1</strong> walk-in from <code className="text-xs bg-stone-200 px-1 rounded">occupancy_entries</code>{" "}
+                (source manual). Hawaii does not observe daylight saving time; gym time uses your app timezone setting.
               </li>
               <li>
                 If unlocks appear in Kisi but not here, verify the webhook URL{" "}
