@@ -172,3 +172,89 @@ export async function PUT(
     return NextResponse.json({ error: "Failed to replace sets" }, { status: 500 });
   }
 }
+
+/**
+ * DELETE ?set_order=N — remove all rows for that set (including drop-set parts), then renumber remaining sets to 0..n-1.
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string; exId: string }> }
+) {
+  try {
+    const memberId = await getMemberIdFromSession();
+    if (!memberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+
+    const workoutId = parseInt((await params).id, 10);
+    const exId = parseInt((await params).exId, 10);
+    if (Number.isNaN(workoutId) || Number.isNaN(exId))
+      return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+
+    const setOrderParam = request.nextUrl.searchParams.get("set_order");
+    if (setOrderParam == null || setOrderParam === "")
+      return NextResponse.json({ error: "set_order query parameter required" }, { status: 400 });
+    const targetOrder = parseInt(setOrderParam, 10);
+    if (Number.isNaN(targetOrder)) return NextResponse.json({ error: "Invalid set_order" }, { status: 400 });
+
+    const db = getDb();
+    ensureWorkoutTables(db);
+
+    const workout = db.prepare("SELECT id FROM workouts WHERE id = ? AND member_id = ?").get(workoutId, memberId);
+    if (!workout) {
+      db.close();
+      return NextResponse.json({ error: "Workout not found" }, { status: 404 });
+    }
+
+    const exercise = db
+      .prepare("SELECT id FROM workout_exercises WHERE id = ? AND workout_id = ?")
+      .get(exId, workoutId) as { id: number } | undefined;
+    if (!exercise) {
+      db.close();
+      return NextResponse.json({ error: "Exercise not found" }, { status: 404 });
+    }
+
+    const tableCols = (db.prepare("PRAGMA table_info(workout_sets)").all() as { name: string }[]).map((c) => c.name);
+    const hasDropIndex = tableCols.includes("drop_index");
+
+    const before = db
+      .prepare(`SELECT id, set_order FROM workout_sets WHERE workout_exercise_id = ? AND set_order = ?`)
+      .all(exId, targetOrder) as { id: number; set_order: number }[];
+    if (before.length === 0) {
+      db.close();
+      return NextResponse.json({ error: "Set not found" }, { status: 404 });
+    }
+
+    db.prepare("DELETE FROM workout_sets WHERE workout_exercise_id = ? AND set_order = ?").run(exId, targetOrder);
+
+    const remaining = db
+      .prepare(
+        `SELECT id, set_order FROM workout_sets WHERE workout_exercise_id = ? ${hasDropIndex ? setOrderBy : "ORDER BY set_order, id"}`
+      )
+      .all(exId) as { id: number; set_order: number }[];
+
+    if (remaining.length > 0) {
+      const byOldOrder = new Map<number, { id: number }[]>();
+      for (const r of remaining) {
+        if (!byOldOrder.has(r.set_order)) byOldOrder.set(r.set_order, []);
+        byOldOrder.get(r.set_order)!.push({ id: r.id });
+      }
+      const sortedOld = [...byOldOrder.keys()].sort((a, b) => a - b);
+      const updateStmt = db.prepare("UPDATE workout_sets SET set_order = ? WHERE id = ?");
+      for (let ni = 0; ni < sortedOld.length; ni++) {
+        const oldO = sortedOld[ni];
+        for (const row of byOldOrder.get(oldO)!) {
+          updateStmt.run(ni, row.id);
+        }
+      }
+    }
+
+    const setRows = db
+      .prepare(`SELECT ${hasDropIndex ? setSelectCols : "id, reps, weight_kg, time_seconds, distance_km, set_order"} FROM workout_sets WHERE workout_exercise_id = ? ${hasDropIndex ? setOrderBy : "ORDER BY set_order, id"}`)
+      .all(exId) as { id: number; reps: number | null; weight_kg: number | null; time_seconds: number | null; distance_km: number | null; set_order: number; drop_index?: number }[];
+    db.close();
+
+    return NextResponse.json({ sets: setRows });
+  } catch (err) {
+    console.error(err);
+    return NextResponse.json({ error: "Failed to delete set" }, { status: 500 });
+  }
+}
