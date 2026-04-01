@@ -94,6 +94,130 @@ async function sendViaGmailApi(to: string, subject: string, text: string): Promi
   return { ok: true };
 }
 
+/**
+ * One broadcast message with BCC recipients (mailing-list style). Recipients do not see each other.
+ * Uses "Undisclosed-recipients" in To — standard for bulk BCC.
+ */
+async function sendViaGmailApiBcc(
+  bcc: string[],
+  subject: string,
+  text: string
+): Promise<{ ok: boolean; error?: string }> {
+  const from = process.env.GMAIL_FROM_EMAIL?.trim();
+  if (!from) return { ok: false, error: "GMAIL_FROM_EMAIL not set" };
+  if (bcc.length === 0) return { ok: false, error: "No BCC recipients" };
+
+  const accessToken = await getGmailAccessToken();
+  if (!accessToken) return { ok: false, error: "Failed to get Gmail access token" };
+
+  const bccList = bcc.map((e) => e.trim()).filter(Boolean).join(", ");
+  const lines = [
+    `From: ${from}`,
+    "To: Undisclosed-recipients:;",
+    `Bcc: ${bccList}`,
+    `Subject: ${subject.replace(/\r?\n/g, " ")}`,
+    "MIME-Version: 1.0",
+    "Content-Type: text/plain; charset=utf-8",
+    "",
+    text,
+  ];
+  const raw = lines.join("\r\n");
+  const rawBase64 = Buffer.from(raw, "utf8").toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+
+  const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ raw: rawBase64 }),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text();
+    return { ok: false, error: `Gmail API ${res.status}: ${errBody.slice(0, 200)}` };
+  }
+  return { ok: true };
+}
+
+/** Default chunk size: one batch can cover typical full member lists (~400) in a single send. */
+const BULK_BCC_DEFAULT_CHUNK = 500;
+
+function getBulkBccChunkSize(): number {
+  const raw = process.env.EMAIL_BULK_BCC_CHUNK_SIZE?.trim();
+  const n = raw ? parseInt(raw, 10) : BULK_BCC_DEFAULT_CHUNK;
+  if (Number.isNaN(n) || n < 1) return BULK_BCC_DEFAULT_CHUNK;
+  /** Upper bound avoids absurd MIME lines; Gmail often allows ~500 recipients per message (varies by account). */
+  const max = 2000;
+  return Math.min(max, n);
+}
+
+/**
+ * Send the same subject/body to many addresses using chunked BCC (one SMTP/API message per chunk).
+ * Avoids one send per recipient, which exhausts Gmail API daily limits on large directories.
+ * Does not support per-recipient placeholders — use {@link sendMemberEmail} for that.
+ */
+export async function sendBulkBroadcastEmail(
+  recipients: string[],
+  subject: string,
+  text: string
+): Promise<{ sent: number; failed: number; errors: string[]; batches: number }> {
+  const unique = [...new Set(recipients.map((e) => e.trim()).filter(Boolean))];
+  if (unique.length === 0) {
+    return { sent: 0, failed: 0, errors: ["No recipients"], batches: 0 };
+  }
+
+  const chunkSize = getBulkBccChunkSize();
+  const errors: string[] = [];
+  let sent = 0;
+  let batches = 0;
+
+  if (isGmailApiConfigured()) {
+    for (let i = 0; i < unique.length; i += chunkSize) {
+      const chunk = unique.slice(i, i + chunkSize);
+      batches++;
+      const result = await sendViaGmailApiBcc(chunk, subject, text);
+      if (result.ok) {
+        sent += chunk.length;
+      } else {
+        errors.push(`Batch ${batches} (${chunk.length} addresses): ${result.error ?? "Failed"}`);
+      }
+      if (i + chunkSize < unique.length) {
+        await new Promise((r) => setTimeout(r, 400));
+      }
+    }
+    return { sent, failed: unique.length - sent, errors, batches };
+  }
+
+  const trans = getTransporter();
+  if (!trans) {
+    return { sent: 0, failed: unique.length, errors: ["SMTP not configured"], batches: 0 };
+  }
+  const fromAddr = process.env.SMTP_FROM ?? process.env.SMTP_USER ?? "noreply@localhost";
+
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const chunk = unique.slice(i, i + chunkSize);
+    batches++;
+    try {
+      await trans.sendMail({
+        from: fromAddr,
+        bcc: chunk,
+        subject,
+        text,
+      });
+      sent += chunk.length;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      errors.push(`Batch ${batches} (${chunk.length} addresses): ${msg}`);
+    }
+    if (i + chunkSize < unique.length) {
+      await new Promise((r) => setTimeout(r, 400));
+    }
+  }
+
+  return { sent, failed: unique.length - sent, errors, batches };
+}
+
 function getTransporter(): nodemailer.Transporter | null {
   if (transporter) return transporter;
   const host = process.env.SMTP_HOST;

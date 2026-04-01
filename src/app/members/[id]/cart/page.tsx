@@ -306,7 +306,11 @@ export default function MemberCartPage() {
       const res = await fetch("/api/terminal/charge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ member_id: memberId, reader_id: selectedReaderId }),
+        body: JSON.stringify({
+          member_id: memberId,
+          reader_id: selectedReaderId,
+          ...(hasMonthlyMembershipInCart ? { monthly_recurring: monthlyRecurring } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to start charge");
@@ -991,6 +995,11 @@ export default function MemberCartPage() {
                       <span>{formatPrice(terminalEstimate.total)}</span>
                     </div>
                     <p className="text-stone-500 text-xs pt-1">Customer will pay on the reader.</p>
+                    {hasMonthlyMembershipInCart && (
+                      <p className="text-stone-600 text-xs pt-2 border-t border-stone-100 mt-2">
+                        Monthly membership: {monthlyRecurring ? "Auto-renew enabled" : "One month only"} (matches the choice above).
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <p className="text-stone-600 text-sm mb-4">
