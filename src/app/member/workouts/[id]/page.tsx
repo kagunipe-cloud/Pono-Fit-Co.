@@ -154,6 +154,10 @@ export default function MemberWorkoutDetailPage() {
   const [editName, setEditName] = useState("");
   const [editType, setEditType] = useState<"lift" | "cardio">("lift");
   const [editSets, setEditSets] = useState<SetRow[]>([{ reps: "", weight: "", drops: [] }]);
+  /** While editing, official catalog id (may be set after re-linking a custom-named lift). */
+  const [editSelectedOfficialId, setEditSelectedOfficialId] = useState<number | null>(null);
+  const [editExerciseSuggestions, setEditExerciseSuggestions] = useState<OfficialExercise[]>([]);
+  const [editShowCustomNameReminder, setEditShowCustomNameReminder] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingExId, setDeletingExId] = useState<number | null>(null);
   const [deletingWorkout, setDeletingWorkout] = useState(false);
@@ -290,14 +294,42 @@ export default function MemberWorkoutDetailPage() {
   }
 
   useEffect(() => {
-    if (!mode) return;
+    if (!mode && editingExId == null) return;
     fetch("/api/member/exercises/favorites")
       .then((r) => (r.ok ? r.json() : null))
       .then((d: { ids?: number[] } | null) => {
         if (Array.isArray(d?.ids)) setFavoriteExerciseIds(new Set(d.ids));
       })
       .catch(() => {});
-  }, [mode]);
+  }, [mode, editingExId]);
+
+  useEffect(() => {
+    if (editingExId == null || editType !== "lift") {
+      setEditExerciseSuggestions([]);
+      return;
+    }
+    if (!editName.trim()) {
+      let cancelled = false;
+      fetch(`/api/member/exercises/frequent?type=lift&limit=20`)
+        .then((r) => (r.ok ? r.json() : { exercises: [] }))
+        .then((d: { exercises?: OfficialExercise[] }) => {
+          if (!cancelled) setEditExerciseSuggestions(Array.isArray(d.exercises) ? d.exercises : []);
+        })
+        .catch(() => {
+          if (!cancelled) setEditExerciseSuggestions([]);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+    const t = setTimeout(() => {
+      fetch(`/api/exercises?q=${encodeURIComponent(editName.trim())}&type=lift&boost_member=1`)
+        .then((r) => (r.ok ? r.json() : []))
+        .then((list: OfficialExercise[]) => setEditExerciseSuggestions(list))
+        .catch(() => setEditExerciseSuggestions([]));
+    }, 200);
+    return () => clearTimeout(t);
+  }, [editingExId, editType, editName]);
 
   useEffect(() => {
     if (!mode) {
@@ -362,6 +394,19 @@ export default function MemberWorkoutDetailPage() {
     else if (exerciseName.trim()) setShowCustomNameReminder(true);
   }
 
+  function pickOfficialExerciseForEdit(ex: OfficialExercise) {
+    setEditName(ex.name);
+    setEditSelectedOfficialId(ex.id);
+    setEditExerciseSuggestions([]);
+    setEditShowCustomNameReminder(false);
+  }
+
+  function onEditExerciseInputBlur() {
+    const match = editExerciseSuggestions.find((e) => e.name.toLowerCase() === editName.trim().toLowerCase());
+    if (match) setEditSelectedOfficialId(match.id);
+    else if (editName.trim()) setEditShowCustomNameReminder(true);
+  }
+
   function addSet() {
     if (mode === "lift") setSets((s) => [...s, { reps: "", weight: "", drops: [] }]);
     else setSets((s) => [...s, { time: "", distance: "" }]);
@@ -369,6 +414,10 @@ export default function MemberWorkoutDetailPage() {
 
   async function saveExercise() {
     if (!exerciseName.trim()) return;
+    if (mode === "lift" && useForMy1rm && selectedOfficialId == null) {
+      alert("Pick an official exercise from the list (or match the name on blur) to use My 1RM.");
+      return;
+    }
     setSaving(true);
     try {
       const base = {
@@ -532,6 +581,9 @@ export default function MemberWorkoutDetailPage() {
     setEditName(ex.exercise_name);
     const type = ex.type === "cardio" ? "cardio" : "lift";
     setEditType(type);
+    setEditSelectedOfficialId(ex.exercise_id ?? null);
+    setEditExerciseSuggestions([]);
+    setEditShowCustomNameReminder(false);
     setUseForMy1rmEdit((ex.use_for_my_1rm ?? 0) === 1);
     if (ex.sets.length > 0) {
       setEditSets(
@@ -557,17 +609,22 @@ export default function MemberWorkoutDetailPage() {
 
   async function saveEdit() {
     if (editingExId == null) return;
+    const ex = workout?.exercises.find((e) => e.id === editingExId);
+    const resolvedExerciseId = editSelectedOfficialId ?? ex?.exercise_id ?? null;
+    if (editType === "lift" && useForMy1rmEdit && resolvedExerciseId == null) {
+      alert("Pick an official exercise from the list (or match the name on blur) to use My 1RM.");
+      return;
+    }
     setSavingEdit(true);
     try {
-      const ex = workout?.exercises.find((e) => e.id === editingExId);
       const res = await fetch(`/api/member/workouts/${id}/exercises/${editingExId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           exercise_name: editName.trim() || "Exercise",
           type: editType,
-          exercise_id: ex?.exercise_id ?? undefined,
-          ...(editType === "lift" && ex?.exercise_id != null && { use_for_my_1rm: useForMy1rmEdit }),
+          ...(resolvedExerciseId != null ? { exercise_id: resolvedExerciseId } : {}),
+          ...(editType === "lift" && { use_for_my_1rm: useForMy1rmEdit && resolvedExerciseId != null }),
         }),
       });
       if (!res.ok) {
@@ -1137,23 +1194,72 @@ export default function MemberWorkoutDetailPage() {
                 (ex.exercise_name ? `name:${ex.exercise_name.trim().toLowerCase()}` : "");
               const lastTimeSets = isRepeatMode && exKey ? sourceSetsByExerciseKey.get(exKey) : null;
               const isAddingSets = addSetsForExId === ex.id;
+              const editResolvedExerciseId =
+                editingExId === ex.id ? editSelectedOfficialId ?? ex.exercise_id ?? null : null;
               return (
                 <li key={ex.id} className="p-4 rounded-xl border border-stone-200 bg-white">
                   {editingExId === ex.id ? (
                     <div className="space-y-3">
+                      <label className="block text-xs font-medium text-stone-600">Exercise</label>
                       <input
                         type="text"
                         value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
+                        onChange={(e) => {
+                          setEditName(e.target.value);
+                          setEditSelectedOfficialId(null);
+                        }}
+                        onBlur={editType === "lift" ? onEditExerciseInputBlur : undefined}
                         className="w-full px-3 py-2 rounded-lg border border-stone-200 text-stone-800"
-                        placeholder="Exercise name"
+                        placeholder="e.g. Barbell Squat"
+                        list="edit-exercise-suggestions"
+                        autoComplete="off"
                       />
+                      <datalist id="edit-exercise-suggestions">
+                        {editExerciseSuggestions.map((sug) => (
+                          <option key={sug.id} value={sug.name} />
+                        ))}
+                      </datalist>
+                      {editType === "lift" && editExerciseSuggestions.length > 0 && !editName.trim() && (
+                        <p className="text-xs font-semibold text-stone-600">Pinned &amp; often used — ☆ to pin</p>
+                      )}
+                      {editType === "lift" && editExerciseSuggestions.length > 0 && (
+                        <ul className="border border-stone-200 rounded-lg bg-stone-50 max-h-36 overflow-auto divide-y divide-stone-100">
+                          {editExerciseSuggestions.map((sug) => (
+                            <li key={sug.id} className="flex items-stretch">
+                              <button
+                                type="button"
+                                onClick={(e) => toggleExerciseFavorite(sug.id, e)}
+                                className="shrink-0 px-2.5 text-amber-600 hover:bg-amber-50 text-lg leading-none"
+                                title={favoriteExerciseIds.has(sug.id) ? "Unpin" : "Pin"}
+                                aria-label={favoriteExerciseIds.has(sug.id) ? "Unpin" : "Pin"}
+                              >
+                                {favoriteExerciseIds.has(sug.id) ? "★" : "☆"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => pickOfficialExerciseForEdit(sug)}
+                                className="flex-1 min-w-0 text-left px-2 py-2 text-sm text-stone-800 hover:bg-white"
+                              >
+                                {sug.name}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {editShowCustomNameReminder && editSelectedOfficialId == null && editName.trim() && editType === "lift" && (
+                        <p className="text-xs text-stone-500">
+                          Custom name — pick from the list above to link progress and My 1RM.
+                        </p>
+                      )}
                       <select
                         value={editType}
                         onChange={(e) => {
                           const newType = e.target.value === "cardio" ? "cardio" : "lift";
                           setEditType(newType);
-                          if (newType === "cardio") setUseForMy1rmEdit(false);
+                          if (newType === "cardio") {
+                            setUseForMy1rmEdit(false);
+                            setEditSelectedOfficialId(null);
+                          }
                           setEditSets(newType === "lift" ? [{ reps: "", weight: "", drops: [] }] : [{ time: "", distance: "" }]);
                         }}
                         className="px-3 py-2 rounded-lg border border-stone-200 text-stone-800"
@@ -1161,7 +1267,7 @@ export default function MemberWorkoutDetailPage() {
                         <option value="lift">Lift</option>
                         <option value="cardio">Cardio</option>
                       </select>
-                      {editType === "lift" && workout?.exercises.find((e) => e.id === editingExId)?.exercise_id != null && (
+                      {editType === "lift" && editSelectedOfficialId != null && editName.trim() && (
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input
                             type="checkbox"
@@ -1203,7 +1309,7 @@ export default function MemberWorkoutDetailPage() {
                                       className="w-20 px-2 py-1.5 rounded border border-stone-200"
                                     />
                                     <PRInfo
-                                      exerciseId={editingExId != null ? workout?.exercises.find((e) => e.id === editingExId)?.exercise_id ?? null : null}
+                                      exerciseId={editResolvedExerciseId}
                                       exerciseName={editName}
                                       weight={row.weight}
                                       excludeWorkoutId={workout?.id ?? null}
@@ -1211,7 +1317,7 @@ export default function MemberWorkoutDetailPage() {
                                     <AutoImplied1RMDisplay reps={row.reps} weight={row.weight} />
                                   </div>
                                   <LiftSetPrPercent
-                                    exerciseId={editingExId != null ? workout?.exercises.find((e) => e.id === editingExId)?.exercise_id ?? null : null}
+                                    exerciseId={editResolvedExerciseId}
                                     exerciseName={editName}
                                     weightStr={row.weight}
                                     repsStr={row.reps}
@@ -1260,7 +1366,7 @@ export default function MemberWorkoutDetailPage() {
                                       <AutoImplied1RMDisplay reps={drop.reps} weight={drop.weight} />
                                     </div>
                                     <LiftSetPrPercent
-                                      exerciseId={editingExId != null ? workout?.exercises.find((e) => e.id === editingExId)?.exercise_id ?? null : null}
+                                      exerciseId={editResolvedExerciseId}
                                       exerciseName={editName}
                                       weightStr={drop.weight}
                                       repsStr={drop.reps}
@@ -1338,7 +1444,12 @@ export default function MemberWorkoutDetailPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setEditingExId(null)}
+                          onClick={() => {
+                            setEditingExId(null);
+                            setEditSelectedOfficialId(null);
+                            setEditExerciseSuggestions([]);
+                            setEditShowCustomNameReminder(false);
+                          }}
                           className="px-3 py-1.5 rounded-lg border border-stone-200 text-stone-600 text-sm hover:bg-stone-50"
                         >
                           Cancel
