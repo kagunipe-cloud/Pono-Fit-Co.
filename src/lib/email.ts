@@ -95,8 +95,29 @@ async function sendViaGmailApi(to: string, subject: string, text: string): Promi
 }
 
 /**
+ * Fold a long RFC 5322 header (comma-separated addresses) so physical lines stay under ~998 octets.
+ */
+function foldCommaSeparatedHeader(name: string, value: string): string {
+  const maxLen = 900;
+  const segments = value.split(",").map((s) => s.trim()).filter(Boolean);
+  const lines: string[] = [];
+  let current = `${name}: `;
+  for (let i = 0; i < segments.length; i++) {
+    const piece = (i === 0 ? "" : ", ") + segments[i];
+    if (current.length + piece.length > maxLen && current !== `${name}: `) {
+      lines.push(current);
+      current = " " + segments[i];
+    } else {
+      current += piece;
+    }
+  }
+  lines.push(current);
+  return lines.join("\r\n");
+}
+
+/**
  * One broadcast message with BCC recipients (mailing-list style). Recipients do not see each other.
- * Uses "Undisclosed-recipients" in To — standard for bulk BCC.
+ * Gmail API rejects `To: Undisclosed-recipients:;` — use the sender as To (same as From).
  */
 async function sendViaGmailApiBcc(
   bcc: string[],
@@ -111,10 +132,11 @@ async function sendViaGmailApiBcc(
   if (!accessToken) return { ok: false, error: "Failed to get Gmail access token" };
 
   const bccList = bcc.map((e) => e.trim()).filter(Boolean).join(", ");
+  const bccHeader = foldCommaSeparatedHeader("Bcc", bccList);
   const lines = [
     `From: ${from}`,
-    "To: Undisclosed-recipients:;",
-    `Bcc: ${bccList}`,
+    `To: ${from}`,
+    bccHeader,
     `Subject: ${subject.replace(/\r?\n/g, " ")}`,
     "MIME-Version: 1.0",
     "Content-Type: text/plain; charset=utf-8",
