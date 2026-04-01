@@ -12,6 +12,17 @@ type LiftSetRow = { reps: string; weight: string; drops?: { reps: string; weight
 type CardioSetRow = { time: string; distance: string };
 type SetRow = LiftSetRow | CardioSetRow;
 
+/** Per-field: false = still showing last session’s values (purple); true = member edited. */
+type LiftAddRepeatTouched = { w: boolean; r: boolean; drops: { w: boolean; r: boolean }[] };
+type CardioAddRepeatTouched = { t: boolean; d: boolean };
+
+function repeatPrefillInputClass(touched: boolean, widthClass: string): string {
+  const base = `${widthClass} px-2 py-1.5 rounded border text-sm`;
+  return touched
+    ? `${base} border-stone-200 text-stone-800`
+    : `${base} border-purple-200 bg-purple-50/50 text-purple-800 placeholder:text-purple-400/80`;
+}
+
 type Exercise = {
   id: number;
   type: string;
@@ -144,6 +155,8 @@ export default function MemberWorkoutDetailPage() {
   const [repeating, setRepeating] = useState(false);
   const [addSetsForExId, setAddSetsForExId] = useState<number | null>(null);
   const [addSetsRows, setAddSetsRows] = useState<SetRow[]>([{ reps: "", weight: "", drops: [] }]);
+  const [addSetsRepeatLiftTouched, setAddSetsRepeatLiftTouched] = useState<LiftAddRepeatTouched[] | null>(null);
+  const [addSetsRepeatCardioTouched, setAddSetsRepeatCardioTouched] = useState<CardioAddRepeatTouched[] | null>(null);
   const [savingSets, setSavingSets] = useState(false);
   const [exerciseSuggestions, setExerciseSuggestions] = useState<OfficialExercise[]>([]);
   const [selectedOfficialId, setSelectedOfficialId] = useState<number | null>(null);
@@ -533,14 +546,55 @@ export default function MemberWorkoutDetailPage() {
     }
   }
 
-  function startAddSetsFor(ex: Exercise) {
+  function startAddSetsFor(ex: Exercise, lastTimeSets: Exercise["sets"] | null | undefined) {
     setAddSetsForExId(ex.id);
+    const hasLast = lastTimeSets && lastTimeSets.length > 0;
+    if (hasLast && ex.type === "lift") {
+      const groups = groupLiftSets(lastTimeSets as Exercise["sets"]);
+      const rows: LiftSetRow[] = groups.map((group) => {
+        const first = group[0];
+        const drops =
+          group.length > 1 ? group.slice(1).map((p) => ({ reps: String(p.reps ?? ""), weight: String(p.weight_kg ?? "") })) : [];
+        return { reps: String(first?.reps ?? ""), weight: String(first?.weight_kg ?? ""), drops };
+      });
+      setAddSetsRows(rows);
+      setAddSetsRepeatLiftTouched(
+        groups.map((group) => {
+          const dropCount = Math.max(0, group.length - 1);
+          return {
+            w: false,
+            r: false,
+            drops: Array.from({ length: dropCount }, () => ({ w: false, r: false })),
+          };
+        })
+      );
+      setAddSetsRepeatCardioTouched(null);
+      return;
+    }
+    if (hasLast && ex.type !== "lift") {
+      setAddSetsRows(
+        (lastTimeSets as Exercise["sets"]).map((s) => ({
+          time: s.time_seconds != null ? String(Math.round(s.time_seconds / 60)) : "",
+          distance: s.distance_km != null ? String(kmToMiles(s.distance_km)) : "",
+        }))
+      );
+      setAddSetsRepeatCardioTouched((lastTimeSets as Exercise["sets"]).map(() => ({ t: false, d: false })));
+      setAddSetsRepeatLiftTouched(null);
+      return;
+    }
     setAddSetsRows(ex.type === "lift" ? [{ reps: "", weight: "", drops: [] }] : [{ time: "", distance: "" }]);
+    setAddSetsRepeatLiftTouched(null);
+    setAddSetsRepeatCardioTouched(null);
   }
 
   function addRepeatSet(exType: string) {
-    if (exType === "lift") setAddSetsRows((s) => [...s, { reps: "", weight: "", drops: [] }]);
-    else setAddSetsRows((s) => [...s, { time: "", distance: "" }]);
+    if (exType === "lift") {
+      setAddSetsRows((s) => [...s, { reps: "", weight: "", drops: [] }]);
+      setAddSetsRepeatLiftTouched((prev) => (prev == null ? null : [...prev, { w: true, r: true, drops: [] }]));
+    } else {
+      setAddSetsRows((s) => [...s, { time: "", distance: "" }]);
+      setAddSetsRepeatCardioTouched((prev) => (prev == null ? null : [...prev, { t: true, d: true }]));
+    }
   }
 
   async function saveRepeatSets() {
@@ -571,6 +625,8 @@ export default function MemberWorkoutDetailPage() {
       });
       if (res.ok) {
         setAddSetsForExId(null);
+        setAddSetsRepeatLiftTouched(null);
+        setAddSetsRepeatCardioTouched(null);
         fetchWorkout();
       }
     } finally {
@@ -716,6 +772,14 @@ export default function MemberWorkoutDetailPage() {
   function removeAddSetRow(index: number) {
     setAddSetsRows((prev) => {
       if (prev.length <= 1) return prev;
+      return prev.filter((_, i) => i !== index);
+    });
+    setAddSetsRepeatLiftTouched((prev) => {
+      if (prev == null || prev.length <= 1) return prev;
+      return prev.filter((_, i) => i !== index);
+    });
+    setAddSetsRepeatCardioTouched((prev) => {
+      if (prev == null || prev.length <= 1) return prev;
       return prev.filter((_, i) => i !== index);
     });
   }
@@ -897,7 +961,9 @@ export default function MemberWorkoutDetailPage() {
             Add Cardio
           </button>
           {isRepeatMode && (
-            <span className="text-sm text-stone-500">Fill in your sets below for each exercise.</span>
+            <span className="text-sm text-stone-500">
+              Last session’s numbers are prefilled in purple; edit a field when you log this session’s result.
+            </span>
           )}
         </div>
       )}
@@ -1586,33 +1652,14 @@ export default function MemberWorkoutDetailPage() {
                       </div>
                     </>
                   )}
-                  {editingExId !== ex.id && isRepeatMode && lastTimeSets && lastTimeSets.length > 0 && (
-                    <div className="mt-2">
-                      <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Last time</p>
-                      <ul className="mt-0.5 space-y-0.5 text-sm text-stone-600">
-                        {ex.type === "lift"
-                          ? groupLiftSets(lastTimeSets as Exercise["sets"]).map((group, i) => (
-                              <li key={i}>
-                                Set {i + 1}: {group.map((s, j) => (
-                                  <span key={j}>
-                                    {j > 0 && " ↓ "}
-                                    {s.weight_kg != null ? s.weight_kg + " lbs" : "—"} × {s.reps ?? "—"} reps
-                                  </span>
-                                ))}
-                              </li>
-                            ))
-                          : (lastTimeSets as Exercise["sets"]).map((s: Exercise["sets"][0], i: number) => (
-                              <li key={i}>
-                                Set {i + 1}: {s.time_seconds != null ? Math.round(s.time_seconds / 60) + " min" : "—"}
-                                {s.distance_km != null ? ", " + kmToMiles(s.distance_km).toFixed(1) + " mi" : ""}
-                              </li>
-                            ))}
-                      </ul>
-                    </div>
-                  )}
                   {editingExId !== ex.id && (
                   <div className="mt-2">
-                    {isRepeatMode && <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">This time</p>}
+                    {isRepeatMode && (
+                      <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">
+                        This session
+                        <span className="font-normal normal-case text-stone-400 ml-1">(purple = last time until you change it)</span>
+                      </p>
+                    )}
                     {ex.sets.length > 0 ? (
                       <>
                         <ul className="mt-0.5 space-y-0.5 text-sm text-stone-600">
@@ -1696,7 +1743,11 @@ export default function MemberWorkoutDetailPage() {
                       isAddingSets ? (
                         <div className="mt-3 space-y-2">
                           {ex.type === "lift"
-                            ? (addSetsRows as LiftSetRow[]).map((row, i) => (
+                            ? (addSetsRows as LiftSetRow[]).map((row, i) => {
+                                const lt = addSetsRepeatLiftTouched?.[i];
+                                const wT = lt?.w ?? true;
+                                const rT = lt?.r ?? true;
+                                return (
                                 <div key={i} className="space-y-1 w-full">
                                   <div className="flex flex-wrap items-center gap-y-2 gap-x-2 w-full justify-between">
                                     <div className="flex flex-wrap items-center gap-2 min-w-0">
@@ -1705,23 +1756,35 @@ export default function MemberWorkoutDetailPage() {
                                         type="text"
                                         placeholder="Weight (lbs)"
                                         value={row.weight}
-                                        onChange={(e) =>
+                                        onChange={(e) => {
+                                          const v = e.target.value;
                                           setAddSetsRows((s) =>
-                                            s.map((r, ri) => (ri === i ? { ...(r as LiftSetRow), weight: e.target.value } : r))
-                                          )
-                                        }
-                                        className="w-24 px-2 py-1.5 rounded border border-stone-200"
+                                            s.map((r, ri) => (ri === i ? { ...(r as LiftSetRow), weight: v } : r))
+                                          );
+                                          setAddSetsRepeatLiftTouched((prev) =>
+                                            prev == null
+                                              ? null
+                                              : prev.map((t, ti) => (ti === i ? { ...t, w: true } : t))
+                                          );
+                                        }}
+                                        className={repeatPrefillInputClass(wT, "w-24")}
                                       />
                                       <input
                                         type="text"
                                         placeholder="Reps"
                                         value={row.reps}
-                                        onChange={(e) =>
+                                        onChange={(e) => {
+                                          const v = e.target.value;
                                           setAddSetsRows((s) =>
-                                            s.map((r, ri) => (ri === i ? { ...(r as LiftSetRow), reps: e.target.value } : r))
-                                          )
-                                        }
-                                        className="w-20 px-2 py-1.5 rounded border border-stone-200"
+                                            s.map((r, ri) => (ri === i ? { ...(r as LiftSetRow), reps: v } : r))
+                                          );
+                                          setAddSetsRepeatLiftTouched((prev) =>
+                                            prev == null
+                                              ? null
+                                              : prev.map((t, ti) => (ti === i ? { ...t, r: true } : t))
+                                          );
+                                        }}
+                                        className={repeatPrefillInputClass(rT, "w-20")}
                                       />
                                       {addSetsForExId != null && (() => {
                                         const exForPr = workout?.exercises.find((e) => e.id === addSetsForExId);
@@ -1761,7 +1824,10 @@ export default function MemberWorkoutDetailPage() {
                                       )}
                                     </div>
                                   </div>
-                                  {(row.drops ?? []).map((drop, di) => (
+                                  {(row.drops ?? []).map((drop, di) => {
+                                    const dwT = lt?.drops[di]?.w ?? true;
+                                    const drT = lt?.drops[di]?.r ?? true;
+                                    return (
                                     <div key={di} className="flex flex-wrap items-center gap-y-2 gap-x-2 pl-8 w-full justify-between">
                                       <div className="flex flex-wrap items-center gap-2 min-w-0">
                                         <span className="text-stone-400">↓</span>
@@ -1769,35 +1835,55 @@ export default function MemberWorkoutDetailPage() {
                                           type="text"
                                           placeholder="lbs"
                                           value={drop.weight}
-                                          onChange={(e) =>
+                                          onChange={(e) => {
+                                            const v = e.target.value;
                                             setAddSetsRows((s) =>
                                               s.map((r, ri) => {
                                                 if (ri !== i) return r;
                                                 const row = r as LiftSetRow;
                                                 const drops = [...(row.drops ?? [])];
-                                                drops[di] = { ...drops[di]!, weight: e.target.value };
+                                                drops[di] = { ...drops[di]!, weight: v };
                                                 return { ...row, drops };
                                               })
-                                            )
-                                          }
-                                          className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                                            );
+                                            setAddSetsRepeatLiftTouched((prev) => {
+                                              if (prev == null) return null;
+                                              return prev.map((t, ti) => {
+                                                if (ti !== i) return t;
+                                                const drops = [...t.drops];
+                                                if (drops[di]) drops[di] = { ...drops[di]!, w: true };
+                                                return { ...t, drops };
+                                              });
+                                            });
+                                          }}
+                                          className={repeatPrefillInputClass(dwT, "w-16")}
                                         />
                                         <input
                                           type="text"
                                           placeholder="Reps"
                                           value={drop.reps}
-                                          onChange={(e) =>
+                                          onChange={(e) => {
+                                            const v = e.target.value;
                                             setAddSetsRows((s) =>
                                               s.map((r, ri) => {
                                                 if (ri !== i) return r;
                                                 const row = r as LiftSetRow;
                                                 const drops = [...(row.drops ?? [])];
-                                                drops[di] = { ...drops[di]!, reps: e.target.value };
+                                                drops[di] = { ...drops[di]!, reps: v };
                                                 return { ...row, drops };
                                               })
-                                            )
-                                          }
-                                          className="w-16 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                                            );
+                                            setAddSetsRepeatLiftTouched((prev) => {
+                                              if (prev == null) return null;
+                                              return prev.map((t, ti) => {
+                                                if (ti !== i) return t;
+                                                const drops = [...t.drops];
+                                                if (drops[di]) drops[di] = { ...drops[di]!, r: true };
+                                                return { ...t, drops };
+                                              });
+                                            });
+                                          }}
+                                          className={repeatPrefillInputClass(drT, "w-16")}
                                         />
                                         <AutoImplied1RMDisplay reps={drop.reps} weight={drop.weight} />
                                       </div>
@@ -1815,18 +1901,25 @@ export default function MemberWorkoutDetailPage() {
                                         ) : null;
                                       })()}
                                     </div>
-                                  ))}
+                                    );
+                                  })}
                                   {(row.drops?.length ?? 0) < 2 && (
                                     <div className="pl-8">
                                       <button
                                         type="button"
-                                        onClick={() =>
+                                        onClick={() => {
                                           setAddSetsRows((s) =>
                                             s.map((r, ri) =>
                                               ri === i ? { ...(r as LiftSetRow), drops: [...((r as LiftSetRow).drops ?? []), { reps: "", weight: "" }] } : r
                                             )
-                                          )
-                                        }
+                                          );
+                                          setAddSetsRepeatLiftTouched((prev) => {
+                                            if (prev == null) return null;
+                                            return prev.map((t, ti) =>
+                                              ti === i ? { ...t, drops: [...t.drops, { w: true, r: true }] } : t
+                                            );
+                                          });
+                                        }}
                                         className="text-xs text-brand-600 hover:underline"
                                       >
                                         Add dropset
@@ -1834,8 +1927,13 @@ export default function MemberWorkoutDetailPage() {
                                     </div>
                                   )}
                                 </div>
-                              ))
-                            : (addSetsRows as { time: string; distance: string }[]).map((row, i) => (
+                              );
+                              })
+                            : (addSetsRows as { time: string; distance: string }[]).map((row, i) => {
+                                const ct = addSetsRepeatCardioTouched?.[i];
+                                const tT = ct?.t ?? true;
+                                const dT = ct?.d ?? true;
+                                return (
                                 <div key={i} className="flex gap-2 flex-wrap items-center justify-between">
                                   <div className="flex gap-2 flex-wrap items-center">
                                     <span className="text-sm text-stone-500 w-8">Set {i + 1}</span>
@@ -1844,22 +1942,34 @@ export default function MemberWorkoutDetailPage() {
                                       placeholder="Time (min)"
                                       value={row.time}
                                       onChange={(e) => {
+                                        const v = e.target.value;
                                         const next = [...addSetsRows];
-                                        (next[i] as { time: string; distance: string }).time = e.target.value;
+                                        (next[i] as { time: string; distance: string }).time = v;
                                         setAddSetsRows(next);
+                                        setAddSetsRepeatCardioTouched((prev) =>
+                                          prev == null
+                                            ? null
+                                            : prev.map((t, ti) => (ti === i ? { ...t, t: true } : t))
+                                        );
                                       }}
-                                      className="w-24 px-2 py-1.5 rounded border border-stone-200"
+                                      className={repeatPrefillInputClass(tT, "w-24")}
                                     />
                                     <input
                                       type="text"
                                       placeholder="Distance (mi)"
                                       value={row.distance}
                                       onChange={(e) => {
+                                        const v = e.target.value;
                                         const next = [...addSetsRows];
-                                        (next[i] as { time: string; distance: string }).distance = e.target.value;
+                                        (next[i] as { time: string; distance: string }).distance = v;
                                         setAddSetsRows(next);
+                                        setAddSetsRepeatCardioTouched((prev) =>
+                                          prev == null
+                                            ? null
+                                            : prev.map((t, ti) => (ti === i ? { ...t, d: true } : t))
+                                        );
                                       }}
-                                      className="w-24 px-2 py-1.5 rounded border border-stone-200"
+                                      className={repeatPrefillInputClass(dT, "w-24")}
                                     />
                                   </div>
                                   {(addSetsRows as { time: string; distance: string }[]).length > 1 && (
@@ -1872,7 +1982,8 @@ export default function MemberWorkoutDetailPage() {
                                     </button>
                                   )}
                                 </div>
-                              ))}
+                              );
+                              })}
                           <div className="flex gap-2 flex-wrap">
                             <button
                               type="button"
@@ -1891,7 +2002,11 @@ export default function MemberWorkoutDetailPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setAddSetsForExId(null)}
+                              onClick={() => {
+                                setAddSetsForExId(null);
+                                setAddSetsRepeatLiftTouched(null);
+                                setAddSetsRepeatCardioTouched(null);
+                              }}
                               className="px-3 py-1.5 rounded-lg border border-stone-200 text-stone-600 text-sm hover:bg-stone-50"
                             >
                               Cancel
@@ -1901,7 +2016,7 @@ export default function MemberWorkoutDetailPage() {
                       ) : (
                         <button
                           type="button"
-                          onClick={() => startAddSetsFor(ex)}
+                          onClick={() => startAddSetsFor(ex, lastTimeSets)}
                           className="mt-2 px-3 py-1.5 rounded-lg border border-stone-200 bg-stone-50 text-sm font-medium text-stone-700 hover:bg-stone-100"
                         >
                           {ex.sets.length > 0 ? "Add more sets" : "Log sets"}
