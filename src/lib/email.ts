@@ -95,29 +95,19 @@ async function sendViaGmailApi(to: string, subject: string, text: string): Promi
 }
 
 /**
- * Fold a long RFC 5322 header (comma-separated addresses) so physical lines stay under ~998 octets.
+ * Gmail `users.messages.send` rejects long or multi-line folded `Bcc` headers ("Invalid Bcc header").
+ * Keep each message to a small number of addresses so one `Bcc:` line stays under RFC limits and parses cleanly.
  */
-function foldCommaSeparatedHeader(name: string, value: string): string {
-  const maxLen = 900;
-  const segments = value.split(",").map((s) => s.trim()).filter(Boolean);
-  const lines: string[] = [];
-  let current = `${name}: `;
-  for (let i = 0; i < segments.length; i++) {
-    const piece = (i === 0 ? "" : ", ") + segments[i];
-    if (current.length + piece.length > maxLen && current !== `${name}: `) {
-      lines.push(current);
-      current = " " + segments[i];
-    } else {
-      current += piece;
-    }
-  }
-  lines.push(current);
-  return lines.join("\r\n");
+function getGmailBccChunkSize(): number {
+  const raw = process.env.EMAIL_GMAIL_BCC_CHUNK?.trim();
+  const n = raw ? parseInt(raw, 10) : 12;
+  if (Number.isNaN(n) || n < 1) return 12;
+  return Math.min(50, n);
 }
 
 /**
  * One broadcast message with BCC recipients (mailing-list style). Recipients do not see each other.
- * Gmail API rejects `To: Undisclosed-recipients:;` — use the sender as To (same as From).
+ * Gmail API: `To` must be a real address (use sender); `Bcc` must be a single short line (batch via {@link getGmailBccChunkSize}).
  */
 async function sendViaGmailApiBcc(
   bcc: string[],
@@ -132,11 +122,17 @@ async function sendViaGmailApiBcc(
   if (!accessToken) return { ok: false, error: "Failed to get Gmail access token" };
 
   const bccList = bcc.map((e) => e.trim()).filter(Boolean).join(", ");
-  const bccHeader = foldCommaSeparatedHeader("Bcc", bccList);
+  const bccHeaderLine = `Bcc: ${bccList}`;
+  if (bccHeaderLine.length > 990) {
+    return {
+      ok: false,
+      error: `Bcc line too long (${bccHeaderLine.length} chars, max ~990). Lower EMAIL_GMAIL_BCC_CHUNK (currently ${getGmailBccChunkSize()} addresses per message).`,
+    };
+  }
   const lines = [
     `From: ${from}`,
     `To: ${from}`,
-    bccHeader,
+    bccHeaderLine,
     `Subject: ${subject.replace(/\r?\n/g, " ")}`,
     "MIME-Version: 1.0",
     "Content-Type: text/plain; charset=utf-8",
@@ -195,8 +191,9 @@ export async function sendBulkBroadcastEmail(
   let batches = 0;
 
   if (isGmailApiConfigured()) {
-    for (let i = 0; i < unique.length; i += chunkSize) {
-      const chunk = unique.slice(i, i + chunkSize);
+    const gmailChunk = getGmailBccChunkSize();
+    for (let i = 0; i < unique.length; i += gmailChunk) {
+      const chunk = unique.slice(i, i + gmailChunk);
       batches++;
       const result = await sendViaGmailApiBcc(chunk, subject, text);
       if (result.ok) {
@@ -204,7 +201,7 @@ export async function sendBulkBroadcastEmail(
       } else {
         errors.push(`Batch ${batches} (${chunk.length} addresses): ${result.error ?? "Failed"}`);
       }
-      if (i + chunkSize < unique.length) {
+      if (i + gmailChunk < unique.length) {
         await new Promise((r) => setTimeout(r, 400));
       }
     }
