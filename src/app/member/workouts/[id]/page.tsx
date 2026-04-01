@@ -160,6 +160,8 @@ export default function MemberWorkoutDetailPage() {
   const [editShowCustomNameReminder, setEditShowCustomNameReminder] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingExId, setDeletingExId] = useState<number | null>(null);
+  /** `"${exerciseId}-${setOrder}"` while a set delete request is in flight */
+  const [deletingSetKey, setDeletingSetKey] = useState<string | null>(null);
   const [deletingWorkout, setDeletingWorkout] = useState(false);
   const [editingWorkoutName, setEditingWorkoutName] = useState(false);
   const [workoutNameValue, setWorkoutNameValue] = useState("");
@@ -684,6 +686,38 @@ export default function MemberWorkoutDetailPage() {
     } finally {
       setDeletingExId(null);
     }
+  }
+
+  async function deleteSetFromExercise(exerciseId: number, setOrder: number) {
+    if (!confirm("Remove this set from the exercise?")) return;
+    const key = `${exerciseId}-${setOrder}`;
+    setDeletingSetKey(key);
+    try {
+      const res = await fetch(
+        `/api/member/workouts/${id}/exercises/${exerciseId}/sets?set_order=${encodeURIComponent(String(setOrder))}`,
+        { method: "DELETE" }
+      );
+      if (res.ok) {
+        fetchWorkout();
+        setPrInvalidateKey((k) => k + 1);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert((err as { error?: string }).error ?? "Could not remove set");
+      }
+    } finally {
+      setDeletingSetKey(null);
+    }
+  }
+
+  function removeEditSetRow(index: number) {
+    setEditSets((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function removeAddSetRow(index: number) {
+    setAddSetsRows((prev) => {
+      if (prev.length <= 1) return prev;
+      return prev.filter((_, i) => i !== index);
+    });
   }
 
   if (loading) return <div className="p-8 text-center text-stone-500">Loading…</div>;
@@ -1316,14 +1350,23 @@ export default function MemberWorkoutDetailPage() {
                                     />
                                     <AutoImplied1RMDisplay reps={row.reps} weight={row.weight} />
                                   </div>
-                                  <LiftSetPrPercent
-                                    exerciseId={editResolvedExerciseId}
-                                    exerciseName={editName}
-                                    weightStr={row.weight}
-                                    repsStr={row.reps}
-                                    excludeWorkoutId={workout?.id ?? null}
-                                    invalidateKey={prInvalidateKey}
-                                  />
+                                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                    <LiftSetPrPercent
+                                      exerciseId={editResolvedExerciseId}
+                                      exerciseName={editName}
+                                      weightStr={row.weight}
+                                      repsStr={row.reps}
+                                      excludeWorkoutId={workout?.id ?? null}
+                                      invalidateKey={prInvalidateKey}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => removeEditSetRow(i)}
+                                      className="text-xs text-red-600 hover:underline"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
                                 </div>
                                 {(row.drops ?? []).map((drop, di) => (
                                   <div key={di} className="flex flex-wrap items-center gap-y-2 gap-x-2 pl-10 w-full justify-between">
@@ -1395,34 +1438,43 @@ export default function MemberWorkoutDetailPage() {
                               </div>
                             ))
                           : (editSets as { time: string; distance: string }[]).map((row, i) => (
-                              <div key={i} className="flex gap-2 flex-wrap items-center">
-                                <span className="text-sm text-stone-500 w-10">Set {i + 1}</span>
-                                <input
-                                  type="text"
-                                  placeholder="Time (min)"
-                                  value={row.time}
-                                  onChange={(e) =>
-                                    setEditSets((s) => {
-                                      const next = [...s];
-                                      (next[i] as { time: string; distance: string }).time = e.target.value;
-                                      return next;
-                                    })
-                                  }
-                                  className="w-24 px-2 py-1.5 rounded border border-stone-200"
-                                />
-                                <input
-                                  type="text"
-                                  placeholder="Distance (mi)"
-                                  value={row.distance}
-                                  onChange={(e) =>
-                                    setEditSets((s) => {
-                                      const next = [...s];
-                                      (next[i] as { time: string; distance: string }).distance = e.target.value;
-                                      return next;
-                                    })
-                                  }
-                                  className="w-24 px-2 py-1.5 rounded border border-stone-200"
-                                />
+                              <div key={i} className="flex gap-2 flex-wrap items-center justify-between">
+                                <div className="flex gap-2 flex-wrap items-center">
+                                  <span className="text-sm text-stone-500 w-10">Set {i + 1}</span>
+                                  <input
+                                    type="text"
+                                    placeholder="Time (min)"
+                                    value={row.time}
+                                    onChange={(e) =>
+                                      setEditSets((s) => {
+                                        const next = [...s];
+                                        (next[i] as { time: string; distance: string }).time = e.target.value;
+                                        return next;
+                                      })
+                                    }
+                                    className="w-24 px-2 py-1.5 rounded border border-stone-200"
+                                  />
+                                  <input
+                                    type="text"
+                                    placeholder="Distance (mi)"
+                                    value={row.distance}
+                                    onChange={(e) =>
+                                      setEditSets((s) => {
+                                        const next = [...s];
+                                        (next[i] as { time: string; distance: string }).distance = e.target.value;
+                                        return next;
+                                      })
+                                    }
+                                    className="w-24 px-2 py-1.5 rounded border border-stone-200"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => removeEditSetRow(i)}
+                                  className="text-xs text-red-600 hover:underline shrink-0"
+                                >
+                                  Remove
+                                </button>
                               </div>
                             ))}
                         <button
@@ -1594,18 +1646,41 @@ export default function MemberWorkoutDetailPage() {
                                             <span aria-hidden>🍍</span> {prLines.join(" · ")}
                                           </span>
                                         )}
+                                        {j === 0 && (
+                                          <button
+                                            type="button"
+                                            onClick={() => deleteSetFromExercise(ex.id, setOrder)}
+                                            disabled={deletingSetKey === `${ex.id}-${setOrder}`}
+                                            className="text-xs text-red-600 hover:underline disabled:opacity-50 shrink-0"
+                                          >
+                                            {deletingSetKey === `${ex.id}-${setOrder}` ? "…" : "Remove set"}
+                                          </button>
+                                        )}
                                       </span>
                                     </div>
                                   ))}
                                 </li>
                               );
                               })
-                            : ex.sets.map((s, i) => (
-                                <li key={s.id}>
-                                  Set {i + 1}: {s.time_seconds != null ? Math.round(s.time_seconds / 60) + " min" : "—"}
-                                  {s.distance_km != null ? ", " + kmToMiles(s.distance_km).toFixed(1) + " mi" : ""}
+                            : ex.sets.map((s, i) => {
+                                const cardioSetOrder = s.set_order ?? i;
+                                return (
+                                <li key={s.id} className="flex flex-wrap items-center justify-between gap-2">
+                                  <span>
+                                    Set {i + 1}: {s.time_seconds != null ? Math.round(s.time_seconds / 60) + " min" : "—"}
+                                    {s.distance_km != null ? ", " + kmToMiles(s.distance_km).toFixed(1) + " mi" : ""}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => deleteSetFromExercise(ex.id, cardioSetOrder)}
+                                    disabled={deletingSetKey === `${ex.id}-${cardioSetOrder}`}
+                                    className="text-xs text-red-600 hover:underline disabled:opacity-50 shrink-0"
+                                  >
+                                    {deletingSetKey === `${ex.id}-${cardioSetOrder}` ? "…" : "Remove set"}
+                                  </button>
                                 </li>
-                              ))}
+                              );
+                              })}
                         </ul>
                         {ex.type === "lift" && (() => {
                           const best = maxAutoImplied1RM(ex.sets);
@@ -1661,19 +1736,30 @@ export default function MemberWorkoutDetailPage() {
                                       })()}
                                       <AutoImplied1RMDisplay reps={row.reps} weight={row.weight} />
                                     </div>
-                                    {addSetsForExId != null && (() => {
-                                      const exForPr = workout?.exercises.find((e) => e.id === addSetsForExId);
-                                      return exForPr ? (
-                                        <LiftSetPrPercent
-                                          exerciseId={exForPr.exercise_id ?? null}
-                                          exerciseName={exForPr.exercise_name}
-                                          weightStr={row.weight}
-                                          repsStr={row.reps}
-                                          excludeWorkoutId={workout?.id ?? null}
-                                          invalidateKey={prInvalidateKey}
-                                        />
-                                      ) : null;
-                                    })()}
+                                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                                      {addSetsForExId != null && (() => {
+                                        const exForPr = workout?.exercises.find((e) => e.id === addSetsForExId);
+                                        return exForPr ? (
+                                          <LiftSetPrPercent
+                                            exerciseId={exForPr.exercise_id ?? null}
+                                            exerciseName={exForPr.exercise_name}
+                                            weightStr={row.weight}
+                                            repsStr={row.reps}
+                                            excludeWorkoutId={workout?.id ?? null}
+                                            invalidateKey={prInvalidateKey}
+                                          />
+                                        ) : null;
+                                      })()}
+                                      {(addSetsRows as LiftSetRow[]).length > 1 && (
+                                        <button
+                                          type="button"
+                                          onClick={() => removeAddSetRow(i)}
+                                          className="text-xs text-red-600 hover:underline"
+                                        >
+                                          Remove
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
                                   {(row.drops ?? []).map((drop, di) => (
                                     <div key={di} className="flex flex-wrap items-center gap-y-2 gap-x-2 pl-8 w-full justify-between">
@@ -1750,30 +1836,41 @@ export default function MemberWorkoutDetailPage() {
                                 </div>
                               ))
                             : (addSetsRows as { time: string; distance: string }[]).map((row, i) => (
-                                <div key={i} className="flex gap-2 flex-wrap items-center">
-                                  <span className="text-sm text-stone-500 w-8">Set {i + 1}</span>
-                                  <input
-                                    type="text"
-                                    placeholder="Time (min)"
-                                    value={row.time}
-                                    onChange={(e) => {
-                                      const next = [...addSetsRows];
-                                      (next[i] as { time: string; distance: string }).time = e.target.value;
-                                      setAddSetsRows(next);
-                                    }}
-                                    className="w-24 px-2 py-1.5 rounded border border-stone-200"
-                                  />
-                                  <input
-                                    type="text"
-                                    placeholder="Distance (mi)"
-                                    value={row.distance}
-                                    onChange={(e) => {
-                                      const next = [...addSetsRows];
-                                      (next[i] as { time: string; distance: string }).distance = e.target.value;
-                                      setAddSetsRows(next);
-                                    }}
-                                    className="w-24 px-2 py-1.5 rounded border border-stone-200"
-                                  />
+                                <div key={i} className="flex gap-2 flex-wrap items-center justify-between">
+                                  <div className="flex gap-2 flex-wrap items-center">
+                                    <span className="text-sm text-stone-500 w-8">Set {i + 1}</span>
+                                    <input
+                                      type="text"
+                                      placeholder="Time (min)"
+                                      value={row.time}
+                                      onChange={(e) => {
+                                        const next = [...addSetsRows];
+                                        (next[i] as { time: string; distance: string }).time = e.target.value;
+                                        setAddSetsRows(next);
+                                      }}
+                                      className="w-24 px-2 py-1.5 rounded border border-stone-200"
+                                    />
+                                    <input
+                                      type="text"
+                                      placeholder="Distance (mi)"
+                                      value={row.distance}
+                                      onChange={(e) => {
+                                        const next = [...addSetsRows];
+                                        (next[i] as { time: string; distance: string }).distance = e.target.value;
+                                        setAddSetsRows(next);
+                                      }}
+                                      className="w-24 px-2 py-1.5 rounded border border-stone-200"
+                                    />
+                                  </div>
+                                  {(addSetsRows as { time: string; distance: string }[]).length > 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => removeAddSetRow(i)}
+                                      className="text-xs text-red-600 hover:underline shrink-0"
+                                    >
+                                      Remove
+                                    </button>
+                                  )}
                                 </div>
                               ))}
                           <div className="flex gap-2 flex-wrap">
