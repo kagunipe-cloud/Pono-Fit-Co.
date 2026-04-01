@@ -313,8 +313,11 @@ export default function AdminEmailMembersPage() {
       <Link href="/members" className="text-stone-500 hover:text-stone-700 text-sm mb-4 inline-block">← Members</Link>
       <h1 className="text-2xl font-bold text-stone-800 mb-2">Email all members</h1>
       <p className="text-stone-500 text-sm mb-6">
-        Broadcast the same subject and message to everyone using <strong>chunked BCC</strong> (one outbound message per batch, not one per person). <strong>All members with an email are included</strong> — large lists are split into multiple batches only if needed. Default batch size is 500 addresses (enough for ~400 members in a single send). Recipients do not see each other&apos;s addresses. Optional env:{" "}
-        <code className="text-xs bg-stone-100 px-1 rounded">EMAIL_BULK_BCC_CHUNK_SIZE</code> (lower it if your provider rejects large BCC lists).
+        Broadcast the same subject and message to everyone using <strong>chunked BCC</strong> (one outbound message per batch, not one per person). <strong>All members with an email are included.</strong>{" "}
+        <strong>Gmail API</strong> requires small BCC batches (default <strong>12</strong> addresses per send); set{" "}
+        <code className="text-xs bg-stone-100 px-1 rounded">EMAIL_GMAIL_BCC_CHUNK</code> to tune.{" "}
+        <strong>SMTP</strong> defaults to larger batches (env{" "}
+        <code className="text-xs bg-stone-100 px-1 rounded">EMAIL_BULK_BCC_CHUNK_SIZE</code>). Recipients do not see each other&apos;s addresses.
       </p>
 
       <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50">
