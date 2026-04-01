@@ -12,7 +12,13 @@ export default function AdminEmailMembersPage() {
   const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
   const [loadingCount, setLoadingCount] = useState(true);
   const [sending, setSending] = useState(false);
-  const [result, setResult] = useState<{ sent: number; total: number; failed: number; errors?: string[] } | null>(null);
+  const [result, setResult] = useState<{
+    sent: number;
+    total: number;
+    failed: number;
+    batches?: number;
+    errors?: string[];
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sendingIds, setSendingIds] = useState(false);
   const [idsResult, setIdsResult] = useState<{ sent: number; total: number; failed: number; errors?: string[] } | null>(null);
@@ -52,7 +58,13 @@ export default function AdminEmailMembersPage() {
   const [groupSubject, setGroupSubject] = useState("");
   const [groupText, setGroupText] = useState("");
   const [sendingGroup, setSendingGroup] = useState(false);
-  const [groupResult, setGroupResult] = useState<{ sent: number; total: number; failed: number; errors?: string[] } | null>(null);
+  const [groupResult, setGroupResult] = useState<{
+    sent: number;
+    total: number;
+    failed: number;
+    batches?: number;
+    errors?: string[];
+  } | null>(null);
 
   useEffect(() => {
     fetch("/api/admin/email-all-members")
@@ -148,7 +160,13 @@ export default function AdminEmailMembersPage() {
         setError(data.error ?? "Failed to send");
         return;
       }
-      setGroupResult({ sent: data.sent, total: data.total, failed: data.failed ?? 0, errors: data.errors });
+      setGroupResult({
+        sent: data.sent,
+        total: data.total,
+        failed: data.failed ?? 0,
+        batches: data.batches,
+        errors: data.errors,
+      });
       setGroupSubject("");
       setGroupText("");
     } catch {
@@ -206,7 +224,13 @@ export default function AdminEmailMembersPage() {
         setError(data.error ?? "Failed to send");
         return;
       }
-      setResult({ sent: data.sent, total: data.total, failed: data.failed ?? 0, errors: data.errors });
+      setResult({
+        sent: data.sent,
+        total: data.total,
+        failed: data.failed ?? 0,
+        batches: data.batches,
+        errors: data.errors,
+      });
       setSubject("");
       setText("");
     } catch {
@@ -289,7 +313,8 @@ export default function AdminEmailMembersPage() {
       <Link href="/members" className="text-stone-500 hover:text-stone-700 text-sm mb-4 inline-block">← Members</Link>
       <h1 className="text-2xl font-bold text-stone-800 mb-2">Email all members</h1>
       <p className="text-stone-500 text-sm mb-6">
-        Send one email to every member who has an address on file. Uses your configured email (SMTP or Gmail API).
+        Broadcast the same subject and message to everyone using <strong>chunked BCC</strong> (one outbound message per batch, not one per person). <strong>All members with an email are included</strong> — large lists are split into multiple batches only if needed. Default batch size is 500 addresses (enough for ~400 members in a single send). Recipients do not see each other&apos;s addresses. Optional env:{" "}
+        <code className="text-xs bg-stone-100 px-1 rounded">EMAIL_BULK_BCC_CHUNK_SIZE</code> (lower it if your provider rejects large BCC lists).
       </p>
 
       <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50">
@@ -504,7 +529,11 @@ export default function AdminEmailMembersPage() {
                   </button>
                   {groupResult && (
                     <p className="text-sm text-stone-600">
-                      Sent to <strong>{groupResult.sent}</strong> of {groupResult.total}.
+                      Sent to <strong>{groupResult.sent}</strong> of {groupResult.total}
+                      {groupResult.batches != null && groupResult.batches > 0 && (
+                        <> — {groupResult.batches} BCC batch{groupResult.batches !== 1 ? "es" : ""}</>
+                      )}
+                      .
                       {groupResult.failed > 0 && groupResult.errors && (
                         <details className="mt-1">
                           <summary className="cursor-pointer text-amber-700">{groupResult.failed} failed</summary>
@@ -667,7 +696,7 @@ export default function AdminEmailMembersPage() {
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <p className="text-sm text-stone-600">
-            <strong>{recipientCount}</strong> member{recipientCount !== 1 ? "s" : ""} will receive this email.
+            <strong>{recipientCount}</strong> member{recipientCount !== 1 ? "s" : ""} will receive this email (sent in BCC batches, not one API call per person).
           </p>
           <div>
             <label htmlFor="subject" className="block text-sm font-medium text-stone-700 mb-1">Subject</label>
@@ -696,7 +725,13 @@ export default function AdminEmailMembersPage() {
           {error && <p className="text-sm text-red-600">{error}</p>}
           {result && (
             <div className="bg-stone-50 border border-stone-200 rounded-lg p-4 text-sm text-stone-700">
-              <p>Sent to <strong>{result.sent}</strong> of {result.total} member{result.total !== 1 ? "s" : ""}.</p>
+              <p>
+                Sent to <strong>{result.sent}</strong> of {result.total} member{result.total !== 1 ? "s" : ""}
+                {result.batches != null && result.batches > 0 && (
+                  <> — {result.batches} BCC batch{result.batches !== 1 ? "es" : ""}</>
+                )}
+                .
+              </p>
               {result.failed > 0 && result.errors && result.errors.length > 0 && (
                 <details className="mt-2">
                   <summary className="cursor-pointer text-amber-700">{result.failed} failed</summary>
@@ -711,7 +746,7 @@ export default function AdminEmailMembersPage() {
             disabled={sending}
             className="px-4 py-2.5 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
           >
-            {sending ? "Sending… (may take several minutes for large lists)" : "Send to all members"}
+            {sending ? "Sending…" : "Send to all members"}
           </button>
         </form>
       )}

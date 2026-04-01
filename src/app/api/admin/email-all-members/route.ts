@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
-import { sendMemberEmail, isGmailApiConfigured } from "@/lib/email";
+import { sendBulkBroadcastEmail, isGmailApiConfigured } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 600;
@@ -21,7 +21,8 @@ function isEmailConfigured(): boolean {
 
 /**
  * GET — returns count of members with an email and whether SMTP is configured.
- * POST — sends one email (subject + text) to every member with an email. Admin only.
+ * POST — sends one broadcast (subject + text) to every member with an email using chunked BCC
+ * (mailing-list style: few API calls instead of one per recipient). Admin only.
  */
 export async function GET(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
@@ -83,26 +84,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Send sequentially with delay to avoid Gmail API rate limits (429 concurrent, 403 quota per minute).
-  const DELAY_MS = 1500;
-  let sent = 0;
-  const errors: string[] = [];
-  for (const row of rows) {
-    const to = row.email?.trim();
-    if (!to) continue;
-    const result = await sendMemberEmail(to, subject, text);
-    if (result.ok) {
-      sent++;
-    } else {
-      errors.push(`${to}: ${result.error ?? "Failed"}`);
-    }
-    await new Promise((r) => setTimeout(r, DELAY_MS));
-  }
+  const emails = rows.map((r) => r.email?.trim()).filter(Boolean) as string[];
+  const { sent, failed, errors, batches } = await sendBulkBroadcastEmail(emails, subject, text);
 
   return NextResponse.json({
     sent,
-    total: rows.length,
-    failed: rows.length - sent,
+    total: emails.length,
+    failed,
+    batches,
     errors: errors.length > 0 ? errors : undefined,
   });
 }

@@ -66,6 +66,8 @@ export async function POST(request: NextRequest) {
     let stripeSession: Stripe.Checkout.Session | null = null;
     let paymentIntentAmount: number | null = null;
     let terminalStripeCustomerId: string | null = null;
+    /** Terminal PI metadata `monthly_recurring` ("1" | "0") when cart had monthly membership. */
+    let terminalMonthlyRecurring: string | undefined;
 
     if (stripe_session_id) {
       const stripeSecret = process.env.STRIPE_SECRET_KEY;
@@ -111,6 +113,8 @@ export async function POST(request: NextRequest) {
           total_details: { amount_tax: Math.round(parseFloat(String(pi.metadata.tax_amount)) * 100) },
         } as Stripe.Checkout.Session;
       }
+      const mr = pi.metadata?.monthly_recurring;
+      if (mr === "1" || mr === "0") terminalMonthlyRecurring = mr;
     }
 
     if (!member_id) {
@@ -154,7 +158,19 @@ export async function POST(request: NextRequest) {
       const termApi = stripeCustomerIdForApi(terminalStripeCustomerId)!;
       const dbStripe = getDb();
       ensureMembersStripeColumn(dbStripe);
-      dbStripe.prepare("UPDATE members SET stripe_customer_id = ? WHERE member_id = ?").run(termApi, member_id);
+      ensureMembersAutoRenewColumn(dbStripe);
+      let autoRenew: number | null = null;
+      if (terminalMonthlyRecurring === "1") autoRenew = 1;
+      else if (terminalMonthlyRecurring === "0") autoRenew = 0;
+      if (autoRenew === null) {
+        dbStripe.prepare("UPDATE members SET stripe_customer_id = ? WHERE member_id = ?").run(termApi, member_id);
+      } else {
+        dbStripe.prepare("UPDATE members SET stripe_customer_id = ?, auto_renew = ? WHERE member_id = ?").run(
+          termApi,
+          autoRenew,
+          member_id
+        );
+      }
       dbStripe.close();
     }
 
