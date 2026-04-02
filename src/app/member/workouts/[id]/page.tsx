@@ -23,6 +23,13 @@ function repeatPrefillInputClass(touched: boolean, widthClass: string): string {
     : `${base} border-purple-200 bg-purple-50/50 text-purple-800 placeholder:text-purple-400/80`;
 }
 
+/** Match source ↔ current exercises (repeat workouts often omit exercise_id on new rows). */
+function exerciseLookupKey(ex: { exercise_id?: number | null; exercise_name?: string }): string {
+  if (ex.exercise_id != null) return `id:${ex.exercise_id}`;
+  const n = ex.exercise_name?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
+  return n ? `name:${n}` : "";
+}
+
 type Exercise = {
   id: number;
   type: string;
@@ -199,16 +206,18 @@ export default function MemberWorkoutDetailPage() {
   /** Pinned exercises (autocomplete boost); loaded when Add Lift/Cardio opens. */
   const [favoriteExerciseIds, setFavoriteExerciseIds] = useState<Set<number>>(new Set());
 
-  /** Map of source workout sets by a stable exercise key so \"last time\" stays attached even if you delete/reorder exercises. */
+  /**
+   * Map of source workout sets by exercise. Repeat workouts copy names but not always `exercise_id`,
+   * so we must register each source exercise under BOTH `id:` and `name:` when applicable.
+   */
   const sourceSetsByExerciseKey = useMemo(() => {
     const map = new Map<string, Exercise["sets"]>();
     if (!sourceWorkout) return map;
     for (const ex of sourceWorkout.exercises) {
-      const key =
-        (ex.exercise_id != null ? `id:${ex.exercise_id}` : null) ??
-        (ex.exercise_name ? `name:${ex.exercise_name.trim().toLowerCase()}` : "");
-      if (!key || map.has(key)) continue;
-      map.set(key, ex.sets);
+      const sets = ex.sets;
+      if (ex.exercise_id != null) map.set(`id:${ex.exercise_id}`, sets);
+      const nameKey = ex.exercise_name?.trim().toLowerCase().replace(/\s+/g, " ");
+      if (nameKey) map.set(`name:${nameKey}`, sets);
     }
     return map;
   }, [sourceWorkout]);
@@ -1289,10 +1298,17 @@ export default function MemberWorkoutDetailPage() {
           <ul className="space-y-4 mb-8">
             {workout.exercises.map((ex) => {
               const vol = ex.type === "lift" ? liftVolume(ex.sets) : 0;
-              const exKey =
-                (ex.exercise_id != null ? `id:${ex.exercise_id}` : null) ??
-                (ex.exercise_name ? `name:${ex.exercise_name.trim().toLowerCase()}` : "");
-              const lastTimeSets = isRepeatMode && exKey ? sourceSetsByExerciseKey.get(exKey) : null;
+              const exKey = exerciseLookupKey(ex);
+              const lastTimeSetsFromKey = isRepeatMode && exKey ? sourceSetsByExerciseKey.get(exKey) : undefined;
+              const lastTimeSetsFromOrder =
+                isRepeatMode && sourceWorkout && lastTimeSetsFromKey == null
+                  ? (() => {
+                      const idx = workout.exercises.findIndex((e) => e.id === ex.id);
+                      if (idx < 0 || idx >= sourceWorkout.exercises.length) return null;
+                      return sourceWorkout.exercises[idx]?.sets ?? null;
+                    })()
+                  : null;
+              const lastTimeSets = lastTimeSetsFromKey ?? lastTimeSetsFromOrder;
               const isAddingSets = addSetsForExId === ex.id;
               const editResolvedExerciseId =
                 editingExId === ex.id ? editSelectedOfficialId ?? ex.exercise_id ?? null : null;

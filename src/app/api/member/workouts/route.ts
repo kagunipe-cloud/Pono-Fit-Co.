@@ -67,16 +67,46 @@ export async function POST(request: NextRequest) {
     const id = Number(result.lastInsertRowid);
 
     if (sourceWorkoutId != null) {
+      const weCols = db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[];
+      const hasExerciseId = weCols.some((c) => c.name === "exercise_id");
+      const hasUseForMy1rm = weCols.some((c) => c.name === "use_for_my_1rm");
+      const selectCols = [
+        "type",
+        "exercise_name",
+        "sort_order",
+        ...(hasExerciseId ? (["exercise_id"] as const) : []),
+        ...(hasUseForMy1rm ? (["use_for_my_1rm"] as const) : []),
+      ].join(", ");
       const sourceExercises = db
         .prepare(
-          "SELECT type, exercise_name, sort_order FROM workout_exercises WHERE workout_id = ? ORDER BY sort_order, id"
+          `SELECT ${selectCols} FROM workout_exercises WHERE workout_id = ? ORDER BY sort_order, id`
         )
-        .all(sourceWorkoutId) as { type: string; exercise_name: string; sort_order: number }[];
+        .all(sourceWorkoutId) as {
+        type: string;
+        exercise_name: string;
+        sort_order: number;
+        exercise_id?: number | null;
+        use_for_my_1rm?: number;
+      }[];
+      const insertCols = ["workout_id", "type", "exercise_name", "sort_order"];
+      const insertVals = "?, ?, ?, ?";
+      const placeholders: string[] = [];
+      if (hasExerciseId) {
+        insertCols.push("exercise_id");
+        placeholders.push("?");
+      }
+      if (hasUseForMy1rm) {
+        insertCols.push("use_for_my_1rm");
+        placeholders.push("?");
+      }
       const insertEx = db.prepare(
-        "INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order) VALUES (?, ?, ?, ?)"
+        `INSERT INTO workout_exercises (${insertCols.join(", ")}) VALUES (${insertVals}${placeholders.length ? ", " + placeholders.join(", ") : ""})`
       );
       for (const ex of sourceExercises) {
-        insertEx.run(id, ex.type, ex.exercise_name, ex.sort_order);
+        const args: (string | number | null)[] = [id, ex.type, ex.exercise_name, ex.sort_order];
+        if (hasExerciseId) args.push(ex.exercise_id ?? null);
+        if (hasUseForMy1rm) args.push(ex.use_for_my_1rm ?? 0);
+        insertEx.run(...args);
       }
     }
 
