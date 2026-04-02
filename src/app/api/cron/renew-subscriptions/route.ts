@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn, ensurePaymentFailuresTable, ensureSalesItemTotalCcFeeColumns, ensureSalesTypeColumn, ensureSubscriptionRenewalPromoColumns } from "../../../../lib/db";
-import { grantAccess as kisiGrantAccess } from "../../../../lib/kisi";
+import { grantAccess as kisiGrantAccess, revokeAccess } from "../../../../lib/kisi";
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
 import { formatDateTimeInAppTz, todayInAppTz, formatDateForStorage } from "../../../../lib/app-timezone";
 import { computeCcFee } from "../../../../lib/cc-fees";
@@ -24,6 +24,28 @@ function addDuration(startDate: Date, length: string, unit: string): Date {
   else if (unit === "Month") d.setMonth(d.getMonth() + n);
   else if (unit === "Year") d.setFullYear(d.getFullYear() + n);
   return d;
+}
+
+/** Parse stored YYYY-MM-DD as local noon for calendar math (matches billing period boundaries). */
+function parseStoredYmdToLocalDate(ymd: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd.trim());
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]) - 1;
+  const d = Number(m[3]);
+  if (!y || mo < 0 || d < 1) return null;
+  return new Date(y, mo, d, 12, 0, 0, 0);
+}
+
+async function revokeKisiForMember(db: ReturnType<typeof getDb>, memberId: string): Promise<void> {
+  const row = db.prepare("SELECT kisi_id FROM members WHERE member_id = ?").get(memberId) as { kisi_id: string | null } | undefined;
+  const kid = row?.kisi_id?.trim();
+  if (!kid) return;
+  try {
+    await revokeAccess(kid);
+  } catch (e) {
+    console.error("[Kisi] revoke failed for member:", memberId, e);
+  }
 }
 
 /** Today in gym timezone (YYYY-MM-DD) to match expiry_date in DB. */
@@ -54,14 +76,17 @@ export async function GET(request: NextRequest) {
     VALUES (?, ?, ?, ?, ?, ?)
   `);
   const today = todayString(tz);
-  // Only auto-renew monthly memberships (not yearly, daily, or other plan types)
+  // Monthly memberships due today or earlier (overdue retries), member opted into auto-renew
   const expiring = db.prepare(`
     SELECT s.subscription_id, s.member_id, s.product_id, s.expiry_date, s.price as sub_price, s.quantity,
            s.promo_renewals_remaining, s.renewal_price_indefinite,
            p.plan_name, p.price as plan_price, p.length, p.unit
     FROM subscriptions s
     JOIN membership_plans p ON p.product_id = s.product_id
-    WHERE s.status = 'Active' AND s.expiry_date = ? AND p.unit = 'Month'
+    JOIN members m ON m.member_id = s.member_id
+    WHERE s.status = 'Active' AND p.unit = 'Month'
+      AND s.expiry_date <= ?
+      AND (m.auto_renew = 1)
   `).all(today) as {
     subscription_id: string;
     member_id: string;
@@ -88,25 +113,22 @@ export async function GET(request: NextRequest) {
     const amountCents = parsePriceToCents(priceStr) * Math.max(1, sub.quantity);
     const memberRow = db.prepare("SELECT stripe_customer_id, email, first_name, auto_renew FROM members WHERE member_id = ?").get(sub.member_id) as { stripe_customer_id: string | null; email: string; first_name: string | null; auto_renew?: number | null } | undefined;
     if (!memberRow) {
-      results.push({ member_id: sub.member_id, status: "skipped", message: "No saved card" });
-      insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "No saved card", null);
+      results.push({ member_id: sub.member_id, status: "skipped", message: "Member not found" });
+      insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "Member not found", null);
       continue;
     }
     const stripeCustomerId = stripeCustomerIdForApi(memberRow.stripe_customer_id);
     if (!stripeCustomerId) {
-      results.push({ member_id: sub.member_id, status: "skipped", message: "No saved card" });
-      insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "No saved card", null);
+      results.push({ member_id: sub.member_id, status: "error", message: "No saved card" });
+      insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "No Stripe customer", null);
+      await revokeKisiForMember(db, sub.member_id);
       continue;
     }
-    if ((memberRow.auto_renew ?? 0) !== 1) {
-      results.push({ member_id: sub.member_id, status: "skipped", message: "Auto-renew not opted in" });
-      continue;
-    }
-
     const itemTotalDollars = amountCents / 100;
     if (itemTotalDollars <= 0) {
       results.push({ member_id: sub.member_id, status: "error", message: "Invalid price" });
       insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "Invalid price", null);
+      await revokeKisiForMember(db, sub.member_id);
       continue;
     }
 
@@ -135,6 +157,7 @@ export async function GET(request: NextRequest) {
       if (!pm) {
         results.push({ member_id: sub.member_id, status: "error", message: "No payment method on file" });
         insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, chargeCents, "No payment method on file", null);
+        await revokeKisiForMember(db, sub.member_id);
         continue;
       }
 
@@ -155,11 +178,13 @@ export async function GET(request: NextRequest) {
         const stripeCode = lastError?.code ?? null;
         results.push({ member_id: sub.member_id, status: "error", message: statusMsg });
         insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, chargeCents, lastError?.message || statusMsg, stripeCode);
+        await revokeKisiForMember(db, sub.member_id);
         continue;
       }
 
-      const startDate = new Date();
-      const expiryDate = addDuration(startDate, sub.length || "1", sub.unit || "Month");
+      // Extend from the subscription period end (due date), not from "today", so late payers don't get free days.
+      const anchorDate = parseStoredYmdToLocalDate(sub.expiry_date) ?? new Date();
+      const expiryDate = addDuration(anchorDate, sub.length || "1", sub.unit || "Month");
       const expiryStr = formatDateForStorage(expiryDate, tz);
       const daysRemaining = Math.ceil((expiryDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
       const sales_id = randomUUID().slice(0, 8);
@@ -227,6 +252,33 @@ export async function GET(request: NextRequest) {
       const stripeCode = stripeErr.decline_code ?? stripeErr.code ?? null;
       results.push({ member_id: sub.member_id, status: "error", message: msg });
       insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, msg, stripeCode);
+      await revokeKisiForMember(db, sub.member_id);
+    }
+  }
+
+  // End-of-period cancel: auto_renew off, expiry already passed — mark Cancelled and revoke door access.
+  const endedNoRenew = db
+    .prepare(
+      `SELECT s.subscription_id, s.member_id
+       FROM subscriptions s
+       JOIN members m ON m.member_id = s.member_id
+       WHERE s.status = 'Active' AND s.expiry_date < ?
+         AND (m.auto_renew = 0 OR m.auto_renew IS NULL)`
+    )
+    .all(today) as { subscription_id: string; member_id: string }[];
+  let cancelledEndOfPeriod = 0;
+  for (const row of endedNoRenew) {
+    try {
+      db.prepare("UPDATE subscriptions SET status = ? WHERE subscription_id = ?").run("Cancelled", row.subscription_id);
+      const anyActive = db
+        .prepare("SELECT 1 FROM subscriptions WHERE member_id = ? AND status = 'Active' LIMIT 1")
+        .get(row.member_id) as { 1?: number } | undefined;
+      if (!anyActive) {
+        await revokeKisiForMember(db, row.member_id);
+      }
+      cancelledEndOfPeriod++;
+    } catch (e) {
+      console.error("[renew-subscriptions] end-of-period cancel failed", row.subscription_id, e);
     }
   }
 
@@ -240,6 +292,7 @@ export async function GET(request: NextRequest) {
     renewed,
     skipped: results.filter((r) => r.status === "skipped").length,
     errors: errors.length,
+    cancelled_end_of_period: cancelledEndOfPeriod,
     details: results,
   });
 }
