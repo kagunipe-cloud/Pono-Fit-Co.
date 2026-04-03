@@ -12,7 +12,7 @@ export default function PtBookingsPage() {
             PT Bookings
           </h1>
           <p className="text-stone-500 mt-1">
-            All PT sessions — active (soonest first, credits at bottom) and fulfilled (most recent first)
+            Scheduled PT sessions — active (soonest first) and fulfilled (most recent first). Open PT credits are under Bookings → Open Credits.
           </p>
         </div>
         <Link

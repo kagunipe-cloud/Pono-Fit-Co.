@@ -74,18 +74,22 @@ export async function GET(request: NextRequest) {
       `).all() as { id: number; class_booking_id: string; member_id: string; booking_date: string | null; class_name: string | null; date: string | null; time: string | null }[];
 
       for (const r of classRows) {
-        const m = db.prepare("SELECT first_name, last_name FROM members WHERE member_id = ?").get(r.member_id) as { first_name: string | null; last_name: string | null } | undefined;
-        const member_name = m ? [m.first_name, m.last_name].filter(Boolean).join(" ").trim() || r.member_id : r.member_id;
         const date = r.date ?? "";
         const time = r.time ?? "";
-        const session_key = date && time ? `${date}T${time}` : "9999-99-99T99:99";
-        const status = session_key < "9999" && session_key <= nowKey ? "fulfilled" : "active";
+        if (!date || !time) {
+          /** Credit-only cart rows: balances live on Open Credits (class_credit_ledger), not this list. */
+          continue;
+        }
+        const m = db.prepare("SELECT first_name, last_name FROM members WHERE member_id = ?").get(r.member_id) as { first_name: string | null; last_name: string | null } | undefined;
+        const member_name = m ? [m.first_name, m.last_name].filter(Boolean).join(" ").trim() || r.member_id : r.member_id;
+        const session_key = `${date}T${time}`;
+        const status = session_key <= nowKey ? "fulfilled" : "active";
         rows.push({
-          source: date ? "Cart (one-time)" : "Credit",
+          source: "Cart (one-time)",
           id: r.class_booking_id ?? r.id,
           member_name,
           transaction_datetime: r.booking_date ?? "—",
-          session_datetime: date && time ? `${date} ${time}` : date || "—",
+          session_datetime: `${date} ${time}`,
           session_sort_key: session_key,
           status,
           class_name: r.class_name ?? "Class",

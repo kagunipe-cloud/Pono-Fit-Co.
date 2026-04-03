@@ -137,17 +137,21 @@ export async function GET(request: NextRequest) {
       `).all() as { id: number; pt_booking_id: string; member_id: string; booking_date: string | null; session_name: string | null; date_time: string | null }[];
 
       for (const r of ptBookRows) {
+        const session_dt = r.date_time ?? "";
+        if (!session_dt) {
+          /** Credit-only cart rows: balances live on Open Credits (pt_credit_ledger), not this list. */
+          continue;
+        }
         const m = db.prepare("SELECT first_name, last_name FROM members WHERE member_id = ?").get(r.member_id) as { first_name: string | null; last_name: string | null } | undefined;
         const member_name = m ? [m.first_name, m.last_name].filter(Boolean).join(" ").trim() || r.member_id : r.member_id;
-        const session_dt = r.date_time ?? "";
-        const session_key = session_dt ? session_dt.replace(" ", "T").slice(0, 16) : "9999-99-99T99:99"; // no session = credit, bottom of active
-        const status = session_key < "9999" && session_key <= nowKey ? "fulfilled" : "active";
+        const session_key = session_dt.replace(" ", "T").slice(0, 16);
+        const status = session_key <= nowKey ? "fulfilled" : "active";
         rows.push({
-          source: session_dt ? "Cart (one-time)" : "Credit",
+          source: "Cart (one-time)",
           id: r.pt_booking_id ?? r.id,
           member_name,
           transaction_datetime: r.booking_date ?? "—",
-          session_datetime: session_dt || "—",
+          session_datetime: session_dt,
           session_sort_key: session_key,
           status,
           session_name: r.session_name ?? "PT",

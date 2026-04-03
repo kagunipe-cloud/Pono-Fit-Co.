@@ -10,7 +10,7 @@ export default function ClassBookingsPage() {
           Class Bookings
         </h1>
         <p className="text-stone-500 mt-1">
-          All class sessions — active (soonest first, credits at bottom) and fulfilled (most recent first)
+          Scheduled class sessions — active (soonest first) and fulfilled (most recent first). Open class credits are under Bookings → Open Credits.
         </p>
       </header>
       <ClassBookingsClient />

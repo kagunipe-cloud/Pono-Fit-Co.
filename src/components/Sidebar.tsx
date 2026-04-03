@@ -5,7 +5,15 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BRAND } from "@/lib/branding";
-import { SECTIONS, getReportSubSections, getBookingsSubSections, REPORT_SUB_SLUGS, BOOKINGS_SUB_SLUGS, SERVICES_SUB_SLUGS } from "../lib/sections";
+import {
+  SECTIONS,
+  getReportSubSections,
+  getBookingsSubSections,
+  REPORT_SUB_SLUGS,
+  BOOKINGS_SUB_SLUGS,
+  BOOKINGS_EXTRA_LINKS,
+  SERVICES_SUB_SLUGS,
+} from "../lib/sections";
 
 type MemberMe = {
   member_id: string;
@@ -136,7 +144,10 @@ function NavList({
     (s) => !REPORT_SUB_SLUGS.includes(s.slug) && !BOOKINGS_SUB_SLUGS.includes(s.slug) && !SERVICES_SUB_SLUGS.includes(s.slug)
   );
   const isOnReportPage = pathname != null && (REPORT_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`)) || pathname === "/admin/usage" || pathname.startsWith("/admin/usage/"));
-  const isOnBookingsPage = pathname != null && BOOKINGS_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`));
+  const isOnBookingsPage =
+    pathname != null &&
+    (BOOKINGS_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`)) ||
+      BOOKINGS_EXTRA_LINKS.some((l) => pathname === l.href || pathname.startsWith(`${l.href}/`)));
   const isOnServicesPage = pathname != null && (pathname.startsWith("/rec-leagues") || pathname.startsWith("/class-packs") || pathname.startsWith("/pt-packs") || SERVICES_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`)));
 
   if (showMemberNav) {
@@ -308,6 +319,21 @@ function NavList({
                         href={`/${slug}`}
                         className={`block px-3 py-2 text-sm font-medium ${
                           pathname === `/${slug}` ? "bg-brand-gray-100 text-brand-500" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                        }`}
+                        role="menuitem"
+                        onClick={() => setBookingsOpen(false)}
+                      >
+                        {title}
+                      </Link>
+                    ))}
+                    {BOOKINGS_EXTRA_LINKS.map(({ href, title }) => (
+                      <Link
+                        key={href}
+                        href={href}
+                        className={`block px-3 py-2 text-sm font-medium ${
+                          pathname === href || pathname?.startsWith(`${href}/`)
+                            ? "bg-brand-gray-100 text-brand-500"
+                            : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
                         }`}
                         role="menuitem"
                         onClick={() => setBookingsOpen(false)}
