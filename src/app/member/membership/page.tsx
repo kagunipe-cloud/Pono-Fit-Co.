@@ -4,16 +4,34 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
-type Sub = { plan_name?: string; status?: string; start_date?: string; expiry_date?: string; plan_price?: string };
+type Sub = {
+  subscription_id?: string;
+  plan_name?: string;
+  status?: string;
+  start_date?: string;
+  expiry_date?: string;
+  plan_price?: string;
+  pass_credits_remaining?: number | null;
+  pass_activation_day?: string | null;
+  plan_unit?: string | null;
+  plan_category?: string | null;
+};
 
 function MemberMembershipContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [data, setData] = useState<{ subscriptions: Sub[]; has_saved_card?: boolean; auto_renew?: boolean } | null>(null);
+  const [data, setData] = useState<{
+    subscriptions: Sub[];
+    has_saved_card?: boolean;
+    auto_renew?: boolean;
+    today_ymd?: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingCard, setUpdatingCard] = useState(false);
   const [cardMessage, setCardMessage] = useState<string | null>(null);
   const [togglingAutoRenew, setTogglingAutoRenew] = useState(false);
+  const [activatingId, setActivatingId] = useState<string | null>(null);
+  const [activateMessage, setActivateMessage] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/member/me")
@@ -60,6 +78,36 @@ function MemberMembershipContent() {
     }
   }
 
+  function isPassPackRow(s: Sub): boolean {
+    return (
+      s.pass_credits_remaining != null &&
+      String(s.plan_category ?? "").trim() === "Passes" &&
+      String(s.plan_unit ?? "").trim() === "Day"
+    );
+  }
+
+  async function activatePassForToday(subscriptionId: string) {
+    setActivateMessage(null);
+    setActivatingId(subscriptionId);
+    try {
+      const res = await fetch("/api/member/activate-pass-day", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscription_id: subscriptionId }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setActivateMessage(typeof json.error === "string" ? json.error : "Could not activate.");
+        return;
+      }
+      setActivateMessage("Pass is active for today. You can unlock the door.");
+      const refreshed = await fetch("/api/member/me").then((r) => (r.ok ? r.json() : null));
+      if (refreshed) setData(refreshed);
+    } finally {
+      setActivatingId(null);
+    }
+  }
+
   async function toggleAutoRenew() {
     if (!data?.has_saved_card) return;
     setTogglingAutoRenew(true);
@@ -80,6 +128,7 @@ function MemberMembershipContent() {
   if (!data) return null;
 
   const subs = data.subscriptions ?? [];
+  const todayYmd = (data.today_ymd ?? "").trim();
 
   return (
     <div className="max-w-2xl mx-auto p-6">
@@ -139,6 +188,9 @@ function MemberMembershipContent() {
           </label>
         </div>
       )}
+      {activateMessage && (
+        <p className="mb-4 text-sm text-stone-700 bg-brand-50 border border-brand-200 rounded-lg px-3 py-2">{activateMessage}</p>
+      )}
       {subs.length === 0 ? (
         <p className="text-stone-500">You don’t have any memberships yet.</p>
       ) : (
@@ -146,9 +198,38 @@ function MemberMembershipContent() {
           {subs.map((s, i) => (
             <li key={i} className="p-4 rounded-xl border border-stone-200 bg-white">
               <p className="font-medium text-stone-800">{s.plan_name ?? "Membership"}</p>
-              <p className="text-sm text-stone-500">
-                {s.status} — {s.start_date} to {s.expiry_date} {s.plan_price ? `· ${s.plan_price}` : ""}
-              </p>
+              {isPassPackRow(s) ? (
+                <div className="mt-2 space-y-2">
+                  <p className="text-sm text-stone-600">
+                    {Number(s.pass_credits_remaining) > 0
+                      ? `${s.pass_credits_remaining} day${Number(s.pass_credits_remaining) !== 1 ? "s" : ""} left on this pack`
+                      : "No days left on this pack"}
+                  </p>
+                  <p className="text-xs text-stone-500">
+                    Activate one day when you plan to visit the gym. Door access runs for that calendar day (after you sign the waiver if required).
+                  </p>
+                  {todayYmd && String(s.pass_activation_day ?? "").trim() === todayYmd && (
+                    <p className="text-sm font-medium text-green-800">Pass active for today — you can unlock the door.</p>
+                  )}
+                  <button
+                    type="button"
+                    disabled={
+                      activatingId === s.subscription_id ||
+                      Number(s.pass_credits_remaining) <= 0 ||
+                      !s.subscription_id ||
+                      (!!todayYmd && String(s.pass_activation_day ?? "").trim() === todayYmd)
+                    }
+                    onClick={() => s.subscription_id && activatePassForToday(s.subscription_id)}
+                    className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {activatingId === s.subscription_id ? "Activating…" : "Activate pass for today"}
+                  </button>
+                </div>
+              ) : (
+                <p className="text-sm text-stone-500">
+                  {s.status} — {s.start_date} to {s.expiry_date} {s.plan_price ? `· ${s.plan_price}` : ""}
+                </p>
+              )}
             </li>
           ))}
         </ul>

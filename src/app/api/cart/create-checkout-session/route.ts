@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
       product_id: number;
       quantity: number;
       unit_price_override?: string | null;
+      gift_recipient_email?: string | null;
     }[];
 
     let hasMonthlyMembershipInCart = false;
@@ -105,6 +106,10 @@ export async function POST(request: NextRequest) {
       if (it.product_type === "membership_plan") {
         const row = db.prepare("SELECT plan_name FROM membership_plans WHERE id = ?").get(it.product_id) as { plan_name: string } | undefined;
         if (row) name = row.plan_name ?? "Membership";
+        const ge = (it.gift_recipient_email ?? "").trim();
+        if (ge && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ge)) {
+          name = `${name} (gift → ${ge})`;
+        }
       } else if (it.product_type === "pt_session") {
         const row = db.prepare("SELECT session_name FROM pt_sessions WHERE id = ?").get(it.product_id) as { session_name: string } | undefined;
         if (row) name = row.session_name ?? "PT Session";

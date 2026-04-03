@@ -68,6 +68,10 @@ function MemberMembershipsContent() {
   return (
     <div className="max-w-2xl mx-auto p-6">
       <h1 className="text-2xl font-bold text-stone-800 mb-2">Memberships</h1>
+      <p className="text-sm text-stone-500 mb-6">
+        All plans (including 5- and 10-day pass packs) are listed here. Staff edit plans under{" "}
+        <span className="text-stone-700">Services → Membership Plans</span> in the sidebar.
+      </p>
       {hasValidPlanFilter && visiblePlans.length > 0 && (
         <p className="text-sm text-stone-500 mb-6">
           Showing the plan you selected.{" "}

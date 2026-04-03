@@ -27,8 +27,24 @@ export async function GET(request: NextRequest) {
       cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member_id) as { id: number; member_id: string; promo_code?: string | null };
     }
 
-    const rawItems = db.prepare("SELECT * FROM cart_items WHERE cart_id = ?").all(cart.id) as { id: number; product_type: string; product_id: number; quantity: number; slot_json?: string | null }[];
-    const items: { id: number; product_type: string; product_id: number; quantity: number; name: string; price: string; slot?: { date: string; start_time: string; duration_minutes: number } }[] = [];
+    const rawItems = db.prepare("SELECT * FROM cart_items WHERE cart_id = ?").all(cart.id) as {
+      id: number;
+      product_type: string;
+      product_id: number;
+      quantity: number;
+      slot_json?: string | null;
+      gift_recipient_email?: string | null;
+    }[];
+    const items: {
+      id: number;
+      product_type: string;
+      product_id: number;
+      quantity: number;
+      name: string;
+      price: string;
+      gift_recipient_email?: string | null;
+      slot?: { date: string; start_time: string; duration_minutes: number };
+    }[] = [];
 
     for (const it of rawItems) {
       let name = "—";

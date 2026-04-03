@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, expiryDateSortableSql, ensureMembersAutoRenewColumn, ensureMembersProfileColumns } from "../../../../lib/db";
+import {
+  getDb,
+  getAppTimezone,
+  expiryDateSortableSql,
+  ensureMembersAutoRenewColumn,
+  ensureMembersProfileColumns,
+  ensureSubscriptionPassPackColumns,
+} from "../../../../lib/db";
+import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../lib/recurring-classes";
+import { todayInAppTz } from "../../../../lib/app-timezone";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { updateKisiUser, ensureKisiUser } from "../../../../lib/kisi";
 import { parseBirthday } from "../../../../lib/member-birthday";
@@ -41,8 +50,19 @@ export async function GET(
 
     const mid = member.member_id as string;
 
+    ensureSubscriptionPassPackColumns(db);
+    ensureRecurringClassesTables(db);
+    let class_credits = 0;
+    try {
+      class_credits = getMemberCreditBalance(db, mid);
+    } catch {
+      /* ignore */
+    }
+    const tz = getAppTimezone(db);
+    const today_ymd = todayInAppTz(tz);
+
     const subscriptions = db.prepare(`
-      SELECT s.*, p.plan_name, p.price as plan_price
+      SELECT s.*, p.plan_name, p.price as plan_price, p.unit as plan_unit, p.category as plan_category
       FROM subscriptions s
       LEFT JOIN membership_plans p ON p.product_id = s.product_id
       WHERE s.member_id = ?
@@ -103,6 +123,8 @@ export async function GET(
     return NextResponse.json({
       member,
       subscriptions,
+      class_credits,
+      today_ymd,
       classBookings,
       ptBookings,
       ptSlotBookings,

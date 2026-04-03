@@ -36,6 +36,8 @@ export default function MemberDetailPage() {
   const [data, setData] = useState<{
     member: Member;
     subscriptions: LinkedRow[];
+    class_credits?: number;
+    today_ymd?: string;
     classBookings: LinkedRow[];
     ptBookings: LinkedRow[];
     ptSlotBookings?: LinkedRow[];
@@ -454,81 +456,140 @@ export default function MemberDetailPage() {
       )}
 
       {isAdmin && (
-        <div className="mb-6 p-4 rounded-xl border border-brand-200 bg-brand-50/50">
-          <h2 className="text-base font-semibold text-stone-800 mb-2">PT credits</h2>
-          <p className="text-xs text-stone-600 mb-3">
-            Balances used when booking PT by session length. Grant one-off credits here (e.g. after a purchase that didn&apos;t record correctly).
-          </p>
-          {ptCreditBalances === null ? (
-            <p className="text-sm text-stone-500">Loading balances…</p>
-          ) : (
-            <>
-              <div className="text-sm text-stone-700 mb-3">
-                {Object.entries(ptCreditBalances).filter(([, n]) => n > 0).length === 0 ? (
-                  <span className="text-stone-500">No PT credits on file.</span>
-                ) : (
-                  <ul className="space-y-0.5">
-                    {Object.entries(ptCreditBalances)
-                      .filter(([, n]) => n > 0)
-                      .sort(([a], [b]) => Number(a) - Number(b))
-                      .map(([mins, n]) => (
-                        <li key={mins}>
-                          <strong>{n}</strong> × {mins}-minute session{Number(n) !== 1 ? "s" : ""}
-                        </li>
-                      ))}
-                  </ul>
-                )}
-              </div>
-              <div className="flex flex-wrap items-end gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-stone-500 mb-1">Session length (minutes)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={1440}
-                    value={ptGrantDuration}
-                    onChange={(e) => setPtGrantDuration(e.target.value)}
-                    placeholder="e.g. 90"
-                    className="w-28 px-2 py-1.5 rounded border border-stone-200 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-stone-500 mb-1">Credits to add</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={99}
-                    value={ptGrantAmount}
-                    onChange={(e) => setPtGrantAmount(Math.max(1, Math.min(99, parseInt(e.target.value, 10) || 1)))}
-                    className="w-20 px-2 py-1.5 rounded border border-stone-200 text-sm"
-                  />
-                </div>
-                <div className="flex-1 min-w-[180px]">
-                  <label className="block text-xs font-medium text-stone-500 mb-1">Note (optional)</label>
-                  <input
-                    type="text"
-                    value={ptGrantNote}
-                    onChange={(e) => setPtGrantNote(e.target.value)}
-                    placeholder="e.g. Fitness assessment purchase Mar 2026"
-                    className="w-full px-2 py-1.5 rounded border border-stone-200 text-sm"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={grantPtCredits}
-                  disabled={ptGrantSubmitting || ptCreditBalances === null}
-                  className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
-                >
-                  {ptGrantSubmitting ? "Saving…" : "Grant credits"}
-                </button>
-              </div>
-              {ptGrantMessage && (
-                <p className={`mt-3 text-sm ${ptGrantMessage.startsWith("Granted") ? "text-emerald-700" : "text-amber-700"}`}>
-                  {ptGrantMessage}
-                </p>
+        <div className="mb-6 p-4 rounded-xl border border-brand-200 bg-brand-50/50 space-y-6">
+          <div>
+            <h2 className="text-base font-semibold text-stone-800 mb-2">Class credits</h2>
+            <p className="text-xs text-stone-600 mb-2">
+              Balance from class packs and complimentary class credits. Used when booking recurring / open classes with a credit.
+            </p>
+            <p className="text-sm text-stone-700">
+              {data && (data.class_credits ?? 0) > 0 ? (
+                <>
+                  <strong>{data.class_credits}</strong> credit{(data.class_credits ?? 0) !== 1 ? "s" : ""} available.
+                </>
+              ) : (
+                <span className="text-stone-500">No class credits on file.</span>
               )}
-            </>
-          )}
+            </p>
+          </div>
+
+          <div className="pt-4 border-t border-stone-200/80">
+            <h2 className="text-base font-semibold text-stone-800 mb-2">Day pass packs</h2>
+            <p className="text-xs text-stone-600 mb-2">
+              Banked days for Passes (5- / 10-day packs). Members activate one calendar day at a time from My Membership.
+            </p>
+            {(() => {
+              const todayY = (data?.today_ymd ?? "").trim();
+              const packs =
+                data?.subscriptions?.filter(
+                  (s) => s.pass_credits_remaining != null && String(s.status ?? "") !== "Cancelled"
+                ) ?? [];
+              if (packs.length === 0) {
+                return <p className="text-sm text-stone-500">No day pass packs on file.</p>;
+              }
+              return (
+                <ul className="space-y-2 text-sm text-stone-700">
+                  {packs.map((s, i) => {
+                    const left = Number(s.pass_credits_remaining ?? 0);
+                    const act = String(s.pass_activation_day ?? "").trim();
+                    const activeToday = !!todayY && act === todayY;
+                    return (
+                      <li key={i} className="rounded-lg border border-stone-200 bg-white/80 px-3 py-2">
+                        <span className="font-medium text-stone-800">{String(s.plan_name ?? "Pass pack")}</span>
+                        <span className="text-stone-600">
+                          {" "}
+                          — {left} day{left !== 1 ? "s" : ""} left
+                        </span>
+                        {activeToday && (
+                          <span className="ml-2 text-emerald-700 font-medium">· Active today</span>
+                        )}
+                        {!activeToday && act && (
+                          <span className="block text-xs text-stone-500 mt-0.5">Last activated: {act}</span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              );
+            })()}
+          </div>
+
+          <div className="pt-4 border-t border-stone-200/80">
+            <h2 className="text-base font-semibold text-stone-800 mb-2">PT credits</h2>
+            <p className="text-xs text-stone-600 mb-3">
+              Balances used when booking PT by session length. Grant one-off credits here (e.g. after a purchase that didn&apos;t record correctly).
+            </p>
+            {ptCreditBalances === null ? (
+              <p className="text-sm text-stone-500">Loading balances…</p>
+            ) : (
+              <>
+                <div className="text-sm text-stone-700 mb-3">
+                  {Object.entries(ptCreditBalances).filter(([, n]) => n > 0).length === 0 ? (
+                    <span className="text-stone-500">No PT credits on file.</span>
+                  ) : (
+                    <ul className="space-y-0.5">
+                      {Object.entries(ptCreditBalances)
+                        .filter(([, n]) => n > 0)
+                        .sort(([a], [b]) => Number(a) - Number(b))
+                        .map(([mins, n]) => (
+                          <li key={mins}>
+                            <strong>{n}</strong> × {mins}-minute session{Number(n) !== 1 ? "s" : ""}
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Session length (minutes)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={1440}
+                      value={ptGrantDuration}
+                      onChange={(e) => setPtGrantDuration(e.target.value)}
+                      placeholder="e.g. 90"
+                      className="w-28 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Credits to add</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={99}
+                      value={ptGrantAmount}
+                      onChange={(e) => setPtGrantAmount(Math.max(1, Math.min(99, parseInt(e.target.value, 10) || 1)))}
+                      className="w-20 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-[180px]">
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Note (optional)</label>
+                    <input
+                      type="text"
+                      value={ptGrantNote}
+                      onChange={(e) => setPtGrantNote(e.target.value)}
+                      placeholder="e.g. Fitness assessment purchase Mar 2026"
+                      className="w-full px-2 py-1.5 rounded border border-stone-200 text-sm"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={grantPtCredits}
+                    disabled={ptGrantSubmitting || ptCreditBalances === null}
+                    className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
+                  >
+                    {ptGrantSubmitting ? "Saving…" : "Grant credits"}
+                  </button>
+                </div>
+                {ptGrantMessage && (
+                  <p className={`mt-3 text-sm ${ptGrantMessage.startsWith("Granted") ? "text-emerald-700" : "text-amber-700"}`}>
+                    {ptGrantMessage}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
 

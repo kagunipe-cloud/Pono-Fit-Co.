@@ -40,6 +40,15 @@ export async function POST(request: NextRequest) {
           })
         : null;
 
+    let gift_recipient_email: string | null = null;
+    if (product_type === "membership_plan" && body.gift_recipient_email != null && String(body.gift_recipient_email).trim() !== "") {
+      const g = String(body.gift_recipient_email).trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(g)) {
+        return NextResponse.json({ error: "Invalid gift_recipient_email" }, { status: 400 });
+      }
+      gift_recipient_email = g;
+    }
+
     const db = getDb();
     ensureCartTables(db);
 
@@ -49,13 +58,9 @@ export async function POST(request: NextRequest) {
       cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member_id) as { id: number };
     }
 
-    db.prepare("INSERT INTO cart_items (cart_id, product_type, product_id, quantity, slot_json) VALUES (?, ?, ?, ?, ?)").run(
-      cart.id,
-      product_type,
-      product_id,
-      quantity,
-      slot_json
-    );
+    db.prepare(
+      "INSERT INTO cart_items (cart_id, product_type, product_id, quantity, slot_json, gift_recipient_email) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run(cart.id, product_type, product_id, quantity, slot_json, gift_recipient_email);
     const row = db.prepare("SELECT * FROM cart_items WHERE cart_id = ? ORDER BY id DESC LIMIT 1").get(cart.id);
     db.close();
     return NextResponse.json(row);

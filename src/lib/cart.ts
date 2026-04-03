@@ -29,6 +29,11 @@ export function ensureCartTables(db: ReturnType<typeof getDb>) {
     /* already exists */
   }
   ensureCartLinePriceOverrides(db);
+  try {
+    db.exec("ALTER TABLE cart_items ADD COLUMN gift_recipient_email TEXT");
+  } catch {
+    /* already exists */
+  }
 }
 
 /** Staff-edited line price and (for monthly membership) how long the price applies on auto-renew. */

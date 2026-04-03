@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone } from "../../../../lib/db";
 import { createLoginForUser, ensureKisiUser, grantAccess, unlockWithUserSecret } from "../../../../lib/kisi";
-import { todayInAppTz } from "../../../../lib/app-timezone";
+import { getSubscriptionDoorAccessValidUntil } from "../../../../lib/pass-access";
 import { addOccupancyEntry, ensureOccupancyTable } from "../../../../lib/occupancy";
 
 export const dynamic = "force-dynamic";
@@ -47,18 +47,10 @@ export async function POST(request: NextRequest) {
     try {
       const db2 = getDb();
       const tz = getAppTimezone(db2);
-      const today = todayInAppTz(tz);
-      const sub = db2.prepare(`
-        SELECT expiry_date FROM subscriptions
-        WHERE member_id = ? AND status = 'Active' AND expiry_date >= ?
-        ORDER BY expiry_date DESC LIMIT 1
-      `).get(member_id, today) as { expiry_date: string } | undefined;
+      const validUntil = getSubscriptionDoorAccessValidUntil(db2, member_id, tz);
       db2.close();
-      if (sub?.expiry_date) {
-        const validUntil = new Date(sub.expiry_date);
-        if (validUntil.getTime() > Date.now()) {
-          await grantAccess(kisiId, validUntil);
-        }
+      if (validUntil && validUntil.getTime() > Date.now()) {
+        await grantAccess(kisiId, validUntil);
       }
     } catch (e) {
       console.warn("[Kisi unlock] grant check failed, continuing:", e);

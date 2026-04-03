@@ -160,6 +160,9 @@ export function getDb() {
   ensureMembersProfileColumns(db);
   ensureMembersCreatedAtColumn(db);
   ensurePaymentFailuresTable(db);
+  ensureGiftPassesTable(db);
+  ensureMembershipPackPlans(db);
+  ensureSubscriptionPassPackColumns(db);
   ensureMembersMemberIdUnique(db);
   ensureGymIdColumns(db);
   ensureDatesNormalized(db);
@@ -297,6 +300,20 @@ export function ensureSubscriptionRenewalPromoColumns(db: ReturnType<typeof getD
   }
   try {
     db.exec("ALTER TABLE subscriptions ADD COLUMN renewal_price_indefinite INTEGER DEFAULT 0");
+  } catch {
+    /* already exists */
+  }
+}
+
+/** Pass packs (category Passes, unit Day): banked day credits; member activates one day at a time. */
+export function ensureSubscriptionPassPackColumns(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN pass_credits_remaining INTEGER");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN pass_activation_day TEXT");
   } catch {
     /* already exists */
   }
@@ -521,6 +538,65 @@ export function ensurePaymentFailuresTable(db: ReturnType<typeof getDb>) {
     `);
   } catch (err) {
     console.error("[db] ensurePaymentFailuresTable", err);
+  }
+}
+
+/** Gift membership passes: purchased pass is emailed; recipient redeems into their account. */
+export function ensureGiftPassesTable(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS gift_passes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token TEXT NOT NULL UNIQUE,
+        membership_plan_id INTEGER NOT NULL,
+        purchaser_member_id TEXT NOT NULL,
+        recipient_email TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        redeemed_member_id TEXT,
+        redeemed_at TEXT,
+        sales_id TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_gift_passes_token ON gift_passes(token);
+    `);
+  } catch (err) {
+    console.error("[db] ensureGiftPassesTable", err);
+  }
+}
+
+/** Seed 5-day and 10-day pack plans if missing (product_id 4 and 5). */
+export function ensureMembershipPackPlans(db: ReturnType<typeof getDb>) {
+  try {
+    const has5 = db.prepare("SELECT 1 FROM membership_plans WHERE product_id = ?").get("4");
+    if (!has5) {
+      db.prepare(`
+        INSERT INTO membership_plans (product_id, plan_name, price, length, unit, access_level, stripe_link, category, description)
+        VALUES (?, ?, ?, ?, ?, NULL, NULL, 'Passes', ?)
+      `).run(
+        "4",
+        "5-Day Pack",
+        "$79.00",
+        "5",
+        "Day",
+        "Five day passes — activate one calendar day at a time from My Membership when you plan to visit."
+      );
+    }
+    const has10 = db.prepare("SELECT 1 FROM membership_plans WHERE product_id = ?").get("5");
+    if (!has10) {
+      db.prepare(`
+        INSERT INTO membership_plans (product_id, plan_name, price, length, unit, access_level, stripe_link, category, description)
+        VALUES (?, ?, ?, ?, ?, NULL, NULL, 'Passes', ?)
+      `).run(
+        "5",
+        "10-Day Pack",
+        "$139.00",
+        "10",
+        "Day",
+        "Ten day passes — activate one calendar day at a time from My Membership when you plan to visit."
+      );
+    }
+  } catch (err) {
+    console.error("[db] ensureMembershipPackPlans", err);
   }
 }
 

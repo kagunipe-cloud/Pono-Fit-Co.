@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, expiryDateSortableSql } from "@/lib/db";
+import { getDb, getAppTimezone } from "@/lib/db";
+import { getSubscriptionDoorAccessValidUntil } from "@/lib/pass-access";
 import { grantAccess as kisiGrantAccess } from "@/lib/kisi";
 
 export const dynamic = "force-dynamic";
@@ -31,20 +32,15 @@ export async function POST(request: NextRequest) {
     ).run(now, row.member_id);
     const memberId = row.member_id;
     const kisiId = row.kisi_id?.trim() || null;
-    const expRow = db.prepare(
-      `SELECT expiry_date FROM subscriptions WHERE member_id = ? AND status = 'Active' ORDER BY ${expiryDateSortableSql("expiry_date")} DESC LIMIT 1`
-    ).get(memberId) as { expiry_date: string } | undefined;
+    const tz = getAppTimezone(db);
+    const validUntil = getSubscriptionDoorAccessValidUntil(db, memberId, tz);
     db.close();
 
-    const expiryDateStr = expRow?.expiry_date?.trim();
     let kisiGranted = false;
-    if (kisiId && expiryDateStr) {
+    if (kisiId && validUntil && validUntil.getTime() > Date.now()) {
       try {
-        const expiryDate = new Date(expiryDateStr);
-        if (!Number.isNaN(expiryDate.getTime())) {
-          await kisiGrantAccess(kisiId, expiryDate);
-          kisiGranted = true;
-        }
+        await kisiGrantAccess(kisiId, validUntil);
+        kisiGranted = true;
       } catch (e) {
         console.error("[waiver/agree] Kisi grant failed for", memberId, e);
       }

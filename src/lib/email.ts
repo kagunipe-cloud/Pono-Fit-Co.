@@ -427,6 +427,27 @@ export async function sendMemberBookingConfirmationEmail(params: {
   return sendMemberEmail(params.to, subject, text);
 }
 
+/** Email recipient a redeem link for a gifted membership / pass (purchaser paid; access activates when they redeem). */
+export async function sendGiftPassEmail(params: {
+  to: string;
+  planName: string;
+  redeemUrl: string;
+  purchaserFirstName?: string | null;
+}): Promise<{ ok: boolean; error?: string }> {
+  const from = params.purchaserFirstName?.trim();
+  const intro = from ? `${from} sent you a gift from ${BRAND.name}.\n\n` : "";
+  const text = `Hi,
+
+${intro}You received: ${params.planName}
+
+Redeem your pass — create an account or log in with this same email address (${params.to}):
+${params.redeemUrl}
+
+Mahalo,
+${BRAND.name}`;
+  return sendMemberEmail(params.to, `Your gift: ${params.planName}`, text);
+}
+
 /** Send membership expiring in 2 days reminder. Card on file: remind them they're set if card is valid. No card: payment due on expiry date. */
 export async function sendMembershipExpiryReminder(params: {
   to: string;

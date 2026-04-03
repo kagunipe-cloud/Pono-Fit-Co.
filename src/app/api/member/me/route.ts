@@ -39,7 +39,7 @@ export async function GET() {
     let occurrenceBookings: Record<string, unknown>[] = [];
     try {
       subscriptions = db.prepare(`
-        SELECT s.*, p.plan_name, p.price as plan_price
+        SELECT s.*, p.plan_name, p.price as plan_price, p.unit as plan_unit, p.category as plan_category
         FROM subscriptions s
         LEFT JOIN membership_plans p ON p.product_id = s.product_id
         WHERE s.member_id = ?
@@ -147,9 +147,22 @@ export async function GET() {
     db.close();
 
     const today = todayInAppTz(tz);
-    const hasAccess = subscriptions.some(
-      (s) => s.status === "Active" && String(s.expiry_date ?? "") >= today
+    const hasAccess = subscriptions.some((s) => {
+      if (s.status !== "Active") return false;
+      const pc = s.pass_credits_remaining;
+      if (pc != null && Number(pc) >= 0) {
+        return String(s.pass_activation_day ?? "").trim() === today;
+      }
+      return String(s.expiry_date ?? "") >= today;
+    });
+    const hasBankedPassNotActivatedToday = subscriptions.some(
+      (s) =>
+        s.status === "Active" &&
+        s.pass_credits_remaining != null &&
+        Number(s.pass_credits_remaining) > 0 &&
+        String(s.pass_activation_day ?? "").trim() !== today
     );
+    const showActivatePassHint = !hasAccess && hasBankedPassNotActivatedToday;
 
     const legalName = [member.first_name, member.last_name].filter(Boolean).join(" ") || "Member";
     const displayName = (member.preferred_name ?? "").trim() || legalName;
@@ -164,11 +177,13 @@ export async function GET() {
         legal_name: legalName,
       },
       subscriptions,
+      today_ymd: today,
       classBookings,
       occurrenceBookings,
       classCredits,
       ptBookings,
       hasAccess,
+      show_activate_pass_hint: showActivatePassHint,
       has_saved_card: hasBillableStripeCustomer(member.stripe_customer_id),
       auto_renew: (member.auto_renew ?? 0) === 1,
     });

@@ -52,6 +52,7 @@ export async function GET(
       unit_price_override?: string | null;
       price_override_months?: number | null;
       price_override_indefinite?: number | null;
+      gift_recipient_email?: string | null;
     }[];
     const items: {
       id: number;
@@ -65,6 +66,7 @@ export async function GET(
       price_override_months?: number | null;
       price_override_indefinite?: boolean;
       plan_unit?: string;
+      gift_recipient_email?: string | null;
     }[] = [];
     for (const it of rawItems) {
       let name = "—";
@@ -113,6 +115,7 @@ export async function GET(
         unit_price_override: it.unit_price_override ?? null,
         price_override_months: it.price_override_months ?? null,
         price_override_indefinite: (it.price_override_indefinite ?? 0) === 1,
+        gift_recipient_email: it.gift_recipient_email ?? null,
         ...(plan_unit != null ? { plan_unit } : {}),
       });
     }

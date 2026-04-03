@@ -21,6 +21,7 @@ type CartItem = {
   price_override_months?: number | null;
   price_override_indefinite?: boolean;
   plan_unit?: string;
+  gift_recipient_email?: string | null;
 };
 
 type Plan = { id: number; plan_name: string; price: string; unit: string };
@@ -95,6 +96,8 @@ export default function MemberCartPage() {
   const [staffDrafts, setStaffDrafts] = useState<
     Record<number, { price: string; months: string; indef: boolean }>
   >({});
+  const [giftDrafts, setGiftDrafts] = useState<Record<number, string>>({});
+  const [giftSavingId, setGiftSavingId] = useState<number | null>(null);
 
   useEffect(() => {
     const next: Record<number, { price: string; months: string; indef: boolean }> = {};
@@ -106,6 +109,16 @@ export default function MemberCartPage() {
       };
     }
     setStaffDrafts(next);
+  }, [items]);
+
+  useEffect(() => {
+    const next: Record<number, string> = {};
+    for (const it of items) {
+      if (it.product_type === "membership_plan") {
+        next[it.id] = it.gift_recipient_email ?? "";
+      }
+    }
+    setGiftDrafts(next);
   }, [items]);
   const [useCreditLoadingId, setUseCreditLoadingId] = useState<number | null>(null);
   const [useCreditConfirm, setUseCreditConfirm] = useState<{ cartItemId: number; occurrenceId: number; itemName: string } | null>(null);
@@ -464,6 +477,32 @@ export default function MemberCartPage() {
     }
   }
 
+  async function saveGiftRecipientEmail(it: CartItem) {
+    if (!memberId) return;
+    const raw = (giftDrafts[it.id] ?? "").trim();
+    if (raw && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) {
+      alert("Enter a valid email or leave the field empty.");
+      return;
+    }
+    setGiftSavingId(it.id);
+    try {
+      const res = await fetch(`/api/cart/items/${it.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ member_id: memberId, gift_recipient_email: raw || null }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(typeof data.error === "string" ? data.error : "Could not save.");
+        return;
+      }
+      const cartData = await fetch(`/api/members/${id}/cart-data`).then((r) => r.json());
+      setItems(cartData.items ?? []);
+    } finally {
+      setGiftSavingId(null);
+    }
+  }
+
   async function clearStaffLinePrice(it: CartItem) {
     if (!memberId) return;
     setStaffPriceSavingId(it.id);
@@ -703,6 +742,32 @@ export default function MemberCartPage() {
                     </button>
                   </div>
                 </div>
+                {(isOwnCart || isStaff) && it.product_type === "membership_plan" && (
+                  <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm">
+                    <p className="text-xs font-medium text-stone-700 mb-1">Gift this pass (optional)</p>
+                    <p className="text-xs text-stone-500 mb-2">
+                      After payment we email them a redeem link. They must sign in with this same email.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="email"
+                        autoComplete="email"
+                        className="flex-1 min-w-[12rem] px-2 py-1.5 rounded border border-stone-200 bg-white"
+                        placeholder="recipient@example.com"
+                        value={giftDrafts[it.id] ?? ""}
+                        onChange={(e) => setGiftDrafts((s) => ({ ...s, [it.id]: e.target.value }))}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => saveGiftRecipientEmail(it)}
+                        disabled={giftSavingId === it.id}
+                        className="px-3 py-1.5 rounded-lg bg-stone-800 text-white text-sm hover:bg-stone-900 disabled:opacity-50"
+                      >
+                        {giftSavingId === it.id ? "Saving…" : "Save"}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {isStaff && staffDrafts[it.id] && (
                   <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-sm space-y-2">
                     <p className="text-xs font-medium text-amber-900">Staff: custom price (before promo %)</p>

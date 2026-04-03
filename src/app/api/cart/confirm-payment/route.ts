@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn, ensureSalesStripePaymentIntentColumn, ensureSalesPromoCodeColumn, ensureSalesItemTotalCcFeeColumns, ensureSubscriptionRenewalPromoColumns } from "../../../../lib/db";
+import {
+  getDb,
+  getAppTimezone,
+  ensureMembersStripeColumn,
+  ensureMembersAutoRenewColumn,
+  ensureSalesStripePaymentIntentColumn,
+  ensureSalesPromoCodeColumn,
+  ensureSalesItemTotalCcFeeColumns,
+  ensureSubscriptionRenewalPromoColumns,
+  ensureGiftPassesTable,
+  ensureSubscriptionPassPackColumns,
+} from "../../../../lib/db";
+import { isPassPackPlan, passCreditsForPurchase } from "../../../../lib/pass-packs";
 import { ensureCartTables } from "../../../../lib/cart";
 import { getEffectiveUnitPriceString } from "../../../../lib/cart-line-prices";
 import {
@@ -8,6 +20,7 @@ import {
   sendMemberEmail,
   sendMemberBookingConfirmationEmail,
   getTrainerDisplayNameFromMemberId,
+  sendGiftPassEmail,
 } from "../../../../lib/email";
 import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../lib/kisi";
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
@@ -192,6 +205,7 @@ export async function POST(request: NextRequest) {
       unit_price_override?: string | null;
       price_override_months?: number | null;
       price_override_indefinite?: number | null;
+      gift_recipient_email?: string | null;
     }[];
     if (items.length === 0) {
       db.close();
@@ -226,6 +240,7 @@ export async function POST(request: NextRequest) {
       time: string;
     }[] = [];
     const emailLineItems: { name: string; quantity: number; price: string }[] = [];
+    const giftSendQueue: { to: string; token: string; planName: string; purchaserFirstName: string | null }[] = [];
 
     db.exec("BEGIN TRANSACTION");
     try {
@@ -236,6 +251,49 @@ export async function POST(request: NextRequest) {
             const effUnit = getEffectiveUnitPriceString(db, it);
             const unitNum = parsePrice(effUnit);
             grand_total += unitNum * it.quantity;
+            const giftEmail = (it.gift_recipient_email ?? "").trim();
+            const isGift = giftEmail.length > 0 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(giftEmail);
+            if (isGift) {
+              emailLineItems.push({
+                name: `${plan.plan_name ?? "Membership"} (gift → ${giftEmail})`,
+                quantity: it.quantity,
+                price: formatPrice(effUnit),
+              });
+              ensureGiftPassesTable(db);
+              const qty = Math.max(1, it.quantity);
+              for (let q = 0; q < qty; q++) {
+                const token = randomUUID().replace(/-/g, "");
+                db.prepare(
+                  `INSERT INTO gift_passes (token, membership_plan_id, purchaser_member_id, recipient_email, sales_id)
+                   VALUES (?, ?, ?, ?, ?)`
+                ).run(token, it.product_id, member_id, giftEmail.toLowerCase(), sales_id);
+                giftSendQueue.push({
+                  to: giftEmail.toLowerCase(),
+                  token,
+                  planName: plan.plan_name ?? "Membership",
+                  purchaserFirstName: memberRow?.first_name ?? null,
+                });
+              }
+              continue;
+            }
+            if (isPassPackPlan(plan)) {
+              ensureSubscriptionPassPackColumns(db);
+              ensureSubscriptionRenewalPromoColumns(db);
+              const credits = passCreditsForPurchase(plan, it.quantity);
+              const start_date = new Date();
+              const startStr = formatDateForStorage(start_date, tz);
+              const sub_id = randomUUID().slice(0, 8);
+              emailLineItems.push({ name: plan.plan_name ?? "Pass pack", quantity: it.quantity, price: formatPrice(effUnit) });
+              db.prepare(`
+                INSERT INTO subscriptions (
+                  subscription_id, member_id, product_id, status, start_date, expiry_date, days_remaining,
+                  price, sales_id, quantity, promo_renewals_remaining, renewal_price_indefinite,
+                  pass_credits_remaining, pass_activation_day
+                )
+                VALUES (?, ?, ?, 'Active', ?, '2000-01-01', '0', ?, ?, ?, NULL, 0, ?, NULL)
+              `).run(sub_id, member_id, plan.product_id, startStr, effUnit, sales_id, String(it.quantity), credits);
+              continue;
+            }
             emailLineItems.push({ name: plan.plan_name ?? "Membership", quantity: it.quantity, price: formatPrice(effUnit) });
             const start_date = new Date();
             const expiry_date = addDuration(start_date, plan.length || "1", plan.unit || "Month");
@@ -513,6 +571,19 @@ export async function POST(request: NextRequest) {
           },
         }).then((r) => {
           if (!r.ok) console.error("[Email] post-purchase:", r.error);
+        });
+      }
+
+      const baseUrl = origin.replace(/\/$/, "");
+      for (const g of giftSendQueue) {
+        const redeemUrl = `${baseUrl}/gift/redeem?t=${encodeURIComponent(g.token)}`;
+        sendGiftPassEmail({
+          to: g.to,
+          planName: g.planName,
+          redeemUrl,
+          purchaserFirstName: g.purchaserFirstName,
+        }).then((r) => {
+          if (!r.ok) console.error("[Email] gift pass:", r.error);
         });
       }
 

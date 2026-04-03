@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../../lib/db";
 import { ensureCartTables } from "../../../../../lib/cart";
 import { getTrainerMemberId } from "../../../../../lib/admin";
+import { getMemberIdFromSession } from "../../../../../lib/session";
 import { normalizeUnitPriceOverrideInput } from "../../../../../lib/cart-line-prices";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +53,57 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const member_id = String(body.member_id ?? "").trim();
   if (!member_id) {
     return NextResponse.json({ error: "member_id required" }, { status: 400 });
+  }
+
+  const giftOnly =
+    body.gift_recipient_email !== undefined &&
+    body.unit_price_override === undefined &&
+    body.price_override_months === undefined &&
+    body.price_override_indefinite === undefined;
+
+  if (giftOnly) {
+    const sessionMemberId = await getMemberIdFromSession();
+    const isStaff = !!(await getTrainerMemberId(request));
+    if (sessionMemberId !== member_id && !isStaff) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const dbGift = getDb();
+    ensureCartTables(dbGift);
+    const giftRow = dbGift
+      .prepare(
+        `SELECT ci.id, ci.product_type
+         FROM cart_items ci
+         JOIN cart c ON c.id = ci.cart_id
+         WHERE ci.id = ? AND c.member_id = ?`
+      )
+      .get(numericId, member_id) as { id: number; product_type: string } | undefined;
+
+    if (!giftRow) {
+      dbGift.close();
+      return NextResponse.json({ error: "Cart item not found" }, { status: 404 });
+    }
+    if (giftRow.product_type !== "membership_plan") {
+      dbGift.close();
+      return NextResponse.json({ error: "Gift recipient email is only for membership lines" }, { status: 400 });
+    }
+
+    const raw = body.gift_recipient_email;
+    let val: string | null = null;
+    if (raw === null || raw === "") {
+      val = null;
+    } else {
+      const s = String(raw).trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) {
+        dbGift.close();
+        return NextResponse.json({ error: "Invalid email address" }, { status: 400 });
+      }
+      val = s;
+    }
+    dbGift.prepare("UPDATE cart_items SET gift_recipient_email = ? WHERE id = ?").run(val, numericId);
+    const updatedGift = dbGift.prepare("SELECT * FROM cart_items WHERE id = ?").get(numericId);
+    dbGift.close();
+    return NextResponse.json(updatedGift);
   }
 
   const db = getDb();

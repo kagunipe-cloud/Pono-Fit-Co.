@@ -14,6 +14,7 @@ type MemberData = {
   occurrenceBookings: Record<string, unknown>[];
   ptBookings: Record<string, unknown>[];
   hasAccess: boolean;
+  show_activate_pass_hint?: boolean;
 } | null;
 
 export default function MemberHomePage() {
@@ -68,6 +69,7 @@ export default function MemberHomePage() {
   const occurrenceBookings = Array.isArray(data.occurrenceBookings) ? data.occurrenceBookings : [];
   const ptBookings = Array.isArray(data.ptBookings) ? data.ptBookings : [];
   const hasAccess = Boolean(data.hasAccess);
+  const showActivatePassHint = Boolean(data.show_activate_pass_hint);
   const activeSub = subscriptions.find((s) => s.status === "Active") as { plan_name?: string; expiry_date?: string } | undefined;
 
   return (
@@ -91,7 +93,16 @@ export default function MemberHomePage() {
         >
           {unlocking ? "Unlocking…" : hasAccess ? "Unlock Door" : "No Active Membership"}
         </button>
-        {!hasAccess && (
+        {showActivatePassHint && (
+          <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+            You have day passes on your account. Open{" "}
+            <Link href="/member/membership" className="font-medium text-brand-700 hover:underline">
+              My Membership
+            </Link>{" "}
+            and tap <strong>Activate pass for today</strong> before you can unlock the door.
+          </p>
+        )}
+        {!hasAccess && !showActivatePassHint && (
           <p className="text-sm text-stone-500 mt-2">Purchase a Membership to Unlock the Door.</p>
         )}
         {unlockMessage && (
