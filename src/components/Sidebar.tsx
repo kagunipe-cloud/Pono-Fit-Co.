@@ -12,6 +12,7 @@ import {
   REPORT_SUB_SLUGS,
   BOOKINGS_SUB_SLUGS,
   BOOKINGS_EXTRA_LINKS,
+  REPORT_EXTRA_LINKS,
   SERVICES_SUB_SLUGS,
 } from "../lib/sections";
 
@@ -143,7 +144,12 @@ function NavList({
   const mainSections = SECTIONS.filter(
     (s) => !REPORT_SUB_SLUGS.includes(s.slug) && !BOOKINGS_SUB_SLUGS.includes(s.slug) && !SERVICES_SUB_SLUGS.includes(s.slug)
   );
-  const isOnReportPage = pathname != null && (REPORT_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`)) || pathname === "/admin/usage" || pathname.startsWith("/admin/usage/"));
+  const isOnReportPage =
+    pathname != null &&
+    (REPORT_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`)) ||
+      REPORT_EXTRA_LINKS.some((l) => pathname === l.href || pathname.startsWith(`${l.href}/`)) ||
+      pathname === "/admin/usage" ||
+      pathname.startsWith("/admin/usage/"));
   const isOnBookingsPage =
     pathname != null &&
     (BOOKINGS_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`)) ||
@@ -445,6 +451,21 @@ function NavList({
                 className={`block px-3 py-2 text-sm font-medium ${
                   pathname === `/${slug}` ? "bg-brand-gray-100 text-brand-500" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
                 }`}
+                  role="menuitem"
+                  onClick={() => setReportsOpen(false)}
+                >
+                  {title}
+                </Link>
+              ))}
+              {REPORT_EXTRA_LINKS.map(({ href, title }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`block px-3 py-2 text-sm font-medium ${
+                    pathname === href || pathname?.startsWith(`${href}/`)
+                      ? "bg-brand-gray-100 text-brand-500"
+                      : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                  }`}
                   role="menuitem"
                   onClick={() => setReportsOpen(false)}
                 >
