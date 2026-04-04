@@ -108,6 +108,12 @@ export default function SubscriptionsPage() {
           <span className="text-sm text-stone-400">
             {rows.length} row{rows.length !== 1 ? "s" : ""}
           </span>
+          <a
+            href={`/api/admin/export-subscriptions-csv?status=${encodeURIComponent(statusFilter)}${debouncedSearch ? `&q=${encodeURIComponent(debouncedSearch)}` : ""}`}
+            className="inline-flex items-center px-3 py-2 rounded-lg border border-stone-200 bg-white text-sm font-medium text-stone-700 hover:bg-stone-50 shrink-0"
+          >
+            Download CSV
+          </a>
         </div>
 
         {error && (
