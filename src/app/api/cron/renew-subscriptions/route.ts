@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn, ensurePaymentFailuresTable, ensureSalesItemTotalCcFeeColumns, ensureSalesTypeColumn, ensureSubscriptionRenewalPromoColumns } from "../../../../lib/db";
-import { grantAccess as kisiGrantAccess, revokeAccess } from "../../../../lib/kisi";
-import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
-import { formatDateTimeInAppTz, todayInAppTz, formatDateForStorage } from "../../../../lib/app-timezone";
+import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn, ensurePaymentFailuresTable, ensureSubscriptionRenewalPromoColumns } from "../../../../lib/db";
+import { revokeAccess } from "../../../../lib/kisi";
+import { extendSubscriptionAfterRenewal } from "../../../../lib/renewal-extension";
+import { todayInAppTz, formatDateForStorage } from "../../../../lib/app-timezone";
 import { computeCcFee } from "../../../../lib/cc-fees";
-import { randomUUID } from "crypto";
 import { stripeCustomerIdForApi } from "../../../../lib/stripe-customer";
 import Stripe from "stripe";
 
@@ -14,27 +13,6 @@ function parsePriceToCents(p: string | null): number {
   if (p == null || p === "") return 0;
   const n = parseFloat(String(p).replace(/[^0-9.-]/g, ""));
   return Number.isNaN(n) ? 0 : Math.round(n * 100);
-}
-
-function addDuration(startDate: Date, length: string, unit: string): Date {
-  const d = new Date(startDate);
-  const n = Math.max(0, parseInt(length, 10) || 1);
-  if (unit === "Day") d.setDate(d.getDate() + n);
-  else if (unit === "Week") d.setDate(d.getDate() + n * 7);
-  else if (unit === "Month") d.setMonth(d.getMonth() + n);
-  else if (unit === "Year") d.setFullYear(d.getFullYear() + n);
-  return d;
-}
-
-/** Parse stored YYYY-MM-DD as local noon for calendar math (matches billing period boundaries). */
-function parseStoredYmdToLocalDate(ymd: string): Date | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd.trim());
-  if (!m) return null;
-  const y = Number(m[1]);
-  const mo = Number(m[2]) - 1;
-  const d = Number(m[3]);
-  if (!y || mo < 0 || d < 1) return null;
-  return new Date(y, mo, d, 12, 0, 0, 0);
 }
 
 async function revokeKisiForMember(db: ReturnType<typeof getDb>, memberId: string): Promise<void> {
@@ -182,69 +160,13 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      // Extend from the subscription period end (due date), not from "today", so late payers don't get free days.
-      const anchorDate = parseStoredYmdToLocalDate(sub.expiry_date) ?? new Date();
-      const expiryDate = addDuration(anchorDate, sub.length || "1", sub.unit || "Month");
-      const expiryStr = formatDateForStorage(expiryDate, tz);
-      const daysRemaining = Math.ceil((expiryDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
-      const sales_id = randomUUID().slice(0, 8);
-
-      ensureSalesItemTotalCcFeeColumns(db);
-      ensureSalesTypeColumn(db);
-      db.exec("BEGIN TRANSACTION");
-      try {
-        const pr = sub.promo_renewals_remaining;
-        const indef = (sub.renewal_price_indefinite ?? 0) === 1;
-        if (pr != null && pr > 0) {
-          const next = pr - 1;
-          if (next === 0) {
-            db.prepare(
-              `UPDATE subscriptions SET expiry_date = ?, days_remaining = ?, promo_renewals_remaining = NULL, renewal_price_indefinite = 0, price = ? WHERE subscription_id = ?`
-            ).run(expiryStr, String(daysRemaining), sub.plan_price, sub.subscription_id);
-          } else {
-            db.prepare(
-              `UPDATE subscriptions SET expiry_date = ?, days_remaining = ?, promo_renewals_remaining = ? WHERE subscription_id = ?`
-            ).run(expiryStr, String(daysRemaining), next, sub.subscription_id);
-          }
-        } else if (indef) {
-          db.prepare("UPDATE subscriptions SET expiry_date = ?, days_remaining = ? WHERE subscription_id = ?").run(
-            expiryStr,
-            String(daysRemaining),
-            sub.subscription_id
-          );
-        } else {
-          db.prepare("UPDATE subscriptions SET expiry_date = ?, days_remaining = ? WHERE subscription_id = ?").run(
-            expiryStr,
-            String(daysRemaining),
-            sub.subscription_id
-          );
-        }
-        const date_time = formatDateTimeInAppTz(new Date(), undefined, tz);
-        db.prepare(`
-          INSERT INTO sales (sales_id, date_time, member_id, grand_total, tax_amount, item_total, cc_fee, email, status, sale_date, sale_type)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Paid', ?, 'renewal')
-        `).run(sales_id, date_time, sub.member_id, String(totalDollars), String(taxDollars), String(itemTotalDollars), String(ccFeeDollars), memberRow.email ?? "", todayInAppTz(tz));
-        db.prepare("UPDATE members SET exp_next_payment_date = ? WHERE member_id = ?").run(expiryStr, sub.member_id);
-        db.exec("COMMIT");
-      } catch (e) {
-        db.exec("ROLLBACK");
-        throw e;
-      }
-      const origin = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
-      const waiver = await ensureWaiverBeforeKisi(sub.member_id, {
-        email: memberRow.email ?? null,
-        first_name: memberRow.first_name ?? null,
-      }, origin);
-      if (waiver.shouldGrantKisi) {
-        const kisiId = db.prepare("SELECT kisi_id FROM members WHERE member_id = ?").get(sub.member_id) as { kisi_id: string | null } | undefined;
-        if (kisiId?.kisi_id) {
-          try {
-            await kisiGrantAccess(kisiId.kisi_id, expiryDate);
-          } catch (e) {
-            console.error("[Kisi] renewal grant failed for member:", sub.member_id, e);
-          }
-        }
-      }
+      await extendSubscriptionAfterRenewal(db, tz, sub, memberRow, {
+        grandTotal: String(totalDollars),
+        taxAmount: String(taxDollars),
+        itemTotal: String(itemTotalDollars),
+        ccFee: String(ccFeeDollars),
+        saleType: "renewal",
+      });
       results.push({ member_id: sub.member_id, status: "renewed" });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

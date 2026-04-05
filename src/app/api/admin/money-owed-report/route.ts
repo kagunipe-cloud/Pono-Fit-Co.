@@ -16,16 +16,26 @@ export type MoneyOwedRow = {
   reason: string;
   stripe_error_code: string | null;
   attempted_at: string;
+  dismissed_at?: string | null;
 };
 
-/** GET: Money owed report — recurring payments that failed or were skipped (admin only). */
+/** GET: Money owed report — recurring payments that failed or were skipped (admin only).
+ *  Query: `?view=archived` — dismissed rows only (read-only history). Default: active (non-dismissed).
+ */
 export async function GET(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
   if (!adminId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const archived = request.nextUrl.searchParams.get("view")?.trim().toLowerCase() === "archived";
+
   try {
     const db = getDb();
+    const whereDismissed = archived
+      ? `WHERE f.dismissed_at IS NOT NULL AND TRIM(f.dismissed_at) != ''`
+      : `WHERE f.dismissed_at IS NULL OR TRIM(COALESCE(f.dismissed_at, '')) = ''`;
+    const orderBy = archived ? `ORDER BY f.dismissed_at DESC` : `ORDER BY f.attempted_at DESC`;
+
     const rows = db.prepare(`
       SELECT
         f.id,
@@ -36,12 +46,14 @@ export async function GET(request: NextRequest) {
         f.reason,
         f.stripe_error_code,
         f.attempted_at,
+        f.dismissed_at,
         m.first_name,
         m.last_name,
         m.email
       FROM payment_failures f
       LEFT JOIN members m ON m.member_id = f.member_id
-      ORDER BY f.attempted_at DESC
+      ${whereDismissed}
+      ${orderBy}
     `).all() as (Record<string, unknown>)[];
 
     const list: MoneyOwedRow[] = rows.map((r) => {
@@ -61,11 +73,12 @@ export async function GET(request: NextRequest) {
         reason: String(r.reason ?? ""),
         stripe_error_code: r.stripe_error_code != null ? String(r.stripe_error_code) : null,
         attempted_at: String(r.attempted_at ?? ""),
+        dismissed_at: r.dismissed_at != null && String(r.dismissed_at).trim() !== "" ? String(r.dismissed_at) : null,
       };
     });
 
     db.close();
-    return NextResponse.json({ rows: list });
+    return NextResponse.json({ view: archived ? "archived" : "active", rows: list });
   } catch (err) {
     console.error("[admin/money-owed-report]", err);
     return NextResponse.json({ error: "Failed to load money owed report" }, { status: 500 });

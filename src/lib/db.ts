@@ -536,6 +536,11 @@ export function ensurePaymentFailuresTable(db: ReturnType<typeof getDb>) {
         attempted_at TEXT DEFAULT (datetime('now'))
       )
     `);
+    try {
+      db.exec("ALTER TABLE payment_failures ADD COLUMN dismissed_at TEXT");
+    } catch {
+      /* already exists */
+    }
   } catch (err) {
     console.error("[db] ensurePaymentFailuresTable", err);
   }

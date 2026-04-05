@@ -249,7 +249,8 @@ export async function GET(request: NextRequest) {
     ensurePaymentFailuresTable(db);
     let sql = `SELECT DISTINCT member_id FROM payment_failures f
       JOIN members m ON m.member_id = f.member_id
-      WHERE TRIM(COALESCE(m.email, '')) != ''`;
+      WHERE TRIM(COALESCE(m.email, '')) != ''
+        AND (f.dismissed_at IS NULL OR TRIM(COALESCE(f.dismissed_at, '')) = '')`;
     const params: (string | number)[] = [];
     if (failedPaymentDays > 0) {
       const cutoff = new Date(Date.now() - failedPaymentDays * 24 * 60 * 60 * 1000).toISOString().slice(0, 19).replace("T", " ");
