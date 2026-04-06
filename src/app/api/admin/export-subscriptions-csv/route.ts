@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, ensureMembersAutoRenewColumn } from "@/lib/db";
+import { getDb, ensureMembersAutoRenewColumn, ensureSubscriptionComplimentaryColumns } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +23,8 @@ type Row = {
   stripe_customer_id: string | null;
   auto_renew: number | null;
   plan_name: string | null;
+  complimentary: number | null;
+  complimentary_renewals_remaining: number | null;
 };
 
 /**
@@ -43,9 +45,11 @@ export async function GET(request: NextRequest) {
   try {
     const db = getDb();
     ensureMembersAutoRenewColumn(db);
+    ensureSubscriptionComplimentaryColumns(db);
 
     let sql = `
       SELECT s.subscription_id, s.member_id, s.product_id, s.status, s.start_date, s.expiry_date, s.days_remaining, s.price,
+             s.complimentary, s.complimentary_renewals_remaining,
              m.email, m.stripe_customer_id, m.auto_renew, p.plan_name
       FROM subscriptions s
       LEFT JOIN members m ON m.member_id = s.member_id
@@ -86,6 +90,8 @@ export async function GET(request: NextRequest) {
       "expiry_date",
       "days_remaining",
       "price",
+      "complimentary",
+      "complimentary_renewals_remaining",
     ];
 
     const lines = [
@@ -104,6 +110,8 @@ export async function GET(request: NextRequest) {
           csvEscape(r.expiry_date),
           csvEscape(r.days_remaining),
           csvEscape(r.price),
+          r.complimentary === 1 ? "1" : "0",
+          r.complimentary_renewals_remaining != null ? String(r.complimentary_renewals_remaining) : "",
         ].join(",")
       ),
     ];

@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensureMembersStripeColumn, ensurePaymentFailuresTable, ensureSubscriptionRenewalPromoColumns } from "@/lib/db";
+import {
+  getDb,
+  getAppTimezone,
+  ensureMembersStripeColumn,
+  ensurePaymentFailuresTable,
+  ensureSubscriptionRenewalPromoColumns,
+  ensureSubscriptionComplimentaryColumns,
+} from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
 import { extendSubscriptionAfterRenewal, type RenewalSubRow } from "@/lib/renewal-extension";
 import { computeCcFee } from "@/lib/cc-fees";
@@ -28,6 +35,8 @@ type SubQueryRow = {
   plan_price: string;
   length: string;
   unit: string;
+  complimentary: number | null;
+  complimentary_renewals_remaining: number | null;
 };
 
 function loadActiveMonthlySubscription(
@@ -38,6 +47,7 @@ function loadActiveMonthlySubscription(
   const base = `
     SELECT s.subscription_id, s.member_id, s.expiry_date, s.price as sub_price, s.quantity,
            s.promo_renewals_remaining, s.renewal_price_indefinite,
+           s.complimentary, s.complimentary_renewals_remaining,
            p.plan_name, p.price as plan_price, p.length, p.unit
     FROM subscriptions s
     JOIN membership_plans p ON p.product_id = s.product_id
@@ -56,6 +66,8 @@ function loadActiveMonthlySubscription(
     quantity: row.quantity ?? 1,
     promo_renewals_remaining: row.promo_renewals_remaining,
     renewal_price_indefinite: row.renewal_price_indefinite,
+    complimentary: row.complimentary,
+    complimentary_renewals_remaining: row.complimentary_renewals_remaining,
     plan_name: row.plan_name,
     plan_price: row.plan_price,
     length: row.length,
@@ -92,6 +104,7 @@ export async function POST(request: NextRequest) {
   ensurePaymentFailuresTable(db);
   ensureMembersStripeColumn(db);
   ensureSubscriptionRenewalPromoColumns(db);
+  ensureSubscriptionComplimentaryColumns(db);
   const tz = getAppTimezone(db);
 
   const failure = db

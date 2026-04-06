@@ -8,6 +8,7 @@ import {
   ensureMembersAutoRenewColumn,
   ensureSubscriptionsSalesIdColumn,
   ensureSubscriptionRenewalPromoColumns,
+  ensureSubscriptionComplimentaryColumns,
 } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
 import { normalizeDateToYMD, formatDateForStorage } from "@/lib/app-timezone";
@@ -87,6 +88,10 @@ function subtractPeriodFromExpiryYmd(expiryYmd: string, length: string, unit: st
  * - `renewal_price_indefinite` = 1 (or true/yes) — renewals use `subscription_price` until you change it (same as staff cart “indefinite” override).
  * - `renewal_discount_months` = N — N months total at `subscription_price` (then subscription price resets to catalog); same math as staff cart override months.
  * Do not set both columns on one row.
+ *
+ * **Complimentary:** `complimentary` = 1 — free membership renewals via cron (no Stripe). `complimentary_periods`
+ * = N: N complimentary **monthly renewals** after import, then subscription reverts to catalog price; leave blank
+ * for indefinite complimentary. Do not combine with `renewal_price_indefinite` or `renewal_discount_months`.
  */
 export async function POST(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
@@ -124,6 +129,7 @@ export async function POST(request: NextRequest) {
   ensureMembersAutoRenewColumn(db);
   ensureSubscriptionsSalesIdColumn(db);
   ensureSubscriptionRenewalPromoColumns(db);
+  ensureSubscriptionComplimentaryColumns(db);
   const tz = getAppTimezone(db);
 
   const getByEmail = db.prepare(
@@ -151,11 +157,11 @@ export async function POST(request: NextRequest) {
     "SELECT subscription_id FROM subscriptions WHERE member_id = ? AND TRIM(product_id) = TRIM(?) AND status = 'Active' LIMIT 1"
   );
   const insertSub = db.prepare(`
-    INSERT INTO subscriptions (subscription_id, member_id, product_id, status, start_date, expiry_date, days_remaining, price, sales_id, quantity, promo_renewals_remaining, renewal_price_indefinite)
-    VALUES (?, ?, ?, 'Active', ?, ?, ?, ?, NULL, ?, ?, ?)
+    INSERT INTO subscriptions (subscription_id, member_id, product_id, status, start_date, expiry_date, days_remaining, price, sales_id, quantity, promo_renewals_remaining, renewal_price_indefinite, complimentary, complimentary_renewals_remaining)
+    VALUES (?, ?, ?, 'Active', ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
   `);
   const updateSub = db.prepare(`
-    UPDATE subscriptions SET start_date = ?, expiry_date = ?, days_remaining = ?, price = ?, quantity = ?, promo_renewals_remaining = ?, renewal_price_indefinite = ?
+    UPDATE subscriptions SET start_date = ?, expiry_date = ?, days_remaining = ?, price = ?, quantity = ?, promo_renewals_remaining = ?, renewal_price_indefinite = ?, complimentary = ?, complimentary_renewals_remaining = ?
     WHERE subscription_id = ?
   `);
 
@@ -326,6 +332,50 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    let complimentaryFlag = 0;
+    let compRemaining: number | null = null;
+    if ((wantsSubFull || wantsSubByName) && plan) {
+      const complimentaryIn = parseAutoRenew(raw.complimentary);
+      const periodsStr = (raw.complimentary_periods ?? "").trim();
+      const periodsParsed = periodsStr ? parseInt(periodsStr, 10) : NaN;
+      const hasLegacyDiscount =
+        parseAutoRenew(raw.renewal_price_indefinite) === 1 || String(raw.renewal_discount_months ?? "").trim() !== "";
+      if (complimentaryIn) {
+        if (hasLegacyDiscount) {
+          errors.push({
+            row: i + 2,
+            email: rawEmail,
+            message: "Do not combine complimentary with renewal_price_indefinite or renewal_discount_months.",
+          });
+          continue;
+        }
+        complimentaryFlag = 1;
+        priceStored = "0";
+        renewalIndef = 0;
+        promoRemaining = null;
+        if (periodsStr) {
+          if (Number.isNaN(periodsParsed) || periodsParsed < 1) {
+            errors.push({
+              row: i + 2,
+              email: rawEmail,
+              message: "complimentary_periods must be a positive integer or leave blank for indefinite complimentary renewals.",
+            });
+            continue;
+          }
+          compRemaining = periodsParsed;
+        } else {
+          compRemaining = null;
+        }
+      } else if (periodsStr) {
+        errors.push({
+          row: i + 2,
+          email: rawEmail,
+          message: "complimentary_periods requires complimentary=1.",
+        });
+        continue;
+      }
+    }
+
     const firstName = firstNameIn ?? existing?.first_name ?? null;
     const lastName = lastNameIn ?? existing?.last_name ?? null;
     const phone = phoneIn ?? existing?.phone ?? null;
@@ -377,10 +427,34 @@ export async function POST(request: NextRequest) {
       if (shouldWriteSub && plan && expiryYmd && startYmd) {
         const existingSub = getActiveSub.get(memberId, plan.product_id) as { subscription_id: string } | undefined;
         if (existingSub) {
-          updateSub.run(startYmd, expiryYmd, String(daysRem), priceStored, qtyStr, promoRemaining, renewalIndef, existingSub.subscription_id);
+          updateSub.run(
+            startYmd,
+            expiryYmd,
+            String(daysRem),
+            priceStored,
+            qtyStr,
+            promoRemaining,
+            renewalIndef,
+            complimentaryFlag,
+            compRemaining,
+            existingSub.subscription_id
+          );
         } else {
           const subId = randomUUID().slice(0, 8);
-          insertSub.run(subId, memberId, plan.product_id, startYmd, expiryYmd, String(daysRem), priceStored, qtyStr, promoRemaining, renewalIndef);
+          insertSub.run(
+            subId,
+            memberId,
+            plan.product_id,
+            startYmd,
+            expiryYmd,
+            String(daysRem),
+            priceStored,
+            qtyStr,
+            promoRemaining,
+            renewalIndef,
+            complimentaryFlag,
+            compRemaining
+          );
         }
         didSub = true;
       }

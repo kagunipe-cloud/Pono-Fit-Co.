@@ -1,5 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn, ensurePaymentFailuresTable, ensureSubscriptionRenewalPromoColumns } from "../../../../lib/db";
+import {
+  getDb,
+  getAppTimezone,
+  ensureMembersStripeColumn,
+  ensureMembersAutoRenewColumn,
+  ensurePaymentFailuresTable,
+  ensureSubscriptionRenewalPromoColumns,
+  ensureSubscriptionComplimentaryColumns,
+} from "../../../../lib/db";
 import { revokeAccess } from "../../../../lib/kisi";
 import { extendSubscriptionAfterRenewal } from "../../../../lib/renewal-extension";
 import { todayInAppTz, formatDateForStorage } from "../../../../lib/app-timezone";
@@ -47,6 +55,7 @@ export async function GET(request: NextRequest) {
   ensureMembersAutoRenewColumn(db);
   ensurePaymentFailuresTable(db);
   ensureSubscriptionRenewalPromoColumns(db);
+  ensureSubscriptionComplimentaryColumns(db);
 
   const tz = getAppTimezone(db);
   const insertFailure = db.prepare(`
@@ -58,6 +67,7 @@ export async function GET(request: NextRequest) {
   const expiring = db.prepare(`
     SELECT s.subscription_id, s.member_id, s.product_id, s.expiry_date, s.price as sub_price, s.quantity,
            s.promo_renewals_remaining, s.renewal_price_indefinite,
+           s.complimentary, s.complimentary_renewals_remaining,
            p.plan_name, p.price as plan_price, p.length, p.unit
     FROM subscriptions s
     JOIN membership_plans p ON p.product_id = s.product_id
@@ -74,6 +84,8 @@ export async function GET(request: NextRequest) {
     quantity: number;
     promo_renewals_remaining: number | null;
     renewal_price_indefinite: number | null;
+    complimentary: number | null;
+    complimentary_renewals_remaining: number | null;
     plan_name: string;
     plan_price: string;
     length: string;
@@ -84,17 +96,41 @@ export async function GET(request: NextRequest) {
   const results: { member_id: string; status: "renewed" | "skipped" | "error"; message?: string }[] = [];
 
   for (const sub of expiring) {
+    const memberRow = db.prepare("SELECT stripe_customer_id, email, first_name, auto_renew FROM members WHERE member_id = ?").get(sub.member_id) as { stripe_customer_id: string | null; email: string | null; first_name: string | null; auto_renew?: number | null } | undefined;
+    if (!memberRow) {
+      const useNegotiatedPrice =
+        (sub.promo_renewals_remaining != null && sub.promo_renewals_remaining > 0) ||
+        (sub.renewal_price_indefinite ?? 0) === 1;
+      const priceStr = useNegotiatedPrice ? sub.sub_price : sub.plan_price;
+      const amountCents = parsePriceToCents(priceStr) * Math.max(1, sub.quantity);
+      results.push({ member_id: sub.member_id, status: "skipped", message: "Member not found" });
+      insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "Member not found", null);
+      continue;
+    }
+
+    if ((sub.complimentary ?? 0) === 1) {
+      try {
+        await extendSubscriptionAfterRenewal(db, tz, sub, memberRow, {
+          grandTotal: "0",
+          taxAmount: "0",
+          itemTotal: "0",
+          ccFee: "0",
+          saleType: "complimentary",
+        });
+        results.push({ member_id: sub.member_id, status: "renewed" });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        results.push({ member_id: sub.member_id, status: "error", message: msg });
+        insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, 0, msg, null);
+      }
+      continue;
+    }
+
     const useNegotiatedPrice =
       (sub.promo_renewals_remaining != null && sub.promo_renewals_remaining > 0) ||
       (sub.renewal_price_indefinite ?? 0) === 1;
     const priceStr = useNegotiatedPrice ? sub.sub_price : sub.plan_price;
     const amountCents = parsePriceToCents(priceStr) * Math.max(1, sub.quantity);
-    const memberRow = db.prepare("SELECT stripe_customer_id, email, first_name, auto_renew FROM members WHERE member_id = ?").get(sub.member_id) as { stripe_customer_id: string | null; email: string; first_name: string | null; auto_renew?: number | null } | undefined;
-    if (!memberRow) {
-      results.push({ member_id: sub.member_id, status: "skipped", message: "Member not found" });
-      insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "Member not found", null);
-      continue;
-    }
     const stripeCustomerId = stripeCustomerIdForApi(memberRow.stripe_customer_id);
     if (!stripeCustomerId) {
       results.push({ member_id: sub.member_id, status: "error", message: "No saved card" });

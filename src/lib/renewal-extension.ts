@@ -3,13 +3,13 @@
  * (cron) or admin write-off / manual retry success.
  */
 
-import { ensureSalesItemTotalCcFeeColumns, ensureSalesTypeColumn, getDb } from "./db";
-
-type AppDb = ReturnType<typeof getDb>;
+import { randomUUID } from "crypto";
+import { ensureSalesItemTotalCcFeeColumns, ensureSalesTypeColumn, ensureSubscriptionComplimentaryColumns, getDb } from "./db";
 import { formatDateTimeInAppTz, todayInAppTz, formatDateForStorage } from "./app-timezone";
 import { grantAccess as kisiGrantAccess } from "./kisi";
 import { ensureWaiverBeforeKisi } from "./waiver";
-import { randomUUID } from "crypto";
+
+type AppDb = ReturnType<typeof getDb>;
 
 export type RenewalSubRow = {
   subscription_id: string;
@@ -19,6 +19,9 @@ export type RenewalSubRow = {
   quantity: number | string;
   promo_renewals_remaining: number | null;
   renewal_price_indefinite: number | null;
+  /** Onboarding complimentary: renew without charge while 1; optional remaining count. */
+  complimentary?: number | null;
+  complimentary_renewals_remaining?: number | null;
   plan_name: string;
   plan_price: string;
   length: string;
@@ -87,13 +90,33 @@ export async function extendSubscriptionAfterRenewal(
 
   ensureSalesItemTotalCcFeeColumns(db);
   ensureSalesTypeColumn(db);
+  ensureSubscriptionComplimentaryColumns(db);
 
+  const useComplimentary = (sub.complimentary ?? 0) === 1;
   const pr = sub.promo_renewals_remaining;
   const indef = (sub.renewal_price_indefinite ?? 0) === 1;
 
   db.exec("BEGIN TRANSACTION");
   try {
-    if (pr != null && pr > 0) {
+    if (useComplimentary) {
+      const rem = sub.complimentary_renewals_remaining;
+      if (rem === null || rem === undefined) {
+        db.prepare("UPDATE subscriptions SET expiry_date = ?, days_remaining = ? WHERE subscription_id = ?").run(
+          expiryStr,
+          String(daysRemaining),
+          sub.subscription_id
+        );
+      } else if (rem > 1) {
+        db.prepare(
+          `UPDATE subscriptions SET expiry_date = ?, days_remaining = ?, complimentary_renewals_remaining = ? WHERE subscription_id = ?`
+        ).run(expiryStr, String(daysRemaining), rem - 1, sub.subscription_id);
+      } else {
+        db.prepare(
+          `UPDATE subscriptions SET expiry_date = ?, days_remaining = ?, complimentary = 0, complimentary_renewals_remaining = NULL,
+           price = ?, promo_renewals_remaining = NULL, renewal_price_indefinite = 0 WHERE subscription_id = ?`
+        ).run(expiryStr, String(daysRemaining), sub.plan_price, sub.subscription_id);
+      }
+    } else if (pr != null && pr > 0) {
       const next = pr - 1;
       if (next === 0) {
         db.prepare(

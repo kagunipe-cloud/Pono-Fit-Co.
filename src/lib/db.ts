@@ -305,6 +305,20 @@ export function ensureSubscriptionRenewalPromoColumns(db: ReturnType<typeof getD
   }
 }
 
+/** Onboarding / admin: complimentary monthly subs renew without charge until periods elapse or indefinitely. */
+export function ensureSubscriptionComplimentaryColumns(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN complimentary INTEGER DEFAULT 0");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN complimentary_renewals_remaining INTEGER");
+  } catch {
+    /* already exists */
+  }
+}
+
 /** Pass packs (category Passes, unit Day): banked day credits; member activates one day at a time. */
 export function ensureSubscriptionPassPackColumns(db: ReturnType<typeof getDb>) {
   try {
