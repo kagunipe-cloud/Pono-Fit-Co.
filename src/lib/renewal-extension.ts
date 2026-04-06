@@ -3,8 +3,9 @@
  * (cron) or admin write-off / manual retry success.
  */
 
-import type Database from "better-sqlite3";
-import { ensureSalesItemTotalCcFeeColumns, ensureSalesTypeColumn } from "./db";
+import { ensureSalesItemTotalCcFeeColumns, ensureSalesTypeColumn, getDb } from "./db";
+
+type AppDb = ReturnType<typeof getDb>;
 import { formatDateTimeInAppTz, todayInAppTz, formatDateForStorage } from "./app-timezone";
 import { grantAccess as kisiGrantAccess } from "./kisi";
 import { ensureWaiverBeforeKisi } from "./waiver";
@@ -67,7 +68,7 @@ export type RenewalFinancials = {
  * We never fall back to anchoring from today — a missing/invalid `expiry_date` throws.
  */
 export async function extendSubscriptionAfterRenewal(
-  db: Database,
+  db: AppDb,
   tz: string,
   sub: RenewalSubRow,
   memberRow: RenewalMemberRow,

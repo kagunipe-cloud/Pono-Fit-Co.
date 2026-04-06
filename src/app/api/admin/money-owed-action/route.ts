@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import type Database from "better-sqlite3";
 import { getDb, getAppTimezone, ensureMembersStripeColumn, ensurePaymentFailuresTable, ensureSubscriptionRenewalPromoColumns } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
-import { extendSubscriptionAfterRenewal } from "@/lib/renewal-extension";
+import { extendSubscriptionAfterRenewal, type RenewalSubRow } from "@/lib/renewal-extension";
 import { computeCcFee } from "@/lib/cc-fees";
 import { stripeCustomerIdForApi } from "@/lib/stripe-customer";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
+
+type AppDb = ReturnType<typeof getDb>;
 
 function parsePriceToCents(p: string | null): number {
   if (p == null || p === "") return 0;
@@ -30,7 +31,7 @@ type SubQueryRow = {
 };
 
 function loadActiveMonthlySubscription(
-  db: Database,
+  db: AppDb,
   memberId: string,
   subscriptionId: string | null | undefined
 ): RenewalSubRow | null {
