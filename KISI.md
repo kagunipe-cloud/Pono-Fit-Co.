@@ -45,6 +45,20 @@ KISI_LOCK_ID=12345
 - Default role is `group_basic`; override if you use a different role in Kisi.
 - **KISI_LOCK_ID**: If you have multiple locks and want "Unlock door" to open a specific one, set this to that lock’s id. Otherwise the app unlocks the first lock the user has access to.
 
+## Reader LED (green) vs our web unlock
+
+When someone uses the **official Kisi app** at the door, the reader runs the full **local** flow (often Bluetooth / tap-to-unlock) and shows the usual **green** success indication.
+
+Our gym app unlocks via **Kisi’s remote API** from your server (`POST /locks/{id}/unlock` with the member’s login secret). The **controller can still open the door**, but the **reader may not show the same green LED** as a physical tap, because the reader was not part of that credential flow.
+
+To match Kisi’s behavior (and to satisfy **Reader proximity** or **Reader tap to access** restrictions in the Kisi dashboard):
+
+1. **Reader proximity** — Kisi requires a **proximity proof** (a one-time password from the reader’s iBeacon). That only comes from **Kisi’s Tap-to-Unlock SDK** on iOS/Android (BLE scan), not from a plain browser button. See [Proximity proof](https://docs.kisi.io/platform/sdks/proximity_proof/) and [Implement in-app unlocks](https://docs.kisi.io/platform/apis/how_to_guides/unlock_locks/implement_in_app_unlocks/).
+2. **Geofence** — The unlock API can include GPS in the JSON body; our `POST /api/kisi/unlock` accepts optional `latitude` and `longitude` if your client sends them.
+3. **Dashboard** — If **Reader tap to access** is enabled for a group, Kisi may block **remote** unlocks; members may need the Kisi app or a custom app using the SDK.
+
+Advanced: `POST /api/kisi/unlock` JSON may include `proximity_proof`, `lock_id`, `latitude`, and `longitude`; these are forwarded to Kisi’s unlock endpoint for integrations that obtain OTP/GPS on the device.
+
 ## Member email required
 
 Each member who gets door access must have an **email** in your app. We use it to find or create their Kisi user and to store the returned Kisi user id (`kisi_id`) for renewals. If a member has no email, we still complete the sale and create the subscription but skip the Kisi step.

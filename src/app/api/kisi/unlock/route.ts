@@ -11,6 +11,12 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const member_id = (body.member_id ?? "").trim();
     const emailProvided = (body.email ?? "").trim();
+    const proximityProof = typeof body.proximity_proof === "string" ? body.proximity_proof.trim() : "";
+    const lockIdOverride = typeof body.lock_id === "string" ? body.lock_id.trim() : "";
+    const latRaw = body.latitude;
+    const lonRaw = body.longitude;
+    const latitude = typeof latRaw === "number" ? latRaw : typeof latRaw === "string" ? parseFloat(latRaw) : NaN;
+    const longitude = typeof lonRaw === "number" ? lonRaw : typeof lonRaw === "string" ? parseFloat(lonRaw) : NaN;
     if (!member_id) {
       return NextResponse.json({ error: "member_id required" }, { status: 400 });
     }
@@ -57,7 +63,11 @@ export async function POST(request: NextRequest) {
     }
 
     const secret = await createLoginForUser(member.email);
-    await unlockWithUserSecret(secret);
+    await unlockWithUserSecret(secret, {
+      ...(lockIdOverride ? { lockId: lockIdOverride } : {}),
+      ...(proximityProof ? { proximityProof } : {}),
+      ...(Number.isFinite(latitude) && Number.isFinite(longitude) ? { latitude, longitude } : {}),
+    });
 
     // Add +1 to coconut count (Kisi may not send webhook for API-triggered unlocks). Dedupes same member within 60 min.
     try {

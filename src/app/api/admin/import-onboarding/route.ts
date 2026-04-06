@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parse } from "csv-parse/sync";
 import { randomUUID } from "crypto";
-import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn, ensureSubscriptionsSalesIdColumn } from "@/lib/db";
+import {
+  getDb,
+  getAppTimezone,
+  ensureMembersStripeColumn,
+  ensureMembersAutoRenewColumn,
+  ensureSubscriptionsSalesIdColumn,
+  ensureSubscriptionRenewalPromoColumns,
+} from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
 import { normalizeDateToYMD, formatDateForStorage } from "@/lib/app-timezone";
 
@@ -74,6 +81,12 @@ function subtractPeriodFromExpiryYmd(expiryYmd: string, length: string, unit: st
  *   Member must already exist (e.g. Glofox import). Subscription dates use exp_next_payment_date on the member
  *   unless you override with subscription_expiry_date / exp_next_payment_date in the row.
  * - **Full:** membership_product_id + subscription_expiry_date (and optional other columns) as before.
+ *
+ * **Legacy / discount renewals (monthly plans):** `subscription_price` alone does **not** change what the renewal
+ * cron charges — it uses the catalog plan price unless you also set negotiated pricing:
+ * - `renewal_price_indefinite` = 1 (or true/yes) — renewals use `subscription_price` until you change it (same as staff cart “indefinite” override).
+ * - `renewal_discount_months` = N — N months total at `subscription_price` (then subscription price resets to catalog); same math as staff cart override months.
+ * Do not set both columns on one row.
  */
 export async function POST(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
@@ -110,6 +123,7 @@ export async function POST(request: NextRequest) {
   ensureMembersStripeColumn(db);
   ensureMembersAutoRenewColumn(db);
   ensureSubscriptionsSalesIdColumn(db);
+  ensureSubscriptionRenewalPromoColumns(db);
   const tz = getAppTimezone(db);
 
   const getByEmail = db.prepare(
@@ -137,11 +151,11 @@ export async function POST(request: NextRequest) {
     "SELECT subscription_id FROM subscriptions WHERE member_id = ? AND TRIM(product_id) = TRIM(?) AND status = 'Active' LIMIT 1"
   );
   const insertSub = db.prepare(`
-    INSERT INTO subscriptions (subscription_id, member_id, product_id, status, start_date, expiry_date, days_remaining, price, sales_id, quantity)
-    VALUES (?, ?, ?, 'Active', ?, ?, ?, ?, NULL, ?)
+    INSERT INTO subscriptions (subscription_id, member_id, product_id, status, start_date, expiry_date, days_remaining, price, sales_id, quantity, promo_renewals_remaining, renewal_price_indefinite)
+    VALUES (?, ?, ?, 'Active', ?, ?, ?, ?, NULL, ?, ?, ?)
   `);
   const updateSub = db.prepare(`
-    UPDATE subscriptions SET start_date = ?, expiry_date = ?, days_remaining = ?, price = ?, quantity = ?
+    UPDATE subscriptions SET start_date = ?, expiry_date = ?, days_remaining = ?, price = ?, quantity = ?, promo_renewals_remaining = ?, renewal_price_indefinite = ?
     WHERE subscription_id = ?
   `);
 
@@ -289,6 +303,29 @@ export async function POST(request: NextRequest) {
       daysRem = daysRemainingFromExpiry(expiryYmd);
     }
 
+    let renewalIndef = 0;
+    let promoRemaining: number | null = null;
+    if ((wantsSubFull || wantsSubByName) && plan) {
+      const indefIn = parseAutoRenew(raw.renewal_price_indefinite);
+      const discStr = (raw.renewal_discount_months ?? "").trim();
+      const discMonths = discStr ? parseInt(discStr, 10) : NaN;
+      if (indefIn && discStr && !Number.isNaN(discMonths) && discMonths >= 1) {
+        errors.push({
+          row: i + 2,
+          email: rawEmail,
+          message: "Use either renewal_price_indefinite or renewal_discount_months, not both.",
+        });
+        continue;
+      }
+      if (indefIn) {
+        renewalIndef = 1;
+        promoRemaining = null;
+      } else if (!Number.isNaN(discMonths) && discMonths >= 1) {
+        renewalIndef = 0;
+        promoRemaining = Math.max(0, discMonths - 1);
+      }
+    }
+
     const firstName = firstNameIn ?? existing?.first_name ?? null;
     const lastName = lastNameIn ?? existing?.last_name ?? null;
     const phone = phoneIn ?? existing?.phone ?? null;
@@ -340,10 +377,10 @@ export async function POST(request: NextRequest) {
       if (shouldWriteSub && plan && expiryYmd && startYmd) {
         const existingSub = getActiveSub.get(memberId, plan.product_id) as { subscription_id: string } | undefined;
         if (existingSub) {
-          updateSub.run(startYmd, expiryYmd, String(daysRem), priceStored, qtyStr, existingSub.subscription_id);
+          updateSub.run(startYmd, expiryYmd, String(daysRem), priceStored, qtyStr, promoRemaining, renewalIndef, existingSub.subscription_id);
         } else {
           const subId = randomUUID().slice(0, 8);
-          insertSub.run(subId, memberId, plan.product_id, startYmd, expiryYmd, String(daysRem), priceStored, qtyStr);
+          insertSub.run(subId, memberId, plan.product_id, startYmd, expiryYmd, String(daysRem), priceStored, qtyStr, promoRemaining, renewalIndef);
         }
         didSub = true;
       }

@@ -235,33 +235,85 @@ export async function createLoginForUser(email: string): Promise<string> {
   return data.secret;
 }
 
+/** Optional data for Kisi unlock — use proximity + OTP when group/door has reader or geofence restrictions. */
+export type UnlockWithUserSecretOptions = {
+  /** Lock to open (overrides `KISI_LOCK_ID` for this request). */
+  lockId?: string;
+  /**
+   * Reader OTP from Kisi iBeacon (Tap-to-Unlock / proximity_proof). Required when
+   * [Reader proximity restriction](https://docs.kisi.io/dashboard/groups/restrictions#reader-proximity-restriction) applies.
+   */
+  proximityProof?: string;
+  /** GPS coordinates for geofence-restricted unlocks (browser/device must supply). */
+  latitude?: number;
+  longitude?: number;
+};
+
+function buildUnlockRequestBody(opts: UnlockWithUserSecretOptions | undefined): string | undefined {
+  if (!opts) return undefined;
+  const payload: {
+    context?: { location: { latitude: number; longitude: number } };
+    lock?: { proximity_proof: string };
+  } = {};
+  const proof = opts.proximityProof?.trim();
+  if (proof) {
+    payload.lock = { proximity_proof: proof };
+  }
+  if (
+    opts.latitude != null &&
+    opts.longitude != null &&
+    Number.isFinite(opts.latitude) &&
+    Number.isFinite(opts.longitude)
+  ) {
+    payload.context = {
+      location: { latitude: opts.latitude, longitude: opts.longitude },
+    };
+  }
+  if (!payload.lock && !payload.context) return undefined;
+  return JSON.stringify(payload);
+}
+
 /**
  * Unlock a door on behalf of a user using their secret (from createLoginForUser).
- * If KISI_LOCK_ID is set, unlocks that lock; otherwise unlocks the first lock the user can access.
+ * If `KISI_LOCK_ID` is set (or `options.lockId`), unlocks that lock; otherwise unlocks the first lock the user can access.
+ *
+ * For **reader proximity** or **geofence** restrictions, pass `proximityProof` (and optionally GPS) so Kisi can
+ * validate the same way the official app does — otherwise the door may still open remotely while the **reader LED**
+ * does not show the same “success” animation as a tap at the reader.
  */
-export async function unlockWithUserSecret(secret: string): Promise<void> {
-  const lockId = process.env.KISI_LOCK_ID?.trim();
-  const headers = {
+export async function unlockWithUserSecret(secret: string, options?: UnlockWithUserSecretOptions): Promise<void> {
+  const envLock = process.env.KISI_LOCK_ID?.trim();
+  const lockId = options?.lockId?.trim() || envLock;
+  const body = buildUnlockRequestBody(options);
+  const baseHeaders: Record<string, string> = {
     Authorization: `KISI-LOGIN ${secret}`,
-    "Content-Type": "application/json",
     Accept: "application/json",
   };
+  const postHeaders: Record<string, string> = {
+    ...baseHeaders,
+    ...(body ? { "Content-Type": "application/json" } : {}),
+  };
 
-  if (lockId) {
-    const res = await fetch(`${KISI_API_BASE}/locks/${lockId}/unlock`, {
+  async function postUnlock(id: string | number): Promise<void> {
+    const res = await fetch(`${KISI_API_BASE}/locks/${id}/unlock`, {
       method: "POST",
-      headers,
+      headers: postHeaders,
+      body: body ?? undefined,
     });
     if (!res.ok) {
       const err = await res.text();
       throw new Error(`Kisi unlock failed: ${res.status} ${err}`);
     }
+  }
+
+  if (lockId) {
+    await postUnlock(lockId);
     return;
   }
 
   const listRes = await fetch(`${KISI_API_BASE}/locks`, {
     method: "GET",
-    headers,
+    headers: { ...baseHeaders, "Content-Type": "application/json" },
   });
   if (!listRes.ok) {
     const err = await listRes.text();
@@ -273,12 +325,5 @@ export async function unlockWithUserSecret(secret: string): Promise<void> {
   if (!first?.id) {
     throw new Error("No locks found for this user");
   }
-  const unlockRes = await fetch(`${KISI_API_BASE}/locks/${first.id}/unlock`, {
-    method: "POST",
-    headers,
-  });
-  if (!unlockRes.ok) {
-    const err = await unlockRes.text();
-    throw new Error(`Kisi unlock failed: ${unlockRes.status} ${err}`);
-  }
+  await postUnlock(first.id);
 }

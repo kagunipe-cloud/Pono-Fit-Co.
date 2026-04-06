@@ -161,6 +161,9 @@ Run **Import members (Glofox CSV)** first so each row has `email`, name, `join_d
 | `stripe_customer_id` | Optional. `cus_…` after Stripe migration. |
 | `membership_plan_name` | **Required** for a subscription row — must match **`membership_plans.plan_name`** exactly (same spelling as **Membership plans** in the app). The app resolves **`product_id`** and plan price. |
 | `subscription_quantity` | Optional; default `1`. |
+| `subscription_price` | Optional. Overrides stored subscription price (e.g. legacy $69 while catalog is $89). **Renewals still use catalog price** unless you also set `renewal_price_indefinite` or `renewal_discount_months`. |
+| `renewal_price_indefinite` | Optional. `1` / `true` / `yes` — monthly renewals charge **`subscription_price`** until you change it (same as staff cart “indefinite” override). Omit if everyone should renew at catalog price. |
+| `renewal_discount_months` | Optional. Integer *N* — *N* months total at **`subscription_price`**, then price resets to catalog (same math as staff cart “months” override). Do not use together with `renewal_price_indefinite`. |
 | `notes` | Ignored. |
 
 **Subscription dates:** The import uses the member’s **`exp_next_payment_date`** (from Glofox) as **`subscription_expiry_date`**, unless you override with `subscription_expiry_date` or `exp_next_payment_date` on this row. **Start date** is derived by stepping back one billing period from that expiry using the plan’s **length** and **unit** (same rules as checkout).
@@ -180,6 +183,7 @@ Use **`membership_product_id`** + **`subscription_expiry_date`** when you want e
 | `subscription_start_date` | Optional; defaults to `join_date` or today. |
 | `subscription_expiry_date` | Required with `membership_product_id`. |
 | `subscription_quantity`, `subscription_price` | Optional. |
+| `renewal_price_indefinite`, `renewal_discount_months` | Optional. Same meaning as minimal mode — use with `subscription_price` for legacy/discount renewals vs catalog. |
 
 **Templates:** `docs/onboarding-import-template.csv` (minimal), `docs/onboarding-import-full-template.csv` (full), `public/onboarding-import-example.csv` (example). Download from **Onboarding docs** in the admin sidebar, then use the **Import onboarding CSV** link on that page.
 
