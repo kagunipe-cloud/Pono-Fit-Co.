@@ -7,7 +7,9 @@ import {
   ensurePaymentFailuresTable,
   ensureSubscriptionRenewalPromoColumns,
   ensureSubscriptionComplimentaryColumns,
+  ensureSubscriptionRenewalDiscountPercentColumn,
 } from "../../../../lib/db";
+import { computeRenewalChargePrice } from "../../../../lib/renewal-pricing";
 import { revokeAccess } from "../../../../lib/kisi";
 import { extendSubscriptionAfterRenewal } from "../../../../lib/renewal-extension";
 import { todayInAppTz, formatDateForStorage } from "../../../../lib/app-timezone";
@@ -56,6 +58,7 @@ export async function GET(request: NextRequest) {
   ensurePaymentFailuresTable(db);
   ensureSubscriptionRenewalPromoColumns(db);
   ensureSubscriptionComplimentaryColumns(db);
+  ensureSubscriptionRenewalDiscountPercentColumn(db);
 
   const tz = getAppTimezone(db);
   const insertFailure = db.prepare(`
@@ -68,6 +71,7 @@ export async function GET(request: NextRequest) {
     SELECT s.subscription_id, s.member_id, s.product_id, s.expiry_date, s.price as sub_price, s.quantity,
            s.promo_renewals_remaining, s.renewal_price_indefinite,
            s.complimentary, s.complimentary_renewals_remaining,
+           s.renewal_discount_percent,
            p.plan_name, p.price as plan_price, p.length, p.unit
     FROM subscriptions s
     JOIN membership_plans p ON p.product_id = s.product_id
@@ -86,6 +90,7 @@ export async function GET(request: NextRequest) {
     renewal_price_indefinite: number | null;
     complimentary: number | null;
     complimentary_renewals_remaining: number | null;
+    renewal_discount_percent: number | null;
     plan_name: string;
     plan_price: string;
     length: string;
@@ -98,10 +103,12 @@ export async function GET(request: NextRequest) {
   for (const sub of expiring) {
     const memberRow = db.prepare("SELECT stripe_customer_id, email, first_name, auto_renew FROM members WHERE member_id = ?").get(sub.member_id) as { stripe_customer_id: string | null; email: string | null; first_name: string | null; auto_renew?: number | null } | undefined;
     if (!memberRow) {
-      const useNegotiatedPrice =
-        (sub.promo_renewals_remaining != null && sub.promo_renewals_remaining > 0) ||
-        (sub.renewal_price_indefinite ?? 0) === 1;
-      const priceStr = useNegotiatedPrice ? sub.sub_price : sub.plan_price;
+      const priceStr = computeRenewalChargePrice(sub.plan_price, {
+        sub_price: sub.sub_price,
+        promo_renewals_remaining: sub.promo_renewals_remaining,
+        renewal_price_indefinite: sub.renewal_price_indefinite,
+        renewal_discount_percent: sub.renewal_discount_percent ?? null,
+      });
       const amountCents = parsePriceToCents(priceStr) * Math.max(1, sub.quantity);
       results.push({ member_id: sub.member_id, status: "skipped", message: "Member not found" });
       insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "Member not found", null);
@@ -126,10 +133,12 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
-    const useNegotiatedPrice =
-      (sub.promo_renewals_remaining != null && sub.promo_renewals_remaining > 0) ||
-      (sub.renewal_price_indefinite ?? 0) === 1;
-    const priceStr = useNegotiatedPrice ? sub.sub_price : sub.plan_price;
+    const priceStr = computeRenewalChargePrice(sub.plan_price, {
+      sub_price: sub.sub_price,
+      promo_renewals_remaining: sub.promo_renewals_remaining,
+      renewal_price_indefinite: sub.renewal_price_indefinite,
+      renewal_discount_percent: sub.renewal_discount_percent ?? null,
+    });
     const amountCents = parsePriceToCents(priceStr) * Math.max(1, sub.quantity);
     const stripeCustomerId = stripeCustomerIdForApi(memberRow.stripe_customer_id);
     if (!stripeCustomerId) {

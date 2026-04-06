@@ -319,6 +319,15 @@ export function ensureSubscriptionComplimentaryColumns(db: ReturnType<typeof get
   }
 }
 
+/** Indefinite % off current catalog price on renewal (legacy members when list price rises). */
+export function ensureSubscriptionRenewalDiscountPercentColumn(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN renewal_discount_percent INTEGER");
+  } catch {
+    /* already exists */
+  }
+}
+
 /** Pass packs (category Passes, unit Day): banked day credits; member activates one day at a time. */
 export function ensureSubscriptionPassPackColumns(db: ReturnType<typeof getDb>) {
   try {

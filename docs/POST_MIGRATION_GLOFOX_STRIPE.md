@@ -164,7 +164,8 @@ Run **Import members (Glofox CSV)** first so each row has `email`, name, `join_d
 | `subscription_price` | Optional. Overrides stored subscription price (e.g. legacy $69 while catalog is $89). **Renewals still use catalog price** unless you also set `renewal_price_indefinite` or `renewal_discount_months`. |
 | `renewal_price_indefinite` | Optional. `1` / `true` / `yes` — monthly renewals charge **`subscription_price`** until you change it (same as staff cart “indefinite” override). Omit if everyone should renew at catalog price. |
 | `renewal_discount_months` | Optional. Integer *N* — *N* months total at **`subscription_price`**, then price resets to catalog (same math as staff cart “months” override). Do not use together with `renewal_price_indefinite`. |
-| `complimentary` | Optional. `1` / `true` / `yes` — **complimentary membership**: monthly renewals run **without Stripe** (cron extends the period). Sets stored price to **0**. Do not combine with `renewal_price_indefinite` or `renewal_discount_months`. |
+| `discount_percent` | Optional. Integer **1–99** — **indefinite percentage off the current catalog price** on each monthly renewal (tracks list-price increases). Do not combine with `subscription_price`, `renewal_price_indefinite`, `renewal_discount_months`, or `complimentary`. |
+| `complimentary` | Optional. `1` / `true` / `yes` — **complimentary membership**: monthly renewals run **without Stripe** (cron extends the period). Sets stored price to **0**. Do not combine with `renewal_price_indefinite`, `renewal_discount_months`, or `discount_percent`. |
 | `complimentary_periods` | Optional. Positive integer **N** — **N** complimentary **monthly renewals** after import, then subscription reverts to **catalog** price and billing. Leave blank with `complimentary=1` for **indefinite** complimentary renewals. Requires `complimentary=1`. |
 | `notes` | Ignored. |
 
@@ -185,7 +186,7 @@ Use **`membership_product_id`** + **`subscription_expiry_date`** when you want e
 | `subscription_start_date` | Optional; defaults to `join_date` or today. |
 | `subscription_expiry_date` | Required with `membership_product_id`. |
 | `subscription_quantity`, `subscription_price` | Optional. |
-| `renewal_price_indefinite`, `renewal_discount_months` | Optional. Same meaning as minimal mode — use with `subscription_price` for legacy/discount renewals vs catalog. |
+| `renewal_price_indefinite`, `renewal_discount_months`, `discount_percent` | Optional. Same meaning as minimal mode — use `subscription_price` with indefinite/months overrides for fixed legacy rates; use `discount_percent` for a lasting **% off catalog** without fixed dollar amounts. |
 | `complimentary`, `complimentary_periods` | Optional. Same meaning as minimal mode (columns appear just before `notes` in the full template). |
 
 **Templates:** `docs/onboarding-import-template.csv` (minimal), `docs/onboarding-import-full-template.csv` (full), `public/onboarding-import-example.csv` (example). Download from **Onboarding docs** in the admin sidebar, then use the **Import onboarding CSV** link on that page.

@@ -9,9 +9,11 @@ import {
   ensureSubscriptionsSalesIdColumn,
   ensureSubscriptionRenewalPromoColumns,
   ensureSubscriptionComplimentaryColumns,
+  ensureSubscriptionRenewalDiscountPercentColumn,
 } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
 import { normalizeDateToYMD, formatDateForStorage } from "@/lib/app-timezone";
+import { computeRenewalChargePrice } from "@/lib/renewal-pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -89,6 +91,10 @@ function subtractPeriodFromExpiryYmd(expiryYmd: string, length: string, unit: st
  * - `renewal_discount_months` = N — N months total at `subscription_price` (then subscription price resets to catalog); same math as staff cart override months.
  * Do not set both columns on one row.
  *
+ * **Catalog discount:** `discount_percent` = 1–99 — indefinite **percent off current catalog** price on each renewal
+ * (when list price rises, they still save that percent). Do not combine with `subscription_price`, negotiated renewal
+ * columns, or `complimentary`.
+ *
  * **Complimentary:** `complimentary` = 1 — free membership renewals via cron (no Stripe). `complimentary_periods`
  * = N: N complimentary **monthly renewals** after import, then subscription reverts to catalog price; leave blank
  * for indefinite complimentary. Do not combine with `renewal_price_indefinite` or `renewal_discount_months`.
@@ -130,6 +136,7 @@ export async function POST(request: NextRequest) {
   ensureSubscriptionsSalesIdColumn(db);
   ensureSubscriptionRenewalPromoColumns(db);
   ensureSubscriptionComplimentaryColumns(db);
+  ensureSubscriptionRenewalDiscountPercentColumn(db);
   const tz = getAppTimezone(db);
 
   const getByEmail = db.prepare(
@@ -157,11 +164,11 @@ export async function POST(request: NextRequest) {
     "SELECT subscription_id FROM subscriptions WHERE member_id = ? AND TRIM(product_id) = TRIM(?) AND status = 'Active' LIMIT 1"
   );
   const insertSub = db.prepare(`
-    INSERT INTO subscriptions (subscription_id, member_id, product_id, status, start_date, expiry_date, days_remaining, price, sales_id, quantity, promo_renewals_remaining, renewal_price_indefinite, complimentary, complimentary_renewals_remaining)
-    VALUES (?, ?, ?, 'Active', ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
+    INSERT INTO subscriptions (subscription_id, member_id, product_id, status, start_date, expiry_date, days_remaining, price, sales_id, quantity, promo_renewals_remaining, renewal_price_indefinite, complimentary, complimentary_renewals_remaining, renewal_discount_percent)
+    VALUES (?, ?, ?, 'Active', ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
   `);
   const updateSub = db.prepare(`
-    UPDATE subscriptions SET start_date = ?, expiry_date = ?, days_remaining = ?, price = ?, quantity = ?, promo_renewals_remaining = ?, renewal_price_indefinite = ?, complimentary = ?, complimentary_renewals_remaining = ?
+    UPDATE subscriptions SET start_date = ?, expiry_date = ?, days_remaining = ?, price = ?, quantity = ?, promo_renewals_remaining = ?, renewal_price_indefinite = ?, complimentary = ?, complimentary_renewals_remaining = ?, renewal_discount_percent = ?
     WHERE subscription_id = ?
   `);
 
@@ -332,6 +339,57 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    let renewalDiscountPercent: number | null = null;
+    if ((wantsSubFull || wantsSubByName) && plan) {
+      const discPctStr = (raw.discount_percent ?? "").trim();
+      if (discPctStr) {
+        if (parseAutoRenew(raw.complimentary) === 1) {
+          errors.push({
+            row: i + 2,
+            email: rawEmail,
+            message: "Do not combine discount_percent with complimentary.",
+          });
+          continue;
+        }
+        const hasLegacy =
+          parseAutoRenew(raw.renewal_price_indefinite) === 1 || String(raw.renewal_discount_months ?? "").trim() !== "";
+        if (hasLegacy) {
+          errors.push({
+            row: i + 2,
+            email: rawEmail,
+            message: "Do not combine discount_percent with renewal_price_indefinite or renewal_discount_months.",
+          });
+          continue;
+        }
+        if (parsePrice(raw.subscription_price) != null) {
+          errors.push({
+            row: i + 2,
+            email: rawEmail,
+            message: "Do not combine discount_percent with subscription_price.",
+          });
+          continue;
+        }
+        const dp = parseInt(discPctStr, 10);
+        if (Number.isNaN(dp) || dp < 1 || dp > 99) {
+          errors.push({
+            row: i + 2,
+            email: rawEmail,
+            message: "discount_percent must be between 1 and 99.",
+          });
+          continue;
+        }
+        renewalDiscountPercent = dp;
+        renewalIndef = 0;
+        promoRemaining = null;
+        priceStored = computeRenewalChargePrice(String(plan.price ?? "0"), {
+          sub_price: String(plan.price ?? "0"),
+          promo_renewals_remaining: null,
+          renewal_price_indefinite: 0,
+          renewal_discount_percent: dp,
+        });
+      }
+    }
+
     let complimentaryFlag = 0;
     let compRemaining: number | null = null;
     if ((wantsSubFull || wantsSubByName) && plan) {
@@ -339,17 +397,20 @@ export async function POST(request: NextRequest) {
       const periodsStr = (raw.complimentary_periods ?? "").trim();
       const periodsParsed = periodsStr ? parseInt(periodsStr, 10) : NaN;
       const hasLegacyDiscount =
-        parseAutoRenew(raw.renewal_price_indefinite) === 1 || String(raw.renewal_discount_months ?? "").trim() !== "";
+        parseAutoRenew(raw.renewal_price_indefinite) === 1 ||
+        String(raw.renewal_discount_months ?? "").trim() !== "" ||
+        String(raw.discount_percent ?? "").trim() !== "";
       if (complimentaryIn) {
         if (hasLegacyDiscount) {
           errors.push({
             row: i + 2,
             email: rawEmail,
-            message: "Do not combine complimentary with renewal_price_indefinite or renewal_discount_months.",
+            message: "Do not combine complimentary with renewal_price_indefinite, renewal_discount_months, or discount_percent.",
           });
           continue;
         }
         complimentaryFlag = 1;
+        renewalDiscountPercent = null;
         priceStored = "0";
         renewalIndef = 0;
         promoRemaining = null;
@@ -437,6 +498,7 @@ export async function POST(request: NextRequest) {
             renewalIndef,
             complimentaryFlag,
             compRemaining,
+            renewalDiscountPercent,
             existingSub.subscription_id
           );
         } else {
@@ -453,7 +515,8 @@ export async function POST(request: NextRequest) {
             promoRemaining,
             renewalIndef,
             complimentaryFlag,
-            compRemaining
+            compRemaining,
+            renewalDiscountPercent
           );
         }
         didSub = true;

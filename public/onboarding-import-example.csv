@@ -1,2 +1,2 @@
-email,auto_renew,stripe_customer_id,membership_plan_name,subscription_quantity,subscription_price,renewal_price_indefinite,renewal_discount_months,complimentary,complimentary_periods,notes
-jane.member@example.com,1,cus_ReplaceWithStripeId,Monthly Unlimited,1,69,1,,,,Example — legacy $69 while catalog is $89: set subscription_price + renewal_price_indefinite=1; member must exist (Glofox import first)
+email,auto_renew,stripe_customer_id,membership_plan_name,subscription_quantity,subscription_price,renewal_price_indefinite,renewal_discount_months,discount_percent,complimentary,complimentary_periods,notes
+jane.member@example.com,1,cus_ReplaceWithStripeId,Monthly Unlimited,1,69,1,,,,,Example — legacy $69 while catalog is $89: set subscription_price + renewal_price_indefinite=1; member must exist (Glofox import first)

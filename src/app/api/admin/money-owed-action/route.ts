@@ -6,7 +6,9 @@ import {
   ensurePaymentFailuresTable,
   ensureSubscriptionRenewalPromoColumns,
   ensureSubscriptionComplimentaryColumns,
+  ensureSubscriptionRenewalDiscountPercentColumn,
 } from "@/lib/db";
+import { computeRenewalChargePrice } from "@/lib/renewal-pricing";
 import { getAdminMemberId } from "@/lib/admin";
 import { extendSubscriptionAfterRenewal, type RenewalSubRow } from "@/lib/renewal-extension";
 import { computeCcFee } from "@/lib/cc-fees";
@@ -37,6 +39,7 @@ type SubQueryRow = {
   unit: string;
   complimentary: number | null;
   complimentary_renewals_remaining: number | null;
+  renewal_discount_percent: number | null;
 };
 
 function loadActiveMonthlySubscription(
@@ -47,7 +50,7 @@ function loadActiveMonthlySubscription(
   const base = `
     SELECT s.subscription_id, s.member_id, s.expiry_date, s.price as sub_price, s.quantity,
            s.promo_renewals_remaining, s.renewal_price_indefinite,
-           s.complimentary, s.complimentary_renewals_remaining,
+           s.complimentary, s.complimentary_renewals_remaining, s.renewal_discount_percent,
            p.plan_name, p.price as plan_price, p.length, p.unit
     FROM subscriptions s
     JOIN membership_plans p ON p.product_id = s.product_id
@@ -68,6 +71,7 @@ function loadActiveMonthlySubscription(
     renewal_price_indefinite: row.renewal_price_indefinite,
     complimentary: row.complimentary,
     complimentary_renewals_remaining: row.complimentary_renewals_remaining,
+    renewal_discount_percent: row.renewal_discount_percent,
     plan_name: row.plan_name,
     plan_price: row.plan_price,
     length: row.length,
@@ -105,6 +109,7 @@ export async function POST(request: NextRequest) {
   ensureMembersStripeColumn(db);
   ensureSubscriptionRenewalPromoColumns(db);
   ensureSubscriptionComplimentaryColumns(db);
+  ensureSubscriptionRenewalDiscountPercentColumn(db);
   const tz = getAppTimezone(db);
 
   const failure = db
@@ -151,9 +156,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const useNegotiatedPrice =
-    (sub.promo_renewals_remaining != null && sub.promo_renewals_remaining > 0) || (sub.renewal_price_indefinite ?? 0) === 1;
-  const priceStr = useNegotiatedPrice ? sub.sub_price : sub.plan_price;
+  const priceStr = computeRenewalChargePrice(sub.plan_price, {
+    sub_price: sub.sub_price,
+    promo_renewals_remaining: sub.promo_renewals_remaining,
+    renewal_price_indefinite: sub.renewal_price_indefinite,
+    renewal_discount_percent: sub.renewal_discount_percent ?? null,
+  });
   const amountCents = parsePriceToCents(priceStr) * Math.max(1, Number(sub.quantity) || 1);
 
   try {

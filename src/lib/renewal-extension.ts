@@ -4,8 +4,15 @@
  */
 
 import { randomUUID } from "crypto";
-import { ensureSalesItemTotalCcFeeColumns, ensureSalesTypeColumn, ensureSubscriptionComplimentaryColumns, getDb } from "./db";
+import {
+  ensureSalesItemTotalCcFeeColumns,
+  ensureSalesTypeColumn,
+  ensureSubscriptionComplimentaryColumns,
+  ensureSubscriptionRenewalDiscountPercentColumn,
+  getDb,
+} from "./db";
 import { formatDateTimeInAppTz, todayInAppTz, formatDateForStorage } from "./app-timezone";
+import { computeRenewalChargePrice } from "./renewal-pricing";
 import { grantAccess as kisiGrantAccess } from "./kisi";
 import { ensureWaiverBeforeKisi } from "./waiver";
 
@@ -22,6 +29,7 @@ export type RenewalSubRow = {
   /** Onboarding complimentary: renew without charge while 1; optional remaining count. */
   complimentary?: number | null;
   complimentary_renewals_remaining?: number | null;
+  renewal_discount_percent?: number | null;
   plan_name: string;
   plan_price: string;
   length: string;
@@ -91,6 +99,7 @@ export async function extendSubscriptionAfterRenewal(
   ensureSalesItemTotalCcFeeColumns(db);
   ensureSalesTypeColumn(db);
   ensureSubscriptionComplimentaryColumns(db);
+  ensureSubscriptionRenewalDiscountPercentColumn(db);
 
   const useComplimentary = (sub.complimentary ?? 0) === 1;
   const pr = sub.promo_renewals_remaining;
@@ -114,14 +123,34 @@ export async function extendSubscriptionAfterRenewal(
         db.prepare(
           `UPDATE subscriptions SET expiry_date = ?, days_remaining = ?, complimentary = 0, complimentary_renewals_remaining = NULL,
            price = ?, promo_renewals_remaining = NULL, renewal_price_indefinite = 0 WHERE subscription_id = ?`
-        ).run(expiryStr, String(daysRemaining), sub.plan_price, sub.subscription_id);
+        ).run(
+          expiryStr,
+          String(daysRemaining),
+          computeRenewalChargePrice(sub.plan_price, {
+            sub_price: sub.sub_price,
+            promo_renewals_remaining: null,
+            renewal_price_indefinite: 0,
+            renewal_discount_percent: sub.renewal_discount_percent ?? null,
+          }),
+          sub.subscription_id
+        );
       }
     } else if (pr != null && pr > 0) {
       const next = pr - 1;
       if (next === 0) {
         db.prepare(
           `UPDATE subscriptions SET expiry_date = ?, days_remaining = ?, promo_renewals_remaining = NULL, renewal_price_indefinite = 0, price = ? WHERE subscription_id = ?`
-        ).run(expiryStr, String(daysRemaining), sub.plan_price, sub.subscription_id);
+        ).run(
+          expiryStr,
+          String(daysRemaining),
+          computeRenewalChargePrice(sub.plan_price, {
+            sub_price: sub.sub_price,
+            promo_renewals_remaining: null,
+            renewal_price_indefinite: 0,
+            renewal_discount_percent: sub.renewal_discount_percent ?? null,
+          }),
+          sub.subscription_id
+        );
       } else {
         db.prepare(`UPDATE subscriptions SET expiry_date = ?, days_remaining = ?, promo_renewals_remaining = ? WHERE subscription_id = ?`).run(
           expiryStr,

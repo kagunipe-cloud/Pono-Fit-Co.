@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, ensureMembersAutoRenewColumn, ensureSubscriptionComplimentaryColumns } from "@/lib/db";
+import {
+  getDb,
+  ensureMembersAutoRenewColumn,
+  ensureSubscriptionComplimentaryColumns,
+  ensureSubscriptionRenewalDiscountPercentColumn,
+} from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +30,7 @@ type Row = {
   plan_name: string | null;
   complimentary: number | null;
   complimentary_renewals_remaining: number | null;
+  renewal_discount_percent: number | null;
 };
 
 /**
@@ -46,10 +52,11 @@ export async function GET(request: NextRequest) {
     const db = getDb();
     ensureMembersAutoRenewColumn(db);
     ensureSubscriptionComplimentaryColumns(db);
+    ensureSubscriptionRenewalDiscountPercentColumn(db);
 
     let sql = `
       SELECT s.subscription_id, s.member_id, s.product_id, s.status, s.start_date, s.expiry_date, s.days_remaining, s.price,
-             s.complimentary, s.complimentary_renewals_remaining,
+             s.complimentary, s.complimentary_renewals_remaining, s.renewal_discount_percent,
              m.email, m.stripe_customer_id, m.auto_renew, p.plan_name
       FROM subscriptions s
       LEFT JOIN members m ON m.member_id = s.member_id
@@ -92,6 +99,7 @@ export async function GET(request: NextRequest) {
       "price",
       "complimentary",
       "complimentary_renewals_remaining",
+      "discount_percent",
     ];
 
     const lines = [
@@ -112,6 +120,7 @@ export async function GET(request: NextRequest) {
           csvEscape(r.price),
           r.complimentary === 1 ? "1" : "0",
           r.complimentary_renewals_remaining != null ? String(r.complimentary_renewals_remaining) : "",
+          r.renewal_discount_percent != null ? String(r.renewal_discount_percent) : "",
         ].join(",")
       ),
     ];
