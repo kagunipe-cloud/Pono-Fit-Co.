@@ -1,7 +1,8 @@
 /**
  * Kisi door access integration.
  * - ensureKisiUser: find user in Kisi by email, or create a managed user; returns Kisi user id.
- * - grantAccess: create a role assignment so the user has access until valid_until.
+ * - grantAccess: replace door access for this user — revokes existing role assignments for this Kisi user,
+ *   then creates one assignment (avoids duplicate rows when unlock/renew/checkout run repeatedly).
  *
  * Required env: KISI_API_KEY, KISI_GROUP_ID
  * Optional: KISI_ROLE_ID (default group_basic)
@@ -126,6 +127,10 @@ export async function grantAccess(kisiUserId: string, validUntil: Date): Promise
     return;
   }
 
+  // Kisi POST /role_assignments always creates a *new* row. Without this, every unlock / renewal / checkout
+  // stacks duplicate "Door Access" lines for the same person in the dashboard.
+  await revokeAccess(kisiId);
+
   const roleId = process.env.KISI_ROLE_ID?.trim() || "group_basic";
   const validFrom = new Date();
   const body = {
@@ -155,7 +160,8 @@ export async function grantAccess(kisiUserId: string, validUntil: Date): Promise
 }
 
 /**
- * Revoke door access for a Kisi user by deleting their role assignments.
+ * Revoke door access for a Kisi user by deleting role assignments for `KISI_GROUP_ID`
+ * (when the list API returns `group_id` per assignment). Other groups are left intact.
  * Use when ACH payment fails or membership is cancelled.
  */
 export async function revokeAccess(kisiUserId: string): Promise<void> {
@@ -182,10 +188,16 @@ export async function revokeAccess(kisiUserId: string): Promise<void> {
     console.error("[Kisi] list role_assignments failed:", listRes.status, err);
     return;
   }
-  const assignments = (await listRes.json()) as { id: number }[];
+  const assignments = (await listRes.json()) as { id: number; group_id?: number | string }[];
   const list = Array.isArray(assignments) ? assignments : [];
+  const envGroup = process.env.KISI_GROUP_ID?.trim();
+  const envGroupNorm = envGroup ? String(parseInt(envGroup, 10) || envGroup) : null;
   for (const a of list) {
     if (a?.id == null) continue;
+    if (envGroupNorm && a.group_id != null && a.group_id !== undefined) {
+      const gNorm = String(parseInt(String(a.group_id), 10) || a.group_id);
+      if (gNorm !== envGroupNorm) continue;
+    }
     const delRes = await fetch(`${KISI_API_BASE}/role_assignments/${a.id}`, {
       method: "DELETE",
       headers: { Authorization: `KISI-LOGIN ${key}` },
