@@ -12,7 +12,7 @@ import {
 import { computeRenewalChargePrice } from "../../../../lib/renewal-pricing";
 import { revokeAccess } from "../../../../lib/kisi";
 import { extendSubscriptionAfterRenewal } from "../../../../lib/renewal-extension";
-import { todayInAppTz, formatDateForStorage } from "../../../../lib/app-timezone";
+import { todayInAppTz } from "../../../../lib/app-timezone";
 import { computeCcFee } from "../../../../lib/cc-fees";
 import { stripeCustomerIdForApi } from "../../../../lib/stripe-customer";
 import Stripe from "stripe";
@@ -47,11 +47,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const stripeSecret = process.env.STRIPE_SECRET_KEY;
-  if (!stripeSecret) {
-    return NextResponse.json({ error: "Stripe not configured" }, { status: 500 });
-  }
-
   const db = getDb();
   ensureMembersStripeColumn(db);
   ensureMembersAutoRenewColumn(db);
@@ -61,11 +56,53 @@ export async function GET(request: NextRequest) {
   ensureSubscriptionRenewalDiscountPercentColumn(db);
 
   const tz = getAppTimezone(db);
+  const today = todayString(tz);
+
+  // End-of-period cancel runs before Stripe: day/week passes never renew via this job, but members with
+  // auto_renew=1 (e.g. monthly) were excluded from the old query — expired day passes stayed Active forever.
+  const endedNoRenew = db
+    .prepare(
+      `SELECT s.subscription_id, s.member_id
+       FROM subscriptions s
+       JOIN members m ON m.member_id = s.member_id
+       JOIN membership_plans p ON p.product_id = s.product_id
+       WHERE s.status = 'Active' AND s.expiry_date < ?
+         AND (
+           LOWER(TRIM(COALESCE(p.unit, ''))) != 'month'
+           OR (m.auto_renew = 0 OR m.auto_renew IS NULL)
+         )`
+    )
+    .all(today) as { subscription_id: string; member_id: string }[];
+  let cancelledEndOfPeriod = 0;
+  for (const row of endedNoRenew) {
+    try {
+      db.prepare("UPDATE subscriptions SET status = ? WHERE subscription_id = ?").run("Cancelled", row.subscription_id);
+      const anyActive = db
+        .prepare("SELECT 1 FROM subscriptions WHERE member_id = ? AND status = 'Active' LIMIT 1")
+        .get(row.member_id) as { 1?: number } | undefined;
+      if (!anyActive) {
+        await revokeKisiForMember(db, row.member_id);
+      }
+      cancelledEndOfPeriod++;
+    } catch (e) {
+      console.error("[renew-subscriptions] end-of-period cancel failed", row.subscription_id, e);
+    }
+  }
+
+  const stripeSecret = process.env.STRIPE_SECRET_KEY;
+  if (!stripeSecret) {
+    db.close();
+    return NextResponse.json({
+      date: today,
+      cancelled_end_of_period: cancelledEndOfPeriod,
+      error: "Stripe not configured — monthly renewals skipped; expired passes were cancelled above.",
+    });
+  }
+
   const insertFailure = db.prepare(`
     INSERT INTO payment_failures (member_id, subscription_id, plan_name, amount_cents, reason, stripe_error_code)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
-  const today = todayString(tz);
   // Monthly memberships due today or earlier (overdue retries), member opted into auto-renew
   const expiring = db.prepare(`
     SELECT s.subscription_id, s.member_id, s.product_id, s.expiry_date, s.price as sub_price, s.quantity,
@@ -220,32 +257,6 @@ export async function GET(request: NextRequest) {
       results.push({ member_id: sub.member_id, status: "error", message: msg });
       insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, msg, stripeCode);
       await revokeKisiForMember(db, sub.member_id);
-    }
-  }
-
-  // End-of-period cancel: auto_renew off, expiry already passed — mark Cancelled and revoke door access.
-  const endedNoRenew = db
-    .prepare(
-      `SELECT s.subscription_id, s.member_id
-       FROM subscriptions s
-       JOIN members m ON m.member_id = s.member_id
-       WHERE s.status = 'Active' AND s.expiry_date < ?
-         AND (m.auto_renew = 0 OR m.auto_renew IS NULL)`
-    )
-    .all(today) as { subscription_id: string; member_id: string }[];
-  let cancelledEndOfPeriod = 0;
-  for (const row of endedNoRenew) {
-    try {
-      db.prepare("UPDATE subscriptions SET status = ? WHERE subscription_id = ?").run("Cancelled", row.subscription_id);
-      const anyActive = db
-        .prepare("SELECT 1 FROM subscriptions WHERE member_id = ? AND status = 'Active' LIMIT 1")
-        .get(row.member_id) as { 1?: number } | undefined;
-      if (!anyActive) {
-        await revokeKisiForMember(db, row.member_id);
-      }
-      cancelledEndOfPeriod++;
-    } catch (e) {
-      console.error("[renew-subscriptions] end-of-period cancel failed", row.subscription_id, e);
     }
   }
 

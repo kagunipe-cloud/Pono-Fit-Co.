@@ -601,6 +601,11 @@ export default function MemberDetailPage() {
               <p className="text-sm text-stone-500 mt-0.5">Legal name: {legalName}</p>
             ) : null}
             <p className="text-stone-500 mt-1 font-mono text-sm">{member.member_id as string}</p>
+            <p className="text-stone-600 text-sm mt-2">
+              Auto-renew:{" "}
+              <span className="font-semibold text-stone-800">{(member.auto_renew ?? 0) === 1 ? "Yes" : "No"}</span>
+              <span className="text-stone-400 font-normal"> — charge saved card when a monthly membership expires</span>
+            </p>
             {isAdmin && (
               <span
                 className={`mt-2 inline-block px-2.5 py-1 rounded text-xs font-medium ${
