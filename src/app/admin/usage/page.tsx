@@ -160,7 +160,7 @@ export default function AdminUsagePage() {
             <section className="bg-white rounded-xl border border-stone-200 overflow-hidden">
               <h2 className="sr-only">Door access events</h2>
               {data.door.length === 0 ? (
-                <p className="p-6 text-stone-500">No door events in this period. Configure the Kisi webhook to start recording.</p>
+                <p className="p-6 text-stone-500">No door events in this period.</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">

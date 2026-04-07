@@ -931,7 +931,7 @@ export default function MemberDetailPage() {
           <h2 className="text-lg font-semibold text-stone-800 mb-3">Recent unlocks</h2>
           <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
             {unlocks.length === 0 ? (
-              <p className="p-6 text-stone-500 text-sm">No door unlocks recorded. Kisi webhook must be configured.</p>
+              <p className="p-6 text-stone-500 text-sm">No door events on file for this member yet.</p>
             ) : (
               <table className="w-full text-left text-sm">
                 <thead>

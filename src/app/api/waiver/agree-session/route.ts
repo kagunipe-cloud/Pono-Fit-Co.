@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { getDb, expiryDateSortableSql } from "@/lib/db";
+import { getDb, getAppTimezone } from "@/lib/db";
 import { getMemberIdFromSession } from "@/lib/session";
-import { grantAccess as kisiGrantAccess } from "@/lib/kisi";
+import { getSubscriptionDoorAccessValidUntil } from "@/lib/pass-access";
+import { ensureKisiUser, grantAccess as kisiGrantAccess } from "@/lib/kisi";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +16,15 @@ export async function POST() {
   try {
     const db = getDb();
     const row = db.prepare(
-      "SELECT member_id, kisi_id, waiver_signed_at FROM members WHERE member_id = ?"
-    ).get(memberId) as { member_id: string; kisi_id: string | null; waiver_signed_at: string | null } | undefined;
+      "SELECT member_id, kisi_id, waiver_signed_at, email, first_name, last_name FROM members WHERE member_id = ?"
+    ).get(memberId) as {
+      member_id: string;
+      kisi_id: string | null;
+      waiver_signed_at: string | null;
+      email: string | null;
+      first_name: string | null;
+      last_name: string | null;
+    } | undefined;
 
     if (!row) {
       db.close();
@@ -33,21 +41,27 @@ export async function POST() {
       "UPDATE members SET waiver_signed_at = ?, waiver_token = NULL, waiver_token_expires_at = NULL WHERE member_id = ?"
     ).run(now, memberId);
 
-    const kisiId = row.kisi_id?.trim() || null;
-    const expRow = db.prepare(
-      `SELECT expiry_date FROM subscriptions WHERE member_id = ? AND status = 'Active' ORDER BY ${expiryDateSortableSql("expiry_date")} DESC LIMIT 1`
-    ).get(memberId) as { expiry_date: string } | undefined;
+    const tz = getAppTimezone(db);
+    const validUntil = getSubscriptionDoorAccessValidUntil(db, memberId, tz);
+
+    let kisiId = row.kisi_id?.trim() || null;
+    const emailTrim = row.email?.trim();
+    if (!kisiId && emailTrim && validUntil && validUntil.getTime() > Date.now()) {
+      try {
+        const name = [row.first_name, row.last_name].filter(Boolean).join(" ").trim() || undefined;
+        kisiId = await ensureKisiUser(emailTrim, name);
+        db.prepare("UPDATE members SET kisi_id = ? WHERE member_id = ?").run(kisiId, memberId);
+      } catch (e) {
+        console.error("[waiver/agree-session] ensureKisiUser failed for", memberId, e);
+      }
+    }
     db.close();
 
     let kisiGranted = false;
-    const expiryDateStr = expRow?.expiry_date?.trim();
-    if (kisiId && expiryDateStr) {
+    if (kisiId && validUntil && validUntil.getTime() > Date.now()) {
       try {
-        const expiryDate = new Date(expiryDateStr);
-        if (!Number.isNaN(expiryDate.getTime())) {
-          await kisiGrantAccess(kisiId, expiryDate);
-          kisiGranted = true;
-        }
+        await kisiGrantAccess(kisiId, validUntil);
+        kisiGranted = true;
       } catch (e) {
         console.error("[waiver/agree-session] Kisi grant failed for", memberId, e);
       }

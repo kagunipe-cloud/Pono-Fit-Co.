@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone } from "@/lib/db";
 import { getSubscriptionDoorAccessValidUntil } from "@/lib/pass-access";
-import { grantAccess as kisiGrantAccess } from "@/lib/kisi";
+import { ensureKisiUser, grantAccess as kisiGrantAccess } from "@/lib/kisi";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +20,15 @@ export async function POST(request: NextRequest) {
   try {
     const db = getDb();
     const row = db.prepare(
-      `SELECT member_id, kisi_id, waiver_signed_at FROM members WHERE waiver_token = ? AND waiver_token_expires_at > datetime('now')`
-    ).get(token) as { member_id: string; kisi_id: string | null; waiver_signed_at: string | null } | undefined;
+      `SELECT member_id, kisi_id, waiver_signed_at, email, first_name, last_name FROM members WHERE waiver_token = ? AND waiver_token_expires_at > datetime('now')`
+    ).get(token) as {
+      member_id: string;
+      kisi_id: string | null;
+      waiver_signed_at: string | null;
+      email: string | null;
+      first_name: string | null;
+      last_name: string | null;
+    } | undefined;
     if (!row) {
       db.close();
       return NextResponse.json({ error: "Invalid or expired link. Request a new one from the gym." }, { status: 401 });
@@ -31,9 +38,20 @@ export async function POST(request: NextRequest) {
       `UPDATE members SET waiver_signed_at = ?, waiver_token = NULL, waiver_token_expires_at = NULL WHERE member_id = ?`
     ).run(now, row.member_id);
     const memberId = row.member_id;
-    const kisiId = row.kisi_id?.trim() || null;
     const tz = getAppTimezone(db);
     const validUntil = getSubscriptionDoorAccessValidUntil(db, memberId, tz);
+
+    let kisiId = row.kisi_id?.trim() || null;
+    const emailTrim = row.email?.trim();
+    if (!kisiId && emailTrim && validUntil && validUntil.getTime() > Date.now()) {
+      try {
+        const name = [row.first_name, row.last_name].filter(Boolean).join(" ").trim() || undefined;
+        kisiId = await ensureKisiUser(emailTrim, name);
+        db.prepare("UPDATE members SET kisi_id = ? WHERE member_id = ?").run(kisiId, memberId);
+      } catch (e) {
+        console.error("[waiver/agree] ensureKisiUser failed for", memberId, e);
+      }
+    }
     db.close();
 
     let kisiGranted = false;
