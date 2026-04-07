@@ -221,18 +221,14 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
+    const existing = getByEmail.get(emailLower) as MemberRow | undefined;
+
     if (wantsSubFull) {
       if (!productId) {
         errors.push({ row: i + 2, email: rawEmail, message: "membership_product_id is required when subscription dates are set." });
         continue;
       }
-      if (!subExpiryRaw.trim()) {
-        errors.push({ row: i + 2, email: rawEmail, message: "subscription_expiry_date is required when membership_product_id is set." });
-        continue;
-      }
     }
-
-    const existing = getByEmail.get(emailLower) as MemberRow | undefined;
 
     if (wantsSubByName && !existing) {
       errors.push({
@@ -260,9 +256,18 @@ export async function POST(request: NextRequest) {
         });
         continue;
       }
-      expiryYmd = normalizeDateToYMD(subExpiryRaw);
+      expiryYmd =
+        normalizeDateToYMD(subExpiryRaw) ||
+        expNextIn ||
+        normalizeDateToYMD(existing?.exp_next_payment_date ?? "") ||
+        null;
       if (!expiryYmd) {
-        errors.push({ row: i + 2, email: rawEmail, message: "Invalid subscription_expiry_date." });
+        errors.push({
+          row: i + 2,
+          email: rawEmail,
+          message:
+            "No renewal/expiry date: set subscription_expiry_date or exp_next_payment_date on this row, or ensure the member already has exp_next_payment_date from a prior import.",
+        });
         continue;
       }
       startYmd = normalizeDateToYMD(subStartRaw);
