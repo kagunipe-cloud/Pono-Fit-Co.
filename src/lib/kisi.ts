@@ -13,6 +13,41 @@
 
 const KISI_API_BASE = "https://api.kisi.io";
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Kisi returns 429 when requests come too fast (e.g. bulk migration). Retry with backoff
+ * and honor Retry-After when the API sends it.
+ */
+async function fetchKisiWithRetry(url: string, init: RequestInit, options?: { maxAttempts?: number }): Promise<Response> {
+  const maxAttempts = options?.maxAttempts ?? 8;
+  let last: Response | undefined;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const res = await fetch(url, init);
+    last = res;
+    if (res.status !== 429 && res.status !== 503) {
+      return res;
+    }
+    if (attempt >= maxAttempts) {
+      break;
+    }
+    const retryAfter = res.headers.get("Retry-After");
+    let waitMs = 0;
+    if (retryAfter) {
+      const sec = parseInt(retryAfter, 10);
+      if (!Number.isNaN(sec)) waitMs = sec * 1000;
+    }
+    if (waitMs <= 0) {
+      waitMs = Math.min(45_000, 750 * 2 ** (attempt - 1));
+    }
+    console.warn(`[Kisi] ${res.status} — retry ${attempt}/${maxAttempts} in ${waitMs}ms`);
+    await sleep(waitMs);
+  }
+  return last!;
+}
+
 function toISO(d: Date): string {
   return d.toISOString();
 }
@@ -143,7 +178,7 @@ export async function grantAccess(kisiUserId: string, validUntil: Date): Promise
     },
   };
 
-  const res = await fetch(`${KISI_API_BASE}/role_assignments`, {
+  const res = await fetchKisiWithRetry(`${KISI_API_BASE}/role_assignments`, {
     method: "POST",
     headers: {
       Authorization: `KISI-LOGIN ${key}`,
@@ -173,7 +208,7 @@ export async function revokeAccess(kisiUserId: string): Promise<void> {
   const kisiId = kisiUserId?.trim();
   if (!kisiId) return;
 
-  const listRes = await fetch(
+  const listRes = await fetchKisiWithRetry(
     `${KISI_API_BASE}/role_assignments?user_id=${encodeURIComponent(kisiId)}`,
     {
       method: "GET",
@@ -198,7 +233,7 @@ export async function revokeAccess(kisiUserId: string): Promise<void> {
       const gNorm = String(parseInt(String(a.group_id), 10) || a.group_id);
       if (gNorm !== envGroupNorm) continue;
     }
-    const delRes = await fetch(`${KISI_API_BASE}/role_assignments/${a.id}`, {
+    const delRes = await fetchKisiWithRetry(`${KISI_API_BASE}/role_assignments/${a.id}`, {
       method: "DELETE",
       headers: { Authorization: `KISI-LOGIN ${key}` },
     });

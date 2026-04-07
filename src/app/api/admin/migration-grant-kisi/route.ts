@@ -103,6 +103,8 @@ export async function POST(request: NextRequest) {
   let skipped_no_active_sub = 0;
   let skipped_expired = 0;
   let granted = 0;
+  /** Space out Kisi calls so bulk runs stay under rate limits (each member = list + deletes + POST). */
+  let kisiGrantAttempt = 0;
 
   for (const row of rows) {
     const subUntil = getSubscriptionDoorAccessValidUntil(db, row.member_id, tz);
@@ -122,6 +124,10 @@ export async function POST(request: NextRequest) {
     }
 
     try {
+      if (kisiGrantAttempt > 0) {
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      kisiGrantAttempt++;
       await grantAccess(row.kisi_id.trim(), validUntil);
       granted++;
     } catch (e) {
