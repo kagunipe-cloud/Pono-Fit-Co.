@@ -1,5 +1,6 @@
 /**
  * Kisi door access integration.
+ * - findKisiUserByEmail: existing user lookup only (e.g. Glofox); does not create.
  * - ensureKisiUser: find user in Kisi by email, or create a managed user; returns Kisi user id.
  * - grantAccess: replace door access for this user — revokes existing role assignments for this Kisi user,
  *   then creates one assignment (avoids duplicate rows when unlock/renew/checkout run repeatedly).
@@ -60,6 +61,36 @@ function authHeaders(): Record<string, string> {
     "Content-Type": "application/json",
     Accept: "application/json",
   };
+}
+
+/**
+ * Look up an existing Kisi user by email (e.g. created in Glofox/Kisi). Does not create users.
+ * Returns null if not found, no API key, or API error.
+ */
+export async function findKisiUserByEmail(email: string): Promise<string | null> {
+  const headers = authHeaders();
+  if (!headers.Authorization) {
+    return null;
+  }
+  const emailTrim = email?.trim();
+  if (!emailTrim) {
+    return null;
+  }
+
+  const query = encodeURIComponent(emailTrim);
+  const listRes = await fetchKisiWithRetry(`${KISI_API_BASE}/users?query=${query}`, {
+    method: "GET",
+    headers,
+  });
+  if (!listRes.ok) {
+    const err = await listRes.text();
+    console.error("[Kisi] findKisiUserByEmail failed:", listRes.status, err);
+    return null;
+  }
+  const listData = (await listRes.json()) as { id?: number; email?: string }[] | { id?: number; email?: string };
+  const users = Array.isArray(listData) ? listData : listData?.id != null ? [listData] : [];
+  const existing = users.find((u) => (u.email ?? "").toLowerCase() === emailTrim.toLowerCase());
+  return existing?.id != null ? String(existing.id) : null;
 }
 
 /**
@@ -190,7 +221,10 @@ export async function grantAccess(kisiUserId: string, validUntil: Date): Promise
   if (!res.ok) {
     const err = await res.text();
     console.error("[Kisi] role_assignments failed:", res.status, err);
-    throw new Error(`Kisi access grant failed: ${res.status}`);
+    const detail = err.trim().slice(0, 400);
+    throw new Error(
+      detail ? `Kisi access grant failed: ${res.status} — ${detail}` : `Kisi access grant failed: ${res.status}`
+    );
   }
 }
 
