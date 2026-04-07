@@ -966,16 +966,29 @@ export default function MemberDetailPage() {
               <input
                 type="checkbox"
                 checked={(data.member?.auto_renew ?? 0) === 1}
-                onChange={async () => {
+                onChange={async (e) => {
+                  const nextEnabled = e.target.checked;
+                  const ok = window.confirm(
+                    nextEnabled
+                      ? "Turn ON auto-renewal for this member? Their saved card will be charged when their monthly membership expires."
+                      : "Turn OFF auto-renewal? They will not be charged automatically when their membership expires."
+                  );
+                  if (!ok) return;
                   setTogglingAutoRenew(true);
                   try {
                     const res = await fetch(`/api/members/${id}/auto-renew`, {
                       method: "PATCH",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ enabled: (data.member?.auto_renew ?? 0) !== 1 }),
+                      body: JSON.stringify({ enabled: nextEnabled }),
                     });
                     const json = await res.json();
-                    if (json.ok) setData((d) => d && d.member ? { ...d, member: { ...d.member, auto_renew: json.auto_renew ? 1 : 0 } } : d);
+                    if (json.ok) {
+                      setData((d) =>
+                        d && d.member ? { ...d, member: { ...d.member, auto_renew: json.auto_renew ? 1 : 0 } } : d
+                      );
+                    } else {
+                      window.alert(json.error ?? "Could not update auto-renew.");
+                    }
                   } finally {
                     setTogglingAutoRenew(false);
                   }
