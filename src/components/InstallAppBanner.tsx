@@ -17,10 +17,19 @@ type Platform = "android" | "ios" | "other";
 export default function InstallAppBanner({
   variant = "banner",
   showInstallLink = true,
+  nativeInstallButtonLabel,
+  fallbackInstallLinkLabel,
+  /** Use on /install: show Android download CTAs even when the viewer is on iPhone (so the Android block doesn’t show the iOS link). */
+  installCtaAs = "auto",
 }: {
   variant?: "banner" | "inline";
   /** When true, show link to /install (iOS has no install API; Android may fall back if prompt never fires). */
   showInstallLink?: boolean;
+  /** Chromium install prompt button (e.g. “Download for Android”). */
+  nativeInstallButtonLabel?: string;
+  /** Link to /install when native prompt is not available (default “Install help”). */
+  fallbackInstallLinkLabel?: string;
+  installCtaAs?: "auto" | "android" | "ios";
 }) {
   const [mounted, setMounted] = useState(false);
   const [platform, setPlatform] = useState<Platform>("other");
@@ -99,13 +108,15 @@ export default function InstallAppBanner({
   if (!mounted || dismissed) return null;
 
   const isBanner = variant === "banner";
+  const ctaPlatform: Platform =
+    installCtaAs === "android" ? "android" : installCtaAs === "ios" ? "ios" : platform;
   /** Chromium (Android + desktop): one-tap when beforeinstallprompt fired. */
   const showNativeInstallButton = installPrompt != null;
-  const showIOSLink = platform === "ios" && showInstallLink;
+  const showIOSLink = ctaPlatform === "ios" && showInstallLink;
   const showGenericInstallLink =
     showInstallLink &&
     !showNativeInstallButton &&
-    (platform === "other" || platform === "android");
+    (ctaPlatform === "other" || ctaPlatform === "android");
 
   if (!showNativeInstallButton && !showIOSLink && !showGenericInstallLink) return null;
 
@@ -119,7 +130,7 @@ export default function InstallAppBanner({
           disabled={installing}
           className="w-full py-2.5 px-4 rounded-lg font-medium text-sm"
         >
-          {installing ? "Opening…" : "Add to Home Screen"}
+          {installing ? "Opening…" : nativeInstallButtonLabel ?? "Add to Home Screen"}
         </button>
       )}
       {(showIOSLink || showGenericInstallLink) && (
@@ -128,7 +139,7 @@ export default function InstallAppBanner({
           data-dumbbell-btn
           className="block w-full py-2.5 px-4 rounded-lg font-medium text-center text-sm"
         >
-          {platform === "ios" ? "Add to Home Screen" : "Install help"}
+          {platform === "ios" ? "Add to Home Screen" : fallbackInstallLinkLabel ?? "Install help"}
         </Link>
       )}
     </>
@@ -143,7 +154,7 @@ export default function InstallAppBanner({
               Get {BRAND.shortName} on your home screen
             </p>
             <p className="text-xs text-stone-500 mt-0.5">
-              {platform === "ios"
+              {(installCtaAs === "auto" ? platform : ctaPlatform) === "ios"
                 ? "Tap below for quick steps to add this app."
                 : installPrompt
                   ? "Use the button below — same as other apps’ “Add to Home screen” prompts."

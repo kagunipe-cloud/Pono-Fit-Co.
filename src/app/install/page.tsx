@@ -6,7 +6,28 @@ import { useSearchParams } from "next/navigation";
 import InstallAppBanner from "@/components/InstallAppBanner";
 import { BRAND } from "@/lib/branding";
 
-type Platform = "android" | "ios" | "other";
+function usePageUrl() {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    setUrl(typeof window !== "undefined" ? window.location.href : "");
+  }, []);
+  return url;
+}
+
+/** Chrome, Firefox, Edge on iOS — Add to Home Screen works best in Safari. */
+function useIOSNotSafari() {
+  const [notSafari, setNotSafari] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ua = navigator.userAgent;
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+    if (!isIOS) return;
+    setNotSafari(/CriOS|FxiOS|EdgiOS|OPiOS|OPT\//i.test(ua));
+  }, []);
+  return notSafari;
+}
+
+type Device = "android" | "ios" | "other";
 
 function InstallContent() {
   const searchParams = useSearchParams();
@@ -14,24 +35,28 @@ function InstallContent() {
   const email = searchParams.get("email") ?? "";
   const hasSetPasswordParams = Boolean(memberId && email);
 
-  const [platform, setPlatform] = useState<Platform>("other");
-  const [copied, setCopied] = useState(false);
+  const [device, setDevice] = useState<Device>("other");
+  const pageUrl = usePageUrl();
+  const iosNotSafari = useIOSNotSafari();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const ua = navigator.userAgent.toLowerCase();
-    if (/android/.test(ua)) setPlatform("android");
-    else if (/iphone|ipad|ipod/.test(ua)) setPlatform("ios");
-    else setPlatform("other");
+    if (/android/.test(ua)) setDevice("android");
+    else if (/iphone|ipad|ipod/.test(ua)) setDevice("ios");
+    else setDevice("other");
   }, []);
+
+  const [copiedFriend, setCopiedFriend] = useState(false);
+  const [copiedSafari, setCopiedSafari] = useState(false);
 
   const installUrl = typeof window !== "undefined" ? `${window.location.origin}/install` : "/install";
 
   async function copyInstallLink() {
     try {
       await navigator.clipboard.writeText(installUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopiedFriend(true);
+      setTimeout(() => setCopiedFriend(false), 2000);
     } catch {
       const input = document.createElement("input");
       input.value = installUrl;
@@ -39,24 +64,35 @@ function InstallContent() {
       input.select();
       document.execCommand("copy");
       document.body.removeChild(input);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopiedFriend(true);
+      setTimeout(() => setCopiedFriend(false), 2000);
     }
   }
 
+  async function copyPageUrlForSafari() {
+    const u = pageUrl || installUrl;
+    try {
+      await navigator.clipboard.writeText(u);
+      setCopiedSafari(true);
+      setTimeout(() => setCopiedSafari(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const safariOpenHref = pageUrl || "/install";
+
   return (
-    <div className="max-w-md mx-auto py-12 px-4">
-      <h1 className="text-2xl font-bold text-stone-800 mb-2">Add {BRAND.name} to your phone</h1>
-      <p className="text-stone-500 text-sm mb-6">
-        Install the app on your home screen — opens like a normal app, no browser bar.
+    <div className="max-w-md mx-auto py-10 px-4">
+      <h1 className="text-2xl font-bold text-stone-800 mb-1">Add {BRAND.name} to your phone</h1>
+      <p className="text-stone-500 text-sm mb-8">
+        Opens full-screen from your home screen — like a regular app.
       </p>
 
       {/* Send to a friend */}
-      <div className="mb-8 p-4 rounded-xl border border-brand-200 bg-brand-50">
+      <div className="mb-10 p-4 rounded-xl border border-brand-200 bg-brand-50">
         <p className="text-sm font-medium text-stone-700 mb-2">Send to a friend</p>
-        <p className="text-xs text-stone-600 mb-3">
-          Text them this link. When they open it on their phone, they’ll see simple install steps.
-        </p>
+        <p className="text-xs text-stone-600 mb-3">Text them this link. They’ll open it on their phone and pick iPhone or Android below.</p>
         <div className="flex gap-2">
           <input
             type="text"
@@ -69,53 +105,98 @@ function InstallContent() {
             onClick={copyInstallLink}
             className="shrink-0 px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700"
           >
-            {copied ? "Copied!" : "Copy link"}
+            {copiedFriend ? "Copied!" : "Copy link"}
           </button>
         </div>
       </div>
 
-      <p className="text-sm font-medium text-stone-700 mb-3">On this device</p>
+      {/* iPhone — visual steps */}
+      <section className="mb-10 rounded-2xl border-2 border-stone-200 bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-bold text-stone-900 mb-1">Instructions for iPhone</h2>
+        <p className="text-xs text-stone-500 mb-6">Use Safari — not Chrome on iPhone (Apple’s rule, not ours).</p>
 
-      {/* Android: one-tap install when prompt is available */}
-      {platform === "android" && (
-        <div className="mb-8">
-          <InstallAppBanner variant="inline" showInstallLink={false} />
-          <p className="text-xs text-stone-500 mt-2">
-            No button? Use Chrome’s menu (⋮) → “Install app” or “Add to Home screen”.
+        <div className="space-y-8">
+          <div>
+            <p className="text-4xl font-black text-brand-600 leading-none mb-2">1</p>
+            <p className="text-sm font-semibold text-stone-800 mb-2">Open in Safari</p>
+            <a
+              href={safariOpenHref}
+              className="flex items-center justify-center w-full py-3.5 px-4 rounded-xl bg-brand-600 text-white font-semibold text-sm hover:bg-brand-700 text-center"
+            >
+              Open in Safari
+            </a>
+            {iosNotSafari && (
+              <p className="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                You’re not in Safari. Tap <strong>⋯</strong> (top or bottom) → <strong>Open in Safari</strong>. Or copy the link, open the{" "}
+                <strong>Safari</strong> app, and paste into the address bar.
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={copyPageUrlForSafari}
+              className="mt-2 w-full py-2 text-sm text-brand-700 font-medium hover:underline"
+            >
+              {copiedSafari ? "Copied — open Safari and paste" : "Copy link → paste in Safari"}
+            </button>
+          </div>
+
+          <div>
+            <p className="text-4xl font-black text-brand-600 leading-none mb-2">2</p>
+            <p className="text-sm font-semibold text-stone-800 mb-3">Tap the Share button</p>
+            <img
+              src="/install/ios-step-share.svg"
+              alt=""
+              className="w-full rounded-xl border border-stone-100 bg-stone-50"
+              width={280}
+              height={120}
+            />
+            <p className="text-xs text-stone-500 mt-2 text-center">Square with arrow — bottom of the screen</p>
+          </div>
+
+          <div>
+            <p className="text-4xl font-black text-brand-600 leading-none mb-2">3</p>
+            <p className="text-sm font-semibold text-stone-800 mb-3">Choose Add to Home Screen</p>
+            <img
+              src="/install/ios-step-add-home.svg"
+              alt=""
+              className="w-full rounded-xl border border-stone-100 bg-stone-50"
+              width={280}
+              height={140}
+            />
+            <p className="text-xs text-stone-500 mt-2 text-center">Then tap Add — done.</p>
+          </div>
+        </div>
+      </section>
+
+      {/* Android — one tap when Chromium offers it */}
+      <section className="mb-10 rounded-2xl border-2 border-stone-200 bg-stone-50 p-5 shadow-sm">
+        <h2 className="text-lg font-bold text-stone-900 mb-1">Download for Android</h2>
+        <p className="text-xs text-stone-600 mb-4">Adds the app icon to your home screen (same as “Install app” in Chrome).</p>
+        {device === "android" ? (
+          <>
+            <InstallAppBanner
+              variant="inline"
+              showInstallLink={false}
+              installCtaAs="android"
+              nativeInstallButtonLabel="Download for Android"
+            />
+            <p className="text-xs text-stone-500 mt-3">
+              No button yet? Chrome menu <strong>⋮</strong> → <strong>Install app</strong> or <strong>Add to Home screen</strong>.
+            </p>
+          </>
+        ) : (
+          <p className="text-sm text-stone-700 bg-white border border-stone-200 rounded-xl px-4 py-3">
+            On an <strong>Android phone</strong>, open this page in <strong>Chrome</strong>. You’ll get a{" "}
+            <strong>Download for Android</strong> button, or use the menu <strong>⋮</strong> → <strong>Install app</strong>.
           </p>
-        </div>
-      )}
+        )}
+      </section>
 
-      {/* iOS: step-by-step (Safari only) */}
-      {platform === "ios" && (
-        <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-6 mb-8">
-          <p className="text-sm font-medium text-stone-700 mb-3">Add to Home Screen (use Safari)</p>
-          <ol className="list-decimal list-inside space-y-2 text-sm text-stone-600">
-            <li>Tap the <strong>Share</strong> button (square with arrow up) at the bottom.</li>
-            <li>Scroll and tap <strong>“Add to Home Screen”</strong>.</li>
-            <li>Tap <strong>Add</strong>. Done.</li>
-          </ol>
-          <p className="text-xs text-stone-500 mt-3">
-            Icon appears on your home screen — tap to open like an app.
-          </p>
-        </div>
-      )}
-
-      {/* Desktop / other: generic */}
-      {platform === "other" && (
-        <div className="bg-stone-100 rounded-xl p-4 mb-8 text-sm text-stone-600">
-          <p className="font-medium text-stone-700 mb-1">Open this page on your phone</p>
-          <p>Copy the link above and text it to yourself (or your friend). Open it in the phone's browser — you'll get install steps for iPhone or Android.</p>
-        </div>
-      )}
-
-      {/* After install: set password (when arrived from post-purchase email with member_id & email) */}
+      {/* After install: set password */}
       {hasSetPasswordParams && (
         <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-6 mb-8">
           <p className="text-sm font-medium text-stone-700 mb-2">Next: set your password</p>
-          <p className="text-xs text-stone-500 mb-3">
-            Create a password once so you can sign in to the app with your email and password.
-          </p>
+          <p className="text-xs text-stone-500 mb-3">Create a password once so you can sign in with your email.</p>
           <Link
             href={`/set-password?member_id=${encodeURIComponent(memberId)}&email=${encodeURIComponent(email)}`}
             className="inline-block w-full py-2.5 px-4 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 text-center text-sm"
