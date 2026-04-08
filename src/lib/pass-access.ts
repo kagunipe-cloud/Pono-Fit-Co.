@@ -1,6 +1,6 @@
 import type { getDb } from "./db";
 import { expiryDateSortableSql } from "./db";
-import { todayInAppTz } from "./app-timezone";
+import { normalizeDateToYMD, todayInAppTz } from "./app-timezone";
 
 /** Last instant (UTC) that still falls on `ymd` in the given IANA timezone. */
 export function endOfCalendarDayInTimeZone(ymd: string, timeZone: string): Date {
@@ -22,7 +22,7 @@ export function endOfCalendarDayInTimeZone(ymd: string, timeZone: string): Date 
 
 /**
  * Valid-until instant for Kisi for an active door subscription:
- * pass pack activated for today → end of that calendar day in app TZ; else standard expiry_date.
+ * pass pack activated for today → end of that calendar day in app TZ; else monthly expiry_date as **end of that calendar day in app TZ** (not UTC midnight of the string, which is a day early in Hawaii).
  */
 export function getSubscriptionDoorAccessValidUntil(
   db: ReturnType<typeof getDb>,
@@ -49,6 +49,10 @@ export function getSubscriptionDoorAccessValidUntil(
     )
     .get(memberId, today) as { expiry_date: string } | undefined;
   if (!other?.expiry_date?.trim()) return null;
+  const ymd = normalizeDateToYMD(other.expiry_date.trim());
+  if (ymd) {
+    return endOfCalendarDayInTimeZone(ymd, tz);
+  }
   const d = new Date(other.expiry_date.trim());
   return Number.isNaN(d.getTime()) ? null : d;
 }
