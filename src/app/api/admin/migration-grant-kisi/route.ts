@@ -6,6 +6,8 @@ import { getSubscriptionDoorAccessValidUntil, endOfCalendarDayInTimeZone } from 
 import { findKisiUserByEmail, grantAccess, grantAccessForGroup } from "@/lib/kisi";
 
 export const dynamic = "force-dynamic";
+/** Max seconds for this route (where supported, e.g. Vercel). Railway may use its own HTTP limits. */
+export const maxDuration = 300;
 
 const SETTINGS_KEY = "migration_kisi_grace_until";
 
@@ -264,6 +266,8 @@ export async function GET(request: NextRequest) {
           "optional boolean — if true, iterate members with email, look up Kisi by email when kisi_id missing, grant, backfill kisi_id (default false)",
       },
       env_grace_group: "KISI_GRACE_GROUP_ID (+ optional KISI_GRACE_ROLE_ID) — duplicate grant into a second Kisi group for migration grace",
+      batching:
+        "Optional POST fields: batch_offset (default 0), batch_size (e.g. 40) — process one chunk of members to avoid 502/timeouts; repeat with next_offset until has_more is false. saved_grace_to_app_settings only on final batch.",
       skip_report_get:
         "/api/admin/migration-grant-kisi?grace_until=YYYY-MM-DD&lookup_kisi_by_email=true — lists expired + not-in-Kisi members (Kisi lookups; no grants)",
     },
@@ -280,9 +284,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { grace_until?: string; dry_run?: boolean; lookup_kisi_by_email?: boolean };
+  let body: {
+    grace_until?: string;
+    dry_run?: boolean;
+    lookup_kisi_by_email?: boolean;
+    batch_offset?: number;
+    batch_size?: number;
+  };
   try {
-    body = (await request.json()) as { grace_until?: string; dry_run?: boolean; lookup_kisi_by_email?: boolean };
+    body = (await request.json()) as typeof body;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
@@ -313,21 +323,41 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid grace_until date." }, { status: 400 });
   }
 
-  const rows = (
-    lookupKisiByEmail
-      ? db
-          .prepare(
-            `SELECT member_id, kisi_id, email FROM members
-             WHERE email IS NOT NULL AND TRIM(email) != ''`
-          )
-          .all()
-      : db
-          .prepare(
-            `SELECT member_id, kisi_id, email FROM members
-             WHERE kisi_id IS NOT NULL AND TRIM(kisi_id) != ''`
-          )
-          .all()
-  ) as MemberRow[];
+  const batchOffset = Math.max(0, parseInt(String(body.batch_offset ?? 0), 10) || 0);
+  const batchSizeRaw = body.batch_size;
+  const useBatch =
+    batchSizeRaw !== undefined &&
+    batchSizeRaw !== null &&
+    String(batchSizeRaw).trim() !== "" &&
+    !Number.isNaN(parseInt(String(batchSizeRaw), 10));
+  const batchSize = useBatch ? Math.min(500, Math.max(1, parseInt(String(batchSizeRaw), 10) || 1)) : null;
+
+  const whereClause = lookupKisiByEmail
+    ? `email IS NOT NULL AND TRIM(email) != ''`
+    : `kisi_id IS NOT NULL AND TRIM(kisi_id) != ''`;
+
+  const totalRow = db.prepare(`SELECT COUNT(*) as c FROM members WHERE ${whereClause}`).get() as { c: number };
+  const membersTotal = totalRow?.c ?? 0;
+
+  let rows: MemberRow[];
+  if (batchSize != null) {
+    rows = db
+      .prepare(
+        `SELECT member_id, kisi_id, email FROM members
+         WHERE ${whereClause}
+         ORDER BY member_id ASC
+         LIMIT ? OFFSET ?`
+      )
+      .all(batchSize, batchOffset) as MemberRow[];
+  } else {
+    rows = db
+      .prepare(
+        `SELECT member_id, kisi_id, email FROM members
+         WHERE ${whereClause}
+         ORDER BY member_id ASC`
+      )
+      .all() as MemberRow[];
+  }
 
   const result = await runMigrationCore(db, tz, graceEnd, rows, {
     dryRun,
@@ -335,10 +365,14 @@ export async function POST(request: NextRequest) {
     executeGrants: !dryRun,
   });
 
-  if (!dryRun) {
+  const isFinalBatch = batchSize == null || batchOffset + rows.length >= membersTotal;
+  if (!dryRun && isFinalBatch) {
     db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)").run(SETTINGS_KEY, graceYmd);
   }
   db.close();
+
+  const nextOffset = batchSize != null ? batchOffset + rows.length : null;
+  const hasMore = batchSize != null && nextOffset != null && nextOffset < membersTotal;
 
   return NextResponse.json({
     ok: true,
@@ -347,6 +381,17 @@ export async function POST(request: NextRequest) {
     grace_until: graceYmd,
     grace_end_iso: graceEnd.toISOString(),
     timezone: tz,
+    batch:
+      batchSize != null
+        ? {
+            offset: batchOffset,
+            size: batchSize,
+            members_total: membersTotal,
+            members_in_this_request: rows.length,
+            has_more: hasMore,
+            next_offset: hasMore ? nextOffset : null,
+          }
+        : undefined,
     members_in_scope: result.members_in_scope,
     members_with_kisi_id: result.members_in_scope,
     granted: result.granted,
@@ -362,6 +407,6 @@ export async function POST(request: NextRequest) {
     grace_granted: !dryRun && process.env.KISI_GRACE_GROUP_ID?.trim() ? result.grace_granted : undefined,
     grace_errors:
       !dryRun && process.env.KISI_GRACE_GROUP_ID?.trim() && result.grace_errors.length ? result.grace_errors : undefined,
-    saved_grace_to_app_settings: dryRun ? false : SETTINGS_KEY,
+    saved_grace_to_app_settings: dryRun ? false : isFinalBatch ? SETTINGS_KEY : false,
   });
 }
