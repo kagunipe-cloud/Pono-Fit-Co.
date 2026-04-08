@@ -14,7 +14,7 @@ function usePageUrl() {
   return url;
 }
 
-/** Chrome, Firefox, Edge on iOS — Add to Home Screen works best in Safari. */
+/** True when iOS and the browser isn’t Safari (Firefox, Edge, Chrome, etc. on iPhone). */
 function useIOSNotSafari() {
   const [notSafari, setNotSafari] = useState(false);
   useEffect(() => {
@@ -80,19 +80,19 @@ function InstallContent() {
     }
   }
 
-  const safariOpenHref = pageUrl || "/install";
-
   return (
     <div className="max-w-md mx-auto py-10 px-4">
       <h1 className="text-2xl font-bold text-stone-800 mb-1">Add {BRAND.name} to your phone</h1>
       <p className="text-stone-500 text-sm mb-8">
-        Opens full-screen from your home screen — like a regular app.
+        {device === "other"
+          ? "On a laptop or desktop, just use this site in your browser — bookmark it if you like. Add-to-home-screen is optional and meant for phones."
+          : "Opens full-screen from your home screen — like a regular app."}
       </p>
 
       {/* Send to a friend */}
       <div className="mb-10 p-4 rounded-xl border border-brand-200 bg-brand-50">
         <p className="text-sm font-medium text-stone-700 mb-2">Send to a friend</p>
-        <p className="text-xs text-stone-600 mb-3">Text them this link. They’ll open it on their phone and pick iPhone or Android below.</p>
+        <p className="text-xs text-stone-600 mb-3">Text them this link. They’ll open it on their phone and follow the steps.</p>
         <div className="flex gap-2">
           <input
             type="text"
@@ -110,89 +110,116 @@ function InstallContent() {
         </div>
       </div>
 
-      {/* iPhone — visual steps */}
-      <section className="mb-10 rounded-2xl border-2 border-stone-200 bg-white p-5 shadow-sm">
-        <h2 className="text-lg font-bold text-stone-900 mb-1">Instructions for iPhone</h2>
-        <p className="text-xs text-stone-500 mb-6">Use Safari — not Chrome on iPhone (Apple’s rule, not ours).</p>
-
-        <div className="space-y-8">
-          <div>
-            <p className="text-4xl font-black text-brand-600 leading-none mb-2">1</p>
-            <p className="text-sm font-semibold text-stone-800 mb-2">Open in Safari</p>
-            <a
-              href={safariOpenHref}
-              className="flex items-center justify-center w-full py-3.5 px-4 rounded-xl bg-brand-600 text-white font-semibold text-sm hover:bg-brand-700 text-center"
-            >
-              Open in Safari
-            </a>
-            {iosNotSafari && (
-              <p className="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                You’re not in Safari. Tap <strong>⋯</strong> (top or bottom) → <strong>Open in Safari</strong>. Or copy the link, open the{" "}
-                <strong>Safari</strong> app, and paste into the address bar.
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={copyPageUrlForSafari}
-              className="mt-2 w-full py-2 text-sm text-brand-700 font-medium hover:underline"
-            >
-              {copiedSafari ? "Copied — open Safari and paste" : "Copy link → paste in Safari"}
-            </button>
-          </div>
-
-          <div>
-            <p className="text-4xl font-black text-brand-600 leading-none mb-2">2</p>
-            <p className="text-sm font-semibold text-stone-800 mb-3">Tap the Share button</p>
-            <img
-              src="/install/ios-step-share.svg"
-              alt=""
-              className="w-full rounded-xl border border-stone-100 bg-stone-50"
-              width={280}
-              height={120}
-            />
-            <p className="text-xs text-stone-500 mt-2 text-center">Square with arrow — bottom of the screen</p>
-          </div>
-
-          <div>
-            <p className="text-4xl font-black text-brand-600 leading-none mb-2">3</p>
-            <p className="text-sm font-semibold text-stone-800 mb-3">Choose Add to Home Screen</p>
-            <img
-              src="/install/ios-step-add-home.svg"
-              alt=""
-              className="w-full rounded-xl border border-stone-100 bg-stone-50"
-              width={280}
-              height={140}
-            />
-            <p className="text-xs text-stone-500 mt-2 text-center">Then tap Add — done.</p>
-          </div>
-        </div>
-      </section>
-
-      {/* Android — one tap when Chromium offers it */}
-      <section className="mb-10 rounded-2xl border-2 border-stone-200 bg-stone-50 p-5 shadow-sm">
-        <h2 className="text-lg font-bold text-stone-900 mb-1">Download for Android</h2>
-        <p className="text-xs text-stone-600 mb-4">Adds the app icon to your home screen (same as “Install app” in Chrome).</p>
-        {device === "android" ? (
-          <>
-            <InstallAppBanner
-              variant="inline"
-              showInstallLink={false}
-              installCtaAs="android"
-              nativeInstallButtonLabel="Download for Android"
-            />
-            <p className="text-xs text-stone-500 mt-3">
-              No button yet? Chrome menu <strong>⋮</strong> → <strong>Install app</strong> or <strong>Add to Home screen</strong>.
-            </p>
-          </>
-        ) : (
-          <p className="text-sm text-stone-700 bg-white border border-stone-200 rounded-xl px-4 py-3">
-            On an <strong>Android phone</strong>, open this page in <strong>Chrome</strong>. You’ll get a{" "}
-            <strong>Download for Android</strong> button, or use the menu <strong>⋮</strong> → <strong>Install app</strong>.
+      {/* Laptop / desktop — no install walkthrough */}
+      {device === "other" && (
+        <section className="mb-10 rounded-2xl border-2 border-stone-200 bg-white p-5 shadow-sm">
+          <h2 className="text-lg font-bold text-stone-900 mb-2">On a computer</h2>
+          <p className="text-sm text-stone-600 mb-4">
+            You don’t need to “install” anything — Safari, Firefox, Edge, Chrome, all fine. Use the site normally.
           </p>
-        )}
-      </section>
+          <p className="text-sm text-stone-600 mb-4">
+            Want the app icon on your <strong>phone</strong>? Copy the link above and open it on your iPhone or Android, then follow the steps there.
+          </p>
+          <button
+            type="button"
+            onClick={copyPageUrlForSafari}
+            className="flex items-center justify-center w-full py-3 px-4 rounded-xl border-2 border-brand-200 bg-brand-50 text-brand-800 font-semibold text-sm hover:bg-brand-100"
+          >
+            {copiedSafari ? "Copied!" : "Copy link to use on your phone"}
+          </button>
+        </section>
+      )}
 
-      {/* After install: set password */}
+      {/* iPhone only */}
+      {device === "ios" && (
+        <section className="mb-10 rounded-2xl border-2 border-stone-200 bg-white p-5 shadow-sm">
+          <h2 className="text-lg font-bold text-stone-900 mb-1">Instructions for iPhone</h2>
+          <p className="text-xs text-stone-500 mb-6">
+            Add-to-home uses <strong>Safari</strong>. Other iPhone browsers (Firefox, Edge, Chrome, …) have to open the page in Safari first — Apple’s rule, not ours.
+          </p>
+
+          <div className="space-y-8">
+            <div>
+              <p className="text-4xl font-black text-brand-600 leading-none mb-2">1</p>
+              {!iosNotSafari ? (
+                <>
+                  <p className="text-sm font-semibold text-stone-800 mb-2">You’re in Safari</p>
+                  <p className="text-sm text-stone-600 mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+                    Good — keep going to step 2. (If the Share button isn’t at the bottom, scroll up slightly.)
+                  </p>
+                  <button
+                    type="button"
+                    onClick={copyPageUrlForSafari}
+                    className="w-full py-2 text-sm text-brand-700 font-medium hover:underline"
+                  >
+                    {copiedSafari ? "Copied!" : "Copy link (optional)"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold text-stone-800 mb-2">Switch to Safari</p>
+                  <p className="text-sm text-amber-900 mb-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    You’re in another browser, not Safari — a link can’t jump you into Safari (Apple’s rule). Use the{" "}
+                    <strong>⋯</strong> or <strong>Share</strong> menu → <strong>Open in Safari</strong>, or copy the link and paste it in Safari.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={copyPageUrlForSafari}
+                    className="flex items-center justify-center w-full py-3.5 px-4 rounded-xl bg-brand-600 text-white font-semibold text-sm hover:bg-brand-700"
+                  >
+                    {copiedSafari ? "Copied — open Safari and paste" : "Copy link → paste in Safari"}
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div>
+              <p className="text-4xl font-black text-brand-600 leading-none mb-2">2</p>
+              <p className="text-sm font-semibold text-stone-800 mb-3">Tap the Share button</p>
+              <img
+                src="/install/ios-step-share.svg"
+                alt=""
+                className="w-full rounded-xl border border-stone-100 bg-stone-50"
+                width={280}
+                height={120}
+              />
+              <p className="text-xs text-stone-500 mt-2 text-center">Square with arrow — bottom of the screen</p>
+            </div>
+
+            <div>
+              <p className="text-4xl font-black text-brand-600 leading-none mb-2">3</p>
+              <p className="text-sm font-semibold text-stone-800 mb-3">Choose Add to Home Screen</p>
+              <img
+                src="/install/ios-step-add-home.svg"
+                alt=""
+                className="w-full rounded-xl border border-stone-100 bg-stone-50"
+                width={280}
+                height={140}
+              />
+              <p className="text-xs text-stone-500 mt-2 text-center">Then tap Add — done.</p>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Android phone only — single download flow */}
+      {device === "android" && (
+        <section className="mb-10 rounded-2xl border-2 border-stone-200 bg-stone-50 p-5 shadow-sm">
+          <h2 className="text-lg font-bold text-stone-900 mb-1">Download for Android</h2>
+          <p className="text-xs text-stone-600 mb-4">Adds the app to your home screen from your browser’s install prompt.</p>
+          <InstallAppBanner
+            variant="inline"
+            showInstallLink={false}
+            installCtaAs="android"
+            nativeInstallButtonLabel="Download for Android"
+          />
+          <p className="text-xs text-stone-500 mt-3">
+            No prompt? Use your browser’s menu (often <strong>⋮</strong> or <strong>≡</strong> near the top or bottom) → <strong>Install app</strong> or{" "}
+            <strong>Add to Home screen</strong> — exact wording depends on the browser.
+          </p>
+        </section>
+      )}
+
       {hasSetPasswordParams && (
         <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-6 mb-8">
           <p className="text-sm font-medium text-stone-700 mb-2">Next: set your password</p>
