@@ -26,12 +26,25 @@ function addDuration(startDate: Date, length: string, unit: string): Date {
   return d;
 }
 
+function subtractDuration(startDate: Date, length: string, unit: string): Date {
+  const d = new Date(startDate);
+  const n = Math.max(0, parseInt(length, 10) || 1);
+  if (unit === "Day") d.setDate(d.getDate() - n);
+  else if (unit === "Week") d.setDate(d.getDate() - n * 7);
+  else if (unit === "Month") d.setMonth(d.getMonth() - n);
+  else if (unit === "Year") d.setFullYear(d.getFullYear() - n);
+  return d;
+}
+
 /**
- * POST — Admin: push Active **monthly** subscription end forward by N billing periods (default 1).
+ * POST — Admin: shift Active **monthly** subscription end by N billing periods (default 1).
  * Updates `subscriptions.expiry_date`, `days_remaining`, and `members.exp_next_payment_date`.
- * Use to skip today’s renewal cron charge (cron selects `expiry_date <= today`).
  *
- * Body: { member_ids: string[], periods?: number } — `periods` defaults to 1 (one plan period from current expiry).
+ * - **Forward** (default): add periods from current expiry — e.g. skip a renewal charge window.
+ * - **Backward** (`subtract: true`): remove periods from current expiry — e.g. realign after a missed
+ *   external charge so `expiry_date` is sooner and `/api/cron/renew-subscriptions` can retry Stripe.
+ *
+ * Body: `{ member_ids: string[], periods?: number, subtract?: boolean }`
  */
 export async function POST(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
@@ -39,9 +52,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { member_ids?: unknown; periods?: unknown };
+  let body: { member_ids?: unknown; periods?: unknown; subtract?: unknown };
   try {
-    body = (await request.json()) as { member_ids?: unknown; periods?: unknown };
+    body = (await request.json()) as { member_ids?: unknown; periods?: unknown; subtract?: unknown };
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
@@ -55,6 +68,7 @@ export async function POST(request: NextRequest) {
   }
 
   const periods = Math.max(1, Math.min(24, parseInt(String(body.periods ?? "1"), 10) || 1));
+  const subtract = body.subtract === true;
 
   const db = getDb();
   const tz = getAppTimezone(db);
@@ -102,7 +116,7 @@ export async function POST(request: NextRequest) {
 
     let end = anchor;
     for (let i = 0; i < periods; i++) {
-      end = addDuration(end, length, unit);
+      end = subtract ? subtractDuration(end, length, unit) : addDuration(end, length, unit);
     }
 
     const expiryStr = formatDateForStorage(end, tz);
@@ -133,6 +147,7 @@ export async function POST(request: NextRequest) {
     ok: true,
     timezone: tz,
     periods,
+    subtract,
     updated,
     skipped: skipped.length ? skipped : undefined,
   });
