@@ -5,6 +5,7 @@ import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../.
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { todayInAppTz } from "../../../../lib/app-timezone";
 import { hasBillableStripeCustomer } from "../../../../lib/stripe-customer";
+import { memberHasDoorAccessToday } from "../../../../lib/pass-access";
 
 export const dynamic = "force-dynamic";
 
@@ -147,14 +148,7 @@ export async function GET() {
     db.close();
 
     const today = todayInAppTz(tz);
-    const hasAccess = subscriptions.some((s) => {
-      if (s.status !== "Active") return false;
-      const pc = s.pass_credits_remaining;
-      if (pc != null && Number(pc) >= 0) {
-        return String(s.pass_activation_day ?? "").trim() === today;
-      }
-      return String(s.expiry_date ?? "") >= today;
-    });
+    const hasAccess = memberHasDoorAccessToday(subscriptions, today);
     const hasBankedPassNotActivatedToday = subscriptions.some(
       (s) =>
         s.status === "Active" &&

@@ -12,6 +12,7 @@ import { todayInAppTz } from "../../../../lib/app-timezone";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { updateKisiUser, ensureKisiUser } from "../../../../lib/kisi";
 import { parseBirthday } from "../../../../lib/member-birthday";
+import { memberHasDoorAccessToday } from "../../../../lib/pass-access";
 
 export const dynamic = "force-dynamic";
 
@@ -118,6 +119,8 @@ export async function GET(
       SELECT * FROM sales WHERE member_id = ? ORDER BY date_time DESC
     `).all(mid) as Record<string, unknown>[];
 
+    const has_door_access = memberHasDoorAccessToday(subscriptions, today_ymd);
+
     db.close();
 
     return NextResponse.json({
@@ -125,6 +128,7 @@ export async function GET(
       subscriptions,
       class_credits,
       today_ymd,
+      has_door_access,
       classBookings,
       ptBookings,
       ptSlotBookings,

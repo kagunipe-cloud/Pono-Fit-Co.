@@ -2,6 +2,24 @@ import type { getDb } from "./db";
 import { expiryDateSortableSql } from "./db";
 import { normalizeDateToYMD, todayInAppTz } from "./app-timezone";
 
+/**
+ * Same rules as GET /api/member/me `hasAccess`: at least one Active subscription
+ * with expiry on/after today, or a day-pass pack with activation set to today.
+ */
+export function memberHasDoorAccessToday(
+  subscriptions: Array<Record<string, unknown>>,
+  todayYmd: string
+): boolean {
+  return subscriptions.some((s) => {
+    if (s.status !== "Active") return false;
+    const pc = s.pass_credits_remaining;
+    if (pc != null && Number(pc) >= 0) {
+      return String(s.pass_activation_day ?? "").trim() === todayYmd;
+    }
+    return String(s.expiry_date ?? "") >= todayYmd;
+  });
+}
+
 /** Last instant (UTC) that still falls on `ymd` in the given IANA timezone. */
 export function endOfCalendarDayInTimeZone(ymd: string, timeZone: string): Date {
   const parts = ymd.trim().split("-").map(Number);

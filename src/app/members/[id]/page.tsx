@@ -38,6 +38,7 @@ export default function MemberDetailPage() {
     subscriptions: LinkedRow[];
     class_credits?: number;
     today_ymd?: string;
+    has_door_access?: boolean;
     classBookings: LinkedRow[];
     ptBookings: LinkedRow[];
     ptSlotBookings?: LinkedRow[];
@@ -364,6 +365,9 @@ export default function MemberDetailPage() {
   const member = data.member;
   const legalName = [member.first_name, member.last_name].filter(Boolean).join(" ") || "Member";
   const displayHeading = String(member.preferred_name ?? "").trim() || legalName;
+  const memberEmail = String(member.email ?? "").trim();
+  const hasDoorAccess = Boolean(data.has_door_access);
+  const canUnlockDoor = memberEmail.length > 0 && hasDoorAccess;
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -638,10 +642,27 @@ export default function MemberDetailPage() {
             <button
               type="button"
               onClick={handleUnlock}
-              disabled={unlocking || !(member.email as string)}
-              className="px-4 py-2 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 disabled:opacity-50"
+              disabled={unlocking || !canUnlockDoor}
+              title={
+                !memberEmail
+                  ? "Add an email on this profile to use door unlock."
+                  : !hasDoorAccess
+                    ? "No active membership or day pass activated for today — nothing to open the door for yet."
+                    : "Trigger a door unlock for this member (Kisi)."
+              }
+              className={
+                canUnlockDoor
+                  ? "px-4 py-2 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 disabled:opacity-50"
+                  : "px-4 py-2 rounded-lg border border-stone-200 bg-stone-100 text-stone-500 cursor-not-allowed font-medium"
+              }
             >
-              {unlocking ? "Unlocking…" : "Unlock door"}
+              {unlocking
+                ? "Unlocking…"
+                : !memberEmail
+                  ? "Unlock door"
+                  : !hasDoorAccess
+                    ? "No door access"
+                    : "Unlock door"}
             </button>
             {unlockMessage && (
               <span className="text-sm text-stone-600">{unlockMessage}</span>
