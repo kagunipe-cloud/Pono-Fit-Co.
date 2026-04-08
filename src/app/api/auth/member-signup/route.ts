@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, ensureMembersPasswordColumn } from "../../../../lib/db";
+import { getDb, ensureMembersPasswordColumn, getAppTimezone } from "../../../../lib/db";
+import { formatDateForStorage } from "../../../../lib/app-timezone";
 import { hashPassword } from "../../../../lib/password";
 import { setMemberSession } from "../../../../lib/session";
 import { randomUUID } from "crypto";
@@ -36,6 +37,8 @@ export async function POST(request: NextRequest) {
 
     const db = getDb();
     ensureMembersPasswordColumn(db);
+    const tz = getAppTimezone(db);
+    const joinDate = formatDateForStorage(new Date(), tz);
     const existing = db.prepare("SELECT member_id FROM members WHERE LOWER(TRIM(email)) = ? LIMIT 1").get(email);
     if (existing) {
       db.close();
@@ -48,8 +51,8 @@ export async function POST(request: NextRequest) {
     const memberId = randomUUID().slice(0, 8);
     const passwordHash = hashPassword(password);
     db.prepare(
-      "INSERT INTO members (member_id, first_name, last_name, email, role, password_hash) VALUES (?, ?, ?, ?, 'Member', ?)"
-    ).run(memberId, firstName ?? "", lastName ?? "", email, passwordHash);
+      "INSERT INTO members (member_id, first_name, last_name, email, role, password_hash, join_date) VALUES (?, ?, ?, ?, 'Member', ?, ?)"
+    ).run(memberId, firstName ?? "", lastName ?? "", email, passwordHash, joinDate);
     db.close();
 
     await setMemberSession(memberId);
