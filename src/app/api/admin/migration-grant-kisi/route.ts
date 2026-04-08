@@ -3,7 +3,7 @@ import type { Database } from "better-sqlite3";
 import { getDb, getAppTimezone } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
 import { getSubscriptionDoorAccessValidUntil, endOfCalendarDayInTimeZone } from "@/lib/pass-access";
-import { findKisiUserByEmail, grantAccess } from "@/lib/kisi";
+import { findKisiUserByEmail, grantAccess, grantAccessForGroup } from "@/lib/kisi";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +40,8 @@ type MigrationResult = {
   skipped_expired_details: SkippedExpiredDetail[];
   skipped_not_in_kisi_details: SkippedNotInKisiDetail[];
   errors: { member_id: string; email?: string; error: string }[];
+  grace_granted: number;
+  grace_errors: { member_id: string; email?: string; error: string }[];
 };
 
 async function runMigrationCore(
@@ -67,6 +69,9 @@ async function runMigrationCore(
   let kisi_id_backfilled = 0;
   let dry_run_eligible_without_stored_kisi = 0;
   let kisiGrantAttempt = 0;
+  let grace_granted = 0;
+  const grace_errors: { member_id: string; email?: string; error: string }[] = [];
+  const graceGroupId = process.env.KISI_GRACE_GROUP_ID?.trim();
 
   for (const row of rows) {
     const subUntil = getSubscriptionDoorAccessValidUntil(db, row.member_id, tz);
@@ -124,6 +129,18 @@ async function runMigrationCore(
       kisiGrantAttempt++;
       await grantAccess(resolvedKisi, validUntil);
       granted++;
+      if (graceGroupId) {
+        try {
+          await grantAccessForGroup(resolvedKisi, validUntil, {
+            groupId: graceGroupId,
+            roleId: process.env.KISI_GRACE_ROLE_ID?.trim(),
+          });
+          grace_granted++;
+        } catch (ge) {
+          const gmsg = ge instanceof Error ? ge.message : String(ge);
+          grace_errors.push({ member_id: row.member_id, ...(emailTrim ? { email: emailTrim } : {}), error: gmsg });
+        }
+      }
       if (lookupKisiByEmail && (!storedKisi || storedKisi !== resolvedKisi)) {
         try {
           db.prepare("UPDATE members SET kisi_id = ? WHERE member_id = ?").run(resolvedKisi, row.member_id);
@@ -149,6 +166,8 @@ async function runMigrationCore(
     skipped_expired_details,
     skipped_not_in_kisi_details,
     errors,
+    grace_granted,
+    grace_errors,
   };
 }
 
@@ -233,7 +252,8 @@ export async function GET(request: NextRequest) {
       "Computes valid_until = min(end of grace day in app timezone, subscription door-access end). " +
       "By default uses members.kisi_id only. Set lookup_kisi_by_email: true to resolve Kisi users by email " +
       "(e.g. Glofox-created users not yet stored in the app), then grant and save kisi_id. " +
-      "GET ?grace_until=YYYY-MM-DD&lookup_kisi_by_email=true returns a skip report (no grants).",
+      "GET ?grace_until=YYYY-MM-DD&lookup_kisi_by_email=true returns a skip report (no grants). " +
+      "Optional env: KISI_GRACE_GROUP_ID (+ KISI_GRACE_ROLE_ID, default group_basic) — after each main grant, also grant the same valid_until in this parallel Kisi group (bulk safety net).",
     saved_grace_until: savedGraceUntil,
     usage: {
       method: "POST",
@@ -243,6 +263,7 @@ export async function GET(request: NextRequest) {
         lookup_kisi_by_email:
           "optional boolean — if true, iterate members with email, look up Kisi by email when kisi_id missing, grant, backfill kisi_id (default false)",
       },
+      env_grace_group: "KISI_GRACE_GROUP_ID (+ optional KISI_GRACE_ROLE_ID) — duplicate grant into a second Kisi group for migration grace",
       skip_report_get:
         "/api/admin/migration-grant-kisi?grace_until=YYYY-MM-DD&lookup_kisi_by_email=true — lists expired + not-in-Kisi members (Kisi lookups; no grants)",
     },
@@ -337,6 +358,10 @@ export async function POST(request: NextRequest) {
     kisi_id_backfilled: lookupKisiByEmail && !dryRun ? result.kisi_id_backfilled : undefined,
     dry_run_eligible_without_stored_kisi: dryRun && lookupKisiByEmail ? result.dry_run_eligible_without_stored_kisi : undefined,
     errors: result.errors.length ? result.errors : undefined,
+    kisi_grace_group_id: process.env.KISI_GRACE_GROUP_ID?.trim() || undefined,
+    grace_granted: !dryRun && process.env.KISI_GRACE_GROUP_ID?.trim() ? result.grace_granted : undefined,
+    grace_errors:
+      !dryRun && process.env.KISI_GRACE_GROUP_ID?.trim() && result.grace_errors.length ? result.grace_errors : undefined,
     saved_grace_to_app_settings: dryRun ? false : SETTINGS_KEY,
   });
 }

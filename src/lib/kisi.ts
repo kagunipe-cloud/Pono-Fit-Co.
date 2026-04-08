@@ -7,6 +7,7 @@
  *
  * Required env: KISI_API_KEY, KISI_GROUP_ID
  * Optional: KISI_ROLE_ID (default group_basic)
+ * Optional (migration grace parallel group): KISI_GRACE_GROUP_ID + KISI_GRACE_ROLE_ID — see migration-grant-kisi.
  *
  * API docs: https://docs.kisi.io/platform/apis/
  * Create API key: Kisi dashboard → My Account → API → Add API Key
@@ -274,6 +275,109 @@ export async function revokeAccess(kisiUserId: string): Promise<void> {
     if (!delRes.ok) {
       console.error("[Kisi] delete role_assignment failed:", a.id, delRes.status);
     }
+  }
+}
+
+/**
+ * Revoke role assignments for this user in a specific group only (other groups untouched).
+ */
+export async function revokeAccessForGroup(kisiUserId: string, groupId: string): Promise<void> {
+  const key = process.env.KISI_API_KEY?.trim();
+  if (!key) {
+    console.log("[Kisi] KISI_API_KEY not set; skipping revoke.");
+    return;
+  }
+  const kisiId = kisiUserId?.trim();
+  const gid = groupId?.trim();
+  if (!kisiId || !gid) return;
+
+  const targetNorm = String(parseInt(gid, 10) || gid);
+
+  const listRes = await fetchKisiWithRetry(
+    `${KISI_API_BASE}/role_assignments?user_id=${encodeURIComponent(kisiId)}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `KISI-LOGIN ${key}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+  if (!listRes.ok) {
+    const err = await listRes.text();
+    console.error("[Kisi] list role_assignments failed:", listRes.status, err);
+    return;
+  }
+  const assignments = (await listRes.json()) as { id: number; group_id?: number | string }[];
+  const list = Array.isArray(assignments) ? assignments : [];
+  for (const a of list) {
+    if (a?.id == null) continue;
+    if (a.group_id == null || a.group_id === undefined) continue;
+    const gNorm = String(parseInt(String(a.group_id), 10) || a.group_id);
+    if (gNorm !== targetNorm) continue;
+    const delRes = await fetchKisiWithRetry(`${KISI_API_BASE}/role_assignments/${a.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `KISI-LOGIN ${key}` },
+    });
+    if (!delRes.ok) {
+      console.error("[Kisi] delete role_assignment failed:", a.id, delRes.status);
+    }
+  }
+}
+
+/**
+ * Replace access for a single group (revoke assignments in that group, then POST one assignment).
+ * Use for a parallel “grace” Kisi group separate from KISI_GROUP_ID.
+ */
+export async function grantAccessForGroup(
+  kisiUserId: string,
+  validUntil: Date,
+  opts: { groupId: string; roleId?: string }
+): Promise<void> {
+  const key = process.env.KISI_API_KEY?.trim();
+  const groupId = opts.groupId?.trim();
+  if (!key || !groupId) {
+    console.log("[Kisi] grantAccessForGroup: KISI_API_KEY or groupId missing; skipping.");
+    return;
+  }
+  const kisiId = kisiUserId?.trim();
+  if (!kisiId) {
+    console.log("[Kisi] grantAccessForGroup: no kisi user id; skipping.");
+    return;
+  }
+
+  await revokeAccessForGroup(kisiId, groupId);
+
+  const roleId = opts.roleId?.trim() || "group_basic";
+  const validFrom = new Date();
+  const body = {
+    role_assignment: {
+      user_id: parseInt(kisiId, 10) || kisiId,
+      role_id: roleId,
+      group_id: parseInt(groupId, 10) || groupId,
+      valid_from: toISO(validFrom),
+      valid_until: toISO(validUntil),
+    },
+  };
+
+  const res = await fetchKisiWithRetry(`${KISI_API_BASE}/role_assignments`, {
+    method: "POST",
+    headers: {
+      Authorization: `KISI-LOGIN ${key}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    console.error("[Kisi] grantAccessForGroup role_assignments failed:", res.status, err);
+    const detail = err.trim().slice(0, 400);
+    throw new Error(
+      detail
+        ? `Kisi grace group grant failed: ${res.status} — ${detail}`
+        : `Kisi grace group grant failed: ${res.status}`
+    );
   }
 }
 
