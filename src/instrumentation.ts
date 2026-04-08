@@ -4,6 +4,9 @@
  * long-running process (e.g. `next start` on a VPS). Not used on Vercel/serverless
  * (no always-on process there — use Vercel Cron or an external cron instead).
  *
+ * Daily jobs use the **gym timezone** from the DB (`getAppTimezone` — `gyms.timezone`
+ * for gym 1, else `app_settings.timezone`), same as the rest of the app.
+ *
  * If you see "missed execution" from node-cron: the main thread was busy at the
  * scheduled time (e.g. handling requests or cold start). For production, the most
  * reliable approach is to run cron externally (system cron or Vercel Cron) and
@@ -14,9 +17,21 @@ export async function register() {
   if (process.env.VERCEL === "1") return;
 
   const cron = await import("node-cron");
+  const { getDb, getAppTimezone } = await import("@/lib/db");
   const port = process.env.PORT || "3000";
   const base = `http://127.0.0.1:${port}`;
   const secret = process.env.CRON_SECRET ?? "";
+
+  let gymTzOpts: { timezone: string };
+  try {
+    const db = getDb();
+    const tz = getAppTimezone(db, 1);
+    db.close();
+    gymTzOpts = { timezone: tz };
+  } catch (e) {
+    console.error("[instrumentation] Failed to read gym timezone; using Pacific/Honolulu", e);
+    gymTzOpts = { timezone: "Pacific/Honolulu" };
+  }
 
   const runRenewal = async () => {
     try {
@@ -38,15 +53,20 @@ export async function register() {
     }
   };
 
-  cron.schedule("0 2 * * *", async () => {
-    const ok = await runRenewal();
-    if (!ok) {
-      setTimeout(async () => {
-        console.log("[renew-subscriptions] Retrying after missed window…");
-        await runRenewal();
-      }, 2 * 60 * 1000);
-    }
-  });
+  /** 2:00 / 2:10 AM in the configured gym timezone (not the host’s default UTC). */
+  cron.schedule(
+    "0 2 * * *",
+    async () => {
+      const ok = await runRenewal();
+      if (!ok) {
+        setTimeout(async () => {
+          console.log("[renew-subscriptions] Retrying after missed window…");
+          await runRenewal();
+        }, 2 * 60 * 1000);
+      }
+    },
+    gymTzOpts
+  );
 
   cron.schedule("10 2 * * *", async () => {
     try {
@@ -64,7 +84,7 @@ export async function register() {
     } catch (err) {
       console.error("[membership-expiry-reminders]", err);
     }
-  });
+  }, gymTzOpts);
 
   cron.schedule("0 * * * *", async () => {
     try {
@@ -94,5 +114,8 @@ export async function register() {
     }
   });
 
-  console.log("[instrumentation] Daily renewal (2:00 AM), expiry reminders (2:10 AM); hourly PT; occupancy snapshot every 15 min.");
+  const tzLabel = gymTzOpts.timezone;
+  console.log(
+    `[instrumentation] Daily renewal (2:00 AM ${tzLabel}), expiry reminders (2:10 AM ${tzLabel}); hourly PT; occupancy snapshot every 15 min.`
+  );
 }
