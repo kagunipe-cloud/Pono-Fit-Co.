@@ -79,8 +79,29 @@ function loadActiveMonthlySubscription(
   };
 }
 
+function normalizeSubscriptionKey(subscriptionId: string | null | undefined): string {
+  return subscriptionId != null && String(subscriptionId).trim() !== "" ? String(subscriptionId).trim() : "";
+}
+
+function deleteFailureGroup(db: AppDb, memberId: string, subscriptionKey: string) {
+  db.prepare(`DELETE FROM payment_failures WHERE member_id = ? AND COALESCE(subscription_id, '') = ?`).run(
+    memberId,
+    subscriptionKey
+  );
+}
+
+function dismissFailureGroup(db: AppDb, memberId: string, subscriptionKey: string) {
+  db.prepare(
+    `UPDATE payment_failures SET dismissed_at = datetime('now')
+     WHERE member_id = ? AND COALESCE(subscription_id, '') = ?
+       AND (dismissed_at IS NULL OR TRIM(COALESCE(dismissed_at, '')) = '')`
+  ).run(memberId, subscriptionKey);
+}
+
 /**
- * POST { action: "dismiss" | "retry_payment" | "write_off", id: payment_failures.id }
+ * POST — action on all failed attempts for one member + subscription (cron retries grouped).
+ * Body: `{ action, id?: number }` (legacy: any failure row id in the group) or
+ * `{ action, member_id: string, subscription_id?: string | null }`.
  */
 export async function POST(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
@@ -88,18 +109,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { action?: string; id?: number };
+  let body: { action?: string; id?: number; member_id?: string; subscription_id?: string | null };
   try {
-    body = (await request.json()) as { action?: string; id?: number };
+    body = (await request.json()) as typeof body;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
   const action = String(body.action ?? "").trim();
-  const id = Number(body.id);
-  if (!Number.isFinite(id) || id < 1) {
-    return NextResponse.json({ error: "Invalid id" }, { status: 400 });
-  }
   if (!["dismiss", "retry_payment", "write_off"].includes(action)) {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   }
@@ -112,42 +129,69 @@ export async function POST(request: NextRequest) {
   ensureSubscriptionRenewalDiscountPercentColumn(db);
   const tz = getAppTimezone(db);
 
-  const failure = db
-    .prepare(
-      `SELECT id, member_id, subscription_id, plan_name, amount_cents, dismissed_at FROM payment_failures WHERE id = ?`
-    )
-    .get(id) as
-    | {
-        id: number;
-        member_id: string;
-        subscription_id: string | null;
-        plan_name: string | null;
-        amount_cents: number | null;
-        dismissed_at: string | null;
-      }
-    | undefined;
+  let memberId: string;
+  let subscriptionKey: string;
 
-  if (!failure || failure.dismissed_at) {
+  const mid = body.member_id != null ? String(body.member_id).trim() : "";
+  if (mid) {
+    memberId = mid;
+    subscriptionKey = normalizeSubscriptionKey(body.subscription_id ?? null);
+  } else {
+    const id = Number(body.id);
+    if (!Number.isFinite(id) || id < 1) {
+      db.close();
+      return NextResponse.json({ error: "Provide id or member_id" }, { status: 400 });
+    }
+    const failure = db
+      .prepare(
+        `SELECT id, member_id, subscription_id, dismissed_at FROM payment_failures WHERE id = ?`
+      )
+      .get(id) as
+      | {
+          id: number;
+          member_id: string;
+          subscription_id: string | null;
+          dismissed_at: string | null;
+        }
+      | undefined;
+
+    if (!failure || failure.dismissed_at) {
+      db.close();
+      return NextResponse.json({ error: "Record not found or already dismissed" }, { status: 404 });
+    }
+    memberId = failure.member_id;
+    subscriptionKey = normalizeSubscriptionKey(failure.subscription_id);
+  }
+
+  const openCount = db
+    .prepare(
+      `SELECT COUNT(*) AS c FROM payment_failures
+       WHERE member_id = ? AND COALESCE(subscription_id, '') = ?
+         AND (dismissed_at IS NULL OR TRIM(COALESCE(dismissed_at, '')) = '')`
+    )
+    .get(memberId, subscriptionKey) as { c: number } | undefined;
+
+  if (!openCount || openCount.c < 1) {
     db.close();
-    return NextResponse.json({ error: "Record not found or already dismissed" }, { status: 404 });
+    return NextResponse.json({ error: "No open failed payments for this member/subscription" }, { status: 404 });
   }
 
   if (action === "dismiss") {
-    db.prepare(`UPDATE payment_failures SET dismissed_at = datetime('now') WHERE id = ?`).run(id);
+    dismissFailureGroup(db, memberId, subscriptionKey);
     db.close();
     return NextResponse.json({ ok: true });
   }
 
   const memberRow = db
     .prepare(`SELECT email, first_name, stripe_customer_id FROM members WHERE member_id = ?`)
-    .get(failure.member_id) as { email: string | null; first_name: string | null; stripe_customer_id: string | null } | undefined;
+    .get(memberId) as { email: string | null; first_name: string | null; stripe_customer_id: string | null } | undefined;
 
   if (!memberRow) {
     db.close();
     return NextResponse.json({ error: "Member not found" }, { status: 400 });
   }
 
-  const sub = loadActiveMonthlySubscription(db, failure.member_id, failure.subscription_id);
+  const sub = loadActiveMonthlySubscription(db, memberId, subscriptionKey === "" ? null : subscriptionKey);
   if (!sub) {
     db.close();
     return NextResponse.json(
@@ -173,7 +217,7 @@ export async function POST(request: NextRequest) {
         ccFee: "0",
         saleType: "complimentary",
       });
-      db.prepare(`DELETE FROM payment_failures WHERE id = ?`).run(id);
+      deleteFailureGroup(db, memberId, subscriptionKey);
       db.close();
       return NextResponse.json({ ok: true, message: "Written off — membership extended; door access restored if waiver allows." });
     }
@@ -247,7 +291,7 @@ export async function POST(request: NextRequest) {
       ccFee: String(ccFeeDollars),
       saleType: "renewal",
     });
-    db.prepare(`DELETE FROM payment_failures WHERE id = ?`).run(id);
+    deleteFailureGroup(db, memberId, subscriptionKey);
     db.close();
     return NextResponse.json({ ok: true, message: "Payment succeeded — membership extended; door access restored if waiver allows." });
   } catch (err) {

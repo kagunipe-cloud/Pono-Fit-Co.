@@ -6,6 +6,18 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { formatDateForDisplay } from "@/lib/app-timezone";
 import { useAppTimezone } from "@/lib/settings-context";
 
+type FailedAttempt = {
+  id: number;
+  member_id: string;
+  member_name: string;
+  email: string | null;
+  plan_name: string | null;
+  amount_dollars: number;
+  reason: string;
+  stripe_error_code: string | null;
+  attempted_at: string;
+};
+
 type Sale = {
   sales_id: string;
   date_time: string;
@@ -30,12 +42,25 @@ function todayYMD(tz: string): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: tz });
 }
 
+function formatAttemptTime(iso: string): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" });
+  } catch {
+    return iso;
+  }
+}
+
 export default function TransactionsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tz = useAppTimezone();
+  const [txnTab, setTxnTab] = useState<"success" | "failed">("success");
   const [sales, setSales] = useState<Sale[]>([]);
+  const [failedAttempts, setFailedAttempts] = useState<FailedAttempt[]>([]);
+  const [expandedFailed, setExpandedFailed] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
+  const [loadingFailed, setLoadingFailed] = useState(false);
   const [adminMemberId, setAdminMemberId] = useState("");
   const [refundingId, setRefundingId] = useState<string | null>(null);
   const [fromDate, setFromDate] = useState("");
@@ -100,6 +125,40 @@ export default function TransactionsPage() {
     fetchSales();
   }, [fetchSales]);
 
+  const loadFailedAttempts = useCallback(() => {
+    setLoadingFailed(true);
+    fetch("/api/admin/money-owed-report")
+      .then((r) => {
+        if (r.status === 401) {
+          router.replace("/login");
+          return null;
+        }
+        return r.json();
+      })
+      .then((data) => {
+        const raw = Array.isArray(data?.attempts) ? data.attempts : [];
+        setFailedAttempts(
+          raw.map((a: Record<string, unknown>) => ({
+            id: Number(a.id),
+            member_id: String(a.member_id),
+            member_name: String(a.member_name ?? a.member_id),
+            email: a.email != null ? String(a.email) : null,
+            plan_name: a.plan_name != null ? String(a.plan_name) : null,
+            amount_dollars: typeof a.amount_dollars === "number" ? a.amount_dollars : 0,
+            reason: String(a.reason ?? ""),
+            stripe_error_code: a.stripe_error_code != null ? String(a.stripe_error_code) : null,
+            attempted_at: String(a.attempted_at ?? ""),
+          }))
+        );
+      })
+      .catch(() => setFailedAttempts([]))
+      .finally(() => setLoadingFailed(false));
+  }, [router]);
+
+  useEffect(() => {
+    if (txnTab === "failed") loadFailedAttempts();
+  }, [txnTab, loadFailedAttempts]);
+
   async function refundSale(salesId: string) {
     if (!adminMemberId.trim() && !confirm("Admin only. Enter your Admin member ID above.")) return;
     setRefundingId(salesId);
@@ -127,9 +186,115 @@ export default function TransactionsPage() {
           : `${formatDateForDisplay(fromDate, tz) || fromDate} – ${formatDateForDisplay(toDate, tz) || toDate}`
         : "";
 
+  const failedByMember = new Map<string, FailedAttempt[]>();
+  for (const a of failedAttempts) {
+    const list = failedByMember.get(a.member_id) ?? [];
+    list.push(a);
+    failedByMember.set(a.member_id, list);
+  }
+  for (const [, list] of failedByMember) {
+    list.sort((x, y) => (x.attempted_at < y.attempted_at ? 1 : -1));
+  }
+
   return (
     <div className="max-w-5xl mx-auto p-6">
       <h1 className="text-2xl font-bold text-stone-800 mb-2">Transactions</h1>
+      <p className="text-stone-500 mb-4">
+        Successful purchases and failed renewal charges. For balances to collect (one row per membership), use{" "}
+        <Link href="/money-owed" className="text-brand-600 hover:underline font-medium">
+          Money owed
+        </Link>
+        .
+      </p>
+
+      <div className="flex gap-2 mb-4 border-b border-stone-200">
+        <button
+          type="button"
+          onClick={() => setTxnTab("success")}
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${txnTab === "success" ? "border-brand-600 text-brand-700" : "border-transparent text-stone-500 hover:text-stone-700"}`}
+        >
+          Successful transactions
+        </button>
+        <button
+          type="button"
+          onClick={() => setTxnTab("failed")}
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${txnTab === "failed" ? "border-brand-600 text-brand-700" : "border-transparent text-stone-500 hover:text-stone-700"}`}
+        >
+          Failed transactions
+        </button>
+      </div>
+
+      {txnTab === "failed" ? (
+        <>
+          <p className="text-sm text-stone-600 mb-4">
+            Each row is a member: total counts every time the renewal cron (or a retry) attempted a charge and it failed. Expand to see each attempt — when, amount, and reason.
+          </p>
+          {loadingFailed ? (
+            <div className="p-12 text-center text-stone-500">Loading…</div>
+          ) : failedAttempts.length === 0 ? (
+            <p className="p-6 text-stone-500 rounded-xl border border-stone-200 bg-white">No failed renewal charges on record.</p>
+          ) : (
+            <div className="rounded-xl border border-stone-200 bg-white overflow-hidden divide-y divide-stone-100">
+              {Array.from(failedByMember.entries()).map(([memberId, attempts]) => {
+                const total = attempts.reduce((s, x) => s + x.amount_dollars, 0);
+                const open = expandedFailed[memberId] ?? false;
+                return (
+                  <div key={memberId}>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedFailed((prev) => ({ ...prev, [memberId]: !open }))}
+                      className="w-full text-left px-4 py-3 flex flex-wrap items-center justify-between gap-2 hover:bg-stone-50"
+                    >
+                      <div>
+                        <Link
+                          href={`/members/${encodeURIComponent(memberId)}`}
+                          className="text-brand-600 hover:underline font-medium"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {attempts[0]?.member_name ?? memberId}
+                        </Link>
+                        {attempts[0]?.email && <span className="block text-xs text-stone-500">{attempts[0].email}</span>}
+                      </div>
+                      <div className="text-sm text-stone-700">
+                        <strong>{attempts.length}</strong> failed charge{attempts.length === 1 ? "" : "s"} · total{" "}
+                        <strong>{formatMoney(String(total))}</strong>
+                        <span className="ml-2 text-stone-400">{open ? "▼" : "▶"}</span>
+                      </div>
+                    </button>
+                    {open && (
+                      <div className="px-4 pb-4 bg-stone-50/80">
+                        <table className="w-full text-left text-sm min-w-[560px]">
+                          <thead>
+                            <tr className="text-stone-500 text-xs">
+                              <th className="py-2 pr-2">When</th>
+                              <th className="py-2 pr-2">Plan</th>
+                              <th className="py-2 pr-2">Amount</th>
+                              <th className="py-2 pr-2">Reason</th>
+                              <th className="py-2">Stripe</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {attempts.map((a) => (
+                              <tr key={a.id} className="border-t border-stone-200/80">
+                                <td className="py-2 pr-2 whitespace-nowrap text-stone-700">{formatAttemptTime(a.attempted_at)}</td>
+                                <td className="py-2 pr-2">{a.plan_name ?? "—"}</td>
+                                <td className="py-2 pr-2">{formatMoney(String(a.amount_dollars))}</td>
+                                <td className="py-2 pr-2 max-w-[220px]">{a.reason || "—"}</td>
+                                <td className="py-2 font-mono text-xs">{a.stripe_error_code ?? "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
       <p className="text-stone-500 mb-4">Purchase history. Filter by date range. To refund, enter your Admin member ID and click Refund (admin only).</p>
       <div className="flex flex-wrap items-end gap-4 mb-4">
         <div>
@@ -242,10 +407,21 @@ export default function TransactionsPage() {
           </table>
         </div>
       )}
-      <p className="mt-4">
-        <Link href="/sales" className="text-brand-600 hover:underline">Sales report</Link>
+        </>
+      )}
+
+      <p className="mt-6 text-sm">
+        <Link href="/money-owed" className="text-brand-600 hover:underline">
+          Money owed
+        </Link>
         {" · "}
-        <Link href="/members" className="text-brand-600 hover:underline">Members</Link>
+        <Link href="/sales" className="text-brand-600 hover:underline">
+          Sales report
+        </Link>
+        {" · "}
+        <Link href="/members" className="text-brand-600 hover:underline">
+          Members
+        </Link>
       </p>
     </div>
   );
