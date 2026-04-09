@@ -356,7 +356,7 @@ export default function EmailsDocumentsPage() {
                 <textarea
                   value={emailAppDownloadBody}
                   onChange={(e) => setEmailAppDownloadBody(e.target.value)}
-                  rows={6}
+                  rows={14}
                   placeholder="Leave blank to use default"
                   className="w-full px-3 py-2 rounded-lg border border-stone-200 font-mono text-sm"
                 />

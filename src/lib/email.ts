@@ -553,23 +553,25 @@ export async function sendAppDownloadInviteEmail(params: {
   };
   const customSubject = getEmailSetting("email_app_download_subject");
   const customBody = getEmailSetting("email_app_download_body");
-  const subject = customSubject ? applyPlaceholders(customSubject, vars) : "Get the Pono Fit Co. app";
-  const defaultText = `Hi${params.first_name ? ` ${params.first_name}` : ""},
+  const subject = customSubject
+    ? applyPlaceholders(customSubject, vars)
+    : "new door-unlock system - switch over by 4/15!";
+  const defaultText = `Aloha eeeverybody!
 
-Download our app to view your membership, book classes, and more:
+We are launching our new app for the gym, which we built ourselves!  We are pretty stoked on it, especially because it helps you track your macros and your workouts for free, and your data goes absolutely nowhere because it's OUR app!
+
+Click the link below to register and install, or just register and read the waiver.  Kisi will still work, if that's what you prefer, but you must at least read and sign the liability waiver to get continued access.  Let us know if you have any questions!
 
 ${installUrl}
 
-Open this link on your phone and follow the steps to add the app to your home screen.
-
 Your Member ID: ${memberId}
 
-To sign in for the first time, set your password here:
+To set your app password (first-time sign-in):
 ${setPasswordUrl}
 
-After that you'll sign in with your email and password.
+Me Ke Mahalo,
 
-— Pono Fit Co.`;
+Bekah & Perry`;
   const text = customBody ? applyPlaceholders(customBody, vars) : defaultText;
   return sendMemberEmail(params.to, subject, text);
 }
