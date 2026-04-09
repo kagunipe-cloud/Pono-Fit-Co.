@@ -599,6 +599,26 @@ export async function sendWaiverSignedCopyToAdmin(params: {
 }
 
 /** Send liability waiver link so member can sign before door (Kisi) access. */
+/** Password reset link after "Forgot password" (token expires; see API route). */
+export async function sendPasswordResetEmail(params: {
+  to: string;
+  first_name?: string | null;
+  reset_url: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const subject = `Reset your ${BRAND.shortName} password`;
+  const text = `Hi${params.first_name ? ` ${params.first_name}` : ""},
+
+We received a request to reset your password for ${BRAND.name}.
+
+Open this link to choose a new password (link expires in 24 hours):
+${params.reset_url}
+
+If you didn’t ask for this, you can ignore this email — your password won’t change.
+
+— ${BRAND.name}`;
+  return sendMemberEmail(params.to, subject, text);
+}
+
 export async function sendLiabilityWaiverEmail(params: {
   to: string;
   first_name?: string | null;

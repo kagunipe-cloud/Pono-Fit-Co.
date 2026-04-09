@@ -375,6 +375,20 @@ export function ensureMembersPasswordColumn(db: ReturnType<typeof getDb>) {
   }
 }
 
+/** Forgot-password email flow (token + expiry). */
+export function ensureMembersPasswordResetColumns(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE members ADD COLUMN password_reset_token TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE members ADD COLUMN password_reset_expires_at TEXT");
+  } catch {
+    /* already exists */
+  }
+}
+
 /** Add phone to members if missing (optional contact number). */
 export function ensureMembersPhoneColumn(db: ReturnType<typeof getDb>) {
   try {

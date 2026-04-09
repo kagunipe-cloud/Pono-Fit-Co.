@@ -51,7 +51,20 @@ function isOwnMemberCartPath(pathname: string, sessionMemberId: string | null): 
 }
 
 function isPublicPath(pathname: string): boolean {
-  const publicPaths = ["/login", "/signup", "/set-password", "/bootstrap", "/install", "/schedule", "/unlock", "/privacy", "/terms", "/sign-waiver"];
+  const publicPaths = [
+    "/login",
+    "/signup",
+    "/set-password",
+    "/forgot-password",
+    "/reset-password",
+    "/bootstrap",
+    "/install",
+    "/schedule",
+    "/unlock",
+    "/privacy",
+    "/terms",
+    "/sign-waiver",
+  ];
   if (publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))) return true;
   if (pathname.startsWith("/rec-leagues")) return true;
   if (pathname.startsWith("/api/")) return true;

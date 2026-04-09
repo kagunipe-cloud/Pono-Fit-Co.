@@ -4,6 +4,7 @@
 
 - **Sign in:** Members use **email + password** on `/login`.
 - **First-time setup:** Each member sets a password **once** on `/set-password`, then signs in with email + password only.
+- **Forgot password:** Members who **already have a password** but forgot it use **Forgot password?** on `/login` → `/forgot-password`. They receive a one-time reset link (valid 24 hours) to `/reset-password`. First-time members who have **never** set a password should use **Set your password** on `/set-password` (Member ID + email), not forgot-password.
 - **Member ID not required for first-time login:** If a member goes to **Sign in**, enters their **email** and any password, and they haven’t set a password yet, they are redirected to `/set-password` with both Member ID and email prefilled in the link. So they never need to know their Member ID if they use Sign in first.
 - If they open `/set-password` directly (e.g. from an old link), they must enter Member ID + email. You can send everyone their Member ID from Admin → Email all members → **Send everyone their Member ID**.
 

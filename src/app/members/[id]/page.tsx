@@ -75,8 +75,10 @@ export default function MemberDetailPage() {
   const [ptGrantSubmitting, setPtGrantSubmitting] = useState(false);
   const [ptGrantMessage, setPtGrantMessage] = useState<string | null>(null);
   const [sendingWaiver, setSendingWaiver] = useState(false);
+  const [sendingPasswordReset, setSendingPasswordReset] = useState(false);
   const [togglingAutoRenew, setTogglingAutoRenew] = useState(false);
   const [waiverResult, setWaiverResult] = useState<{ message: string; url?: string } | null>(null);
+  const [passwordResetMessage, setPasswordResetMessage] = useState<string | null>(null);
   const [unlocks, setUnlocks] = useState<{ id: number; lock_id: number | null; lock_name: string | null; success: number; happened_at: string }[]>([]);
   const searchParams = useSearchParams();
 
@@ -217,6 +219,26 @@ export default function MemberDetailPage() {
       setWaiverResult({ message: "Failed to send waiver." });
     } finally {
       setSendingWaiver(false);
+    }
+  }
+
+  async function handleSendPasswordReset() {
+    setPasswordResetMessage(null);
+    setSendingPasswordReset(true);
+    try {
+      const res = await fetch(`/api/admin/members/${encodeURIComponent(id)}/send-password-reset`, {
+        method: "POST",
+      });
+      const json = (await res.json()) as { error?: string; message?: string };
+      if (res.ok) {
+        setPasswordResetMessage(json.message ?? "Password reset email sent.");
+      } else {
+        setPasswordResetMessage(json.error ?? "Could not send reset email.");
+      }
+    } catch {
+      setPasswordResetMessage("Could not send reset email.");
+    } finally {
+      setSendingPasswordReset(false);
     }
   }
 
@@ -677,6 +699,20 @@ export default function MemberDetailPage() {
               >
                 {sendingWaiver ? "Sending…" : "Send waiver link"}
               </button>
+            )}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={handleSendPasswordReset}
+                disabled={sendingPasswordReset}
+                className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium disabled:opacity-50"
+                title="Same email as Forgot password: 24-hour link to choose a new password"
+              >
+                {sendingPasswordReset ? "Sending…" : "Send password reset email"}
+              </button>
+            )}
+            {passwordResetMessage && (
+              <span className="text-sm text-stone-600 max-w-md">{passwordResetMessage}</span>
             )}
             {waiverResult && (
               <span className="text-sm text-stone-600">

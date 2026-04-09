@@ -70,6 +70,13 @@ function SetPasswordContent() {
         <p className="text-stone-500 text-sm mb-6">
           Create a password once. After this, you’ll sign in with your email and this password.
         </p>
+        <p className="text-sm text-stone-600 mb-4 p-3 rounded-lg bg-stone-50 border border-stone-200">
+          Already set your password?{" "}
+          <Link href="/login" className="text-brand-600 font-medium hover:underline">
+            Sign in here
+          </Link>{" "}
+          — you can ignore this page.
+        </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="member_id" className="block text-sm font-medium text-stone-700 mb-1">

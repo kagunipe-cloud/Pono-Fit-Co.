@@ -149,6 +149,10 @@ function LoginContent() {
         </Link>
       </p>
       <p className="mt-2 text-center text-sm text-stone-500">
+        <Link href="/forgot-password" className="text-brand-600 hover:underline">
+          Forgot password?
+        </Link>
+        {" · "}
         <Link href="/set-password" className="text-brand-600 hover:underline">
           Set your password
         </Link>

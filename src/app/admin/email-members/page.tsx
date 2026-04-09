@@ -24,6 +24,8 @@ export default function AdminEmailMembersPage() {
   const [idsResult, setIdsResult] = useState<{ sent: number; total: number; failed: number; errors?: string[] } | null>(null);
   const [welcomeMembers, setWelcomeMembers] = useState<MemberWithEmail[]>([]);
   const [loadingWelcomeMembers, setLoadingWelcomeMembers] = useState(false);
+  /** When true, welcome list + sends only include members missing app password and/or liability waiver (union; overlap expected). */
+  const [welcomeOnboardingOnly, setWelcomeOnboardingOnly] = useState(true);
   const [welcomeSearch, setWelcomeSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sendingSelected, setSendingSelected] = useState(false);
@@ -83,14 +85,16 @@ export default function AdminEmailMembersPage() {
   useEffect(() => {
     if (!smtpConfigured) return;
     setLoadingWelcomeMembers(true);
-    fetch("/api/admin/email-member-ids")
+    setSelectedIds(new Set());
+    const q = welcomeOnboardingOnly ? "?filter=needs_password_or_waiver" : "";
+    fetch(`/api/admin/email-member-ids${q}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data: { members?: MemberWithEmail[] } | null) => {
         setWelcomeMembers(data?.members ?? []);
       })
       .catch(() => setWelcomeMembers([]))
       .finally(() => setLoadingWelcomeMembers(false));
-  }, [smtpConfigured]);
+  }, [smtpConfigured, welcomeOnboardingOnly]);
 
   // Load Email Groups filter options
   useEffect(() => {
@@ -245,7 +249,13 @@ export default function AdminEmailMembersPage() {
     setIdsResult(null);
     setSendingIds(true);
     try {
-      const res = await fetch("/api/admin/email-member-ids", { method: "POST" });
+      const res = await fetch("/api/admin/email-member-ids", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filter: welcomeOnboardingOnly ? "needs_password_or_waiver" : "all",
+        }),
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(data.error ?? "Failed to send");
@@ -268,7 +278,10 @@ export default function AdminEmailMembersPage() {
       const res = await fetch("/api/admin/email-member-ids", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ member_ids: Array.from(selectedIds) }),
+        body: JSON.stringify({
+          member_ids: Array.from(selectedIds),
+          filter: welcomeOnboardingOnly ? "needs_password_or_waiver" : "all",
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -552,14 +565,32 @@ export default function AdminEmailMembersPage() {
         </div>
       )}
 
-      {recipientCount !== null && recipientCount > 0 && smtpConfigured && (
+      {smtpConfigured && (
         <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50">
           <h2 className="font-semibold text-stone-800 mb-1">Resend welcome emails</h2>
           <p className="text-sm text-stone-600 mb-3">
-            Send each member a welcome email with the app install link, their <strong>Member ID</strong>, and a link to set their password. Use this to get everyone their member IDs or resend the original welcome after fixing email setup.
+            Send the app install link, their <strong>Member ID</strong>, and the set-password link. Members who already have <strong>both</strong> an app password and a signed liability waiver are skipped when the option below is on.
           </p>
+          <label className="flex items-start gap-2 mb-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={welcomeOnboardingOnly}
+              onChange={(e) => setWelcomeOnboardingOnly(e.target.checked)}
+              className="rounded border-stone-300 mt-1"
+            />
+            <span className="text-sm text-stone-700">
+              <strong>Onboarding only:</strong> include members who still need an app password <strong>and/or</strong> haven&apos;t signed the liability waiver (same person may count for both — one email each).
+            </span>
+          </label>
           <p className="text-sm text-stone-500 mb-3">
-            <strong>{recipientCount}</strong> member{recipientCount !== 1 ? "s" : ""} will receive their own email.
+            {loadingWelcomeMembers ? (
+              "Loading…"
+            ) : (
+              <>
+                <strong>{welcomeMembers.length}</strong> member{welcomeMembers.length !== 1 ? "s" : ""} match this send
+                {welcomeOnboardingOnly ? "" : ` (all ${recipientCount ?? "—"} with email)`}.
+              </>
+            )}
           </p>
           {idsResult && (
             <div className="bg-white border border-stone-200 rounded-lg p-3 text-sm text-stone-700 mb-3">
@@ -575,10 +606,10 @@ export default function AdminEmailMembersPage() {
           <button
             type="button"
             onClick={handleSendMemberIds}
-            disabled={sendingIds}
-            className="px-4 py-2 rounded-lg border border-stone-300 bg-white font-medium hover:bg-stone-50 disabled:opacity-50"
+            disabled={sendingIds || loadingWelcomeMembers || welcomeMembers.length === 0}
+            className="px-4 py-2 rounded-lg border border-stone-300 bg-white font-medium hover:bg-stone-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {sendingIds ? "Sending…" : "Resend welcome emails to everyone"}
+            {sendingIds ? "Sending…" : "Resend welcome emails (matched list)"}
           </button>
         </div>
       )}
@@ -587,7 +618,7 @@ export default function AdminEmailMembersPage() {
         <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50">
           <h2 className="font-semibold text-stone-800 mb-1">Send welcome email to selected members</h2>
           <p className="text-sm text-stone-600 mb-3">
-            Pick one or more members to send the welcome email (install link, Member ID, set-password link) only to them.
+            Pick from the same list as above (respects <strong>Onboarding only</strong>). Sends install link, Member ID, and set-password link.
           </p>
           {loadingWelcomeMembers ? (
             <p className="text-sm text-stone-500">Loading members…</p>
