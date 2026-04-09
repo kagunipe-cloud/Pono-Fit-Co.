@@ -3,6 +3,11 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import InstallAppBanner from "@/components/InstallAppBanner";
+import {
+  createFetchTimeoutSignal,
+  FETCH_TIMEOUT_EMAIL_MS,
+  isFetchAbortError,
+} from "@/lib/client-fetch-timeout";
 
 function ForgotPasswordContent() {
   const [email, setEmail] = useState("");
@@ -20,11 +25,13 @@ function ForgotPasswordContent() {
       return;
     }
     setLoading(true);
+    const { signal, clear } = createFetchTimeoutSignal(FETCH_TIMEOUT_EMAIL_MS);
     try {
       const res = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: em }),
+        signal,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -33,9 +40,16 @@ function ForgotPasswordContent() {
       }
       setMessage(data.message ?? "Check your email for the next step.");
       setEmail("");
-    } catch {
-      setError("Something went wrong.");
+    } catch (e) {
+      if (isFetchAbortError(e)) {
+        setError(
+          "Request timed out — the server may be slow to send mail. Wait a minute, check your inbox, or try again."
+        );
+      } else {
+        setError("Something went wrong.");
+      }
     } finally {
+      clear();
       setLoading(false);
     }
   }

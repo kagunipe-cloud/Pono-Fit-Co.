@@ -252,6 +252,10 @@ function getTransporter(): nodemailer.Transporter | null {
     port,
     secure: port === 465,
     auth: { user, pass },
+    /** Avoid hanging forever when SMTP is unreachable (client was stuck on "Sending…"). */
+    connectionTimeout: 25_000,
+    greetingTimeout: 25_000,
+    socketTimeout: 60_000,
   });
   return transporter;
 }

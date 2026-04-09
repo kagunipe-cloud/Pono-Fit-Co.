@@ -5,6 +5,11 @@ import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatDateTimeInAppTz } from "@/lib/app-timezone";
 import { useAppTimezone } from "@/lib/settings-context";
+import {
+  createFetchTimeoutSignal,
+  FETCH_TIMEOUT_EMAIL_MS,
+  isFetchAbortError,
+} from "@/lib/client-fetch-timeout";
 
 type Member = Record<string, unknown>;
 
@@ -225,9 +230,11 @@ export default function MemberDetailPage() {
   async function handleSendPasswordReset() {
     setPasswordResetMessage(null);
     setSendingPasswordReset(true);
+    const { signal, clear } = createFetchTimeoutSignal(FETCH_TIMEOUT_EMAIL_MS);
     try {
       const res = await fetch(`/api/admin/members/${encodeURIComponent(id)}/send-password-reset`, {
         method: "POST",
+        signal,
       });
       const json = (await res.json()) as { error?: string; message?: string };
       if (res.ok) {
@@ -235,9 +242,16 @@ export default function MemberDetailPage() {
       } else {
         setPasswordResetMessage(json.error ?? "Could not send reset email.");
       }
-    } catch {
-      setPasswordResetMessage("Could not send reset email.");
+    } catch (e) {
+      if (isFetchAbortError(e)) {
+        setPasswordResetMessage(
+          "Request timed out — email may still send. Check your SMTP or try again in a minute."
+        );
+      } else {
+        setPasswordResetMessage("Could not send reset email.");
+      }
     } finally {
+      clear();
       setSendingPasswordReset(false);
     }
   }

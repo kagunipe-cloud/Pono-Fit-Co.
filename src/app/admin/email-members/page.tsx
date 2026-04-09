@@ -2,6 +2,11 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
+import {
+  createFetchTimeoutSignal,
+  FETCH_TIMEOUT_WELCOME_EMAIL_MS,
+  isFetchAbortError,
+} from "@/lib/client-fetch-timeout";
 
 type MemberWithEmail = { member_id: string; email: string; first_name: string | null; last_name: string | null };
 
@@ -248,6 +253,7 @@ export default function AdminEmailMembersPage() {
     setError(null);
     setIdsResult(null);
     setSendingIds(true);
+    const { signal, clear } = createFetchTimeoutSignal(FETCH_TIMEOUT_WELCOME_EMAIL_MS);
     try {
       const res = await fetch("/api/admin/email-member-ids", {
         method: "POST",
@@ -255,6 +261,7 @@ export default function AdminEmailMembersPage() {
         body: JSON.stringify({
           filter: welcomeOnboardingOnly ? "needs_password_or_waiver" : "all",
         }),
+        signal,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -262,9 +269,16 @@ export default function AdminEmailMembersPage() {
         return;
       }
       setIdsResult({ sent: data.sent, total: data.total, failed: data.failed ?? 0, errors: data.errors });
-    } catch {
-      setError("Something went wrong.");
+    } catch (e) {
+      if (isFetchAbortError(e)) {
+        setError(
+          "Request timed out after several minutes — some emails may have been sent. Check the server log or send in smaller batches."
+        );
+      } else {
+        setError("Something went wrong.");
+      }
     } finally {
+      clear();
       setSendingIds(false);
     }
   }
@@ -274,6 +288,7 @@ export default function AdminEmailMembersPage() {
     setError(null);
     setSelectedResult(null);
     setSendingSelected(true);
+    const { signal, clear } = createFetchTimeoutSignal(FETCH_TIMEOUT_WELCOME_EMAIL_MS);
     try {
       const res = await fetch("/api/admin/email-member-ids", {
         method: "POST",
@@ -282,6 +297,7 @@ export default function AdminEmailMembersPage() {
           member_ids: Array.from(selectedIds),
           filter: welcomeOnboardingOnly ? "needs_password_or_waiver" : "all",
         }),
+        signal,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -290,9 +306,16 @@ export default function AdminEmailMembersPage() {
       }
       setSelectedResult({ sent: data.sent, total: data.total, failed: data.failed ?? 0, errors: data.errors });
       setSelectedIds(new Set());
-    } catch {
-      setError("Something went wrong.");
+    } catch (e) {
+      if (isFetchAbortError(e)) {
+        setError(
+          "Request timed out after several minutes — some emails may have been sent. Check the server log or send in smaller batches."
+        );
+      } else {
+        setError("Something went wrong.");
+      }
     } finally {
+      clear();
       setSendingSelected(false);
     }
   }
