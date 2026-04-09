@@ -42,6 +42,8 @@ export async function POST(request: NextRequest) {
 
     // Ensure Kisi user exists (fixes 404 for complimentary members who weren't granted at signup)
     let kisiId = member.kisi_id?.trim() || null;
+    /** True only when we just linked Kisi — grant door role here. Skip on normal unlocks (grantAccess is slow: list + deletes + POST). */
+    const needsInitialKisiGrant = !kisiId;
     if (!kisiId) {
       const name = [member.first_name, member.last_name].filter(Boolean).join(" ").trim() || undefined;
       kisiId = await ensureKisiUser(member.email.trim(), name);
@@ -49,17 +51,19 @@ export async function POST(request: NextRequest) {
     }
     db.close();
 
-    // Grant access if member has active subscription (e.g. waiver signed after complimentary)
-    try {
-      const db2 = getDb();
-      const tz = getAppTimezone(db2);
-      const validUntil = getSubscriptionDoorAccessValidUntil(db2, member_id, tz);
-      db2.close();
-      if (validUntil && validUntil.getTime() > Date.now()) {
-        await grantAccess(kisiId, validUntil);
+    // One-time grant when we first attach kisi_id. Purchase / waiver / pass activation / complimentary already call grantAccess elsewhere.
+    if (needsInitialKisiGrant) {
+      try {
+        const db2 = getDb();
+        const tz = getAppTimezone(db2);
+        const validUntil = getSubscriptionDoorAccessValidUntil(db2, member_id, tz);
+        db2.close();
+        if (validUntil && validUntil.getTime() > Date.now()) {
+          await grantAccess(kisiId, validUntil);
+        }
+      } catch (e) {
+        console.warn("[Kisi unlock] grant check failed, continuing:", e);
       }
-    } catch (e) {
-      console.warn("[Kisi unlock] grant check failed, continuing:", e);
     }
 
     const secret = await createLoginForUser(member.email);

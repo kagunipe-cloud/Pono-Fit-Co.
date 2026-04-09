@@ -395,7 +395,7 @@ export async function createLoginForUser(email: string): Promise<string> {
     throw new Error("Email required to create Kisi login");
   }
 
-  const res = await fetch(`${KISI_API_BASE}/logins`, {
+  const res = await fetchKisiWithRetry(`${KISI_API_BASE}/logins`, {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -480,7 +480,7 @@ export async function unlockWithUserSecret(secret: string, options?: UnlockWithU
   };
 
   async function postUnlock(id: string | number): Promise<void> {
-    const res = await fetch(`${KISI_API_BASE}/locks/${id}/unlock`, {
+    const res = await fetchKisiWithRetry(`${KISI_API_BASE}/locks/${id}/unlock`, {
       method: "POST",
       headers: postHeaders,
       body: body ?? undefined,
@@ -496,7 +496,7 @@ export async function unlockWithUserSecret(secret: string, options?: UnlockWithU
     return;
   }
 
-  const listRes = await fetch(`${KISI_API_BASE}/locks`, {
+  const listRes = await fetchKisiWithRetry(`${KISI_API_BASE}/locks`, {
     method: "GET",
     headers: { ...baseHeaders, "Content-Type": "application/json" },
   });
