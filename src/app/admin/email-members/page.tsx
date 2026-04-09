@@ -24,7 +24,7 @@ export default function AdminEmailMembersPage() {
   const [idsResult, setIdsResult] = useState<{ sent: number; total: number; failed: number; errors?: string[] } | null>(null);
   const [welcomeMembers, setWelcomeMembers] = useState<MemberWithEmail[]>([]);
   const [loadingWelcomeMembers, setLoadingWelcomeMembers] = useState(false);
-  /** When true, welcome list + sends only include members missing app password and/or liability waiver (union; overlap expected). */
+  /** When true, welcome list + sends only include active members (Active subscription) who still need app password and/or waiver. */
   const [welcomeOnboardingOnly, setWelcomeOnboardingOnly] = useState(true);
   const [welcomeSearch, setWelcomeSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -569,7 +569,7 @@ export default function AdminEmailMembersPage() {
         <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50">
           <h2 className="font-semibold text-stone-800 mb-1">Resend welcome emails</h2>
           <p className="text-sm text-stone-600 mb-3">
-            Send the app install link, their <strong>Member ID</strong>, and the set-password link. Members who already have <strong>both</strong> an app password and a signed liability waiver are skipped when the option below is on.
+            Send the app install link, their <strong>Member ID</strong>, and the set-password link. With <strong>Onboarding only</strong> on, we only include people with an <strong>active membership</strong> (at least one Active subscription) who still need a password and/or waiver — not churned members. Anyone who buys again gets the normal purchase email.
           </p>
           <label className="flex items-start gap-2 mb-3 cursor-pointer">
             <input
@@ -579,7 +579,7 @@ export default function AdminEmailMembersPage() {
               className="rounded border-stone-300 mt-1"
             />
             <span className="text-sm text-stone-700">
-              <strong>Onboarding only:</strong> include members who still need an app password <strong>and/or</strong> haven&apos;t signed the liability waiver (same person may count for both — one email each).
+              <strong>Onboarding only:</strong> active members only (Active subscription) who still need an app password <strong>and/or</strong> haven&apos;t signed the liability waiver.
             </span>
           </label>
           <p className="text-sm text-stone-500 mb-3">
@@ -618,7 +618,7 @@ export default function AdminEmailMembersPage() {
         <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50">
           <h2 className="font-semibold text-stone-800 mb-1">Send welcome email to selected members</h2>
           <p className="text-sm text-stone-600 mb-3">
-            Pick from the same list as above (respects <strong>Onboarding only</strong>). Sends install link, Member ID, and set-password link.
+            Pick from the same list as above (respects <strong>Onboarding only</strong> — active members only when that&apos;s on). Sends install link, Member ID, and set-password link.
           </p>
           {loadingWelcomeMembers ? (
             <p className="text-sm text-stone-500">Loading members…</p>

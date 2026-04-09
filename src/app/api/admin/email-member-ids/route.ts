@@ -25,8 +25,17 @@ function sqlNeedsPasswordOrWaiver(): string {
   )`;
 }
 
+/** Current membership / pass / plan row — excludes churned members who will get purchase emails if they return. */
+function sqlHasActiveSubscription(): string {
+  return `EXISTS (
+    SELECT 1 FROM subscriptions s
+    WHERE s.member_id = members.member_id AND s.status = 'Active'
+  )`;
+}
+
 /**
  * GET — members with email (for welcome-email picker). Query: filter=needs_password_or_waiver
+ * (onboarding = missing password and/or waiver, and at least one Active subscription).
  */
 export async function GET(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
@@ -42,7 +51,7 @@ export async function GET(request: NextRequest) {
 
   let sql = `SELECT member_id, email, first_name, last_name FROM members WHERE TRIM(COALESCE(email, '')) != ''`;
   if (onboarding) {
-    sql += ` AND ${sqlNeedsPasswordOrWaiver()}`;
+    sql += ` AND ${sqlNeedsPasswordOrWaiver()} AND ${sqlHasActiveSubscription()}`;
   }
   sql += ` ORDER BY last_name ASC, first_name ASC`;
 
@@ -58,7 +67,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST — welcome email (install link, Member ID, set-password link).
- * Body: { filter?: "all" | "needs_password_or_waiver" } — onboarding filter = missing password and/or waiver.
+ * Body: { filter?: "all" | "needs_password_or_waiver" } — onboarding = missing password and/or waiver, and Active subscription.
  * { member_ids?: string[] } — optional subset (still applies filter when set).
  */
 export async function POST(request: NextRequest) {
@@ -94,7 +103,7 @@ export async function POST(request: NextRequest) {
 
   let sql = `SELECT member_id, email, first_name FROM members WHERE TRIM(COALESCE(email, '')) != ''`;
   if (onboarding) {
-    sql += ` AND ${sqlNeedsPasswordOrWaiver()}`;
+    sql += ` AND ${sqlNeedsPasswordOrWaiver()} AND ${sqlHasActiveSubscription()}`;
   }
   let rows = db.prepare(sql).all() as { member_id: string; email: string; first_name: string | null }[];
   db.close();
