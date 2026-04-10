@@ -55,6 +55,7 @@ function MoneyOwedContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
+  const [emailBusy, setEmailBusy] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -117,6 +118,34 @@ function MoneyOwedContent() {
       setActionMessage(e instanceof Error ? e.message : "Something went wrong");
     } finally {
       setActionBusy(null);
+    }
+  }
+
+  async function sendReminder(row: MoneyOwedAggregatedRow) {
+    if (!row.email?.trim()) {
+      setActionMessage("Add an email on this member’s profile before sending a reminder.");
+      return;
+    }
+    setEmailBusy(groupKey(row));
+    setActionMessage(null);
+    try {
+      const res = await fetch("/api/admin/money-owed-reminder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          member_id: row.member_id,
+          subscription_id: row.subscription_id,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof data.error === "string" ? data.error : "Request failed");
+      }
+      setActionMessage(typeof data.message === "string" ? data.message : "Reminder sent.");
+    } catch (e) {
+      setActionMessage(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setEmailBusy(null);
     }
   }
 
@@ -208,10 +237,23 @@ function MoneyOwedContent() {
                         </p>
                       </div>
                       {!archived && (
-                        <div className="flex flex-col gap-1 shrink-0 sm:min-w-[9rem]">
+                        <div className="flex flex-col gap-1 shrink-0 sm:min-w-[11rem]">
                           <button
                             type="button"
-                            disabled={actionBusy === groupKey(r)}
+                            disabled={
+                              emailBusy === groupKey(r) ||
+                              actionBusy === groupKey(r) ||
+                              !r.email?.trim()
+                            }
+                            onClick={() => sendReminder(r)}
+                            title={!r.email?.trim() ? "Member has no email on file" : undefined}
+                            className="text-left text-xs font-medium text-stone-800 hover:underline disabled:opacity-50"
+                          >
+                            {emailBusy === groupKey(r) ? "Sending…" : "Send email reminder"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={actionBusy === groupKey(r) || emailBusy === groupKey(r)}
                             onClick={() => runAction(r, "retry_payment")}
                             className="text-left text-xs font-medium text-brand-700 hover:underline disabled:opacity-50"
                           >
@@ -219,7 +261,7 @@ function MoneyOwedContent() {
                           </button>
                           <button
                             type="button"
-                            disabled={actionBusy === groupKey(r)}
+                            disabled={actionBusy === groupKey(r) || emailBusy === groupKey(r)}
                             onClick={() => runAction(r, "write_off")}
                             className="text-left text-xs font-medium text-stone-700 hover:underline disabled:opacity-50"
                           >
@@ -227,7 +269,7 @@ function MoneyOwedContent() {
                           </button>
                           <button
                             type="button"
-                            disabled={actionBusy === groupKey(r)}
+                            disabled={actionBusy === groupKey(r) || emailBusy === groupKey(r)}
                             onClick={() => runAction(r, "dismiss")}
                             className="text-left text-xs text-stone-500 hover:underline disabled:opacity-50"
                           >

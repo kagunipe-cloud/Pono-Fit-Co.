@@ -625,6 +625,49 @@ If you didn’t ask for this, you can ignore this email — your password won’
   return sendMemberEmail(params.to, subject, text);
 }
 
+/** Sent from Admin → Money owed → Send email reminder. Placeholders include {{pay_url}} (sign-in → Membership to update card). */
+export async function sendMoneyOwedReminderEmail(params: {
+  to: string;
+  first_name: string | null;
+  member_name: string;
+  plan_name: string | null;
+  amount_dollars: number;
+  /** Absolute URL, e.g. https://gym.com/login?next=%2Fmember%2Fmembership */
+  pay_url: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const amountFormatted = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(params.amount_dollars);
+  const vars: Record<string, string> = {
+    first_name: (params.first_name ?? "").trim(),
+    member_name: params.member_name.trim(),
+    plan_name: (params.plan_name ?? "").trim(),
+    amount_formatted: amountFormatted,
+    pay_url: params.pay_url.trim(),
+  };
+  const customSubject = getEmailSetting("email_money_owed_reminder_subject");
+  const customBody = getEmailSetting("email_money_owed_reminder_body");
+  const subject = customSubject
+    ? applyPlaceholders(customSubject, vars)
+    : "Membership payment reminder";
+  const defaultBody = `Aloha {{first_name}},
+
+Just a friendly reminder that your monthly-membership fee is due, if you'd like to keep using the gym.  Mahalo, and we hope to see you soon :)
+
+Sign in to update your payment method or review your membership (auto-renew will retry once your card works):
+
+{{pay_url}}
+
+Me Ke Aloha,
+
+Bekah & Perry`;
+  const text = customBody ? applyPlaceholders(customBody, vars) : applyPlaceholders(defaultBody, vars);
+  return sendMemberEmail(params.to, subject, text);
+}
+
 export async function sendLiabilityWaiverEmail(params: {
   to: string;
   first_name?: string | null;

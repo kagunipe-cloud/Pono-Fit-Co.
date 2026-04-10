@@ -29,6 +29,8 @@ export default function EmailsDocumentsPage() {
   const [emailPostPurchaseBody, setEmailPostPurchaseBody] = useState("");
   const [emailMembershipExpirySubject, setEmailMembershipExpirySubject] = useState("");
   const [emailMembershipExpiryBody, setEmailMembershipExpiryBody] = useState("");
+  const [emailMoneyOwedReminderSubject, setEmailMoneyOwedReminderSubject] = useState("");
+  const [emailMoneyOwedReminderBody, setEmailMoneyOwedReminderBody] = useState("");
   const [emailAppDownloadSubject, setEmailAppDownloadSubject] = useState("");
   const [emailAppDownloadBody, setEmailAppDownloadBody] = useState("");
   const [emailLiabilityWaiverSubject, setEmailLiabilityWaiverSubject] = useState("");
@@ -55,6 +57,8 @@ export default function EmailsDocumentsPage() {
           setEmailPostPurchaseBody(data.email_post_purchase_body ?? "");
           setEmailMembershipExpirySubject(data.email_membership_expiry_subject ?? "");
           setEmailMembershipExpiryBody(data.email_membership_expiry_body ?? "");
+          setEmailMoneyOwedReminderSubject(data.email_money_owed_reminder_subject ?? "");
+          setEmailMoneyOwedReminderBody(data.email_money_owed_reminder_body ?? "");
           setEmailAppDownloadSubject(data.email_app_download_subject ?? "");
           setEmailAppDownloadBody(data.email_app_download_body ?? "");
           setEmailLiabilityWaiverSubject(data.email_liability_waiver_subject ?? "");
@@ -88,6 +92,8 @@ export default function EmailsDocumentsPage() {
           email_post_purchase_body: emailPostPurchaseBody || null,
           email_membership_expiry_subject: emailMembershipExpirySubject || null,
           email_membership_expiry_body: emailMembershipExpiryBody || null,
+          email_money_owed_reminder_subject: emailMoneyOwedReminderSubject || null,
+          email_money_owed_reminder_body: emailMoneyOwedReminderBody || null,
           email_app_download_subject: emailAppDownloadSubject || null,
           email_app_download_body: emailAppDownloadBody || null,
           email_liability_waiver_subject: emailLiabilityWaiverSubject || null,
@@ -331,6 +337,53 @@ export default function EmailsDocumentsPage() {
                   <details className="mt-2">
                     <summary className="text-xs text-stone-500 cursor-pointer hover:text-stone-700">Show default body</summary>
                     <pre className="mt-1 p-3 rounded-lg bg-stone-50 border border-stone-100 text-xs text-stone-600 overflow-x-auto whitespace-pre-wrap font-mono">{defaults.email_membership_expiry_body}</pre>
+                  </details>
+                )}
+              </div>
+            </div>
+
+            <div className="border border-stone-200 rounded-lg p-4 space-y-3">
+              <h3 className="font-semibold text-stone-800">Money owed reminder</h3>
+              <p className="text-sm text-stone-500">
+                Sent when staff taps <strong>Send email reminder</strong> on{" "}
+                <Link href="/money-owed" className="text-brand-600 hover:underline">
+                  Money owed
+                </Link>
+                . Placeholders:{" "}
+                <code className="text-xs bg-stone-100 px-1 rounded">{"{{first_name}}"}</code>,{" "}
+                <code className="text-xs bg-stone-100 px-1 rounded">{"{{member_name}}"}</code>,{" "}
+                <code className="text-xs bg-stone-100 px-1 rounded">{"{{plan_name}}"}</code>,{" "}
+                <code className="text-xs bg-stone-100 px-1 rounded">{"{{amount_formatted}}"}</code>,{" "}
+                <code className="text-xs bg-stone-100 px-1 rounded">{"{{pay_url}}"}</code> (sign in, then Membership page to update card).
+              </p>
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-1">Subject</label>
+                <input
+                  type="text"
+                  value={emailMoneyOwedReminderSubject}
+                  onChange={(e) => setEmailMoneyOwedReminderSubject(e.target.value)}
+                  placeholder="Leave blank to use default"
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                />
+                {defaults.email_money_owed_reminder_subject && (
+                  <p className="mt-1 text-xs text-stone-500">Default: {defaults.email_money_owed_reminder_subject}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-1">Body</label>
+                <textarea
+                  value={emailMoneyOwedReminderBody}
+                  onChange={(e) => setEmailMoneyOwedReminderBody(e.target.value)}
+                  rows={10}
+                  placeholder="Leave blank to use default"
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200 font-mono text-sm"
+                />
+                {defaults.email_money_owed_reminder_body && (
+                  <details className="mt-2">
+                    <summary className="text-xs text-stone-500 cursor-pointer hover:text-stone-700">Show default body</summary>
+                    <pre className="mt-1 p-3 rounded-lg bg-stone-50 border border-stone-100 text-xs text-stone-600 overflow-x-auto whitespace-pre-wrap font-mono">
+                      {defaults.email_money_owed_reminder_body}
+                    </pre>
                   </details>
                 )}
               </div>

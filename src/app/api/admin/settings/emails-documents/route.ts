@@ -18,6 +18,8 @@ const EMAIL_KEYS = [
   "email_post_purchase_body",
   "email_membership_expiry_subject",
   "email_membership_expiry_body",
+  "email_money_owed_reminder_subject",
+  "email_money_owed_reminder_body",
   "email_app_download_subject",
   "email_app_download_body",
   "email_liability_waiver_subject",
@@ -66,7 +68,19 @@ Bekah & Perry with Pono Fit Co. here! We're just emailing to let you know that y
 
 Mahalo Nui Loa,
 
-B & P`,
+ B & P`,
+  email_money_owed_reminder_subject: "Membership payment reminder",
+  email_money_owed_reminder_body: `Aloha {{first_name}},
+
+Just a friendly reminder that your monthly-membership fee is due, if you'd like to keep using the gym.  Mahalo, and we hope to see you soon :)
+
+Sign in to update your payment method or review your membership (auto-renew will retry once your card works):
+
+{{pay_url}}
+
+Me Ke Aloha,
+
+Bekah & Perry`,
   email_app_download_subject: "new door-unlock system - switch over by 4/15!",
   email_app_download_body: `Aloha eeeverybody!
 

@@ -39,7 +39,7 @@ function getDateRange(mode: string, tz: string): DateRange | null {
   return null;
 }
 
-/** GET: Door and app usage events (admin only). Query: limit (default 20), offset (0), mode (today|yesterday|7|30|90|all), tz (for today/yesterday). */
+/** GET: Door and app usage events (admin only). Query: limit (default 20), offset (door rows), app_offset (app rows), mode, tz. */
 export async function GET(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
   if (!adminId) {
@@ -49,6 +49,11 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const limit = Math.min(MAX_LIMIT, parseInt(searchParams.get("limit") ?? String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT);
   const offset = Math.max(0, parseInt(searchParams.get("offset") ?? "0", 10));
+  const appOffset = Math.max(0, parseInt(searchParams.get("app_offset") ?? "0", 10));
+  /** both | door | app — use door-only or app-only when loading more of one stream without re-querying the other. */
+  const fetchScope = (searchParams.get("fetch") ?? "both").trim().toLowerCase();
+  const wantDoor = fetchScope === "both" || fetchScope === "door";
+  const wantApp = fetchScope === "both" || fetchScope === "app";
   const mode = searchParams.get("mode") ?? "today";
   const tz = searchParams.get("tz")?.trim() || APP_TIMEZONE;
 
@@ -58,7 +63,8 @@ export async function GET(request: NextRequest) {
     const db = getDb();
     ensureUsageTables(db);
 
-    let doorRows: Record<string, unknown>[];
+    let doorRows: Record<string, unknown>[] = [];
+    if (wantDoor) {
     if (range) {
       const sinceCmp = toSqliteDateTimeCompare(range.since);
       const untilCmp = range.until ? toSqliteDateTimeCompare(range.until) : null;
@@ -90,13 +96,15 @@ export async function GET(request: NextRequest) {
          ORDER BY d.happened_at DESC LIMIT ? OFFSET ?`
       ).all(limit, offset) as Record<string, unknown>[];
     }
+    }
 
     const since = range?.since ?? null;
     const until = range?.until ?? null;
     const sinceCmp = since ? toSqliteDateTimeCompare(since) : null;
     const untilCmp = until ? toSqliteDateTimeCompare(until) : null;
 
-    let appRows: Record<string, unknown>[];
+    let appRows: Record<string, unknown>[] = [];
+    if (wantApp) {
     if (sinceCmp && untilCmp) {
       appRows = db.prepare(
         `SELECT a.id, a.member_id, a.event_type, a.path, a.created_at,
@@ -104,8 +112,8 @@ export async function GET(request: NextRequest) {
          FROM app_usage_events a
          LEFT JOIN members m ON m.member_id = a.member_id
          WHERE a.created_at >= ? AND a.created_at <= ?
-         ORDER BY a.created_at DESC LIMIT ?`
-      ).all(sinceCmp, untilCmp, limit) as Record<string, unknown>[];
+         ORDER BY a.created_at DESC LIMIT ? OFFSET ?`
+      ).all(sinceCmp, untilCmp, limit, appOffset) as Record<string, unknown>[];
     } else if (sinceCmp) {
       appRows = db.prepare(
         `SELECT a.id, a.member_id, a.event_type, a.path, a.created_at,
@@ -113,19 +121,21 @@ export async function GET(request: NextRequest) {
          FROM app_usage_events a
          LEFT JOIN members m ON m.member_id = a.member_id
          WHERE a.created_at >= ?
-         ORDER BY a.created_at DESC LIMIT ?`
-      ).all(sinceCmp, limit) as Record<string, unknown>[];
+         ORDER BY a.created_at DESC LIMIT ? OFFSET ?`
+      ).all(sinceCmp, limit, appOffset) as Record<string, unknown>[];
     } else {
       appRows = db.prepare(
         `SELECT a.id, a.member_id, a.event_type, a.path, a.created_at,
           TRIM(COALESCE(m.first_name, '') || ' ' || COALESCE(m.last_name, '')) AS member_name
          FROM app_usage_events a
          LEFT JOIN members m ON m.member_id = a.member_id
-         ORDER BY a.created_at DESC LIMIT ?`
-      ).all(limit) as Record<string, unknown>[];
+         ORDER BY a.created_at DESC LIMIT ? OFFSET ?`
+      ).all(limit, appOffset) as Record<string, unknown>[];
+    }
     }
 
-    const hasMore = doorRows.length === limit;
+    const hasMore = wantDoor && doorRows.length === limit;
+    const hasMoreApp = wantApp && appRows.length === limit;
 
     db.close();
 
@@ -133,6 +143,7 @@ export async function GET(request: NextRequest) {
       door: doorRows as Record<string, unknown>[],
       app: appRows as Record<string, unknown>[],
       hasMore,
+      hasMoreApp,
     });
   } catch (err) {
     console.error("[admin/usage]", err);
