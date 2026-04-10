@@ -172,8 +172,14 @@ export default function ExercisesPage() {
   return (
     <div className="max-w-2xl mx-auto p-6">
       <h1 className="text-2xl font-bold text-stone-800 mb-2">Exercise database</h1>
-      <p className="text-stone-600 text-sm mb-6">
+      <p className="text-stone-600 text-sm mb-2">
         Official exercises members can pick when logging workouts. Picked exercises are available for progress charts.
+      </p>
+      <p className="text-sm mb-6">
+        <Link href="/admin/exercise-orphans" className="text-brand-600 hover:underline font-medium">
+          Broken exercise links in workouts
+        </Link>
+        <span className="text-stone-500"> — audit lines pointing at missing catalog IDs</span>
       </p>
 
       <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50 space-y-4">
