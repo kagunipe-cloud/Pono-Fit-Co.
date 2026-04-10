@@ -64,7 +64,7 @@ function mapAttemptRow(r: Record<string, unknown>): MoneyOwedAttemptRow {
 /** GET: Money owed + failed payment attempts (admin only).
  *  - `attempts`: every cron/API failure row (for “Failed transactions” in Transactions).
  *  - `aggregated`: one row per member + subscription — amount = one period; retries counted.
- *  Query: `?view=archived` — dismissed rows only.
+ *  Query: `?view=archived` — archived (cancel subscription) rows only.
  */
 export async function GET(request: NextRequest) {
   const adminId = await getAdminMemberId(request);

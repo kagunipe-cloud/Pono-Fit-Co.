@@ -85,10 +85,10 @@ function MoneyOwedContent() {
     load();
   }, [load]);
 
-  async function runAction(row: MoneyOwedAggregatedRow, action: "dismiss" | "retry_payment" | "write_off") {
+  async function runAction(row: MoneyOwedAggregatedRow, action: "cancel_subscription" | "retry_payment" | "write_off") {
     const prompts: Record<typeof action, string> = {
-      dismiss:
-        "Dismiss this balance from Money Owed?\n\nAll recorded retry attempts for this membership will be archived. Stripe history is unchanged.",
+      cancel_subscription:
+        "Cancel this membership?\n\nAutomatic renewals will stop, failed payment attempts will be archived here, and door access follows the usual rules if they have no other active membership. Stripe history is unchanged.",
       retry_payment:
         "Retry payment now?\n\nWe will charge the default card once for this renewal (plus fees/tax, same as the cron). If it succeeds, the membership is extended and door access restored if the waiver allows.",
       write_off:
@@ -150,7 +150,7 @@ function MoneyOwedContent() {
   }
 
   const emptyMessage = archived
-    ? "No dismissed balances. Dismissed failures appear here for reference."
+    ? "No archived records. Memberships you cancelled from Money owed appear here for reference."
     : "No failed recurring payments on record.";
 
   const byMember = new Map<string, MoneyOwedAggregatedRow[]>();
@@ -270,10 +270,10 @@ function MoneyOwedContent() {
                           <button
                             type="button"
                             disabled={actionBusy === groupKey(r) || emailBusy === groupKey(r)}
-                            onClick={() => runAction(r, "dismiss")}
+                            onClick={() => runAction(r, "cancel_subscription")}
                             className="text-left text-xs text-stone-500 hover:underline disabled:opacity-50"
                           >
-                            Dismiss
+                            Cancel subscription
                           </button>
                         </div>
                       )}
