@@ -33,7 +33,7 @@ function formatMoney(n: number): string {
   }).format(n);
 }
 
-function formatAttemptedAt(iso: string): string {
+function formatAttemptedAt(iso: string | null | undefined): string {
   if (!iso) return "—";
   try {
     const d = new Date(iso);
@@ -236,7 +236,7 @@ function MoneyOwedContent() {
                     const emailReminderTitle = !r.email?.trim()
                       ? "Member has no email on file"
                       : recentReminder
-                        ? `Reminder already sent ${formatAttemptedAt(r.reminder_sent_at)} — click to send again (you’ll confirm)`
+                        ? `Reminder already sent ${formatAttemptedAt(r.reminder_sent_at ?? "")} — click to send again (you’ll confirm)`
                         : undefined;
                     return (
                     <div key={groupKey(r)} className="p-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
