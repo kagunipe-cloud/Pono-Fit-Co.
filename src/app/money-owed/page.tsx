@@ -20,6 +20,7 @@ type MoneyOwedAggregatedRow = {
   first_attempted_at: string;
   last_attempted_at: string;
   failure_ids: number[];
+  reminder_sent_at?: string | null;
 };
 
 function formatMoney(n: number): string {
@@ -32,7 +33,7 @@ function formatMoney(n: number): string {
   }).format(n);
 }
 
-function formatAttemptedAt(iso: string): string {
+function formatAttemptedAt(iso: string | null | undefined): string {
   if (!iso) return "—";
   try {
     const d = new Date(iso);
@@ -46,6 +47,16 @@ function groupKey(r: MoneyOwedAggregatedRow): string {
   return `${r.member_id}::${r.subscription_id ?? ""}`;
 }
 
+/** SQLite `datetime('now')` is UTC; parse for comparisons with `Date.now()`. */
+function parseReminderSentAtMs(iso: string | null | undefined): number | null {
+  if (iso == null || String(iso).trim() === "") return null;
+  const s = String(iso).trim();
+  const ms = Date.parse(s.includes("T") ? s : `${s.replace(" ", "T")}Z`);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+const REMINDER_RECENT_MS = 48 * 60 * 60 * 1000;
+
 function MoneyOwedContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -55,6 +66,7 @@ function MoneyOwedContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
+  const [emailBusy, setEmailBusy] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -84,10 +96,10 @@ function MoneyOwedContent() {
     load();
   }, [load]);
 
-  async function runAction(row: MoneyOwedAggregatedRow, action: "dismiss" | "retry_payment" | "write_off") {
+  async function runAction(row: MoneyOwedAggregatedRow, action: "cancel_subscription" | "retry_payment" | "write_off") {
     const prompts: Record<typeof action, string> = {
-      dismiss:
-        "Dismiss this balance from Money Owed?\n\nAll recorded retry attempts for this membership will be archived. Stripe history is unchanged.",
+      cancel_subscription:
+        "Cancel this membership?\n\nAutomatic renewals will stop, failed payment attempts will be archived here, and door access follows the usual rules if they have no other active membership. Stripe history is unchanged.",
       retry_payment:
         "Retry payment now?\n\nWe will charge the default card once for this renewal (plus fees/tax, same as the cron). If it succeeds, the membership is extended and door access restored if the waiver allows.",
       write_off:
@@ -120,8 +132,44 @@ function MoneyOwedContent() {
     }
   }
 
+  async function sendReminder(row: MoneyOwedAggregatedRow) {
+    if (!row.email?.trim()) {
+      setActionMessage("Add an email on this member’s profile before sending a reminder.");
+      return;
+    }
+    const prevMs = parseReminderSentAtMs(row.reminder_sent_at ?? null);
+    if (prevMs != null && Date.now() - prevMs < REMINDER_RECENT_MS) {
+      const ok = window.confirm(
+        `A reminder was already sent on ${formatAttemptedAt(row.reminder_sent_at ?? "")} (within the last 48 hours).\n\nSend another email anyway?`
+      );
+      if (!ok) return;
+    }
+    setEmailBusy(groupKey(row));
+    setActionMessage(null);
+    try {
+      const res = await fetch("/api/admin/money-owed-reminder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          member_id: row.member_id,
+          subscription_id: row.subscription_id,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof data.error === "string" ? data.error : "Request failed");
+      }
+      setActionMessage(typeof data.message === "string" ? data.message : "Reminder sent.");
+      load();
+    } catch (e) {
+      setActionMessage(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setEmailBusy(null);
+    }
+  }
+
   const emptyMessage = archived
-    ? "No dismissed balances. Dismissed failures appear here for reference."
+    ? "No archived records. Memberships you cancelled from Money owed appear here for reference."
     : "No failed recurring payments on record.";
 
   const byMember = new Map<string, MoneyOwedAggregatedRow[]>();
@@ -179,7 +227,18 @@ function MoneyOwedContent() {
                   {first.email && <span className="ml-2 text-sm text-stone-500">{first.email}</span>}
                 </div>
                 <div className="divide-y divide-stone-100">
-                  {subs.map((r) => (
+                  {subs.map((r) => {
+                    const reminderMs = parseReminderSentAtMs(r.reminder_sent_at ?? null);
+                    const recentReminder =
+                      reminderMs != null &&
+                      Date.now() - reminderMs < REMINDER_RECENT_MS &&
+                      r.reminder_sent_at;
+                    const emailReminderTitle = !r.email?.trim()
+                      ? "Member has no email on file"
+                      : recentReminder
+                        ? `Reminder already sent ${formatAttemptedAt(r.reminder_sent_at ?? "")} — click to send again (you’ll confirm)`
+                        : undefined;
+                    return (
                     <div key={groupKey(r)} className="p-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1 space-y-1">
                         <p className="font-medium text-stone-800">{r.plan_name ?? "—"}</p>
@@ -206,12 +265,30 @@ function MoneyOwedContent() {
                             <> · First: {formatAttemptedAt(r.first_attempted_at)}</>
                           )}
                         </p>
+                        {r.reminder_sent_at ? (
+                          <p className="text-xs text-stone-600 mt-1">
+                            Reminder email last sent: {formatAttemptedAt(r.reminder_sent_at)}
+                          </p>
+                        ) : null}
                       </div>
                       {!archived && (
-                        <div className="flex flex-col gap-1 shrink-0 sm:min-w-[9rem]">
+                        <div className="flex flex-col gap-1 shrink-0 sm:min-w-[11rem]">
                           <button
                             type="button"
-                            disabled={actionBusy === groupKey(r)}
+                            disabled={
+                              emailBusy === groupKey(r) ||
+                              actionBusy === groupKey(r) ||
+                              !r.email?.trim()
+                            }
+                            onClick={() => sendReminder(r)}
+                            title={emailReminderTitle}
+                            className="text-left text-xs font-medium text-stone-800 hover:underline disabled:opacity-50"
+                          >
+                            {emailBusy === groupKey(r) ? "Sending…" : "Send email reminder"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={actionBusy === groupKey(r) || emailBusy === groupKey(r)}
                             onClick={() => runAction(r, "retry_payment")}
                             className="text-left text-xs font-medium text-brand-700 hover:underline disabled:opacity-50"
                           >
@@ -219,7 +296,7 @@ function MoneyOwedContent() {
                           </button>
                           <button
                             type="button"
-                            disabled={actionBusy === groupKey(r)}
+                            disabled={actionBusy === groupKey(r) || emailBusy === groupKey(r)}
                             onClick={() => runAction(r, "write_off")}
                             className="text-left text-xs font-medium text-stone-700 hover:underline disabled:opacity-50"
                           >
@@ -227,16 +304,17 @@ function MoneyOwedContent() {
                           </button>
                           <button
                             type="button"
-                            disabled={actionBusy === groupKey(r)}
-                            onClick={() => runAction(r, "dismiss")}
+                            disabled={actionBusy === groupKey(r) || emailBusy === groupKey(r)}
+                            onClick={() => runAction(r, "cancel_subscription")}
                             className="text-left text-xs text-stone-500 hover:underline disabled:opacity-50"
                           >
-                            Dismiss
+                            Cancel subscription
                           </button>
                         </div>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             );

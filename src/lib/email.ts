@@ -252,6 +252,10 @@ function getTransporter(): nodemailer.Transporter | null {
     port,
     secure: port === 465,
     auth: { user, pass },
+    /** Avoid hanging forever when SMTP is unreachable (client was stuck on "Sending…"). */
+    connectionTimeout: 25_000,
+    greetingTimeout: 25_000,
+    socketTimeout: 60_000,
   });
   return transporter;
 }
@@ -553,23 +557,25 @@ export async function sendAppDownloadInviteEmail(params: {
   };
   const customSubject = getEmailSetting("email_app_download_subject");
   const customBody = getEmailSetting("email_app_download_body");
-  const subject = customSubject ? applyPlaceholders(customSubject, vars) : "Get the Pono Fit Co. app";
-  const defaultText = `Hi${params.first_name ? ` ${params.first_name}` : ""},
+  const subject = customSubject
+    ? applyPlaceholders(customSubject, vars)
+    : "new door-unlock system - switch over by 4/15!";
+  const defaultText = `Aloha eeeverybody!
 
-Download our app to view your membership, book classes, and more:
+We are launching our new app for the gym, which we built ourselves!  We are pretty stoked on it, especially because it helps you track your macros and your workouts for free, and your data goes absolutely nowhere because it's OUR app!
+
+Click the link below to register and install, or just register and read the waiver.  Kisi will still work, if that's what you prefer, but you must at least read and sign the liability waiver to get continued access.  Let us know if you have any questions!
 
 ${installUrl}
 
-Open this link on your phone and follow the steps to add the app to your home screen.
-
 Your Member ID: ${memberId}
 
-To sign in for the first time, set your password here:
+To set your app password (first-time sign-in):
 ${setPasswordUrl}
 
-After that you'll sign in with your email and password.
+Me Ke Mahalo,
 
-— Pono Fit Co.`;
+Bekah & Perry`;
   const text = customBody ? applyPlaceholders(customBody, vars) : defaultText;
   return sendMemberEmail(params.to, subject, text);
 }
@@ -599,6 +605,69 @@ export async function sendWaiverSignedCopyToAdmin(params: {
 }
 
 /** Send liability waiver link so member can sign before door (Kisi) access. */
+/** Password reset link after "Forgot password" (token expires; see API route). */
+export async function sendPasswordResetEmail(params: {
+  to: string;
+  first_name?: string | null;
+  reset_url: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const subject = `Reset your ${BRAND.shortName} password`;
+  const text = `Hi${params.first_name ? ` ${params.first_name}` : ""},
+
+We received a request to reset your password for ${BRAND.name}.
+
+Open this link to choose a new password (link expires in 24 hours):
+${params.reset_url}
+
+If you didn’t ask for this, you can ignore this email — your password won’t change.
+
+— ${BRAND.name}`;
+  return sendMemberEmail(params.to, subject, text);
+}
+
+/** Sent from Admin → Money owed → Send email reminder. Placeholders include {{pay_url}} (sign-in → Membership to update card). */
+export async function sendMoneyOwedReminderEmail(params: {
+  to: string;
+  first_name: string | null;
+  member_name: string;
+  plan_name: string | null;
+  amount_dollars: number;
+  /** Absolute URL, e.g. https://gym.com/login?next=%2Fmember%2Fmembership */
+  pay_url: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const amountFormatted = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(params.amount_dollars);
+  const vars: Record<string, string> = {
+    first_name: (params.first_name ?? "").trim(),
+    member_name: params.member_name.trim(),
+    plan_name: (params.plan_name ?? "").trim(),
+    amount_formatted: amountFormatted,
+    pay_url: params.pay_url.trim(),
+  };
+  const customSubject = getEmailSetting("email_money_owed_reminder_subject");
+  const customBody = getEmailSetting("email_money_owed_reminder_body");
+  const subject = customSubject
+    ? applyPlaceholders(customSubject, vars)
+    : "Membership payment reminder";
+  const defaultBody = `Aloha {{first_name}},
+
+Just a friendly reminder that your monthly-membership fee is due, if you'd like to keep using the gym.  Mahalo, and we hope to see you soon :)
+
+Sign in to update your payment method or review your membership (auto-renew will retry once your card works):
+
+{{pay_url}}
+
+Me Ke Aloha,
+
+Bekah & Perry`;
+  const text = customBody ? applyPlaceholders(customBody, vars) : applyPlaceholders(defaultBody, vars);
+  return sendMemberEmail(params.to, subject, text);
+}
+
 export async function sendLiabilityWaiverEmail(params: {
   to: string;
   first_name?: string | null;

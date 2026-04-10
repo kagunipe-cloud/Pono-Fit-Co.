@@ -18,6 +18,8 @@ const EMAIL_KEYS = [
   "email_post_purchase_body",
   "email_membership_expiry_subject",
   "email_membership_expiry_body",
+  "email_money_owed_reminder_subject",
+  "email_money_owed_reminder_body",
   "email_app_download_subject",
   "email_app_download_body",
   "email_liability_waiver_subject",
@@ -66,24 +68,36 @@ Bekah & Perry with Pono Fit Co. here! We're just emailing to let you know that y
 
 Mahalo Nui Loa,
 
-B & P`,
-  email_app_download_subject: "Get the Pono Fit Co. app",
-  email_app_download_body: `Hi{{first_name}},
+ B & P`,
+  email_money_owed_reminder_subject: "Membership payment reminder",
+  email_money_owed_reminder_body: `Aloha {{first_name}},
 
-Download our app to view your membership, book classes, and more:
+Just a friendly reminder that your monthly-membership fee is due, if you'd like to keep using the gym.  Mahalo, and we hope to see you soon :)
+
+Sign in to update your payment method or review your membership (auto-renew will retry once your card works):
+
+{{pay_url}}
+
+Me Ke Aloha,
+
+Bekah & Perry`,
+  email_app_download_subject: "new door-unlock system - switch over by 4/15!",
+  email_app_download_body: `Aloha eeeverybody!
+
+We are launching our new app for the gym, which we built ourselves!  We are pretty stoked on it, especially because it helps you track your macros and your workouts for free, and your data goes absolutely nowhere because it's OUR app!
+
+Click the link below to register and install, or just register and read the waiver.  Kisi will still work, if that's what you prefer, but you must at least read and sign the liability waiver to get continued access.  Let us know if you have any questions!
 
 {{install_url}}
 
-Open this link on your phone and follow the steps to add the app to your home screen.
-
 Your Member ID: {{member_id}}
 
-To sign in for the first time, set your password here:
+To set your app password (first-time sign-in):
 {{set_password_url}}
 
-After that you'll sign in with your email and password.
+Me Ke Mahalo,
 
-— Pono Fit Co.`,
+Bekah & Perry`,
   email_liability_waiver_subject: "Sign your liability waiver to get door access",
   email_liability_waiver_body: `Hi{{first_name}},
 

@@ -29,9 +29,7 @@ export async function POST(request: NextRequest) {
     const db = getDb();
     ensureMembersPasswordColumn(db);
     const row = db
-      .prepare(
-        "SELECT member_id, email, password_hash FROM members WHERE member_id = ?"
-      )
+      .prepare("SELECT member_id, email, password_hash FROM members WHERE member_id = ?")
       .get(member_id) as
       | { member_id: string; email: string | null; password_hash: string | null }
       | undefined;
@@ -40,16 +38,15 @@ export async function POST(request: NextRequest) {
     if (!row) {
       return NextResponse.json({ error: "Member not found" }, { status: 401 });
     }
-    const memberEmail = (row.email ?? "").trim().toLowerCase();
-    if (memberEmail !== email) {
-      return NextResponse.json(
-        { error: "Email does not match this member" },
-        { status: 401 }
-      );
+    if ((row.email ?? "").trim().toLowerCase() !== email) {
+      return NextResponse.json({ error: "Email does not match this member" }, { status: 401 });
     }
     if (row.password_hash) {
       return NextResponse.json(
-        { error: "Password already set. Sign in with your email and password." },
+        {
+          error: "Password already set. Sign in with your email and password.",
+          code: "PASSWORD_ALREADY_SET",
+        },
         { status: 400 }
       );
     }

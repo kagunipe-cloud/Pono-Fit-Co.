@@ -29,7 +29,7 @@ type AppEvent = {
   created_at: string;
 };
 
-type UsageData = { door: DoorEvent[]; app: AppEvent[]; hasMore?: boolean } | null;
+type UsageData = { door: DoorEvent[]; app: AppEvent[]; hasMore?: boolean; hasMoreApp?: boolean } | null;
 
 const MODE_OPTIONS = [
   { value: "today", label: "Today" },
@@ -52,18 +52,33 @@ export default function AdminUsagePage() {
   const tz = useAppTimezone();
   const [data, setData] = useState<UsageData>(null);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadingMoreDoor, setLoadingMoreDoor] = useState(false);
+  const [loadingMoreApp, setLoadingMoreApp] = useState(false);
   const [mode, setMode] = useState<string>("today");
   const [activeTab, setActiveTab] = useState<"door" | "app">("door");
 
   const fetchUsage = useCallback(
-    (offset = 0, append = false) => {
+    (opts: {
+      doorOffset: number;
+      appOffset: number;
+      fetch: "both" | "door" | "app";
+      appendDoor?: boolean;
+      appendApp?: boolean;
+    }) => {
+      const { doorOffset, appOffset, fetch: fetchScope, appendDoor, appendApp } = opts;
       const params = new URLSearchParams();
       params.set("mode", mode);
       params.set("limit", "20");
-      params.set("offset", String(offset));
+      params.set("offset", String(doorOffset));
+      params.set("app_offset", String(appOffset));
+      params.set("fetch", fetchScope);
       params.set("tz", tz);
-      const setLoadingState = append ? setLoadingMore : setLoading;
+      const setLoadingState =
+        appendDoor || appendApp
+          ? appendDoor
+            ? setLoadingMoreDoor
+            : setLoadingMoreApp
+          : setLoading;
       setLoadingState(true);
       fetch(`/api/admin/usage?${params}`)
         .then((r) => {
@@ -75,18 +90,39 @@ export default function AdminUsagePage() {
         })
         .then((json) => {
           if (!json) return;
-          const door = json.door ?? [];
-          const app = json.app ?? [];
-          if (append) {
+          const door = (json.door ?? []) as DoorEvent[];
+          const app = (json.app ?? []) as AppEvent[];
+          if (appendDoor) {
             setData((prev) =>
-              prev ? { ...prev, door: [...prev.door, ...door], hasMore: json.hasMore } : { door, app, hasMore: json.hasMore }
+              prev
+                ? {
+                    ...prev,
+                    door: [...prev.door, ...door],
+                    hasMore: json.hasMore === true,
+                  }
+                : { door, app, hasMore: json.hasMore, hasMoreApp: json.hasMoreApp }
+            );
+          } else if (appendApp) {
+            setData((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    app: [...prev.app, ...app],
+                    hasMoreApp: json.hasMoreApp === true,
+                  }
+                : { door, app, hasMore: json.hasMore, hasMoreApp: json.hasMoreApp }
             );
           } else {
-            setData({ door, app, hasMore: json.hasMore });
+            setData({
+              door,
+              app,
+              hasMore: json.hasMore === true,
+              hasMoreApp: json.hasMoreApp === true,
+            });
           }
         })
         .catch(() => {
-          if (!append) setData({ door: [], app: [] });
+          if (!appendDoor && !appendApp) setData({ door: [], app: [] });
         })
         .finally(() => setLoadingState(false));
     },
@@ -95,12 +131,17 @@ export default function AdminUsagePage() {
 
   useEffect(() => {
     setData(null);
-    fetchUsage(0, false);
+    fetchUsage({ doorOffset: 0, appOffset: 0, fetch: "both" });
   }, [mode, tz, fetchUsage]);
 
-  function handleLoadMore() {
-    if (!data?.door.length || loadingMore) return;
-    fetchUsage(data.door.length, true);
+  function handleLoadMoreDoor() {
+    if (!data?.door.length || loadingMoreDoor) return;
+    fetchUsage({ doorOffset: data.door.length, appOffset: 0, fetch: "door", appendDoor: true });
+  }
+
+  function handleLoadMoreApp() {
+    if (!data?.app.length || loadingMoreApp) return;
+    fetchUsage({ doorOffset: 0, appOffset: data.app.length, fetch: "app", appendApp: true });
   }
 
   return (
@@ -197,11 +238,11 @@ export default function AdminUsagePage() {
                 <div className="p-4 border-t border-stone-100 text-center">
                   <button
                     type="button"
-                    onClick={handleLoadMore}
-                    disabled={loadingMore}
+                    onClick={handleLoadMoreDoor}
+                    disabled={loadingMoreDoor}
                     className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm disabled:opacity-50"
                   >
-                    {loadingMore ? "Loading…" : "Load more"}
+                    {loadingMoreDoor ? "Loading…" : "Load more"}
                   </button>
                 </div>
               )}
@@ -241,6 +282,18 @@ export default function AdminUsagePage() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              )}
+              {data.hasMoreApp && (
+                <div className="p-4 border-t border-stone-100 text-center">
+                  <button
+                    type="button"
+                    onClick={handleLoadMoreApp}
+                    disabled={loadingMoreApp}
+                    className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium text-sm disabled:opacity-50"
+                  >
+                    {loadingMoreApp ? "Loading…" : "Load more"}
+                  </button>
                 </div>
               )}
             </section>

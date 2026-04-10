@@ -65,33 +65,68 @@ export async function POST(
     const setCols = db.prepare("PRAGMA table_info(workout_sets)").all() as { name: string }[];
     const hasDropIndex = setCols.some((c) => c.name === "drop_index");
 
+    /** exercise_id FK must point at a real exercises row; old workouts may reference deleted IDs. */
+    const exerciseExists = db.prepare("SELECT 1 FROM exercises WHERE id = ?");
+
     const workoutName = workout.name?.trim() || null;
     const insertWorkout = db.prepare("INSERT INTO workouts (member_id, started_at, finished_at, assigned_by_admin, name) VALUES (?, datetime('now'), datetime('now'), 0, ?)");
     const insertEx = hasUseForMy1rm
       ? db.prepare("INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id, use_for_my_1rm) VALUES (?, ?, ?, ?, ?, ?)")
       : db.prepare("INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id) VALUES (?, ?, ?, ?, ?)");
-    const insertSet = db.prepare("INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    const insertSet = hasDropIndex
+      ? db.prepare(
+          "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        )
+      : db.prepare(
+          "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order) VALUES (?, ?, ?, ?, ?, ?)"
+        );
 
-    insertWorkout.run(recipient.member_id, workoutName);
-    const newWorkoutId = db.prepare("SELECT last_insert_rowid()").get() as { "last_insert_rowid()": number };
-    const newId = newWorkoutId["last_insert_rowid()"];
+    const workoutInsert = insertWorkout.run(recipient.member_id, workoutName);
+    const newId = Number(workoutInsert.lastInsertRowid);
+    if (!Number.isFinite(newId) || newId < 1) {
+      db.close();
+      return NextResponse.json({ error: "Failed to create workout copy" }, { status: 500 });
+    }
+
+    const setsSelectSql = hasDropIndex
+      ? "SELECT reps, weight_kg, time_seconds, distance_km, set_order, drop_index FROM workout_sets WHERE workout_exercise_id = ? ORDER BY set_order, id"
+      : "SELECT reps, weight_kg, time_seconds, distance_km, set_order FROM workout_sets WHERE workout_exercise_id = ? ORDER BY set_order, id";
 
     for (const ex of exercises) {
       const type = ex.type === "cardio" ? "cardio" : "lift";
-      const useForMy1rm = hasUseForMy1rm && type === "lift" && ex.exercise_id != null && (ex.use_for_my_1rm ?? 0) === 1;
-      if (hasUseForMy1rm) {
-        insertEx.run(newId, type, ex.exercise_name, ex.sort_order, ex.exercise_id, useForMy1rm ? 1 : 0);
-      } else {
-        insertEx.run(newId, type, ex.exercise_name, ex.sort_order, ex.exercise_id);
+      const rawExId = ex.exercise_id != null && ex.exercise_id > 0 ? ex.exercise_id : null;
+      const exerciseId =
+        rawExId != null && exerciseExists.get(rawExId) != null ? rawExId : null;
+      const useForMy1rm = hasUseForMy1rm && type === "lift" && exerciseId != null && (ex.use_for_my_1rm ?? 0) === 1;
+      const exResult = hasUseForMy1rm
+        ? insertEx.run(newId, type, ex.exercise_name, ex.sort_order, exerciseId, useForMy1rm ? 1 : 0)
+        : insertEx.run(newId, type, ex.exercise_name, ex.sort_order, exerciseId);
+      if (useForMy1rm && exerciseId != null) {
+        db.prepare("INSERT OR REPLACE INTO member_1rm_settings (member_id, exercise_id) VALUES (?, ?)").run(recipient.member_id, exerciseId);
       }
-      if (useForMy1rm) {
-        db.prepare("INSERT OR REPLACE INTO member_1rm_settings (member_id, exercise_id) VALUES (?, ?)").run(recipient.member_id, ex.exercise_id);
-      }
-      const newExRow = db.prepare("SELECT last_insert_rowid() AS id").get() as { id: number };
-      const newExId = newExRow.id;
-      const sets = db.prepare("SELECT reps, weight_kg, time_seconds, distance_km, set_order, drop_index FROM workout_sets WHERE workout_exercise_id = ? ORDER BY set_order, id").all(ex.id) as { reps: number | null; weight_kg: number | null; time_seconds: number | null; distance_km: number | null; set_order: number; drop_index?: number }[];
+      const newExId = Number(exResult.lastInsertRowid);
+      const sets = db.prepare(setsSelectSql).all(ex.id) as {
+        reps: number | null;
+        weight_kg: number | null;
+        time_seconds: number | null;
+        distance_km: number | null;
+        set_order: number;
+        drop_index?: number;
+      }[];
       for (const s of sets) {
-        insertSet.run(newExId, s.reps, s.weight_kg, s.time_seconds, s.distance_km, s.set_order, hasDropIndex && s.drop_index != null ? s.drop_index : 0);
+        if (hasDropIndex) {
+          insertSet.run(
+            newExId,
+            s.reps,
+            s.weight_kg,
+            s.time_seconds,
+            s.distance_km,
+            s.set_order,
+            s.drop_index != null ? s.drop_index : 0
+          );
+        } else {
+          insertSet.run(newExId, s.reps, s.weight_kg, s.time_seconds, s.distance_km, s.set_order);
+        }
       }
     }
 

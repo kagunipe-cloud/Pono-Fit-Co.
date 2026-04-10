@@ -7,12 +7,14 @@ import {
   ensureSubscriptionRenewalPromoColumns,
   ensureSubscriptionComplimentaryColumns,
   ensureSubscriptionRenewalDiscountPercentColumn,
+  deleteMoneyOwedReminderForGroup,
 } from "@/lib/db";
 import { computeRenewalChargePrice } from "@/lib/renewal-pricing";
 import { getAdminMemberId } from "@/lib/admin";
 import { extendSubscriptionAfterRenewal, type RenewalSubRow } from "@/lib/renewal-extension";
 import { computeCcFee } from "@/lib/cc-fees";
 import { stripeCustomerIdForApi } from "@/lib/stripe-customer";
+import { revokeAccess } from "@/lib/kisi";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
@@ -88,6 +90,7 @@ function deleteFailureGroup(db: AppDb, memberId: string, subscriptionKey: string
     memberId,
     subscriptionKey
   );
+  deleteMoneyOwedReminderForGroup(db, memberId, subscriptionKey);
 }
 
 function dismissFailureGroup(db: AppDb, memberId: string, subscriptionKey: string) {
@@ -96,6 +99,26 @@ function dismissFailureGroup(db: AppDb, memberId: string, subscriptionKey: strin
      WHERE member_id = ? AND COALESCE(subscription_id, '') = ?
        AND (dismissed_at IS NULL OR TRIM(COALESCE(dismissed_at, '')) = '')`
   ).run(memberId, subscriptionKey);
+  deleteMoneyOwedReminderForGroup(db, memberId, subscriptionKey);
+}
+
+/** Same outcome as POST /api/admin/subscriptions/cancel — stops cron renewals for that membership. */
+async function cancelActiveSubscriptionForMoneyOwed(
+  db: AppDb,
+  row: { subscription_id: string; member_id: string; kisi_id: string | null }
+): Promise<void> {
+  db.prepare("UPDATE subscriptions SET status = ? WHERE subscription_id = ?").run("Cancelled", row.subscription_id);
+  const stillActive = db
+    .prepare("SELECT 1 FROM subscriptions WHERE member_id = ? AND status = 'Active' LIMIT 1")
+    .get(row.member_id) as { 1?: number } | undefined;
+  const kid = row.kisi_id?.trim();
+  if (kid && !stillActive) {
+    try {
+      await revokeAccess(kid);
+    } catch (e) {
+      console.error("[money-owed-action cancel_subscription] Kisi revoke failed", e);
+    }
+  }
 }
 
 /**
@@ -117,7 +140,7 @@ export async function POST(request: NextRequest) {
   }
 
   const action = String(body.action ?? "").trim();
-  if (!["dismiss", "retry_payment", "write_off"].includes(action)) {
+  if (!["cancel_subscription", "retry_payment", "write_off"].includes(action)) {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   }
 
@@ -157,7 +180,7 @@ export async function POST(request: NextRequest) {
 
     if (!failure || failure.dismissed_at) {
       db.close();
-      return NextResponse.json({ error: "Record not found or already dismissed" }, { status: 404 });
+      return NextResponse.json({ error: "Record not found or already archived" }, { status: 404 });
     }
     memberId = failure.member_id;
     subscriptionKey = normalizeSubscriptionKey(failure.subscription_id);
@@ -176,10 +199,44 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No open failed payments for this member/subscription" }, { status: 404 });
   }
 
-  if (action === "dismiss") {
+  if (action === "cancel_subscription") {
+    const sidToCancel =
+      subscriptionKey !== ""
+        ? subscriptionKey
+        : (loadActiveMonthlySubscription(db, memberId, null)?.subscription_id ?? null);
+
+    let cancelled = false;
+    if (sidToCancel) {
+      const activeRow = db
+        .prepare(
+          `SELECT s.subscription_id, s.member_id, m.kisi_id
+           FROM subscriptions s
+           JOIN members m ON m.member_id = s.member_id
+           WHERE s.subscription_id = ? AND s.member_id = ? AND s.status = 'Active'`
+        )
+        .get(sidToCancel, memberId) as
+        | { subscription_id: string; member_id: string; kisi_id: string | null }
+        | undefined;
+      if (activeRow) {
+        try {
+          await cancelActiveSubscriptionForMoneyOwed(db, activeRow);
+          cancelled = true;
+        } catch (e) {
+          db.close();
+          const msg = e instanceof Error ? e.message : "Failed to cancel membership";
+          return NextResponse.json({ error: msg }, { status: 500 });
+        }
+      }
+    }
+
     dismissFailureGroup(db, memberId, subscriptionKey);
     db.close();
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      ok: true,
+      message: cancelled
+        ? "Balance archived; membership cancelled so automatic renewals stop. Door access is revoked if they have no other active membership."
+        : "Balance archived. No active monthly subscription was matched to cancel (cron renewals were already not running for that case).",
+    });
   }
 
   const memberRow = db

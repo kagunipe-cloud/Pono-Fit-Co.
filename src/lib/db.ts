@@ -375,6 +375,20 @@ export function ensureMembersPasswordColumn(db: ReturnType<typeof getDb>) {
   }
 }
 
+/** Forgot-password email flow (token + expiry). */
+export function ensureMembersPasswordResetColumns(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE members ADD COLUMN password_reset_token TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE members ADD COLUMN password_reset_expires_at TEXT");
+  } catch {
+    /* already exists */
+  }
+}
+
 /** Add phone to members if missing (optional contact number). */
 export function ensureMembersPhoneColumn(db: ReturnType<typeof getDb>) {
   try {
@@ -567,6 +581,34 @@ export function ensurePaymentFailuresTable(db: ReturnType<typeof getDb>) {
   } catch (err) {
     console.error("[db] ensurePaymentFailuresTable", err);
   }
+}
+
+/** Last admin “money owed” reminder email per member + subscription group (subscription_key '' = none). */
+export function ensureMoneyOwedRemindersTable(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS money_owed_reminders (
+        member_id TEXT NOT NULL,
+        subscription_key TEXT NOT NULL,
+        sent_at TEXT NOT NULL,
+        PRIMARY KEY (member_id, subscription_key)
+      )
+    `);
+  } catch (err) {
+    console.error("[db] ensureMoneyOwedRemindersTable", err);
+  }
+}
+
+export function deleteMoneyOwedReminderForGroup(
+  db: ReturnType<typeof getDb>,
+  memberId: string,
+  subscriptionKey: string
+) {
+  ensureMoneyOwedRemindersTable(db);
+  db.prepare(`DELETE FROM money_owed_reminders WHERE member_id = ? AND subscription_key = ?`).run(
+    memberId,
+    subscriptionKey
+  );
 }
 
 /** Gift membership passes: purchased pass is emailed; recipient redeems into their account. */

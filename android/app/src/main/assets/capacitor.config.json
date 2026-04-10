@@ -1,0 +1,13 @@
+{
+	"appId": "co.ponofit.app",
+	"appName": "Pono Fit",
+	"webDir": "www",
+	"server": {
+		"url": "https://app.beponofitco.com",
+		"cleartext": false
+	},
+	"ios": {
+		"contentInset": "automatic",
+		"scheme": "ponofit"
+	}
+}

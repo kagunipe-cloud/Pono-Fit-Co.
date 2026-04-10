@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "../../../../lib/db";
+import { getDb, ensureMoneyOwedRemindersTable } from "../../../../lib/db";
 import { getAdminMemberId } from "../../../../lib/admin";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +38,8 @@ export type MoneyOwedAggregatedRow = {
   first_attempted_at: string;
   last_attempted_at: string;
   failure_ids: number[];
+  /** When an admin last sent the money-owed reminder email for this group (if ever). */
+  reminder_sent_at: string | null;
 };
 
 function mapAttemptRow(r: Record<string, unknown>): MoneyOwedAttemptRow {
@@ -64,7 +66,7 @@ function mapAttemptRow(r: Record<string, unknown>): MoneyOwedAttemptRow {
 /** GET: Money owed + failed payment attempts (admin only).
  *  - `attempts`: every cron/API failure row (for “Failed transactions” in Transactions).
  *  - `aggregated`: one row per member + subscription — amount = one period; retries counted.
- *  Query: `?view=archived` — dismissed rows only.
+ *  Query: `?view=archived` — archived (cancel subscription) rows only.
  */
 export async function GET(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
@@ -75,6 +77,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const db = getDb();
+    ensureMoneyOwedRemindersTable(db);
     const whereDismissed = archived
       ? `WHERE f.dismissed_at IS NOT NULL AND TRIM(f.dismissed_at) != ''`
       : `WHERE f.dismissed_at IS NULL OR TRIM(COALESCE(f.dismissed_at, '')) = ''`;
@@ -148,9 +151,14 @@ export async function GET(request: NextRequest) {
       LIMIT 1
     `);
 
+    const reminderStmt = db.prepare(
+      `SELECT sent_at FROM money_owed_reminders WHERE member_id = ? AND subscription_key = ?`
+    );
+
     const aggregated: MoneyOwedAggregatedRow[] = [];
     for (const g of groupRows) {
       const subKey = g.subscription_id != null ? String(g.subscription_id) : "";
+      const reminderRow = reminderStmt.get(g.member_id, subKey) as { sent_at: string } | undefined;
       const latest = latestStmt.get(g.member_id, subKey) as
         | { plan_name: string | null; amount_cents: number | null; reason: string; stripe_error_code: string | null }
         | undefined;
@@ -181,6 +189,10 @@ export async function GET(request: NextRequest) {
         first_attempted_at: String(g.first_attempted_at ?? ""),
         last_attempted_at: String(g.last_attempted_at ?? ""),
         failure_ids: ids,
+        reminder_sent_at:
+          reminderRow?.sent_at != null && String(reminderRow.sent_at).trim() !== ""
+            ? String(reminderRow.sent_at)
+            : null,
       });
     }
 
