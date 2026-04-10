@@ -7,6 +7,7 @@ import {
   ensureSubscriptionRenewalPromoColumns,
   ensureSubscriptionComplimentaryColumns,
   ensureSubscriptionRenewalDiscountPercentColumn,
+  deleteMoneyOwedReminderForGroup,
 } from "@/lib/db";
 import { computeRenewalChargePrice } from "@/lib/renewal-pricing";
 import { getAdminMemberId } from "@/lib/admin";
@@ -89,6 +90,7 @@ function deleteFailureGroup(db: AppDb, memberId: string, subscriptionKey: string
     memberId,
     subscriptionKey
   );
+  deleteMoneyOwedReminderForGroup(db, memberId, subscriptionKey);
 }
 
 function dismissFailureGroup(db: AppDb, memberId: string, subscriptionKey: string) {
@@ -97,6 +99,7 @@ function dismissFailureGroup(db: AppDb, memberId: string, subscriptionKey: strin
      WHERE member_id = ? AND COALESCE(subscription_id, '') = ?
        AND (dismissed_at IS NULL OR TRIM(COALESCE(dismissed_at, '')) = '')`
   ).run(memberId, subscriptionKey);
+  deleteMoneyOwedReminderForGroup(db, memberId, subscriptionKey);
 }
 
 /** Same outcome as POST /api/admin/subscriptions/cancel — stops cron renewals for that membership. */

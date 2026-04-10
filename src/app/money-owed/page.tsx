@@ -20,6 +20,7 @@ type MoneyOwedAggregatedRow = {
   first_attempted_at: string;
   last_attempted_at: string;
   failure_ids: number[];
+  reminder_sent_at?: string | null;
 };
 
 function formatMoney(n: number): string {
@@ -45,6 +46,16 @@ function formatAttemptedAt(iso: string): string {
 function groupKey(r: MoneyOwedAggregatedRow): string {
   return `${r.member_id}::${r.subscription_id ?? ""}`;
 }
+
+/** SQLite `datetime('now')` is UTC; parse for comparisons with `Date.now()`. */
+function parseReminderSentAtMs(iso: string | null | undefined): number | null {
+  if (iso == null || String(iso).trim() === "") return null;
+  const s = String(iso).trim();
+  const ms = Date.parse(s.includes("T") ? s : `${s.replace(" ", "T")}Z`);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+const REMINDER_RECENT_MS = 48 * 60 * 60 * 1000;
 
 function MoneyOwedContent() {
   const router = useRouter();
@@ -126,6 +137,13 @@ function MoneyOwedContent() {
       setActionMessage("Add an email on this member’s profile before sending a reminder.");
       return;
     }
+    const prevMs = parseReminderSentAtMs(row.reminder_sent_at ?? null);
+    if (prevMs != null && Date.now() - prevMs < REMINDER_RECENT_MS) {
+      const ok = window.confirm(
+        `A reminder was already sent on ${formatAttemptedAt(row.reminder_sent_at ?? "")} (within the last 48 hours).\n\nSend another email anyway?`
+      );
+      if (!ok) return;
+    }
     setEmailBusy(groupKey(row));
     setActionMessage(null);
     try {
@@ -142,6 +160,7 @@ function MoneyOwedContent() {
         throw new Error(typeof data.error === "string" ? data.error : "Request failed");
       }
       setActionMessage(typeof data.message === "string" ? data.message : "Reminder sent.");
+      load();
     } catch (e) {
       setActionMessage(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -208,7 +227,18 @@ function MoneyOwedContent() {
                   {first.email && <span className="ml-2 text-sm text-stone-500">{first.email}</span>}
                 </div>
                 <div className="divide-y divide-stone-100">
-                  {subs.map((r) => (
+                  {subs.map((r) => {
+                    const reminderMs = parseReminderSentAtMs(r.reminder_sent_at ?? null);
+                    const recentReminder =
+                      reminderMs != null &&
+                      Date.now() - reminderMs < REMINDER_RECENT_MS &&
+                      r.reminder_sent_at;
+                    const emailReminderTitle = !r.email?.trim()
+                      ? "Member has no email on file"
+                      : recentReminder
+                        ? `Reminder already sent ${formatAttemptedAt(r.reminder_sent_at)} — click to send again (you’ll confirm)`
+                        : undefined;
+                    return (
                     <div key={groupKey(r)} className="p-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 flex-1 space-y-1">
                         <p className="font-medium text-stone-800">{r.plan_name ?? "—"}</p>
@@ -235,6 +265,11 @@ function MoneyOwedContent() {
                             <> · First: {formatAttemptedAt(r.first_attempted_at)}</>
                           )}
                         </p>
+                        {r.reminder_sent_at ? (
+                          <p className="text-xs text-stone-600 mt-1">
+                            Reminder email last sent: {formatAttemptedAt(r.reminder_sent_at)}
+                          </p>
+                        ) : null}
                       </div>
                       {!archived && (
                         <div className="flex flex-col gap-1 shrink-0 sm:min-w-[11rem]">
@@ -246,7 +281,7 @@ function MoneyOwedContent() {
                               !r.email?.trim()
                             }
                             onClick={() => sendReminder(r)}
-                            title={!r.email?.trim() ? "Member has no email on file" : undefined}
+                            title={emailReminderTitle}
                             className="text-left text-xs font-medium text-stone-800 hover:underline disabled:opacity-50"
                           >
                             {emailBusy === groupKey(r) ? "Sending…" : "Send email reminder"}
@@ -278,7 +313,8 @@ function MoneyOwedContent() {
                         </div>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             );

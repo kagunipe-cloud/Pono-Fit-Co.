@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, ensurePaymentFailuresTable } from "@/lib/db";
+import { getDb, ensurePaymentFailuresTable, ensureMoneyOwedRemindersTable } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
 import { sendMoneyOwedReminderEmail, isGmailApiConfigured } from "@/lib/email";
 
@@ -126,6 +126,17 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+
+  const dbWrite = getDb();
+  ensureMoneyOwedRemindersTable(dbWrite);
+  dbWrite
+    .prepare(
+      `INSERT INTO money_owed_reminders (member_id, subscription_key, sent_at)
+       VALUES (?, ?, datetime('now'))
+       ON CONFLICT(member_id, subscription_key) DO UPDATE SET sent_at = excluded.sent_at`
+    )
+    .run(memberId, subKey);
+  dbWrite.close();
 
   return NextResponse.json({ ok: true, message: `Reminder sent to ${to}.` });
 }

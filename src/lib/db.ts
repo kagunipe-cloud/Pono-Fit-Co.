@@ -583,6 +583,34 @@ export function ensurePaymentFailuresTable(db: ReturnType<typeof getDb>) {
   }
 }
 
+/** Last admin “money owed” reminder email per member + subscription group (subscription_key '' = none). */
+export function ensureMoneyOwedRemindersTable(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS money_owed_reminders (
+        member_id TEXT NOT NULL,
+        subscription_key TEXT NOT NULL,
+        sent_at TEXT NOT NULL,
+        PRIMARY KEY (member_id, subscription_key)
+      )
+    `);
+  } catch (err) {
+    console.error("[db] ensureMoneyOwedRemindersTable", err);
+  }
+}
+
+export function deleteMoneyOwedReminderForGroup(
+  db: ReturnType<typeof getDb>,
+  memberId: string,
+  subscriptionKey: string
+) {
+  ensureMoneyOwedRemindersTable(db);
+  db.prepare(`DELETE FROM money_owed_reminders WHERE member_id = ? AND subscription_key = ?`).run(
+    memberId,
+    subscriptionKey
+  );
+}
+
 /** Gift membership passes: purchased pass is emailed; recipient redeems into their account. */
 export function ensureGiftPassesTable(db: ReturnType<typeof getDb>) {
   try {
