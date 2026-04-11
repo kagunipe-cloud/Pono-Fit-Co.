@@ -5,6 +5,7 @@
 
 import { randomUUID } from "crypto";
 import {
+  clearPaymentFailuresAfterSubscriptionRenewal,
   ensureSalesItemTotalCcFeeColumns,
   ensureSalesTypeColumn,
   ensureSubscriptionComplimentaryColumns,
@@ -187,6 +188,12 @@ export async function extendSubscriptionAfterRenewal(
     db.exec("ROLLBACK");
     throw e;
   }
+
+  const failureGroupKey =
+    sub.subscription_id != null && String(sub.subscription_id).trim() !== ""
+      ? String(sub.subscription_id).trim()
+      : "";
+  clearPaymentFailuresAfterSubscriptionRenewal(db, sub.member_id, failureGroupKey);
 
   const origin = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
   const waiver = await ensureWaiverBeforeKisi(sub.member_id, {
