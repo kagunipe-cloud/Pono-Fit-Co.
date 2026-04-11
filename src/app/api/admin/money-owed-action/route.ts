@@ -343,6 +343,7 @@ export async function POST(request: NextRequest) {
       itemTotal: String(itemTotalDollars),
       ccFee: String(ccFeeDollars),
       saleType: "renewal",
+      stripePaymentIntentId: paymentIntent.id,
     });
     db.close();
     return NextResponse.json({ ok: true, message: "Payment succeeded — membership extended; door access restored if waiver allows." });

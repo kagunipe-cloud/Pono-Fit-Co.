@@ -7,6 +7,7 @@ import { randomUUID } from "crypto";
 import {
   clearPaymentFailuresAfterSubscriptionRenewal,
   ensureSalesItemTotalCcFeeColumns,
+  ensureSalesStripePaymentIntentColumn,
   ensureSalesTypeColumn,
   ensureSubscriptionComplimentaryColumns,
   ensureSubscriptionRenewalDiscountPercentColumn,
@@ -69,6 +70,8 @@ export type RenewalFinancials = {
   ccFee: string;
   /** 'renewal' for paid charge; 'complimentary' for write-off (still extends period). */
   saleType: "renewal" | "complimentary";
+  /** Set for paid renewals so admin refunds can hit Stripe. */
+  stripePaymentIntentId?: string | null;
 };
 
 /**
@@ -98,6 +101,7 @@ export async function extendSubscriptionAfterRenewal(
   const sales_id = randomUUID().slice(0, 8);
 
   ensureSalesItemTotalCcFeeColumns(db);
+  ensureSalesStripePaymentIntentColumn(db);
   ensureSalesTypeColumn(db);
   ensureSubscriptionComplimentaryColumns(db);
   ensureSubscriptionRenewalDiscountPercentColumn(db);
@@ -167,9 +171,13 @@ export async function extendSubscriptionAfterRenewal(
     }
 
     const date_time = formatDateTimeInAppTz(new Date(), undefined, tz);
+    const stripePi =
+      financials.stripePaymentIntentId != null && String(financials.stripePaymentIntentId).trim() !== ""
+        ? String(financials.stripePaymentIntentId).trim()
+        : null;
     db.prepare(`
-      INSERT INTO sales (sales_id, date_time, member_id, grand_total, tax_amount, item_total, cc_fee, email, status, sale_date, sale_type)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Paid', ?, ?)
+      INSERT INTO sales (sales_id, date_time, member_id, grand_total, tax_amount, item_total, cc_fee, email, status, sale_date, sale_type, stripe_payment_intent_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Paid', ?, ?, ?)
     `).run(
       sales_id,
       date_time,
@@ -180,7 +188,8 @@ export async function extendSubscriptionAfterRenewal(
       financials.ccFee,
       memberRow.email ?? "",
       todayInAppTz(tz),
-      financials.saleType
+      financials.saleType,
+      stripePi
     );
     db.prepare("UPDATE members SET exp_next_payment_date = ? WHERE member_id = ?").run(expiryStr, sub.member_id);
     db.exec("COMMIT");

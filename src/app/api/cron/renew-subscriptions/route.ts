@@ -248,6 +248,7 @@ export async function GET(request: NextRequest) {
         itemTotal: String(itemTotalDollars),
         ccFee: String(ccFeeDollars),
         saleType: "renewal",
+        stripePaymentIntentId: paymentIntent.id,
       });
       results.push({ member_id: sub.member_id, status: "renewed" });
     } catch (err) {

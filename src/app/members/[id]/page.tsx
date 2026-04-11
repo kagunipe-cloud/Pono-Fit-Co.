@@ -291,14 +291,36 @@ export default function MemberDetailPage() {
   }
 
   async function refundSale(salesId: string) {
+    if (
+      !confirm(
+        "Refund this charge in Stripe and mark the sale as refunded here? Any membership tied to this sale will be cancelled. This cannot be undone."
+      )
+    ) {
+      return;
+    }
     setAdminAction("refund");
     try {
-      const res = await fetch("/api/admin/sales/refund", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sales_id: salesId }),
-      });
-      const json = await res.json();
+      const run = async (recordRefundOnly: boolean) => {
+        const res = await fetch("/api/admin/sales/refund", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sales_id: salesId, ...(recordRefundOnly ? { record_refund_only: true } : {}) }),
+        });
+        const json = await res.json();
+        return { res, json };
+      };
+      let { res, json } = await run(false);
+      if (res.status === 409 && json?.error) {
+        if (
+          confirm(
+            `${String(json.error)}\n\nIf you already refunded this charge in Stripe, click OK to mark it refunded in the app only (no Stripe API call).`
+          )
+        ) {
+          ({ res, json } = await run(true));
+        } else {
+          return;
+        }
+      }
       if (res.ok) fetchMember();
       else alert(json.error ?? "Failed");
     } finally {

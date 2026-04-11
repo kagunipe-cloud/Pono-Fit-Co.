@@ -161,14 +161,37 @@ export default function TransactionsPage() {
 
   async function refundSale(salesId: string) {
     if (!adminMemberId.trim() && !confirm("Admin only. Enter your Admin member ID above.")) return;
+    if (
+      !confirm(
+        "Refund this charge in Stripe and mark the sale as refunded here? Any membership tied to this sale will be cancelled. This cannot be undone."
+      )
+    ) {
+      return;
+    }
     setRefundingId(salesId);
     try {
-      const res = await fetch("/api/admin/sales/refund", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...(adminMemberId ? { "X-Admin-Member-Id": adminMemberId } : {}) },
-        body: JSON.stringify({ sales_id: salesId }),
-      });
-      const json = await res.json();
+      const headers = { "Content-Type": "application/json", ...(adminMemberId ? { "X-Admin-Member-Id": adminMemberId } : {}) };
+      const run = async (recordRefundOnly: boolean) => {
+        const res = await fetch("/api/admin/sales/refund", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ sales_id: salesId, ...(recordRefundOnly ? { record_refund_only: true } : {}) }),
+        });
+        const json = await res.json();
+        return { res, json };
+      };
+      let { res, json } = await run(false);
+      if (res.status === 409 && json?.error) {
+        if (
+          confirm(
+            `${String(json.error)}\n\nIf you already refunded this charge in Stripe, click OK to mark it refunded in the app only (no Stripe API call).`
+          )
+        ) {
+          ({ res, json } = await run(true));
+        } else {
+          return;
+        }
+      }
       if (res.ok) setSales((prev) => prev.map((s) => (s.sales_id === salesId ? { ...s, status: "Refunded" } : s)));
       else alert(json.error ?? "Failed");
     } finally {
