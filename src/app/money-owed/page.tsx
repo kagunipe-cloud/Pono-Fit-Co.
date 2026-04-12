@@ -229,14 +229,15 @@ function MoneyOwedContent() {
                 <div className="divide-y divide-stone-100">
                   {subs.map((r) => {
                     const reminderMs = parseReminderSentAtMs(r.reminder_sent_at ?? null);
+                    const reminderSentAt = r.reminder_sent_at;
                     const recentReminder =
                       reminderMs != null &&
                       Date.now() - reminderMs < REMINDER_RECENT_MS &&
-                      r.reminder_sent_at;
+                      Boolean(reminderSentAt?.trim());
                     const emailReminderTitle = !r.email?.trim()
                       ? "Member has no email on file"
-                      : recentReminder
-                        ? `Reminder already sent ${formatAttemptedAt(r.reminder_sent_at ?? "")} — click to send again (you’ll confirm)`
+                      : recentReminder && reminderSentAt
+                        ? `Reminder already sent ${formatAttemptedAt(reminderSentAt)} — click to send again (you’ll confirm)`
                         : undefined;
                     return (
                     <div key={groupKey(r)} className="p-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
