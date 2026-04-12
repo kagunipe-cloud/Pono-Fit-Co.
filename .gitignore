@@ -18,6 +18,12 @@
 .DS_Store
 *.pem
 
+# Xcode / SwiftPM — user-local state (regenerated on open; causes noisy merges)
+**/xcuserdata/
+*.xcuserstate
+**/.swiftpm/**/xcuserdata/
+**/project.xcworkspace/xcshareddata/swiftpm/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
