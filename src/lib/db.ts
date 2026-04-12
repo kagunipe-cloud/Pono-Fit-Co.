@@ -611,6 +611,20 @@ export function deleteMoneyOwedReminderForGroup(
   );
 }
 
+/** Call when a monthly subscription successfully renews (cron, admin retry, write-off) so Money Owed stays accurate. */
+export function clearPaymentFailuresAfterSubscriptionRenewal(
+  db: ReturnType<typeof getDb>,
+  memberId: string,
+  subscriptionKey: string
+) {
+  ensurePaymentFailuresTable(db);
+  db.prepare(`DELETE FROM payment_failures WHERE member_id = ? AND COALESCE(subscription_id, '') = ?`).run(
+    memberId,
+    subscriptionKey
+  );
+  deleteMoneyOwedReminderForGroup(db, memberId, subscriptionKey);
+}
+
 /** Gift membership passes: purchased pass is emailed; recipient redeems into their account. */
 export function ensureGiftPassesTable(db: ReturnType<typeof getDb>) {
   try {

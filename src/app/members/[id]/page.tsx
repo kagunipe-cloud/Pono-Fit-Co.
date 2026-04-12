@@ -82,6 +82,8 @@ export default function MemberDetailPage() {
   const [sendingWaiver, setSendingWaiver] = useState(false);
   const [sendingPasswordReset, setSendingPasswordReset] = useState(false);
   const [togglingAutoRenew, setTogglingAutoRenew] = useState(false);
+  const [adjustSubId, setAdjustSubId] = useState<string | null>(null);
+  const [adjustDateStr, setAdjustDateStr] = useState("");
   const [waiverResult, setWaiverResult] = useState<{ message: string; url?: string } | null>(null);
   const [passwordResetMessage, setPasswordResetMessage] = useState<string | null>(null);
   const [unlocks, setUnlocks] = useState<{ id: number; lock_id: number | null; lock_name: string | null; success: number; happened_at: string }[]>([]);
@@ -274,6 +276,38 @@ export default function MemberDetailPage() {
     }
   }
 
+  function openAdjustExpiry(subscriptionId: string, expiryRaw: unknown) {
+    const s = String(expiryRaw ?? "").trim();
+    const m = /^(\d{4}-\d{2}-\d{2})/.exec(s);
+    setAdjustDateStr(m ? m[1] : "");
+    setAdjustSubId(subscriptionId);
+  }
+
+  async function submitAdjustExpiry() {
+    if (!adjustSubId || !adjustDateStr.trim()) return;
+    if (!confirm(`Set period end (expiry) to ${adjustDateStr.trim()}? Door access in Kisi will be updated if this member has a Kisi user.`)) {
+      return;
+    }
+    setAdminAction("adjust-expiry");
+    try {
+      const res = await fetch("/api/admin/subscriptions/adjust-expiry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscription_id: adjustSubId, expiry_date: adjustDateStr.trim() }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setAdjustSubId(null);
+        if (json.kisi_warning) alert(String(json.kisi_warning));
+        fetchMember();
+      } else {
+        alert(json.error ?? "Failed");
+      }
+    } finally {
+      setAdminAction(null);
+    }
+  }
+
   async function cancelPTBooking(type: "slot" | "trainer_specific" | "open", id: number) {
     setAdminAction("pt");
     try {
@@ -291,14 +325,36 @@ export default function MemberDetailPage() {
   }
 
   async function refundSale(salesId: string) {
+    if (
+      !confirm(
+        "Refund this charge in Stripe and mark the sale as refunded here? Any membership tied to this sale will be cancelled. This cannot be undone."
+      )
+    ) {
+      return;
+    }
     setAdminAction("refund");
     try {
-      const res = await fetch("/api/admin/sales/refund", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sales_id: salesId }),
-      });
-      const json = await res.json();
+      const run = async (recordRefundOnly: boolean) => {
+        const res = await fetch("/api/admin/sales/refund", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sales_id: salesId, ...(recordRefundOnly ? { record_refund_only: true } : {}) }),
+        });
+        const json = await res.json();
+        return { res, json };
+      };
+      let { res, json } = await run(false);
+      if (res.status === 409 && json?.error) {
+        if (
+          confirm(
+            `${String(json.error)}\n\nIf you already refunded this charge in Stripe, click OK to mark it refunded in the app only (no Stripe API call).`
+          )
+        ) {
+          ({ res, json } = await run(true));
+        } else {
+          return;
+        }
+      }
       if (res.ok) fetchMember();
       else alert(json.error ?? "Failed");
     } finally {
@@ -1087,9 +1143,58 @@ export default function MemberDetailPage() {
                     <td className="py-2 px-4">{String(s.days_remaining ?? "—")}</td>
                     <td className="py-2 px-4">
                       {isAdmin && s.status !== "Cancelled" ? (
-                        <button type="button" onClick={() => cancelSubscription(String(s.subscription_id))} disabled={!!adminAction} className="text-red-600 hover:underline text-xs font-medium disabled:opacity-50">
-                          {adminAction === "sub" ? "…" : "Cancel"}
-                        </button>
+                        adjustSubId === String(s.subscription_id) ? (
+                          <div className="flex flex-col gap-2 items-start min-w-[11rem]">
+                            <label className="text-xs text-stone-500 sr-only">New expiry</label>
+                            <input
+                              type="date"
+                              value={adjustDateStr}
+                              onChange={(e) => setAdjustDateStr(e.target.value)}
+                              className="text-xs border border-stone-300 rounded px-2 py-1 text-stone-800"
+                              disabled={!!adminAction}
+                            />
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void submitAdjustExpiry()}
+                                disabled={!!adminAction || !adjustDateStr}
+                                className="text-brand-700 hover:underline text-xs font-medium disabled:opacity-50"
+                              >
+                                {adminAction === "adjust-expiry" ? "…" : "Save"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setAdjustSubId(null);
+                                  setAdjustDateStr("");
+                                }}
+                                disabled={!!adminAction}
+                                className="text-stone-600 hover:underline text-xs disabled:opacity-50"
+                              >
+                                Close
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-1 items-start">
+                            <button
+                              type="button"
+                              onClick={() => openAdjustExpiry(String(s.subscription_id), s.expiry_date)}
+                              disabled={!!adminAction}
+                              className="text-brand-700 hover:underline text-xs font-medium disabled:opacity-50"
+                            >
+                              Adjust expiry
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => cancelSubscription(String(s.subscription_id))}
+                              disabled={!!adminAction}
+                              className="text-red-600 hover:underline text-xs font-medium disabled:opacity-50"
+                            >
+                              {adminAction === "sub" ? "…" : "Cancel"}
+                            </button>
+                          </div>
+                        )
                       ) : (
                         "—"
                       )}

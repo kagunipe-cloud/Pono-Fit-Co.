@@ -7,6 +7,7 @@ import {
   ensureSubscriptionRenewalPromoColumns,
   ensureSubscriptionComplimentaryColumns,
   ensureSubscriptionRenewalDiscountPercentColumn,
+  clearPaymentFailuresAfterSubscriptionRenewal,
   deleteMoneyOwedReminderForGroup,
 } from "@/lib/db";
 import { computeRenewalChargePrice } from "@/lib/renewal-pricing";
@@ -86,11 +87,7 @@ function normalizeSubscriptionKey(subscriptionId: string | null | undefined): st
 }
 
 function deleteFailureGroup(db: AppDb, memberId: string, subscriptionKey: string) {
-  db.prepare(`DELETE FROM payment_failures WHERE member_id = ? AND COALESCE(subscription_id, '') = ?`).run(
-    memberId,
-    subscriptionKey
-  );
-  deleteMoneyOwedReminderForGroup(db, memberId, subscriptionKey);
+  clearPaymentFailuresAfterSubscriptionRenewal(db, memberId, subscriptionKey);
 }
 
 function dismissFailureGroup(db: AppDb, memberId: string, subscriptionKey: string) {
@@ -274,7 +271,6 @@ export async function POST(request: NextRequest) {
         ccFee: "0",
         saleType: "complimentary",
       });
-      deleteFailureGroup(db, memberId, subscriptionKey);
       db.close();
       return NextResponse.json({ ok: true, message: "Written off — membership extended; door access restored if waiver allows." });
     }
@@ -347,8 +343,8 @@ export async function POST(request: NextRequest) {
       itemTotal: String(itemTotalDollars),
       ccFee: String(ccFeeDollars),
       saleType: "renewal",
+      stripePaymentIntentId: paymentIntent.id,
     });
-    deleteFailureGroup(db, memberId, subscriptionKey);
     db.close();
     return NextResponse.json({ ok: true, message: "Payment succeeded — membership extended; door access restored if waiver allows." });
   } catch (err) {

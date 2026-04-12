@@ -8,7 +8,7 @@ import {
   ensureSubscriptionPassPackColumns,
 } from "../../../../lib/db";
 import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../lib/recurring-classes";
-import { todayInAppTz } from "../../../../lib/app-timezone";
+import { todayInAppTz, calendarDaysUntilExpiryYmd } from "../../../../lib/app-timezone";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { updateKisiUser, ensureKisiUser } from "../../../../lib/kisi";
 import { parseBirthday } from "../../../../lib/member-birthday";
@@ -69,6 +69,14 @@ export async function GET(
       WHERE s.member_id = ?
       ORDER BY s.start_date DESC
     `).all(mid) as Record<string, unknown>[];
+
+    for (const sub of subscriptions) {
+      const exp = sub.expiry_date;
+      if (typeof exp === "string" && exp.trim() !== "") {
+        const n = calendarDaysUntilExpiryYmd(exp, today_ymd);
+        if (n !== null) sub.days_remaining = String(n);
+      }
+    }
 
     const classBookings = db.prepare(`
       SELECT b.*, c.class_name, c.date as class_date, c.time as class_time

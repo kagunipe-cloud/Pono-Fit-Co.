@@ -72,6 +72,25 @@ export function todayInAppTz(timeZone: string = APP_TIMEZONE): string {
   return new Date().toLocaleDateString("en-CA", { timeZone });
 }
 
+/**
+ * Whole calendar days from `todayYmd` until `expiryYmd` (gym date strings).
+ * Same calendar day => 0; negative if expiry is in the past.
+ * Prefer this for UI instead of stored `subscriptions.days_remaining`, which is only updated on renew/checkout.
+ */
+export function calendarDaysUntilExpiryYmd(
+  expiryYmd: string | null | undefined,
+  todayYmd: string
+): number | null {
+  const expNorm = normalizeDateToYMD(expiryYmd);
+  const todayNorm = normalizeDateToYMD(todayYmd);
+  if (!expNorm || !todayNorm) return null;
+  const [ey, em, ed] = expNorm.split("-").map((x) => parseInt(x, 10));
+  const [ty, tm, td] = todayNorm.split("-").map((x) => parseInt(x, 10));
+  const exp = Date.UTC(ey, em - 1, ed);
+  const tod = Date.UTC(ty, tm - 1, td);
+  return Math.round((exp - tod) / 86400000);
+}
+
 /** Format a Date as YYYY-MM-DD for storage. Use this for all date-only DB columns. */
 export function formatDateForStorage(date: Date, timeZone: string = APP_TIMEZONE): string {
   return date.toLocaleDateString("en-CA", { timeZone });
