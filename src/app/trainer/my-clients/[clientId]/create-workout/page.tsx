@@ -137,6 +137,19 @@ export default function TrainerCreateWorkoutForClientPage() {
     setExercises((e) => e.filter((_, i) => i !== index));
   }
 
+  function moveExerciseInList(from: number, direction: -1 | 1) {
+    setExercises((list) => {
+      const to = from + direction;
+      if (to < 0 || to >= list.length) return list;
+      const next = [...list];
+      const a = next[from]!;
+      const b = next[to]!;
+      next[from] = b;
+      next[to] = a;
+      return next;
+    });
+  }
+
   async function handleAddExerciseToDb(e: React.FormEvent) {
     e.preventDefault();
     setNewExError(null);
@@ -341,13 +354,41 @@ export default function TrainerCreateWorkoutForClientPage() {
           {exercises.length > 0 && (
             <ul className="space-y-2">
               {exercises.map((ex, i) => (
-                <li key={i} className="flex items-center justify-between p-3 rounded-lg border border-stone-200 bg-white">
-                  <span className="font-medium text-stone-800">
+                <li key={i} className="flex items-center justify-between gap-2 p-3 rounded-lg border border-stone-200 bg-white">
+                  <span className="font-medium text-stone-800 min-w-0">
                     {ex.exercise_name}
                     <span className="ml-2 text-xs text-stone-500 capitalize">({ex.type})</span>
                     <span className="ml-2 text-xs text-stone-400">— {ex.sets.length} set(s)</span>
                   </span>
-                  <button type="button" onClick={() => removeExercise(i)} className="text-sm text-red-600 hover:underline">Remove</button>
+                  <span className="flex items-center gap-2 shrink-0">
+                    {exercises.length > 1 && (
+                      <span className="inline-flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => moveExerciseInList(i, -1)}
+                          disabled={i === 0}
+                          className="px-2 py-0.5 rounded border border-stone-200 text-stone-600 text-sm hover:bg-stone-50 disabled:opacity-40"
+                          title="Move up"
+                          aria-label="Move exercise up"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveExerciseInList(i, 1)}
+                          disabled={i >= exercises.length - 1}
+                          className="px-2 py-0.5 rounded border border-stone-200 text-stone-600 text-sm hover:bg-stone-50 disabled:opacity-40"
+                          title="Move down"
+                          aria-label="Move exercise down"
+                        >
+                          ↓
+                        </button>
+                      </span>
+                    )}
+                    <button type="button" onClick={() => removeExercise(i)} className="text-sm text-red-600 hover:underline">
+                      Remove
+                    </button>
+                  </span>
                 </li>
               ))}
             </ul>

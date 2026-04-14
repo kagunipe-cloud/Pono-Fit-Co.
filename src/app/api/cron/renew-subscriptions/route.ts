@@ -8,6 +8,7 @@ import {
   ensureSubscriptionRenewalPromoColumns,
   ensureSubscriptionComplimentaryColumns,
   ensureSubscriptionRenewalDiscountPercentColumn,
+  ensureSubscriptionPassPackColumns,
 } from "../../../../lib/db";
 import { computeRenewalChargePrice } from "../../../../lib/renewal-pricing";
 import { revokeAccess } from "../../../../lib/kisi";
@@ -54,12 +55,14 @@ export async function GET(request: NextRequest) {
   ensureSubscriptionRenewalPromoColumns(db);
   ensureSubscriptionComplimentaryColumns(db);
   ensureSubscriptionRenewalDiscountPercentColumn(db);
+  ensureSubscriptionPassPackColumns(db);
 
   const tz = getAppTimezone(db);
   const today = todayString(tz);
 
-  // End-of-period cancel runs before Stripe: day/week passes never renew via this job, but members with
-  // auto_renew=1 (e.g. monthly) were excluded from the old query — expired day passes stayed Active forever.
+  // End-of-period cancel runs before Stripe: non-monthly plans with past expiry and no auto-renew.
+  // Pass packs (5-/10-day banked credits) store expiry_date = 2000-01-01 as a sentinel — they must NOT
+  // match this query or the cron immediately cancels them and wipes door access.
   const endedNoRenew = db
     .prepare(
       `SELECT s.subscription_id, s.member_id
@@ -67,6 +70,7 @@ export async function GET(request: NextRequest) {
        JOIN members m ON m.member_id = s.member_id
        JOIN membership_plans p ON p.product_id = s.product_id
        WHERE s.status = 'Active' AND s.expiry_date < ?
+         AND s.pass_credits_remaining IS NULL
          AND (
            LOWER(TRIM(COALESCE(p.unit, ''))) != 'month'
            OR (m.auto_renew = 0 OR m.auto_renew IS NULL)

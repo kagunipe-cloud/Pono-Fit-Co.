@@ -572,40 +572,30 @@ export default function MemberDetailPage() {
           <div className="pt-4 border-t border-stone-200/80">
             <h2 className="text-base font-semibold text-stone-800 mb-2">Day pass packs</h2>
             <p className="text-xs text-stone-600 mb-2">
-              Banked days for Passes (5- / 10-day packs). Members activate one calendar day at a time from My Membership.
+              Banked days (same ledger idea as class/PT credits). Members activate one calendar day at a time from My Membership.
             </p>
             {(() => {
               const todayY = (data?.today_ymd ?? "").trim();
-              const packs =
-                data?.subscriptions?.filter(
-                  (s) => s.pass_credits_remaining != null && String(s.status ?? "") !== "Cancelled"
-                ) ?? [];
-              if (packs.length === 0) {
-                return <p className="text-sm text-stone-500">No day pass packs on file.</p>;
+              const left = Number((data as { day_pass_credits?: number })?.day_pass_credits ?? 0);
+              const act = String((data?.member as { pass_activation_day?: string | null })?.pass_activation_day ?? "").trim();
+              const activeToday = !!todayY && act === todayY;
+              if (left <= 0 && !activeToday) {
+                return <p className="text-sm text-stone-500">No banked day passes on file.</p>;
               }
               return (
-                <ul className="space-y-2 text-sm text-stone-700">
-                  {packs.map((s, i) => {
-                    const left = Number(s.pass_credits_remaining ?? 0);
-                    const act = String(s.pass_activation_day ?? "").trim();
-                    const activeToday = !!todayY && act === todayY;
-                    return (
-                      <li key={i} className="rounded-lg border border-stone-200 bg-white/80 px-3 py-2">
-                        <span className="font-medium text-stone-800">{String(s.plan_name ?? "Pass pack")}</span>
-                        <span className="text-stone-600">
-                          {" "}
-                          — {left} day{left !== 1 ? "s" : ""} left
-                        </span>
-                        {activeToday && (
-                          <span className="ml-2 text-emerald-700 font-medium">· Active today</span>
-                        )}
-                        {!activeToday && act && (
-                          <span className="block text-xs text-stone-500 mt-0.5">Last activated: {act}</span>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
+                <div className="rounded-lg border border-stone-200 bg-white/80 px-3 py-2 text-sm text-stone-700">
+                  <span className="font-medium text-stone-800">Day pass credits</span>
+                  <span className="text-stone-600">
+                    {" "}
+                    — {left} day{left !== 1 ? "s" : ""} banked
+                  </span>
+                  {activeToday && (
+                    <span className="ml-2 text-emerald-700 font-medium">· Active today</span>
+                  )}
+                  {!activeToday && act ? (
+                    <span className="block text-xs text-stone-500 mt-0.5">Last activated: {act}</span>
+                  ) : null}
+                </div>
               );
             })()}
           </div>
@@ -1134,16 +1124,33 @@ export default function MemberDetailPage() {
             <table className="w-full text-left text-sm">
               <thead><tr className="bg-stone-50 text-stone-500"><th className="py-2 px-4">Plan</th><th className="py-2 px-4">Status</th><th className="py-2 px-4">Start</th><th className="py-2 px-4">Expiry</th><th className="py-2 px-4">Days left</th><th className="py-2 px-4">Admin</th></tr></thead>
               <tbody>
-                {data.subscriptions.map((s, i) => (
+                {data.subscriptions.map((s, i) => {
+                  const isBankedPassPack =
+                    s.pass_credits_remaining != null && String(s.pass_credits_remaining).trim() !== "";
+                  return (
                   <tr key={i} className="border-t border-stone-100">
                     <td className="py-2 px-4">{String(s.plan_name ?? s.product_id ?? "—")}</td>
                     <td className="py-2 px-4">{String(s.status ?? "—")}</td>
                     <td className="py-2 px-4">{String(s.start_date ?? "—")}</td>
-                    <td className="py-2 px-4">{String(s.expiry_date ?? "—")}</td>
-                    <td className="py-2 px-4">{String(s.days_remaining ?? "—")}</td>
+                    <td className="py-2 px-4">
+                      {isBankedPassPack ? (
+                        <span title="Pass packs use banked day credits, not a calendar end date">—</span>
+                      ) : (
+                        String(s.expiry_date ?? "—")
+                      )}
+                    </td>
+                    <td className="py-2 px-4">
+                      {isBankedPassPack ? (
+                        <span title="Days left in this pack">{String(s.days_remaining ?? "—")}</span>
+                      ) : (
+                        String(s.days_remaining ?? "—")
+                      )}
+                    </td>
                     <td className="py-2 px-4">
                       {isAdmin && s.status !== "Cancelled" ? (
-                        adjustSubId === String(s.subscription_id) ? (
+                        isBankedPassPack ? (
+                          <span className="text-xs text-stone-500">Banked days — member activates under My Membership</span>
+                        ) : adjustSubId === String(s.subscription_id) ? (
                           <div className="flex flex-col gap-2 items-start min-w-[11rem]">
                             <label className="text-xs text-stone-500 sr-only">New expiry</label>
                             <input
@@ -1200,7 +1207,8 @@ export default function MemberDetailPage() {
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}

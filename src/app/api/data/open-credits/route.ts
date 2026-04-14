@@ -3,6 +3,11 @@ import { getDb } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
 import { ensureRecurringClassesTables } from "@/lib/recurring-classes";
 import { ensurePTSlotTables } from "@/lib/pt-slots";
+import {
+  ensureDayPassCreditLedger,
+  ensureMembersPassActivationDayColumn,
+  migrateLegacyPassPackSubscriptionsToLedger,
+} from "@/lib/day-pass-credits";
 
 export const dynamic = "force-dynamic";
 
@@ -149,37 +154,40 @@ export async function GET(request: NextRequest) {
       purchaser_member_id: g.purchaser_member_id,
     }));
 
+    ensureDayPassCreditLedger(db);
+    ensureMembersPassActivationDayColumn(db);
+    migrateLegacyPassPackSubscriptionsToLedger(db);
+
     const subs = db
       .prepare(
-        `SELECT s.subscription_id, s.member_id, s.status, s.pass_credits_remaining, s.pass_activation_day, mp.plan_name,
-                m.first_name, m.last_name
-         FROM subscriptions s
-         LEFT JOIN membership_plans mp ON mp.product_id = s.product_id
-         JOIN members m ON m.member_id = s.member_id
-         WHERE s.pass_credits_remaining IS NOT NULL AND s.pass_credits_remaining > 0
-           AND (s.status IS NULL OR s.status != 'Cancelled')
-         ORDER BY m.last_name COLLATE NOCASE, m.first_name COLLATE NOCASE`
+        `SELECT l.member_id,
+                SUM(l.amount) AS credits,
+                MAX(m.first_name) AS first_name,
+                MAX(m.last_name) AS last_name,
+                MAX(m.pass_activation_day) AS pass_activation_day
+         FROM day_pass_credit_ledger l
+         JOIN members m ON m.member_id = l.member_id
+         GROUP BY l.member_id
+         HAVING SUM(l.amount) > 0
+         ORDER BY MAX(m.last_name) COLLATE NOCASE, MAX(m.first_name) COLLATE NOCASE`
       )
       .all() as {
-        subscription_id: string | null;
         member_id: string;
-        status: string | null;
-        pass_credits_remaining: number | null;
-        pass_activation_day: string | null;
-        plan_name: string | null;
+        credits: number;
         first_name: string | null;
         last_name: string | null;
+        pass_activation_day: string | null;
       }[];
 
     let subRows: OpenCreditsPassSubRow[] = subs.map((s) => ({
       kind: "subscription" as const,
-      subscription_id: s.subscription_id,
+      subscription_id: null,
       member_id: s.member_id,
       member_name: [s.first_name, s.last_name].filter(Boolean).join(" ").trim() || s.member_id,
-      plan_name: s.plan_name,
-      pass_credits_remaining: Number(s.pass_credits_remaining ?? 0),
+      plan_name: "Day pass credits",
+      pass_credits_remaining: Number(s.credits ?? 0),
       pass_activation_day: s.pass_activation_day,
-      status: s.status,
+      status: "Active",
     }));
 
     if (q) {

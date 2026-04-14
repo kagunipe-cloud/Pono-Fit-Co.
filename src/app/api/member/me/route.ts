@@ -6,6 +6,12 @@ import { getMemberIdFromSession } from "../../../../lib/session";
 import { todayInAppTz } from "../../../../lib/app-timezone";
 import { hasBillableStripeCustomer } from "../../../../lib/stripe-customer";
 import { memberHasDoorAccessToday } from "../../../../lib/pass-access";
+import {
+  ensureDayPassCreditLedger,
+  ensureMembersPassActivationDayColumn,
+  getMemberDayPassLedgerBalance,
+  migrateLegacyPassPackSubscriptionsToLedger,
+} from "../../../../lib/day-pass-credits";
 
 export const dynamic = "force-dynamic";
 
@@ -19,8 +25,12 @@ export async function GET() {
     const db = getDb();
     ensureMembersAutoRenewColumn(db);
     ensureMembersProfileColumns(db);
+    ensureDayPassCreditLedger(db);
+    ensureMembersPassActivationDayColumn(db);
+    migrateLegacyPassPackSubscriptionsToLedger(db);
+
     const member = db.prepare(
-      "SELECT member_id, first_name, last_name, preferred_name, email, stripe_customer_id, auto_renew FROM members WHERE member_id = ?"
+      "SELECT member_id, first_name, last_name, preferred_name, email, stripe_customer_id, auto_renew, pass_activation_day FROM members WHERE member_id = ?"
     ).get(memberId) as {
       member_id: string;
       first_name: string | null;
@@ -29,6 +39,7 @@ export async function GET() {
       email: string | null;
       stripe_customer_id: string | null;
       auto_renew?: number | null;
+      pass_activation_day?: string | null;
     } | undefined;
     if (!member) {
       db.close();
@@ -39,16 +50,23 @@ export async function GET() {
     let classBookings: Record<string, unknown>[] = [];
     let occurrenceBookings: Record<string, unknown>[] = [];
     try {
-      subscriptions = db.prepare(`
+      const rawSubs = db.prepare(`
         SELECT s.*, p.plan_name, p.price as plan_price, p.unit as plan_unit, p.category as plan_category
         FROM subscriptions s
         LEFT JOIN membership_plans p ON p.product_id = s.product_id
         WHERE s.member_id = ?
         ORDER BY s.start_date DESC
       `).all(memberId) as Record<string, unknown>[];
+      subscriptions = rawSubs.filter((s) => {
+        const cat = String(s.plan_category ?? "").trim();
+        const unit = String(s.plan_unit ?? "").trim();
+        return !(cat === "Passes" && unit === "Day");
+      });
     } catch {
       /* subscriptions table may be empty schema */
     }
+
+    const dayPassCredits = getMemberDayPassLedgerBalance(db, memberId);
     try {
       classBookings = db.prepare(`
         SELECT b.*, c.class_name, c.date as class_date, c.time as class_time
@@ -148,14 +166,10 @@ export async function GET() {
     db.close();
 
     const today = todayInAppTz(tz);
-    const hasAccess = memberHasDoorAccessToday(subscriptions, today);
-    const hasBankedPassNotActivatedToday = subscriptions.some(
-      (s) =>
-        s.status === "Active" &&
-        s.pass_credits_remaining != null &&
-        Number(s.pass_credits_remaining) > 0 &&
-        String(s.pass_activation_day ?? "").trim() !== today
-    );
+    const memberPassDay = String(member.pass_activation_day ?? "").trim();
+    const hasAccess = memberHasDoorAccessToday(subscriptions, today, memberPassDay);
+    const hasBankedPassNotActivatedToday =
+      dayPassCredits > 0 && memberPassDay !== today;
     const showActivatePassHint = !hasAccess && hasBankedPassNotActivatedToday;
 
     const legalName = [member.first_name, member.last_name].filter(Boolean).join(" ") || "Member";
@@ -171,6 +185,8 @@ export async function GET() {
         legal_name: legalName,
       },
       subscriptions,
+      day_pass_credits: dayPassCredits,
+      pass_activation_day: member.pass_activation_day ?? null,
       today_ymd: today,
       classBookings,
       occurrenceBookings,

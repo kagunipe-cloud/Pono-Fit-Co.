@@ -1,15 +1,18 @@
 import type { getDb } from "./db";
 import { expiryDateSortableSql } from "./db";
 import { normalizeDateToYMD, todayInAppTz } from "./app-timezone";
+import { ensureMembersPassActivationDayColumn } from "./day-pass-credits";
 
 /**
  * Same rules as GET /api/member/me `hasAccess`: at least one Active subscription
- * with expiry on/after today, or a day-pass pack with activation set to today.
+ * with expiry on/after today, or a banked day pass activated for today (members.pass_activation_day).
  */
 export function memberHasDoorAccessToday(
   subscriptions: Array<Record<string, unknown>>,
-  todayYmd: string
+  todayYmd: string,
+  memberPassActivationDay?: string | null
 ): boolean {
+  if (String(memberPassActivationDay ?? "").trim() === todayYmd) return true;
   return subscriptions.some((s) => {
     if (s.status !== "Active") return false;
     const pc = s.pass_credits_remaining;
@@ -47,7 +50,15 @@ export function getSubscriptionDoorAccessValidUntil(
   memberId: string,
   tz: string
 ): Date | null {
+  ensureMembersPassActivationDayColumn(db);
   const today = todayInAppTz(tz);
+  const memberAct = db
+    .prepare("SELECT pass_activation_day FROM members WHERE member_id = ?")
+    .get(memberId) as { pass_activation_day: string | null } | undefined;
+  const memberDay = String(memberAct?.pass_activation_day ?? "").trim();
+  if (memberDay === today) {
+    return endOfCalendarDayInTimeZone(memberDay, tz);
+  }
   const passRow = db
     .prepare(
       `SELECT pass_activation_day FROM subscriptions

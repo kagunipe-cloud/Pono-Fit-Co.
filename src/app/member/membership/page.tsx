@@ -11,8 +11,6 @@ type Sub = {
   start_date?: string;
   expiry_date?: string;
   plan_price?: string;
-  pass_credits_remaining?: number | null;
-  pass_activation_day?: string | null;
   plan_unit?: string | null;
   plan_category?: string | null;
 };
@@ -25,12 +23,14 @@ function MemberMembershipContent() {
     has_saved_card?: boolean;
     auto_renew?: boolean;
     today_ymd?: string;
+    day_pass_credits?: number;
+    pass_activation_day?: string | null;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingCard, setUpdatingCard] = useState(false);
   const [cardMessage, setCardMessage] = useState<string | null>(null);
   const [togglingAutoRenew, setTogglingAutoRenew] = useState(false);
-  const [activatingId, setActivatingId] = useState<string | null>(null);
+  const [activatingPass, setActivatingPass] = useState(false);
   const [activateMessage, setActivateMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -78,22 +78,14 @@ function MemberMembershipContent() {
     }
   }
 
-  function isPassPackRow(s: Sub): boolean {
-    return (
-      s.pass_credits_remaining != null &&
-      String(s.plan_category ?? "").trim() === "Passes" &&
-      String(s.plan_unit ?? "").trim() === "Day"
-    );
-  }
-
-  async function activatePassForToday(subscriptionId: string) {
+  async function activatePassForToday() {
     setActivateMessage(null);
-    setActivatingId(subscriptionId);
+    setActivatingPass(true);
     try {
       const res = await fetch("/api/member/activate-pass-day", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subscription_id: subscriptionId }),
+        body: JSON.stringify({}),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -104,7 +96,7 @@ function MemberMembershipContent() {
       const refreshed = await fetch("/api/member/me").then((r) => (r.ok ? r.json() : null));
       if (refreshed) setData(refreshed);
     } finally {
-      setActivatingId(null);
+      setActivatingPass(false);
     }
   }
 
@@ -118,7 +110,7 @@ function MemberMembershipContent() {
         body: JSON.stringify({ enabled: !data.auto_renew }),
       });
       const json = await res.json();
-      if (json.ok) setData((d) => d ? { ...d, auto_renew: json.auto_renew } : d);
+      if (json.ok) setData((d) => (d ? { ...d, auto_renew: json.auto_renew } : d));
     } finally {
       setTogglingAutoRenew(false);
     }
@@ -129,6 +121,8 @@ function MemberMembershipContent() {
 
   const subs = data.subscriptions ?? [];
   const todayYmd = (data.today_ymd ?? "").trim();
+  const dayPassCredits = Number(data.day_pass_credits ?? 0);
+  const passAct = String(data.pass_activation_day ?? "").trim();
 
   return (
     <div className="max-w-2xl mx-auto p-6">
@@ -188,48 +182,45 @@ function MemberMembershipContent() {
           </label>
         </div>
       )}
-      {activateMessage && (
+
+      {(dayPassCredits > 0 || (todayYmd && passAct === todayYmd)) && (
+        <div className="mb-6 p-4 rounded-xl border border-brand-200 bg-brand-50/50">
+          <h2 className="text-sm font-semibold text-stone-800 mb-1">Day pass credits</h2>
+          <p className="text-sm text-stone-600 mb-2">
+            {dayPassCredits > 0
+              ? `${dayPassCredits} day${dayPassCredits !== 1 ? "s" : ""} banked — activate when you plan to visit.`
+              : "No banked days left."}
+          </p>
+          <p className="text-xs text-stone-500 mb-2">Door access applies for that calendar day (waiver may be required).</p>
+          {todayYmd && passAct === todayYmd && (
+            <p className="text-sm font-medium text-green-800 mb-2">Pass active for today — you can unlock the door.</p>
+          )}
+          {activateMessage && <p className="text-sm text-stone-700 mb-2">{activateMessage}</p>}
+          <button
+            type="button"
+            disabled={activatingPass || dayPassCredits <= 0 || (!!todayYmd && passAct === todayYmd)}
+            onClick={() => void activatePassForToday()}
+            className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {activatingPass ? "Activating…" : "Activate pass for today"}
+          </button>
+        </div>
+      )}
+
+      {activateMessage && dayPassCredits <= 0 && !(todayYmd && passAct === todayYmd) && (
         <p className="mb-4 text-sm text-stone-700 bg-brand-50 border border-brand-200 rounded-lg px-3 py-2">{activateMessage}</p>
       )}
+
       {subs.length === 0 ? (
-        <p className="text-stone-500">You don’t have any memberships yet.</p>
+        <p className="text-stone-500">You don’t have a recurring membership on file.{dayPassCredits > 0 ? "" : " Purchase a pass pack or membership when you're ready."}</p>
       ) : (
         <ul className="space-y-4">
           {subs.map((s, i) => (
             <li key={i} className="p-4 rounded-xl border border-stone-200 bg-white">
               <p className="font-medium text-stone-800">{s.plan_name ?? "Membership"}</p>
-              {isPassPackRow(s) ? (
-                <div className="mt-2 space-y-2">
-                  <p className="text-sm text-stone-600">
-                    {Number(s.pass_credits_remaining) > 0
-                      ? `${s.pass_credits_remaining} day${Number(s.pass_credits_remaining) !== 1 ? "s" : ""} left on this pack`
-                      : "No days left on this pack"}
-                  </p>
-                  <p className="text-xs text-stone-500">
-                    Activate one day when you plan to visit the gym. Door access runs for that calendar day (after you sign the waiver if required).
-                  </p>
-                  {todayYmd && String(s.pass_activation_day ?? "").trim() === todayYmd && (
-                    <p className="text-sm font-medium text-green-800">Pass active for today — you can unlock the door.</p>
-                  )}
-                  <button
-                    type="button"
-                    disabled={
-                      activatingId === s.subscription_id ||
-                      Number(s.pass_credits_remaining) <= 0 ||
-                      !s.subscription_id ||
-                      (!!todayYmd && String(s.pass_activation_day ?? "").trim() === todayYmd)
-                    }
-                    onClick={() => s.subscription_id && activatePassForToday(s.subscription_id)}
-                    className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {activatingId === s.subscription_id ? "Activating…" : "Activate pass for today"}
-                  </button>
-                </div>
-              ) : (
-                <p className="text-sm text-stone-500">
-                  {s.status} — {s.start_date} to {s.expiry_date} {s.plan_price ? `· ${s.plan_price}` : ""}
-                </p>
-              )}
+              <p className="text-sm text-stone-500">
+                {s.status} — {s.start_date} to {s.expiry_date} {s.plan_price ? `· ${s.plan_price}` : ""}
+              </p>
             </li>
           ))}
         </ul>

@@ -9,9 +9,9 @@ import {
   ensureSalesItemTotalCcFeeColumns,
   ensureSubscriptionRenewalPromoColumns,
   ensureGiftPassesTable,
-  ensureSubscriptionPassPackColumns,
 } from "../../../../lib/db";
 import { isPassPackPlan, passCreditsForPurchase } from "../../../../lib/pass-packs";
+import { ensureDayPassCreditLedger } from "../../../../lib/day-pass-credits";
 import { ensureCartTables } from "../../../../lib/cart";
 import { getEffectiveUnitPriceString } from "../../../../lib/cart-line-prices";
 import {
@@ -277,21 +277,13 @@ export async function POST(request: NextRequest) {
               continue;
             }
             if (isPassPackPlan(plan)) {
-              ensureSubscriptionPassPackColumns(db);
-              ensureSubscriptionRenewalPromoColumns(db);
+              ensureDayPassCreditLedger(db);
               const credits = passCreditsForPurchase(plan, it.quantity);
-              const start_date = new Date();
-              const startStr = formatDateForStorage(start_date, tz);
-              const sub_id = randomUUID().slice(0, 8);
               emailLineItems.push({ name: plan.plan_name ?? "Pass pack", quantity: it.quantity, price: formatPrice(effUnit) });
-              db.prepare(`
-                INSERT INTO subscriptions (
-                  subscription_id, member_id, product_id, status, start_date, expiry_date, days_remaining,
-                  price, sales_id, quantity, promo_renewals_remaining, renewal_price_indefinite,
-                  pass_credits_remaining, pass_activation_day
-                )
-                VALUES (?, ?, ?, 'Active', ?, '2000-01-01', '0', ?, ?, ?, NULL, 0, ?, NULL)
-              `).run(sub_id, member_id, plan.product_id, startStr, effUnit, sales_id, String(it.quantity), credits);
+              db.prepare(
+                `INSERT INTO day_pass_credit_ledger (member_id, amount, reason, reference_type, reference_id)
+                 VALUES (?, ?, 'purchase', 'sale', ?)`
+              ).run(member_id, credits, sales_id);
               continue;
             }
             emailLineItems.push({ name: plan.plan_name ?? "Membership", quantity: it.quantity, price: formatPrice(effUnit) });
