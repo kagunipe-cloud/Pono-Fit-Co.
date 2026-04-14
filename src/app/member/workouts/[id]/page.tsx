@@ -34,6 +34,7 @@ type Exercise = {
   id: number;
   type: string;
   exercise_name: string;
+  sort_order?: number;
   exercise_id?: number | null;
   use_for_my_1rm?: number;
   sets: { id: number; reps: number | null; weight_kg: number | null; time_seconds: number | null; distance_km: number | null; set_order: number; drop_index?: number }[];
@@ -180,6 +181,7 @@ export default function MemberWorkoutDetailPage() {
   const [editShowCustomNameReminder, setEditShowCustomNameReminder] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingExId, setDeletingExId] = useState<number | null>(null);
+  const [reordering, setReordering] = useState(false);
   /** `"${exerciseId}-${setOrder}"` while a set delete request is in flight */
   const [deletingSetKey, setDeletingSetKey] = useState<string | null>(null);
   const [deletingWorkout, setDeletingWorkout] = useState(false);
@@ -799,6 +801,33 @@ export default function MemberWorkoutDetailPage() {
   const isOpen = !workout.finished_at;
   const isRepeatMode = isOpen && !!sourceWorkout;
 
+  async function moveExercise(fromIndex: number, direction: -1 | 1) {
+    if (!workout || reordering) return;
+    const toIndex = fromIndex + direction;
+    if (toIndex < 0 || toIndex >= workout.exercises.length) return;
+    const next = [...workout.exercises];
+    const a = next[fromIndex]!;
+    const b = next[toIndex]!;
+    next[fromIndex] = b;
+    next[toIndex] = a;
+    setReordering(true);
+    try {
+      const res = await fetch(`/api/member/workouts/${id}/exercises/reorder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ exercise_ids: next.map((e) => e.id) }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert((err as { error?: string }).error ?? "Could not reorder exercises");
+        return;
+      }
+      fetchWorkout();
+    } finally {
+      setReordering(false);
+    }
+  }
+
   async function saveWorkoutName() {
     setSavingWorkoutName(true);
     try {
@@ -1296,7 +1325,7 @@ export default function MemberWorkoutDetailPage() {
             </p>
           )}
           <ul className="space-y-4 mb-8">
-            {workout.exercises.map((ex) => {
+            {workout.exercises.map((ex, exIndex) => {
               const vol = ex.type === "lift" ? liftVolume(ex.sets) : 0;
               const exKey = exerciseLookupKey(ex);
               const lastTimeSetsFromKey = isRepeatMode && exKey ? sourceSetsByExerciseKey.get(exKey) : undefined;
@@ -1305,7 +1334,7 @@ export default function MemberWorkoutDetailPage() {
                   ? (() => {
                       const idx = workout.exercises.findIndex((e) => e.id === ex.id);
                       if (idx < 0 || idx >= sourceWorkout.exercises.length) return null;
-                      return sourceWorkout.exercises[idx]?.sets ?? null;
+                      return sourceWorkout.exercises[idx]?.sets ?? null; // order may differ if exercises were reordered
                     })()
                   : null;
               const lastTimeSets = lastTimeSetsFromKey ?? lastTimeSetsFromOrder;
@@ -1612,6 +1641,30 @@ export default function MemberWorkoutDetailPage() {
                         )}
                       </p>
                       <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
+                        {workout.exercises.length > 1 && (
+                          <span className="inline-flex items-center gap-1 mr-1">
+                            <button
+                              type="button"
+                              onClick={() => moveExercise(exIndex, -1)}
+                              disabled={reordering || exIndex === 0}
+                              className="px-2 py-0.5 rounded border border-stone-200 text-stone-600 text-sm hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                              title="Move up"
+                              aria-label="Move exercise up"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveExercise(exIndex, 1)}
+                              disabled={reordering || exIndex >= workout.exercises.length - 1}
+                              className="px-2 py-0.5 rounded border border-stone-200 text-stone-600 text-sm hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                              title="Move down"
+                              aria-label="Move exercise down"
+                            >
+                              ↓
+                            </button>
+                          </span>
+                        )}
                         <button
                           type="button"
                           onClick={async () => {

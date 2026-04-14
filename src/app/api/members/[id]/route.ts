@@ -13,6 +13,12 @@ import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { updateKisiUser, ensureKisiUser } from "../../../../lib/kisi";
 import { parseBirthday } from "../../../../lib/member-birthday";
 import { memberHasDoorAccessToday } from "../../../../lib/pass-access";
+import {
+  ensureDayPassCreditLedger,
+  ensureMembersPassActivationDayColumn,
+  getMemberDayPassLedgerBalance,
+  migrateLegacyPassPackSubscriptionsToLedger,
+} from "../../../../lib/day-pass-credits";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +35,9 @@ export async function GET(
     const db = getDb();
     ensureMembersAutoRenewColumn(db);
     ensureMembersProfileColumns(db);
+    ensureDayPassCreditLedger(db);
+    ensureMembersPassActivationDayColumn(db);
+    migrateLegacyPassPackSubscriptionsToLedger(db);
 
     // If id contains non-digits (e.g. "103eec15"), treat ONLY as member_id. Otherwise parseInt("103eec15")→103
     // would incorrectly match member id=103 (Colin) instead of member_id="103eec15" (DC ACRES).
@@ -38,7 +47,7 @@ export async function GET(
         COALESCE(m.exp_next_payment_date, (SELECT s.expiry_date FROM subscriptions s WHERE s.member_id = m.member_id AND s.status = 'Active' ORDER BY ${expiryDateSortableSql("s.expiry_date")} DESC LIMIT 1)) AS exp_next_payment_date,
         m.role, m.created_at, m.waiver_signed_at, m.stripe_customer_id, m.auto_renew,
         m.emergency_contact_name, m.emergency_contact_phone, m.emergency_info, m.spirit_animal,
-        m.pronouns, m.birthday, m.mailing_address
+        m.pronouns, m.birthday, m.mailing_address, m.pass_activation_day
       FROM members m WHERE ${isPurelyNumeric ? "m.id = ? OR m.member_id = ?" : "m.member_id = ?"}
     `);
     const member = (isPurelyNumeric
@@ -62,15 +71,26 @@ export async function GET(
     const tz = getAppTimezone(db);
     const today_ymd = todayInAppTz(tz);
 
-    const subscriptions = db.prepare(`
+    const rawSubs = db.prepare(`
       SELECT s.*, p.plan_name, p.price as plan_price, p.unit as plan_unit, p.category as plan_category
       FROM subscriptions s
       LEFT JOIN membership_plans p ON p.product_id = s.product_id
       WHERE s.member_id = ?
       ORDER BY s.start_date DESC
     `).all(mid) as Record<string, unknown>[];
+    const subscriptions = rawSubs.filter((s) => {
+      const cat = String(s.plan_category ?? "").trim();
+      const unit = String(s.plan_unit ?? "").trim();
+      return !(cat === "Passes" && unit === "Day");
+    });
+    const day_pass_credits = getMemberDayPassLedgerBalance(db, mid);
 
     for (const sub of subscriptions) {
+      const passCredits = sub.pass_credits_remaining;
+      if (passCredits != null && String(passCredits).trim() !== "") {
+        sub.days_remaining = String(Math.max(0, Math.floor(Number(passCredits))));
+        continue;
+      }
       const exp = sub.expiry_date;
       if (typeof exp === "string" && exp.trim() !== "") {
         const n = calendarDaysUntilExpiryYmd(exp, today_ymd);
@@ -127,13 +147,15 @@ export async function GET(
       SELECT * FROM sales WHERE member_id = ? ORDER BY date_time DESC
     `).all(mid) as Record<string, unknown>[];
 
-    const has_door_access = memberHasDoorAccessToday(subscriptions, today_ymd);
+    const memberPassDay = String(member.pass_activation_day ?? "").trim();
+    const has_door_access = memberHasDoorAccessToday(subscriptions, today_ymd, memberPassDay);
 
     db.close();
 
     return NextResponse.json({
       member,
       subscriptions,
+      day_pass_credits,
       class_credits,
       today_ymd,
       has_door_access,

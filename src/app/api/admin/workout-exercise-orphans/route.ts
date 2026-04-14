@@ -24,7 +24,7 @@ function memberDisplay(first: string | null, last: string | null, memberId: stri
  * GET — list workout_exercises rows whose exercise_id does not exist in exercises (broken FK target).
  * POST { "confirm": true } — set those exercise_id to NULL; remove orphan member_1rm_settings rows.
  */
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
   if (!adminId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -471,6 +471,7 @@ const GYM_ID_TABLES = [
   "class_occurrences",
   "class_pack_products",
   "class_credit_ledger",
+  "day_pass_credit_ledger",
   "occurrence_bookings",
   // Rec leagues
   "rec_leagues",

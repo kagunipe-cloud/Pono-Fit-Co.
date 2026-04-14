@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { getDb, ensureGiftPassesTable, ensureSubscriptionRenewalPromoColumns, ensureSubscriptionPassPackColumns, getAppTimezone } from "@/lib/db";
+import { getDb, ensureGiftPassesTable, ensureSubscriptionRenewalPromoColumns, getAppTimezone } from "@/lib/db";
+import { ensureDayPassCreditLedger } from "@/lib/day-pass-credits";
 import { isPassPackPlan, passCreditsForPurchase } from "@/lib/pass-packs";
 import { getMemberIdFromSession } from "@/lib/session";
 import { formatDateForStorage } from "@/lib/app-timezone";
@@ -102,14 +103,11 @@ export async function POST(request: NextRequest) {
   try {
     db.exec("BEGIN TRANSACTION");
     if (passPack) {
-      ensureSubscriptionPassPackColumns(db);
+      ensureDayPassCreditLedger(db);
       db.prepare(
-        `INSERT INTO subscriptions (
-           subscription_id, member_id, product_id, status, start_date, expiry_date, days_remaining, price, sales_id, quantity,
-           promo_renewals_remaining, renewal_price_indefinite, pass_credits_remaining, pass_activation_day
-         )
-         VALUES (?, ?, ?, 'Active', ?, '2000-01-01', '0', ?, NULL, 1, NULL, 0, ?, NULL)`
-      ).run(sub_id, memberId, plan.product_id, startStr, plan.price ?? "0", giftPassCredits);
+        `INSERT INTO day_pass_credit_ledger (member_id, amount, reason, reference_type, reference_id)
+         VALUES (?, ?, 'gift_redeem', 'gift_pass', ?)`
+      ).run(memberId, giftPassCredits, String(row.id));
     } else {
       const expiry_date = addDuration(start_date, plan.length || "1", plan.unit || "Month");
       expiryStr = formatDateForStorage(expiry_date, tz);

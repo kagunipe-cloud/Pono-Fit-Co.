@@ -79,6 +79,12 @@ export default function MemberDetailPage() {
   const [ptGrantNote, setPtGrantNote] = useState("");
   const [ptGrantSubmitting, setPtGrantSubmitting] = useState(false);
   const [ptGrantMessage, setPtGrantMessage] = useState<string | null>(null);
+  const [dayPassGrantAmount, setDayPassGrantAmount] = useState(1);
+  const [dayPassGrantNote, setDayPassGrantNote] = useState("");
+  const [dayPassRemoveAmount, setDayPassRemoveAmount] = useState(1);
+  const [dayPassRemoveNote, setDayPassRemoveNote] = useState("");
+  const [dayPassSubmitting, setDayPassSubmitting] = useState(false);
+  const [dayPassMessage, setDayPassMessage] = useState<string | null>(null);
   const [sendingWaiver, setSendingWaiver] = useState(false);
   const [sendingPasswordReset, setSendingPasswordReset] = useState(false);
   const [togglingAutoRenew, setTogglingAutoRenew] = useState(false);
@@ -398,6 +404,79 @@ export default function MemberDetailPage() {
     }
   }
 
+  async function grantDayPassCredits() {
+    const amt = Math.max(1, Math.min(99, Math.floor(dayPassGrantAmount)));
+    setDayPassMessage(null);
+    setDayPassSubmitting(true);
+    try {
+      const res = await fetch(`/api/members/${id}/day-pass-credits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "grant",
+          amount: amt,
+          ...(dayPassGrantNote.trim() ? { note: dayPassGrantNote.trim() } : {}),
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.balance != null) {
+        setDayPassMessage(`Granted ${amt} day pass credit${amt !== 1 ? "s" : ""}.`);
+        setDayPassGrantAmount(1);
+        setDayPassGrantNote("");
+        await fetchMember();
+      } else {
+        setDayPassMessage(json.error ?? "Could not grant credits.");
+      }
+    } catch {
+      setDayPassMessage("Request failed.");
+    } finally {
+      setDayPassSubmitting(false);
+    }
+  }
+
+  async function removeDayPassCredits() {
+    const amt = Math.max(1, Math.min(99, Math.floor(dayPassRemoveAmount)));
+    const left = Number((data as { day_pass_credits?: number })?.day_pass_credits ?? 0);
+    if (left <= 0) {
+      setDayPassMessage("No day pass credits to remove.");
+      return;
+    }
+    const take = Math.min(amt, left);
+    if (
+      !confirm(
+        `Remove ${take} day pass credit${take !== 1 ? "s" : ""} from this member? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setDayPassMessage(null);
+    setDayPassSubmitting(true);
+    try {
+      const res = await fetch(`/api/members/${id}/day-pass-credits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "remove",
+          amount: amt,
+          ...(dayPassRemoveNote.trim() ? { note: dayPassRemoveNote.trim() } : {}),
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.balance != null) {
+        setDayPassMessage(`Removed ${json.removed ?? take} day pass credit${(json.removed ?? take) !== 1 ? "s" : ""}.`);
+        setDayPassRemoveAmount(1);
+        setDayPassRemoveNote("");
+        await fetchMember();
+      } else {
+        setDayPassMessage(json.error ?? "Could not remove credits.");
+      }
+    } catch {
+      setDayPassMessage("Request failed.");
+    } finally {
+      setDayPassSubmitting(false);
+    }
+  }
+
   async function applyComplimentary() {
     const productId = compProductId === "" ? null : Number(compProductId);
     if (productId == null || Number.isNaN(productId)) {
@@ -460,6 +539,11 @@ export default function MemberDetailPage() {
   const memberEmail = String(member.email ?? "").trim();
   const hasDoorAccess = Boolean(data.has_door_access);
   const canUnlockDoor = memberEmail.length > 0 && hasDoorAccess;
+
+  const dayPassLeft = Number((data as { day_pass_credits?: number })?.day_pass_credits ?? 0);
+  const todayYmd = (data?.today_ymd ?? "").trim();
+  const passActivationDay = String((data?.member as { pass_activation_day?: string | null })?.pass_activation_day ?? "").trim();
+  const passActiveToday = !!todayYmd && passActivationDay === todayYmd;
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -571,43 +655,105 @@ export default function MemberDetailPage() {
 
           <div className="pt-4 border-t border-stone-200/80">
             <h2 className="text-base font-semibold text-stone-800 mb-2">Day pass packs</h2>
-            <p className="text-xs text-stone-600 mb-2">
-              Banked days for Passes (5- / 10-day packs). Members activate one calendar day at a time from My Membership.
+            <p className="text-xs text-stone-600 mb-3">
+              Banked days (same ledger as class/PT credits). Members activate one calendar day at a time from My Membership. Grant or remove credits here when needed.
             </p>
-            {(() => {
-              const todayY = (data?.today_ymd ?? "").trim();
-              const packs =
-                data?.subscriptions?.filter(
-                  (s) => s.pass_credits_remaining != null && String(s.status ?? "") !== "Cancelled"
-                ) ?? [];
-              if (packs.length === 0) {
-                return <p className="text-sm text-stone-500">No day pass packs on file.</p>;
-              }
-              return (
-                <ul className="space-y-2 text-sm text-stone-700">
-                  {packs.map((s, i) => {
-                    const left = Number(s.pass_credits_remaining ?? 0);
-                    const act = String(s.pass_activation_day ?? "").trim();
-                    const activeToday = !!todayY && act === todayY;
-                    return (
-                      <li key={i} className="rounded-lg border border-stone-200 bg-white/80 px-3 py-2">
-                        <span className="font-medium text-stone-800">{String(s.plan_name ?? "Pass pack")}</span>
-                        <span className="text-stone-600">
-                          {" "}
-                          — {left} day{left !== 1 ? "s" : ""} left
-                        </span>
-                        {activeToday && (
-                          <span className="ml-2 text-emerald-700 font-medium">· Active today</span>
-                        )}
-                        {!activeToday && act && (
-                          <span className="block text-xs text-stone-500 mt-0.5">Last activated: {act}</span>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-              );
-            })()}
+            {dayPassLeft <= 0 && !passActiveToday ? (
+              <p className="text-sm text-stone-500 mb-3">No banked day passes on file.</p>
+            ) : (
+              <div className="rounded-lg border border-stone-200 bg-white/80 px-3 py-2 text-sm text-stone-700 mb-3">
+                <span className="font-medium text-stone-800">Day pass credits</span>
+                <span className="text-stone-600">
+                  {" "}
+                  — {dayPassLeft} day{dayPassLeft !== 1 ? "s" : ""} banked
+                </span>
+                {passActiveToday && (
+                  <span className="ml-2 text-emerald-700 font-medium">· Active today</span>
+                )}
+                {!passActiveToday && passActivationDay ? (
+                  <span className="block text-xs text-stone-500 mt-0.5">Last activated: {passActivationDay}</span>
+                ) : null}
+              </div>
+            )}
+            <div className="flex flex-wrap items-end gap-3 mb-3">
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Credits to add</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={dayPassGrantAmount}
+                  onChange={(e) =>
+                    setDayPassGrantAmount(Math.max(1, Math.min(99, parseInt(e.target.value, 10) || 1)))
+                  }
+                  className="w-20 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                />
+              </div>
+              <div className="flex-1 min-w-[180px]">
+                <label className="block text-xs font-medium text-stone-500 mb-1">Note (optional)</label>
+                <input
+                  type="text"
+                  value={dayPassGrantNote}
+                  onChange={(e) => setDayPassGrantNote(e.target.value)}
+                  placeholder="e.g. Guest pass comp"
+                  className="w-full px-2 py-1.5 rounded border border-stone-200 text-sm"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={grantDayPassCredits}
+                disabled={dayPassSubmitting}
+                className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
+              >
+                {dayPassSubmitting ? "Saving…" : "Grant credits"}
+              </button>
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Credits to remove</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={Math.max(1, dayPassLeft)}
+                  value={dayPassRemoveAmount}
+                  onChange={(e) =>
+                    setDayPassRemoveAmount(
+                      Math.max(1, Math.min(Math.max(1, dayPassLeft), parseInt(e.target.value, 10) || 1))
+                    )
+                  }
+                  className="w-20 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                />
+              </div>
+              <div className="flex-1 min-w-[180px]">
+                <label className="block text-xs font-medium text-stone-500 mb-1">Note (optional)</label>
+                <input
+                  type="text"
+                  value={dayPassRemoveNote}
+                  onChange={(e) => setDayPassRemoveNote(e.target.value)}
+                  placeholder="e.g. Entered in error"
+                  className="w-full px-2 py-1.5 rounded border border-stone-200 text-sm"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={removeDayPassCredits}
+                disabled={dayPassSubmitting || dayPassLeft <= 0}
+                className="px-4 py-2 rounded-lg border border-stone-300 bg-white text-stone-800 font-medium hover:bg-stone-50 disabled:opacity-50"
+              >
+                {dayPassSubmitting ? "Saving…" : "Remove credits"}
+              </button>
+            </div>
+            {dayPassMessage && (
+              <p
+                className={`mt-3 text-sm ${
+                  dayPassMessage.startsWith("Granted") || dayPassMessage.startsWith("Removed")
+                    ? "text-emerald-700"
+                    : "text-amber-700"
+                }`}
+              >
+                {dayPassMessage}
+              </p>
+            )}
           </div>
 
           <div className="pt-4 border-t border-stone-200/80">
@@ -1134,16 +1280,33 @@ export default function MemberDetailPage() {
             <table className="w-full text-left text-sm">
               <thead><tr className="bg-stone-50 text-stone-500"><th className="py-2 px-4">Plan</th><th className="py-2 px-4">Status</th><th className="py-2 px-4">Start</th><th className="py-2 px-4">Expiry</th><th className="py-2 px-4">Days left</th><th className="py-2 px-4">Admin</th></tr></thead>
               <tbody>
-                {data.subscriptions.map((s, i) => (
+                {data.subscriptions.map((s, i) => {
+                  const isBankedPassPack =
+                    s.pass_credits_remaining != null && String(s.pass_credits_remaining).trim() !== "";
+                  return (
                   <tr key={i} className="border-t border-stone-100">
                     <td className="py-2 px-4">{String(s.plan_name ?? s.product_id ?? "—")}</td>
                     <td className="py-2 px-4">{String(s.status ?? "—")}</td>
                     <td className="py-2 px-4">{String(s.start_date ?? "—")}</td>
-                    <td className="py-2 px-4">{String(s.expiry_date ?? "—")}</td>
-                    <td className="py-2 px-4">{String(s.days_remaining ?? "—")}</td>
+                    <td className="py-2 px-4">
+                      {isBankedPassPack ? (
+                        <span title="Pass packs use banked day credits, not a calendar end date">—</span>
+                      ) : (
+                        String(s.expiry_date ?? "—")
+                      )}
+                    </td>
+                    <td className="py-2 px-4">
+                      {isBankedPassPack ? (
+                        <span title="Days left in this pack">{String(s.days_remaining ?? "—")}</span>
+                      ) : (
+                        String(s.days_remaining ?? "—")
+                      )}
+                    </td>
                     <td className="py-2 px-4">
                       {isAdmin && s.status !== "Cancelled" ? (
-                        adjustSubId === String(s.subscription_id) ? (
+                        isBankedPassPack ? (
+                          <span className="text-xs text-stone-500">Banked days — member activates under My Membership</span>
+                        ) : adjustSubId === String(s.subscription_id) ? (
                           <div className="flex flex-col gap-2 items-start min-w-[11rem]">
                             <label className="text-xs text-stone-500 sr-only">New expiry</label>
                             <input
@@ -1200,7 +1363,8 @@ export default function MemberDetailPage() {
                       )}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
