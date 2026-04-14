@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { getDb } from "./db";
+import { isNativeAppStoreClient } from "./native-app-request";
 import { getMemberIdFromSession } from "./session";
 
 /**
@@ -7,6 +8,9 @@ import { getMemberIdFromSession } from "./session";
  * Checks session first, then X-Admin-Member-Id header (for staff using member profile without logging in).
  */
 export async function getAdminMemberId(request?: NextRequest): Promise<string | null> {
+  if (request && isNativeAppStoreClient(request)) {
+    return null;
+  }
   let candidate: string | null = await getMemberIdFromSession();
   if (!candidate && request) {
     const header = request.headers.get("X-Admin-Member-Id")?.trim();
@@ -24,6 +28,9 @@ export async function getAdminMemberId(request?: NextRequest): Promise<string | 
  * Used for trainer schedule access; admins can also act as trainers.
  */
 export async function getTrainerMemberId(request?: NextRequest): Promise<string | null> {
+  if (request && isNativeAppStoreClient(request)) {
+    return null;
+  }
   let candidate: string | null = await getMemberIdFromSession();
   if (!candidate && request) {
     const header = request.headers.get("X-Admin-Member-Id")?.trim();

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { isNativeAppStoreClient } from "@/lib/native-app-request";
 
 const ADMIN_PATHS = [
   "/",
@@ -77,6 +78,11 @@ export async function middleware(request: NextRequest) {
 
   if (isPublicPath(pathname)) {
     return NextResponse.next();
+  }
+
+  /** App Store / Play shell: member experience only (no admin or trainer dashboards). */
+  if (isNativeAppStoreClient(request) && (isAdminPath(pathname) || isTrainerPath(pathname))) {
+    return NextResponse.redirect(new URL("/member", request.url));
   }
 
   const cookie = request.headers.get("cookie") ?? "";

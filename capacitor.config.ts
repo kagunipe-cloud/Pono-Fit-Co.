@@ -30,6 +30,11 @@ const config: CapacitorConfig = {
   ios: {
     contentInset: "automatic",
     scheme: "ponofit",
+    /** Lets the server treat this WebView as the native member app (staff UIs/APIs disabled). */
+    appendUserAgent: " PonoFitNativeApp/1",
+  },
+  android: {
+    appendUserAgent: " PonoFitNativeApp/1",
   },
 };
 

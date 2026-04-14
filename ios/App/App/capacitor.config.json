@@ -8,7 +8,11 @@
 	},
 	"ios": {
 		"contentInset": "automatic",
-		"scheme": "ponofit"
+		"scheme": "ponofit",
+		"appendUserAgent": " PonoFitNativeApp/1"
+	},
+	"android": {
+		"appendUserAgent": " PonoFitNativeApp/1"
 	},
 	"packageClassList": [
 		"AppPlugin",

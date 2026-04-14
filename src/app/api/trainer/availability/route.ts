@@ -6,9 +6,9 @@ import { getTrainerMemberId } from "../../../../lib/admin";
 export const dynamic = "force-dynamic";
 
 /** GET — list availability blocks for the current trainer (trainer_member_id = me). */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const memberId = await getTrainerMemberId();
+    const memberId = await getTrainerMemberId(request);
     if (!memberId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -28,7 +28,7 @@ export async function GET() {
 /** POST — create an availability block for the current trainer. */
 export async function POST(request: NextRequest) {
   try {
-    const memberId = await getTrainerMemberId();
+    const memberId = await getTrainerMemberId(request);
     if (!memberId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
