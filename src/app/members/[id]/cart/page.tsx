@@ -140,8 +140,8 @@ export default function MemberCartPage() {
     fetch("/api/auth/member-me")
       .then((r) => (r.ok ? r.json() : null))
       .then((me) => {
-        const role = me?.role;
-        setCanUseTerminal(role === "Admin" || role === "Trainer");
+        /** Stripe Terminal reader — only admins at the desk; members use Pay with Stripe. */
+        setCanUseTerminal(me?.role === "Admin");
       })
       .catch(() => setCanUseTerminal(false));
   }, []);

@@ -68,6 +68,11 @@ function MoneyOwedContent() {
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const [emailBusy, setEmailBusy] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [terminalRow, setTerminalRow] = useState<MoneyOwedAggregatedRow | null>(null);
+  const [readers, setReaders] = useState<{ id: string; label: string; status: string }[]>([]);
+  const [readerId, setReaderId] = useState("");
+  const [terminalBusy, setTerminalBusy] = useState(false);
+  const [terminalError, setTerminalError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -101,7 +106,7 @@ function MoneyOwedContent() {
       cancel_subscription:
         "Cancel this membership?\n\nAutomatic renewals will stop, failed payment attempts will be archived here, and door access follows the usual rules if they have no other active membership. Stripe history is unchanged.",
       retry_payment:
-        "Retry payment now?\n\nWe will charge the default card once for this renewal (plus fees/tax, same as the cron). If it succeeds, the membership is extended and door access restored if the waiver allows.",
+        "Charge the card on file now?\n\nWe will charge the default payment method once for this renewal (plus fees/tax, same as the cron). If it succeeds, the membership is extended and door access restored if the waiver allows.",
       write_off:
         "Write off this balance without charging?\n\nTheir monthly membership will be extended one period, door access restored if the waiver allows, and a $0 complimentary sale will be recorded.",
     };
@@ -168,6 +173,114 @@ function MoneyOwedContent() {
     }
   }
 
+  useEffect(() => {
+    if (!terminalRow) {
+      setReaders([]);
+      setReaderId("");
+      setTerminalError(null);
+      return;
+    }
+    fetch("/api/terminal/readers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const list = data?.readers ?? [];
+        setReaders(list);
+        if (list.length > 0 && list[0]?.id) setReaderId(list[0].id);
+      })
+      .catch(() => setReaders([]));
+  }, [terminalRow]);
+
+  async function openUpdatePaymentMethod(row: MoneyOwedAggregatedRow) {
+    setActionMessage(null);
+    try {
+      const res = await fetch(
+        `/api/members/${encodeURIComponent(row.member_id)}/update-payment-method`,
+        { method: "POST" }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof data.error === "string" ? data.error : "Could not start card update");
+      }
+      if (typeof data.url === "string" && data.url) {
+        window.open(data.url, "_blank", "noopener,noreferrer");
+        setActionMessage(
+          "Stripe opened in a new tab — after the member saves a card, use “Retry card on file” here."
+        );
+      } else {
+        setActionMessage("No checkout URL returned.");
+      }
+    } catch (e) {
+      setActionMessage(e instanceof Error ? e.message : "Failed to open Stripe");
+    }
+  }
+
+  async function runTerminalMoneyOwed(row: MoneyOwedAggregatedRow) {
+    if (!readerId.trim()) {
+      setTerminalError("Select a reader.");
+      return;
+    }
+    setTerminalError(null);
+    setTerminalBusy(true);
+    try {
+      const res = await fetch("/api/admin/money-owed-terminal-charge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          member_id: row.member_id,
+          subscription_id: row.subscription_id,
+          reader_id: readerId.trim(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof data.error === "string" ? data.error : "Failed to start charge");
+      }
+      const paymentIntentId = data.payment_intent_id as string | undefined;
+      if (!paymentIntentId) throw new Error("No payment intent returned");
+
+      const startedAt = Date.now();
+      const TIMEOUT_MS = 5 * 60 * 1000;
+      const poll = async (): Promise<void> => {
+        if (Date.now() - startedAt > TIMEOUT_MS) {
+          throw new Error("Payment timed out. Try again.");
+        }
+        const statusRes = await fetch(
+          `/api/terminal/payment-status?payment_intent_id=${encodeURIComponent(paymentIntentId)}`
+        );
+        const statusData = await statusRes.json();
+        if (statusData.status === "succeeded") {
+          const completeRes = await fetch("/api/admin/money-owed-terminal-complete", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ payment_intent_id: paymentIntentId }),
+          });
+          const completeData = await completeRes.json().catch(() => ({}));
+          if (!completeRes.ok) {
+            throw new Error(
+              typeof completeData.error === "string" ? completeData.error : "Failed to record payment"
+            );
+          }
+          setActionMessage(
+            typeof completeData.message === "string" ? completeData.message : "Reader payment recorded."
+          );
+          setTerminalRow(null);
+          load();
+          return;
+        }
+        if (statusData.status === "failed") {
+          throw new Error("Payment was canceled on the reader.");
+        }
+        await new Promise((r) => setTimeout(r, 2000));
+        await poll();
+      };
+      await poll();
+    } catch (e) {
+      setTerminalError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setTerminalBusy(false);
+    }
+  }
+
   const emptyMessage = archived
     ? "No archived records. Memberships you cancelled from Money owed appear here for reference."
     : "No failed recurring payments on record.";
@@ -205,6 +318,66 @@ function MoneyOwedContent() {
 
       {actionMessage && (
         <p className="mb-4 text-sm text-stone-700 bg-brand-50 border border-brand-100 rounded-lg px-3 py-2">{actionMessage}</p>
+      )}
+
+      {terminalRow && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="money-owed-terminal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !terminalBusy) setTerminalRow(null);
+          }}
+        >
+          <div className="bg-white rounded-xl border border-stone-200 shadow-lg max-w-md w-full p-5 space-y-4">
+            <h2 id="money-owed-terminal-title" className="text-lg font-semibold text-stone-800">
+              Charge on reader
+            </h2>
+            <p className="text-sm text-stone-600">
+              {terminalRow.plan_name ?? "Membership"} — {formatMoney(terminalRow.amount_dollars)} (fees/tax same as card retry).
+              Customer pays on the selected Stripe reader.
+            </p>
+            {readers.length === 0 ? (
+              <p className="text-sm text-amber-800">Loading readers…</p>
+            ) : (
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Reader</label>
+                <select
+                  value={readerId}
+                  onChange={(e) => setReaderId(e.target.value)}
+                  disabled={terminalBusy}
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                >
+                  {readers.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.label || r.id} {r.status ? `(${r.status})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {terminalError && <p className="text-sm text-red-600">{terminalError}</p>}
+            <div className="flex flex-wrap gap-2 justify-end">
+              <button
+                type="button"
+                disabled={terminalBusy}
+                onClick={() => setTerminalRow(null)}
+                className="px-4 py-2 rounded-lg border border-stone-200 text-stone-700 text-sm hover:bg-stone-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={terminalBusy || readers.length === 0 || !readerId}
+                onClick={() => runTerminalMoneyOwed(terminalRow)}
+                className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+              >
+                {terminalBusy ? "Waiting for reader…" : "Start charge"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {loading ? (
@@ -293,7 +466,32 @@ function MoneyOwedContent() {
                             onClick={() => runAction(r, "retry_payment")}
                             className="text-left text-xs font-medium text-brand-700 hover:underline disabled:opacity-50"
                           >
-                            Retry payment
+                            Retry card on file
+                          </button>
+                          <button
+                            type="button"
+                            disabled={
+                              actionBusy === groupKey(r) ||
+                              emailBusy === groupKey(r) ||
+                              terminalBusy ||
+                              Boolean(terminalRow)
+                            }
+                            onClick={() => {
+                              setTerminalError(null);
+                              setTerminalRow(r);
+                            }}
+                            className="text-left text-xs font-medium text-brand-700 hover:underline disabled:opacity-50"
+                          >
+                            Charge on reader
+                          </button>
+                          <button
+                            type="button"
+                            disabled={actionBusy === groupKey(r) || emailBusy === groupKey(r)}
+                            onClick={() => openUpdatePaymentMethod(r)}
+                            title="Opens Stripe so the member can add or replace a card; then use Retry card on file."
+                            className="text-left text-xs font-medium text-stone-700 hover:underline disabled:opacity-50"
+                          >
+                            Update payment method &amp; retry
                           </button>
                           <button
                             type="button"

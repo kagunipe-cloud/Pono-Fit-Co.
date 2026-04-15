@@ -12,80 +12,24 @@ import {
 } from "@/lib/db";
 import { computeRenewalChargePrice } from "@/lib/renewal-pricing";
 import { getAdminMemberId } from "@/lib/admin";
-import { extendSubscriptionAfterRenewal, type RenewalSubRow } from "@/lib/renewal-extension";
+import { extendSubscriptionAfterRenewal } from "@/lib/renewal-extension";
+import {
+  loadActiveMonthlySubscription,
+  normalizeSubscriptionKey,
+  parsePriceToCents,
+} from "@/lib/money-owed-renewal-load";
 import { computeCcFee } from "@/lib/cc-fees";
 import { stripeCustomerIdForApi } from "@/lib/stripe-customer";
-import { resolveStripeCustomerCardPaymentMethodId } from "@/lib/stripe-customer-payment-method";
+import {
+  resolveStripeCustomerCardPaymentMethodId,
+  stripeFailureFieldsFromError,
+} from "@/lib/stripe-customer-payment-method";
 import { revokeAccess } from "@/lib/kisi";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
 
 type AppDb = ReturnType<typeof getDb>;
-
-function parsePriceToCents(p: string | null): number {
-  if (p == null || p === "") return 0;
-  const n = parseFloat(String(p).replace(/[^0-9.-]/g, ""));
-  return Number.isNaN(n) ? 0 : Math.round(n * 100);
-}
-
-type SubQueryRow = {
-  subscription_id: string;
-  member_id: string;
-  expiry_date: string;
-  sub_price: string;
-  quantity: number | string | null;
-  promo_renewals_remaining: number | null;
-  renewal_price_indefinite: number | null;
-  plan_name: string;
-  plan_price: string;
-  length: string;
-  unit: string;
-  complimentary: number | null;
-  complimentary_renewals_remaining: number | null;
-  renewal_discount_percent: number | null;
-};
-
-function loadActiveMonthlySubscription(
-  db: AppDb,
-  memberId: string,
-  subscriptionId: string | null | undefined
-): RenewalSubRow | null {
-  const base = `
-    SELECT s.subscription_id, s.member_id, s.expiry_date, s.price as sub_price, s.quantity,
-           s.promo_renewals_remaining, s.renewal_price_indefinite,
-           s.complimentary, s.complimentary_renewals_remaining, s.renewal_discount_percent,
-           p.plan_name, p.price as plan_price, p.length, p.unit
-    FROM subscriptions s
-    JOIN membership_plans p ON p.product_id = s.product_id
-    WHERE s.member_id = ? AND s.status = 'Active' AND p.unit = 'Month'
-  `;
-  const sid = subscriptionId?.trim();
-  const row = sid
-    ? (db.prepare(`${base} AND s.subscription_id = ?`).get(memberId, sid) as SubQueryRow | undefined)
-    : (db.prepare(`${base} ORDER BY s.expiry_date ASC LIMIT 1`).get(memberId) as SubQueryRow | undefined);
-  if (!row) return null;
-  return {
-    subscription_id: row.subscription_id,
-    member_id: row.member_id,
-    expiry_date: row.expiry_date,
-    sub_price: row.sub_price,
-    quantity: row.quantity ?? 1,
-    promo_renewals_remaining: row.promo_renewals_remaining,
-    renewal_price_indefinite: row.renewal_price_indefinite,
-    complimentary: row.complimentary,
-    complimentary_renewals_remaining: row.complimentary_renewals_remaining,
-    renewal_discount_percent: row.renewal_discount_percent,
-    plan_name: row.plan_name,
-    plan_price: row.plan_price,
-    length: row.length,
-    unit: row.unit,
-  };
-}
-
-function normalizeSubscriptionKey(subscriptionId: string | null | undefined): string {
-  return subscriptionId != null && String(subscriptionId).trim() !== "" ? String(subscriptionId).trim() : "";
-}
 
 function deleteFailureGroup(db: AppDb, memberId: string, subscriptionKey: string) {
   clearPaymentFailuresAfterSubscriptionRenewal(db, memberId, subscriptionKey);
@@ -263,6 +207,11 @@ export async function POST(request: NextRequest) {
   });
   const amountCents = parsePriceToCents(priceStr) * Math.max(1, Number(sub.quantity) || 1);
 
+  /** Set false only after a successful PI — if extend throws after charge, do not log a new failure row. */
+  let retryFailureStillPreRenewal = action === "retry_payment";
+  /** Amount (incl. fee/tax) for `payment_failures` when a retry fails before renewal is recorded. */
+  let recordRetryFailureCents: number | undefined;
+
   try {
     if (action === "write_off") {
       await extendSubscriptionAfterRenewal(db, tz, sub, memberRow, {
@@ -310,6 +259,7 @@ export async function POST(request: NextRequest) {
     }
     const totalDollars = baseAmount + taxDollars;
     const chargeCents = Math.round(totalDollars * 100);
+    recordRetryFailureCents = chargeCents;
 
     const paymentMethodId = await resolveStripeCustomerCardPaymentMethodId(stripe, stripeCustomerId);
     const piParams: Stripe.PaymentIntentCreateParams = {
@@ -328,13 +278,20 @@ export async function POST(request: NextRequest) {
     const paymentIntent = await stripe.paymentIntents.create(piParams);
 
     if (paymentIntent.status !== "succeeded") {
-      const lastError = (paymentIntent as { last_payment_error?: { message?: string } }).last_payment_error;
+      const lastError = (paymentIntent as {
+        last_payment_error?: { code?: string; decline_code?: string; message?: string };
+      }).last_payment_error;
+      const reasonText = (lastError?.message ?? "").trim() || `Payment status: ${paymentIntent.status}`;
+      const stripeCode = lastError?.decline_code ?? lastError?.code ?? null;
+      db.prepare(
+        `INSERT INTO payment_failures (member_id, subscription_id, plan_name, amount_cents, reason, stripe_error_code)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(sub.member_id, sub.subscription_id, sub.plan_name, chargeCents, reasonText, stripeCode);
       db.close();
-      return NextResponse.json(
-        { error: lastError?.message ?? `Payment status: ${paymentIntent.status}` },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: reasonText }, { status: 400 });
     }
+
+    retryFailureStillPreRenewal = false;
 
     await extendSubscriptionAfterRenewal(db, tz, sub, memberRow, {
       grandTotal: String(totalDollars),
@@ -347,6 +304,29 @@ export async function POST(request: NextRequest) {
     db.close();
     return NextResponse.json({ ok: true, message: "Payment succeeded — membership extended; door access restored if waiver allows." });
   } catch (err) {
+    if (
+      action === "retry_payment" &&
+      retryFailureStillPreRenewal &&
+      recordRetryFailureCents != null
+    ) {
+      try {
+        const { message, stripe_error_code } = stripeFailureFieldsFromError(err);
+        ensurePaymentFailuresTable(db);
+        db.prepare(
+          `INSERT INTO payment_failures (member_id, subscription_id, plan_name, amount_cents, reason, stripe_error_code)
+           VALUES (?, ?, ?, ?, ?, ?)`
+        ).run(
+          sub.member_id,
+          sub.subscription_id,
+          sub.plan_name,
+          recordRetryFailureCents,
+          message,
+          stripe_error_code
+        );
+      } catch (insertErr) {
+        console.error("[money-owed-action] insert retry failure row", insertErr);
+      }
+    }
     try {
       db.close();
     } catch {
