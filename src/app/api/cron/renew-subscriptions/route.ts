@@ -16,6 +16,10 @@ import { extendSubscriptionAfterRenewal } from "../../../../lib/renewal-extensio
 import { todayInAppTz } from "../../../../lib/app-timezone";
 import { computeCcFee } from "../../../../lib/cc-fees";
 import { stripeCustomerIdForApi } from "../../../../lib/stripe-customer";
+import {
+  resolveStripeCustomerCardPaymentMethodId,
+  stripeFailureFieldsFromError,
+} from "../../../../lib/stripe-customer-payment-method";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
@@ -213,35 +217,31 @@ export async function GET(request: NextRequest) {
     const chargeCents = Math.round(totalDollars * 100);
 
     try {
-      const paymentMethods = await stripe.paymentMethods.list({
-        customer: stripeCustomerId,
-        type: "card",
-      });
-      const pm = paymentMethods.data[0];
-      if (!pm) {
-        results.push({ member_id: sub.member_id, status: "error", message: "No payment method on file" });
-        insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, chargeCents, "No payment method on file", null);
-        await revokeKisiForMember(db, sub.member_id);
-        continue;
-      }
-
-      const paymentIntent = await stripe.paymentIntents.create({
+      const paymentMethodId = await resolveStripeCustomerCardPaymentMethodId(stripe, stripeCustomerId);
+      const piParams: Stripe.PaymentIntentCreateParams = {
         amount: chargeCents,
         currency: "usd",
         customer: stripeCustomerId,
-        payment_method: pm.id,
         off_session: true,
         confirm: true,
         description: `Renewal: ${sub.plan_name}`,
         metadata: { member_id: sub.member_id, subscription_id: sub.subscription_id, type: "renewal" },
-      });
+      };
+      if (paymentMethodId) {
+        piParams.payment_method = paymentMethodId;
+      }
+      /** If `payment_method` is omitted, Stripe uses the customer’s default payment method when set (covers some legacy setups). */
+
+      const paymentIntent = await stripe.paymentIntents.create(piParams);
 
       if (paymentIntent.status !== "succeeded") {
         const statusMsg = `Payment status: ${paymentIntent.status}`;
-        const lastError = (paymentIntent as { last_payment_error?: { code?: string; message?: string } }).last_payment_error;
-        const stripeCode = lastError?.code ?? null;
-        results.push({ member_id: sub.member_id, status: "error", message: statusMsg });
-        insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, chargeCents, lastError?.message || statusMsg, stripeCode);
+        const lastError = (paymentIntent as { last_payment_error?: { code?: string; decline_code?: string; message?: string } })
+          .last_payment_error;
+        const stripeCode = lastError?.decline_code ?? lastError?.code ?? null;
+        const reasonText = (lastError?.message ?? "").trim() || statusMsg;
+        results.push({ member_id: sub.member_id, status: "error", message: reasonText });
+        insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, chargeCents, reasonText, stripeCode);
         await revokeKisiForMember(db, sub.member_id);
         continue;
       }
@@ -256,11 +256,9 @@ export async function GET(request: NextRequest) {
       });
       results.push({ member_id: sub.member_id, status: "renewed" });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      const stripeErr = err as { code?: string; decline_code?: string };
-      const stripeCode = stripeErr.decline_code ?? stripeErr.code ?? null;
+      const { message: msg, stripe_error_code: stripeCode } = stripeFailureFieldsFromError(err);
       results.push({ member_id: sub.member_id, status: "error", message: msg });
-      insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, msg, stripeCode);
+      insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, chargeCents, msg, stripeCode);
       await revokeKisiForMember(db, sub.member_id);
     }
   }

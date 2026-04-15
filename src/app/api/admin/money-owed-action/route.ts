@@ -15,6 +15,7 @@ import { getAdminMemberId } from "@/lib/admin";
 import { extendSubscriptionAfterRenewal, type RenewalSubRow } from "@/lib/renewal-extension";
 import { computeCcFee } from "@/lib/cc-fees";
 import { stripeCustomerIdForApi } from "@/lib/stripe-customer";
+import { resolveStripeCustomerCardPaymentMethodId } from "@/lib/stripe-customer-payment-method";
 import { revokeAccess } from "@/lib/kisi";
 import Stripe from "stripe";
 
@@ -310,23 +311,21 @@ export async function POST(request: NextRequest) {
     const totalDollars = baseAmount + taxDollars;
     const chargeCents = Math.round(totalDollars * 100);
 
-    const paymentMethods = await stripe.paymentMethods.list({ customer: stripeCustomerId, type: "card" });
-    const pm = paymentMethods.data[0];
-    if (!pm) {
-      db.close();
-      return NextResponse.json({ error: "No payment method on file for this customer." }, { status: 400 });
-    }
-
-    const paymentIntent = await stripe.paymentIntents.create({
+    const paymentMethodId = await resolveStripeCustomerCardPaymentMethodId(stripe, stripeCustomerId);
+    const piParams: Stripe.PaymentIntentCreateParams = {
       amount: chargeCents,
       currency: "usd",
       customer: stripeCustomerId,
-      payment_method: pm.id,
       off_session: true,
       confirm: true,
       description: `Renewal (retry): ${sub.plan_name}`,
       metadata: { member_id: sub.member_id, subscription_id: sub.subscription_id, type: "renewal_retry" },
-    });
+    };
+    if (paymentMethodId) {
+      piParams.payment_method = paymentMethodId;
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create(piParams);
 
     if (paymentIntent.status !== "succeeded") {
       const lastError = (paymentIntent as { last_payment_error?: { message?: string } }).last_payment_error;
