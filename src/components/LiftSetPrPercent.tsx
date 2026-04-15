@@ -63,7 +63,7 @@ export function LiftSetPrPercent({
 
   if (!valid) return null;
   if (loading) {
-    return <span className="text-xs text-stone-400 tabular-nums shrink-0">…</span>;
+    return <span className="text-xs text-stone-400 tabular-nums">…</span>;
   }
   if (!data) return null;
 
@@ -73,7 +73,7 @@ export function LiftSetPrPercent({
 
   return (
     <span
-      className="inline-flex items-center gap-1 text-xs shrink-0 tabular-nums"
+      className="inline-flex items-center gap-1 text-xs min-w-0 flex-wrap tabular-nums"
       title={pr != null && pr > 0 ? `Prior best at this weight: ${pr} reps` : "First reps logged at this weight"}
     >
       {showPineapple && isPr && <span aria-hidden>🍍</span>}
