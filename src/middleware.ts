@@ -45,6 +45,11 @@ function isMemberPath(pathname: string): boolean {
   return pathname === "/member" || pathname.startsWith("/member/") || pathname === "/sign-waiver-required" || pathname === "/accept-privacy-terms";
 }
 
+/** Real cart & Stripe return URLs use /members/[id]/cart — not staff UI; must not be treated as admin for native shell. */
+function isMemberCartOrSuccessPath(pathname: string): boolean {
+  return /^\/members\/[^/]+\/cart(\/success)?$/.test(pathname);
+}
+
 /** Cart & Stripe success live under /members/[id]/cart — allow the signed-in member (or staff) without Admin role. */
 function isOwnMemberCartPath(pathname: string, sessionMemberId: string | null): boolean {
   if (!sessionMemberId) return false;
@@ -81,7 +86,11 @@ export async function middleware(request: NextRequest) {
   }
 
   /** App Store / Play shell: member experience only (no admin or trainer dashboards). */
-  if (isNativeAppStoreClient(request) && (isAdminPath(pathname) || isTrainerPath(pathname))) {
+  if (
+    isNativeAppStoreClient(request) &&
+    (isAdminPath(pathname) || isTrainerPath(pathname)) &&
+    !isMemberCartOrSuccessPath(pathname)
+  ) {
     return NextResponse.redirect(new URL("/member", request.url));
   }
 
