@@ -22,10 +22,14 @@ function PrivacyDefaultContent() {
           <h2 className="text-lg font-semibold text-stone-800 mt-6 mb-2">2. Information We Collect</h2>
           <p className="mb-2">We collect information you provide directly and information generated through your use of our services:</p>
           <ul className="list-disc pl-6 space-y-1">
-            <li><strong>Account information:</strong> Name, email address, phone number, and member ID</li>
+            <li><strong>Account information:</strong> Name, email address, phone number, age or date of birth when you provide it, and member ID</li>
             <li><strong>Payment information:</strong> Processed by Stripe; we do not store full card numbers or bank account details. We accept credit/debit cards and ACH (bank account) payments for memberships, classes, and personal training. Billing address is collected at checkout for payment processing and tax compliance.</li>
             <li><strong>Membership and booking data:</strong> Subscriptions, class bookings, personal training sessions</li>
-            <li><strong>Fitness and nutrition data:</strong> Workout logs, macro tracking, and related information you choose to enter</li>
+            <li><strong>Fitness and nutrition data:</strong> Workout logs, macro tracking, foods and targets you log, and related information you choose to enter</li>
+            <li><strong>In-app preferences:</strong> Favorites and saved items you choose to store in the app (for example, saved foods or routines)</li>
+            <li><strong>Search and discovery:</strong> Queries you enter in macro and nutrition search may be stored and used to improve search results and suggestions for you and other members (for example, ranking popular items)</li>
+            <li><strong>Check-ins and visits:</strong> Records of facility check-ins or visits when you use check-in features or door access, used for membership operations and (where applicable) occupancy or usage reporting</li>
+            <li><strong>Usage information:</strong> How you interact with the app and our services—such as feature use, timestamps, and technical information from your requests—to operate the product, troubleshoot, secure accounts, and improve performance and user experience</li>
             <li><strong>Waiver and consent records:</strong> Liability waiver agreements and signatures</li>
             <li><strong>Door access data:</strong> Used to manage facility access via our access control provider (Kisi)</li>
             <li><strong>Communications:</strong> Emails we send and support inquiries</li>
@@ -38,8 +42,11 @@ function PrivacyDefaultContent() {
           <ul className="list-disc pl-6 space-y-1">
             <li>Provide membership, class booking, and personal training services</li>
             <li>Process payments and manage subscriptions</li>
-            <li>Manage facility access (door unlock)</li>
+            <li>Manage facility access (door unlock) and record check-ins or visits as needed for your membership</li>
             <li>Send transactional emails (waivers, booking confirmations, membership reminders)</li>
+            <li>Store and display your favorites, workouts, macros, and other content you save</li>
+            <li>Improve search in nutrition and macro features using past searches and aggregated patterns</li>
+            <li>Understand product usage, fix issues, improve performance, and develop features (including internal analytics and reporting)</li>
             <li>Improve our services and user experience</li>
             <li>Comply with legal obligations</li>
           </ul>
