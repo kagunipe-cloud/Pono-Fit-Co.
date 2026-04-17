@@ -5,8 +5,10 @@ import {
   expiryDateSortableSql,
   ensureMembersAutoRenewColumn,
   ensureMembersProfileColumns,
+  ensureMembersInsuranceProgramColumn,
   ensureSubscriptionPassPackColumns,
 } from "../../../../lib/db";
+import { normalizeInsuranceProgram } from "../../../../lib/insurance-program";
 import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../lib/recurring-classes";
 import { todayInAppTz, calendarDaysUntilExpiryYmd } from "../../../../lib/app-timezone";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
@@ -35,6 +37,7 @@ export async function GET(
     const db = getDb();
     ensureMembersAutoRenewColumn(db);
     ensureMembersProfileColumns(db);
+    ensureMembersInsuranceProgramColumn(db);
     ensureDayPassCreditLedger(db);
     ensureMembersPassActivationDayColumn(db);
     migrateLegacyPassPackSubscriptionsToLedger(db);
@@ -47,7 +50,7 @@ export async function GET(
         COALESCE(m.exp_next_payment_date, (SELECT s.expiry_date FROM subscriptions s WHERE s.member_id = m.member_id AND s.status = 'Active' ORDER BY ${expiryDateSortableSql("s.expiry_date")} DESC LIMIT 1)) AS exp_next_payment_date,
         m.role, m.created_at, m.waiver_signed_at, m.stripe_customer_id, m.auto_renew,
         m.emergency_contact_name, m.emergency_contact_phone, m.emergency_info, m.spirit_animal,
-        m.pronouns, m.birthday, m.mailing_address, m.pass_activation_day
+        m.pronouns, m.birthday, m.mailing_address, m.pass_activation_day, m.insurance_program
       FROM members m WHERE ${isPurelyNumeric ? "m.id = ? OR m.member_id = ?" : "m.member_id = ?"}
     `);
     const member = (isPurelyNumeric
@@ -187,6 +190,7 @@ export async function PATCH(
   try {
     const db = getDb();
     ensureMembersProfileColumns(db);
+    ensureMembersInsuranceProgramColumn(db);
     const isPurelyNumeric = /^\d+$/.test(id);
     const existing = (isPurelyNumeric
       ? db.prepare("SELECT id FROM members WHERE id = ? OR member_id = ?").get(parseInt(id, 10), id)
@@ -228,15 +232,18 @@ export async function PATCH(
       "pronouns",
       "birthday",
       "mailing_address",
+      "insurance_program",
     ] as const;
     for (const field of fields) {
       if (body[field] !== undefined) {
         const val =
           field === "birthday"
             ? (body.birthday as string | null)
-            : typeof body[field] === "string"
-              ? (body[field] as string).trim() || null
-              : body[field];
+            : field === "insurance_program"
+              ? normalizeInsuranceProgram(body.insurance_program)
+              : typeof body[field] === "string"
+                ? (body[field] as string).trim() || null
+                : body[field];
         if (field === "email" && (val == null || val === "")) {
           db.close();
           return NextResponse.json(
@@ -262,7 +269,7 @@ export async function PATCH(
       `SELECT id, member_id, first_name, last_name, preferred_name, email, phone, kisi_id, kisi_group_id, join_date, exp_next_payment_date, role, created_at,
               waiver_signed_at, stripe_customer_id, auto_renew,
               emergency_contact_name, emergency_contact_phone, emergency_info, spirit_animal,
-              pronouns, birthday, mailing_address
+              pronouns, birthday, mailing_address, insurance_program
        FROM members WHERE id = ?`
     ).get(memberId) as {
       id: number;

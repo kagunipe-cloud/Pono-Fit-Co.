@@ -10,8 +10,14 @@ import {
   FETCH_TIMEOUT_EMAIL_MS,
   isFetchAbortError,
 } from "@/lib/client-fetch-timeout";
+import { INSURANCE_PROGRAM_LABELS } from "@/lib/insurance-program";
 
 type Member = Record<string, unknown>;
+
+function insuranceEditValue(m: Record<string, unknown>): string {
+  const v = String(m.insurance_program ?? "").trim().toLowerCase();
+  return v === "optum" || v === "tivity" ? v : "";
+}
 
 function buildMemberEditForm(m: Record<string, unknown>) {
   return {
@@ -20,6 +26,7 @@ function buildMemberEditForm(m: Record<string, unknown>) {
     email: String(m.email ?? ""),
     phone: String(m.phone ?? ""),
     role: String(m.role ?? "Member"),
+    insurance_program: insuranceEditValue(m),
     join_date: String(m.join_date ?? ""),
     exp_next_payment_date: String(m.exp_next_payment_date ?? ""),
     preferred_name: String(m.preferred_name ?? ""),
@@ -1020,6 +1027,20 @@ export default function MemberDetailPage() {
                   <option value="Admin">Admin</option>
                 </select>
               </div>
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-medium text-stone-600 mb-1">
+                  Insurance / fitness benefit (Silver Sneakers, One Pass, etc.)
+                </label>
+                <select
+                  value={editForm.insurance_program ?? ""}
+                  onChange={(e) => setEditForm((f) => ({ ...f, insurance_program: e.target.value }))}
+                  className="w-full max-w-md px-3 py-2 rounded-lg border border-stone-200"
+                >
+                  <option value="">None</option>
+                  <option value="optum">{INSURANCE_PROGRAM_LABELS.optum}</option>
+                  <option value="tivity">{INSURANCE_PROGRAM_LABELS.tivity}</option>
+                </select>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-stone-600 mb-1">Join date</label>
                 <input
@@ -1115,6 +1136,16 @@ export default function MemberDetailPage() {
               <div><dt className="text-stone-500">Email</dt><dd className="font-medium">{String(member.email ?? "—")}</dd></div>
               <div><dt className="text-stone-500">Phone</dt><dd className="font-medium">{String(member.phone ?? "—")}</dd></div>
               <div><dt className="text-stone-500">Role</dt><dd><span className={`px-2 py-0.5 rounded text-xs font-medium ${member.role === "Admin" ? "bg-brand-100 text-brand-800" : "bg-stone-100"}`}>{String(member.role ?? "—")}</span></dd></div>
+              <div>
+                <dt className="text-stone-500">Insurance benefit</dt>
+                <dd className="font-medium">
+                  {member.insurance_program === "optum"
+                    ? INSURANCE_PROGRAM_LABELS.optum
+                    : member.insurance_program === "tivity"
+                      ? INSURANCE_PROGRAM_LABELS.tivity
+                      : "—"}
+                </dd>
+              </div>
               <div><dt className="text-stone-500">Join date</dt><dd className="font-medium">{String(member.join_date ?? "—")}</dd></div>
               <div><dt className="text-stone-500">Renewal date</dt><dd className="font-medium">{String(member.exp_next_payment_date ?? "—")}</dd></div>
               <div className="sm:col-span-2 border-t border-stone-100 pt-3 mt-1">
@@ -1201,7 +1232,15 @@ export default function MemberDetailPage() {
 
       {isAdmin && (
         <section className="mb-8">
-          <h2 className="text-lg font-semibold text-stone-800 mb-3">Recent unlocks</h2>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h2 className="text-lg font-semibold text-stone-800">Recent unlocks</h2>
+            <Link
+              href={`/admin/reports/member-unlocks?member_id=${encodeURIComponent(String(member.member_id ?? ""))}`}
+              className="text-sm text-brand-600 hover:underline font-medium"
+            >
+              Full unlock report (date range)
+            </Link>
+          </div>
           <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
             {unlocks.length === 0 ? (
               <p className="p-6 text-stone-500 text-sm">No door events on file for this member yet.</p>

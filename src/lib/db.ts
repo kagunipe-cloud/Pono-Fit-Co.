@@ -158,6 +158,7 @@ export function getDb() {
   ensureMembersWaiverColumns(db);
   ensureMembersPhoneColumn(db);
   ensureMembersProfileColumns(db);
+  ensureMembersInsuranceProgramColumn(db);
   ensureMembersCreatedAtColumn(db);
   ensurePaymentFailuresTable(db);
   ensureGiftPassesTable(db);
@@ -416,6 +417,15 @@ export function ensureMembersProfileColumns(db: ReturnType<typeof getDb>) {
     } catch {
       /* already exists */
     }
+  }
+}
+
+/** Silver Sneakers / One Pass style: Optum vs Tivity Health; null = not designated. */
+export function ensureMembersInsuranceProgramColumn(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE members ADD COLUMN insurance_program TEXT");
+  } catch {
+    /* already exists */
   }
 }
 

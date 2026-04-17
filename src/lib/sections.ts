@@ -179,7 +179,11 @@ export const BOOKINGS_SUB_SLUGS: SectionSlug[] = ["pt-bookings", "class-bookings
 export const BOOKINGS_EXTRA_LINKS: { href: string; title: string }[] = [{ href: "/open-credits", title: "Open Credits" }];
 
 /** Extra Reports dropdown links (not `[section]` data tables). */
-export const REPORT_EXTRA_LINKS: { href: string; title: string }[] = [{ href: "/members-expiry", title: "Membership expiry" }];
+export const REPORT_EXTRA_LINKS: { href: string; title: string }[] = [
+  { href: "/members-expiry", title: "Membership expiry" },
+  { href: "/admin/reports/member-unlocks", title: "Member unlocks" },
+  { href: "/admin/reports/insurance", title: "Insurance report" },
+];
 
 /** Slugs that appear under the sidebar "Services" dropdown (admin nav). Rec Leagues is added in the Sidebar. */
 export const SERVICES_SUB_SLUGS: SectionSlug[] = ["classes", "pt-sessions", "membership-plans"];
