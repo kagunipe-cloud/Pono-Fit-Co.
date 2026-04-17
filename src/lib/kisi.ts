@@ -512,3 +512,23 @@ export async function unlockWithUserSecret(secret: string, options?: UnlockWithU
   }
   await postUnlock(first.id);
 }
+
+/** Revoke door access, then delete the Kisi user (best effort). Used when a member account is removed. */
+export async function deleteKisiUserBestEffort(kisiUserId: string): Promise<void> {
+  const kisiId = kisiUserId?.trim();
+  if (!kisiId) return;
+  await revokeAccess(kisiId);
+  const headers = authHeaders();
+  if (!headers.Authorization) {
+    console.log("[Kisi] KISI_API_KEY not set; skipping user delete.");
+    return;
+  }
+  const res = await fetchKisiWithRetry(`${KISI_API_BASE}/users/${encodeURIComponent(kisiId)}`, {
+    method: "DELETE",
+    headers: { Authorization: headers.Authorization, Accept: "application/json" },
+  });
+  if (!res.ok && res.status !== 404) {
+    const err = await res.text();
+    console.error("[Kisi] delete user failed:", res.status, err.slice(0, 300));
+  }
+}

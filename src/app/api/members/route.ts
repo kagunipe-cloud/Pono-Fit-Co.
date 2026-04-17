@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone, expiryDateSortableSql } from "../../../lib/db";
+import { getDb, getAppTimezone, expiryDateSortableSql, ensureMembersAccountDeletedAtColumn } from "../../../lib/db";
 import { formatDateForStorage, todayInAppTz, parseAppDateToYMD, ymdGte } from "../../../lib/app-timezone";
 import { randomUUID } from "crypto";
 
@@ -77,6 +77,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const db = getDb();
+    ensureMembersAccountDeletedAtColumn(db);
     const tz = getAppTimezone(db);
     const todayYMD = getTodayYMD(tz);
     const typesMap = getMemberTypesMap(db);
@@ -91,7 +92,8 @@ export async function GET(request: NextRequest) {
           ${subquery} AS subscription_expiry,
           m.role, m.created_at
         FROM members m
-        WHERE m.first_name LIKE ? OR m.last_name LIKE ? OR m.email LIKE ? OR m.role LIKE ? OR m.member_id LIKE ?
+        WHERE (m.account_deleted_at IS NULL OR TRIM(m.account_deleted_at) = '')
+          AND (m.first_name LIKE ? OR m.last_name LIKE ? OR m.email LIKE ? OR m.role LIKE ? OR m.member_id LIKE ?)
         ORDER BY m.last_name ASC, m.first_name ASC
       `);
       rows = stmt.all(pattern, pattern, pattern, pattern, pattern) as Record<string, unknown>[];
@@ -102,6 +104,7 @@ export async function GET(request: NextRequest) {
           ${subquery} AS subscription_expiry,
           m.role, m.created_at
         FROM members m
+        WHERE (m.account_deleted_at IS NULL OR TRIM(m.account_deleted_at) = '')
         ORDER BY m.last_name ASC, m.first_name ASC
       `);
       rows = stmt.all() as Record<string, unknown>[];

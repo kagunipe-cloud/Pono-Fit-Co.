@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getDb } from "../../../../lib/db";
-import { getMemberIdFromSession } from "../../../../lib/session";
+import { getDb, ensureMembersAccountDeletedAtColumn } from "../../../../lib/db";
+import { getMemberIdFromSession, clearMemberSession } from "../../../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -12,9 +12,20 @@ export async function GET() {
       return NextResponse.json({ ok: false });
     }
     const db = getDb();
-    const row = db.prepare("SELECT role FROM members WHERE member_id = ?").get(memberId) as { role: string | null } | undefined;
+    ensureMembersAccountDeletedAtColumn(db);
+    const row = db.prepare("SELECT role, account_deleted_at FROM members WHERE member_id = ?").get(memberId) as
+      | { role: string | null; account_deleted_at: string | null }
+      | undefined;
     db.close();
-    const role = row?.role ?? "Member";
+    if (!row) {
+      await clearMemberSession();
+      return NextResponse.json({ ok: false, account_closed: true });
+    }
+    if ((row.account_deleted_at ?? "").trim()) {
+      await clearMemberSession();
+      return NextResponse.json({ ok: false, account_closed: true });
+    }
+    const role = row.role ?? "Member";
     return NextResponse.json({ ok: true, role, member_id: memberId });
   } catch {
     return NextResponse.json({ ok: false });

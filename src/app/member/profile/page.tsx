@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { isNativeAppShell } from "@/lib/native-app-client";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -40,6 +41,16 @@ export default function MemberProfilePage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
+  const [nativeShell, setNativeShell] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setNativeShell(isNativeAppShell());
+  }, []);
 
   useEffect(() => {
     fetch("/api/member/profile")
@@ -121,6 +132,35 @@ export default function MemberProfilePage() {
       setError("Save failed.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleDeleteAccount(e: React.FormEvent) {
+    e.preventDefault();
+    setDeleteError(null);
+    if (!deletePassword) {
+      setDeleteError("Enter your password.");
+      return;
+    }
+    setDeleteLoading(true);
+    try {
+      const res = await fetch("/api/member/delete-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setDeleteError(json.error ?? "Could not delete account.");
+        return;
+      }
+      setDeletePassword("");
+      window.dispatchEvent(new Event("member-me-refresh"));
+      router.replace("/login");
+    } catch {
+      setDeleteError("Request failed.");
+    } finally {
+      setDeleteLoading(false);
     }
   }
 
@@ -467,6 +507,72 @@ export default function MemberProfilePage() {
           </p>
         )}
       </div>
+
+      {nativeShell && (
+        <div className="mt-10 pt-8 border-t border-red-200/80">
+          <h2 className="text-sm font-semibold text-red-900 mb-1">Delete account</h2>
+          <p className="text-xs text-stone-600 mb-4 max-w-lg">
+            Close your member login and remove your personal information from this app. If you have purchase or visit
+            history, we keep anonymized records for the business; otherwise your profile is removed entirely. Door access
+            in Kisi is revoked.
+          </p>
+          {!form.has_password ? (
+            <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 max-w-lg">
+              Set a password in the section above first — then you can delete your account here.
+            </p>
+          ) : !deleteOpen ? (
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteOpen(true);
+                setDeleteError(null);
+              }}
+              className="px-4 py-2 rounded-lg border border-red-300 text-red-800 text-sm font-medium hover:bg-red-50"
+            >
+              Delete my account…
+            </button>
+          ) : (
+            <form onSubmit={handleDeleteAccount} className="space-y-3 max-w-md">
+              {deleteError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{deleteError}</div>
+              )}
+              <p className="text-sm text-stone-700">
+                This cannot be undone. Enter your current password to confirm.
+              </p>
+              <label className="block text-sm">
+                <span className="text-stone-600">Current password</span>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-stone-200 px-3 py-2 text-stone-900"
+                  autoComplete="current-password"
+                />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="submit"
+                  disabled={deleteLoading}
+                  className="px-4 py-2 rounded-lg bg-red-700 text-white text-sm font-medium hover:bg-red-800 disabled:opacity-50"
+                >
+                  {deleteLoading ? "Deleting…" : "Permanently delete account"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteOpen(false);
+                    setDeletePassword("");
+                    setDeleteError(null);
+                  }}
+                  className="px-4 py-2 rounded-lg border border-stone-200 text-sm text-stone-700 hover:bg-stone-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
     </div>
   );
 }

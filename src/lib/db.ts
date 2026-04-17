@@ -159,6 +159,7 @@ export function getDb() {
   ensureMembersPhoneColumn(db);
   ensureMembersProfileColumns(db);
   ensureMembersInsuranceProgramColumn(db);
+  ensureMembersAccountDeletedAtColumn(db);
   ensureMembersCreatedAtColumn(db);
   ensurePaymentFailuresTable(db);
   ensureGiftPassesTable(db);
@@ -424,6 +425,15 @@ export function ensureMembersProfileColumns(db: ReturnType<typeof getDb>) {
 export function ensureMembersInsuranceProgramColumn(db: ReturnType<typeof getDb>) {
   try {
     db.exec("ALTER TABLE members ADD COLUMN insurance_program TEXT");
+  } catch {
+    /* already exists */
+  }
+}
+
+/** Set when the member self-deletes (app); row may be anonymized instead of removed if history exists. */
+export function ensureMembersAccountDeletedAtColumn(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE members ADD COLUMN account_deleted_at TEXT");
   } catch {
     /* already exists */
   }

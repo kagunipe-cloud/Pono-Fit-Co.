@@ -62,7 +62,7 @@ function PrivacyDefaultContent() {
         <section>
           <h2 className="text-lg font-semibold text-stone-800 mt-6 mb-2">5. Data Retention</h2>
           <p>
-            We retain your information for as long as your account is active or as needed to provide services, comply with legal obligations, resolve disputes, and enforce agreements. You may request deletion of your data by contacting us.
+            We retain your information for as long as your account is active or as needed to provide services, comply with legal obligations, resolve disputes, and enforce agreements. You may delete your member account yourself in our mobile app (see Section 8) or request deletion of your data by contacting us at the email below.
           </p>
         </section>
 
@@ -84,33 +84,46 @@ function PrivacyDefaultContent() {
             <li><strong>Non-discrimination:</strong> We will not discriminate against you for exercising your privacy rights</li>
           </ul>
           <p className="mt-2">
-            To exercise these rights, contact us at the email below.
+            To exercise these rights, contact us at the email below. You may also delete your account directly in our mobile app as described in Section 8.
           </p>
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-800 mt-6 mb-2">8. California Residents (CCPA)</h2>
+          <h2 className="text-lg font-semibold text-stone-800 mt-6 mb-2">8. Deleting your account (mobile app)</h2>
+          <p className="mb-2">
+            If you use the {BRAND.name} mobile app (iOS or Android), you can initiate account deletion from your member profile. Open <strong>Profile</strong>, scroll to <strong>Delete account</strong>, and follow the steps. You must have a password on your account to confirm deletion; if you have not set one yet, use the password section on the same page or your set-password link first.
+          </p>
+          <p className="mb-2">
+            <strong>What happens when you delete:</strong> We revoke door access with our access provider (Kisi) and sign you out. If you have <strong>no</strong> purchase, subscription, or booking history in our system, we remove your member profile. If you <strong>do</strong> have that history (for example memberships, classes, or payments we must retain for business or legal reasons), we close your login and remove personal details we no longer need (such as your real name, contact information, and similar profile fields) while keeping anonymized or operational records tied to your member ID where the law or our legitimate business purposes require it.
+          </p>
+          <p>
+            Account deletion in the app is available only in the native mobile app, not on the website dashboard. Staff (admin) accounts cannot be deleted through this flow; contact us if you need help with a staff account.
+          </p>
+        </section>
+
+        <section>
+          <h2 className="text-lg font-semibold text-stone-800 mt-6 mb-2">9. California Residents (CCPA)</h2>
           <p>
             If you are a California resident, the California Consumer Privacy Act (CCPA) provides additional rights. We collect the categories of personal information described in Section 2. We use this information for the purposes described in Section 3. We do not sell or share personal information for cross-context behavioral advertising. You may submit requests by contacting us.
           </p>
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-800 mt-6 mb-2">9. Children&apos;s Privacy</h2>
+          <h2 className="text-lg font-semibold text-stone-800 mt-6 mb-2">10. Children&apos;s Privacy</h2>
           <p>
             Our services are not directed to individuals under 16. We do not knowingly collect personal information from children under 16. If you believe we have collected such information, please contact us.
           </p>
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-800 mt-6 mb-2">10. Changes</h2>
+          <h2 className="text-lg font-semibold text-stone-800 mt-6 mb-2">11. Changes</h2>
           <p>
             We may update this Privacy Policy from time to time. We will notify you of material changes by posting the updated policy on this page and updating the &quot;Last updated&quot; date.
           </p>
         </section>
 
         <section>
-          <h2 className="text-lg font-semibold text-stone-800 mt-6 mb-2">11. Contact Us</h2>
+          <h2 className="text-lg font-semibold text-stone-800 mt-6 mb-2">12. Contact Us</h2>
           <p>
             For questions about this Privacy Policy or to exercise your rights, contact us at{" "}
             <a href="mailto:ponofitco@gmail.com" className="text-brand-600 hover:underline">ponofitco@gmail.com</a>.
@@ -129,7 +142,7 @@ export default function PrivacyPolicyPage() {
         <BackLink />
       </Suspense>
       <h1 className="text-2xl font-bold text-stone-800 mb-2">Privacy Policy</h1>
-      <p className="text-stone-500 text-sm mb-8">Last updated: March 2026</p>
+      <p className="text-stone-500 text-sm mb-8">Last updated: April 2026</p>
 
       {hasFile ? (
         <div className="border border-stone-200 rounded-lg overflow-hidden bg-white">

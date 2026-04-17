@@ -5,6 +5,7 @@ import {
   ensureMembersProfileColumns,
   ensureMembersStripeColumn,
   ensureMembersPasswordColumn,
+  ensureMembersAccountDeletedAtColumn,
 } from "../../../../lib/db";
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { stripeCustomerIdForApi } from "../../../../lib/stripe-customer";
@@ -33,11 +34,12 @@ export async function GET() {
     const db = getDb();
     ensureMembersProfileColumns(db);
     ensureMembersPasswordColumn(db);
+    ensureMembersAccountDeletedAtColumn(db);
     const row = db.prepare(
       `SELECT member_id, first_name, last_name, preferred_name, email, phone,
               emergency_contact_name, emergency_contact_phone, emergency_info, spirit_animal,
               pronouns, birthday, mailing_address,
-              password_hash
+              password_hash, account_deleted_at
        FROM members WHERE member_id = ?`
     ).get(memberId) as {
       member_id: string;
@@ -54,12 +56,16 @@ export async function GET() {
       birthday: string | null;
       mailing_address: string | null;
       password_hash: string | null;
+      account_deleted_at: string | null;
     } | undefined;
 
     db.close();
 
     if (!row) {
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
+    }
+    if ((row.account_deleted_at ?? "").trim()) {
+      return NextResponse.json({ error: "Account closed" }, { status: 401 });
     }
 
     return NextResponse.json({
@@ -92,6 +98,16 @@ export async function PATCH(request: NextRequest) {
     const memberId = await getMemberIdFromSession();
     if (!memberId) {
       return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    }
+
+    const db0 = getDb();
+    ensureMembersAccountDeletedAtColumn(db0);
+    const closed = db0.prepare("SELECT account_deleted_at FROM members WHERE member_id = ?").get(memberId) as
+      | { account_deleted_at: string | null }
+      | undefined;
+    db0.close();
+    if ((closed?.account_deleted_at ?? "").trim()) {
+      return NextResponse.json({ error: "Account closed" }, { status: 401 });
     }
 
     const body = await request.json().catch(() => ({}));

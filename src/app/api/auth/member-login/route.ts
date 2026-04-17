@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, ensureMembersPasswordColumn } from "../../../../lib/db";
+import { getDb, ensureMembersPasswordColumn, ensureMembersAccountDeletedAtColumn } from "../../../../lib/db";
 import { verifyPassword } from "../../../../lib/password";
 import { setMemberSession } from "../../../../lib/session";
 
@@ -54,9 +54,13 @@ export async function POST(request: NextRequest) {
 
     const db = getDb();
     ensureMembersPasswordColumn(db);
+    ensureMembersAccountDeletedAtColumn(db);
     const member = db
       .prepare(
-        "SELECT member_id, email, password_hash, role, waiver_signed_at, privacy_terms_accepted_at FROM members WHERE LOWER(TRIM(email)) = ? LIMIT 1"
+        `SELECT member_id, email, password_hash, role, waiver_signed_at, privacy_terms_accepted_at
+         FROM members
+         WHERE LOWER(TRIM(email)) = ? AND (account_deleted_at IS NULL OR TRIM(account_deleted_at) = '')
+         LIMIT 1`
       )
       .get(email) as
       | { member_id: string; email: string | null; password_hash: string | null; role: string | null; waiver_signed_at: string | null; privacy_terms_accepted_at: string | null }

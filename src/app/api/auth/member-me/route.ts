@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDb, ensureMembersProfileColumns } from "../../../../lib/db";
+import { getDb, ensureMembersProfileColumns, ensureMembersAccountDeletedAtColumn } from "../../../../lib/db";
 import { getMemberIdFromSession } from "../../../../lib/session";
 
 export const dynamic = "force-dynamic";
@@ -33,8 +33,10 @@ export async function GET() {
 
     const db = getDb();
     ensureMembersProfileColumns(db);
+    ensureMembersAccountDeletedAtColumn(db);
     const member = db.prepare(
-      "SELECT member_id, first_name, last_name, preferred_name, email, role, waiver_signed_at, privacy_terms_accepted_at FROM members WHERE member_id = ?"
+      `SELECT member_id, first_name, last_name, preferred_name, email, role, waiver_signed_at, privacy_terms_accepted_at, account_deleted_at
+       FROM members WHERE member_id = ?`
     ).get(memberId) as {
       member_id: string;
       first_name: string | null;
@@ -44,11 +46,16 @@ export async function GET() {
       role: string | null;
       waiver_signed_at: string | null;
       privacy_terms_accepted_at: string | null;
+      account_deleted_at: string | null;
     } | undefined;
 
     if (!member) {
       db.close();
       return NextResponse.json({ error: "Member not found" }, { status: 401 });
+    }
+    if ((member.account_deleted_at ?? "").trim()) {
+      db.close();
+      return NextResponse.json({ error: "Account closed" }, { status: 401 });
     }
 
     const waiverSigned = !!(member.waiver_signed_at ?? "").trim();
