@@ -67,3 +67,45 @@ export function loadActiveMonthlySubscription(
 export function normalizeSubscriptionKey(subscriptionId: string | null | undefined): string {
   return subscriptionId != null && String(subscriptionId).trim() !== "" ? String(subscriptionId).trim() : "";
 }
+
+/**
+ * Latest cancelled monthly subscription (by prior period end). Used to reactivate after
+ * end-of-period cancel (auto-renew off) with an off-session card charge.
+ */
+export function loadLatestCancelledMonthlySubscription(
+  db: AppDb,
+  memberId: string,
+  subscriptionId: string | null | undefined
+): RenewalSubRow | null {
+  const base = `
+    SELECT s.subscription_id, s.member_id, s.expiry_date, s.price as sub_price, s.quantity,
+           s.promo_renewals_remaining, s.renewal_price_indefinite,
+           s.complimentary, s.complimentary_renewals_remaining, s.renewal_discount_percent,
+           p.plan_name, p.price as plan_price, p.length, p.unit
+    FROM subscriptions s
+    JOIN membership_plans p ON p.product_id = s.product_id
+    WHERE s.member_id = ? AND s.status = 'Cancelled' AND LOWER(TRIM(COALESCE(p.unit, ''))) = 'month'
+      AND s.pass_credits_remaining IS NULL
+  `;
+  const sid = subscriptionId?.trim();
+  const row = sid
+    ? (db.prepare(`${base} AND s.subscription_id = ?`).get(memberId, sid) as SubQueryRow | undefined)
+    : (db.prepare(`${base} ORDER BY s.expiry_date DESC LIMIT 1`).get(memberId) as SubQueryRow | undefined);
+  if (!row) return null;
+  return {
+    subscription_id: row.subscription_id,
+    member_id: row.member_id,
+    expiry_date: row.expiry_date,
+    sub_price: row.sub_price,
+    quantity: row.quantity ?? 1,
+    promo_renewals_remaining: row.promo_renewals_remaining,
+    renewal_price_indefinite: row.renewal_price_indefinite,
+    complimentary: row.complimentary,
+    complimentary_renewals_remaining: row.complimentary_renewals_remaining,
+    renewal_discount_percent: row.renewal_discount_percent,
+    plan_name: row.plan_name,
+    plan_price: row.plan_price,
+    length: row.length,
+    unit: row.unit,
+  };
+}

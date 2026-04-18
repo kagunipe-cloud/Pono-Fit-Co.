@@ -13,10 +13,20 @@ import {
 import { INSURANCE_PROGRAM_LABELS } from "@/lib/insurance-program";
 
 type Member = Record<string, unknown>;
+type LinkedRow = Record<string, unknown>;
 
 function insuranceEditValue(m: Record<string, unknown>): string {
   const v = String(m.insurance_program ?? "").trim().toLowerCase();
   return v === "optum" || v === "tivity" ? v : "";
+}
+
+/** Calendar monthly (not pass-pack rows that reuse subscription fields). */
+function isMonthlyCalendarSub(s: LinkedRow): boolean {
+  const u = String(s.plan_unit ?? "").trim().toLowerCase();
+  if (u !== "month") return false;
+  const pc = s.pass_credits_remaining;
+  if (pc != null && String(pc).trim() !== "") return false;
+  return true;
 }
 
 function buildMemberEditForm(m: Record<string, unknown>) {
@@ -39,7 +49,6 @@ function buildMemberEditForm(m: Record<string, unknown>) {
     spirit_animal: String(m.spirit_animal ?? ""),
   };
 }
-type LinkedRow = Record<string, unknown>;
 
 export default function MemberDetailPage() {
   const params = useParams();
@@ -95,6 +104,7 @@ export default function MemberDetailPage() {
   const [sendingWaiver, setSendingWaiver] = useState(false);
   const [sendingPasswordReset, setSendingPasswordReset] = useState(false);
   const [togglingAutoRenew, setTogglingAutoRenew] = useState(false);
+  const [reactivateMembershipSubmitting, setReactivateMembershipSubmitting] = useState(false);
   const [adjustSubId, setAdjustSubId] = useState<string | null>(null);
   const [adjustDateStr, setAdjustDateStr] = useState("");
   const [waiverResult, setWaiverResult] = useState<{ message: string; url?: string } | null>(null);
@@ -115,6 +125,35 @@ export default function MemberDetailPage() {
         .finally(() => window.history.replaceState({}, "", `/members/${id}`));
     }
   }, [id, searchParams]);
+
+  async function handleReactivateMembership() {
+    const ok = window.confirm(
+      "Charge this member's saved card off-session for one renewal period (same pricing rules as automatic renewals), set their cancelled monthly subscription back to Active, extend the period from the old expiry date, and turn auto-renew ON? They can turn auto-renew off on this page afterward."
+    );
+    if (!ok) return;
+    setReactivateMembershipSubmitting(true);
+    try {
+      const res = await fetch(`/api/admin/members/${id}/reactivate-membership`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enable_auto_renew: true }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.ok) {
+        window.alert(typeof json.message === "string" ? json.message : "Membership reactivated.");
+        await fetchMember();
+        const u = await fetch(`/api/members/${id}/unlocks?limit=10`);
+        if (u.ok) {
+          const uj = await u.json();
+          setUnlocks(uj?.unlocks ?? []);
+        }
+      } else {
+        window.alert(typeof json.error === "string" ? json.error : "Could not reactivate membership.");
+      }
+    } finally {
+      setReactivateMembershipSubmitting(false);
+    }
+  }
 
   async function changeCardOnFile() {
     setChangingCard(true);
@@ -1272,7 +1311,23 @@ export default function MemberDetailPage() {
 
       <section className="mb-8">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
-          <h2 className="text-lg font-semibold text-stone-800">Subscriptions</h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-lg font-semibold text-stone-800">Subscriptions</h2>
+            {isAdmin &&
+              !!String(data.member?.stripe_customer_id ?? "").trim() &&
+              !data.subscriptions.some((s) => s.status === "Active" && isMonthlyCalendarSub(s)) &&
+              data.subscriptions.some((s) => s.status === "Cancelled" && isMonthlyCalendarSub(s)) && (
+                <button
+                  type="button"
+                  onClick={handleReactivateMembership}
+                  disabled={reactivateMembershipSubmitting}
+                  title="Off-session charge in Stripe using the customer’s saved card; reuses the latest cancelled monthly row."
+                  className="px-3 py-1.5 rounded-lg bg-amber-600 text-white text-sm font-medium hover:bg-amber-700 disabled:opacity-50"
+                >
+                  {reactivateMembershipSubmitting ? "Charging…" : "Reactivate last monthly (saved card)"}
+                </button>
+              )}
+          </div>
           {isAdmin && data.subscriptions.some((s) => s.status === "Active") && (
             <label className="flex items-center gap-2 text-sm">
               <input

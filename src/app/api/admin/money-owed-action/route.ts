@@ -67,6 +67,8 @@ async function cancelActiveSubscriptionForMoneyOwed(
  * POST — action on all failed attempts for one member + subscription (cron retries grouped).
  * Body: `{ action, id?: number }` (legacy: any failure row id in the group) or
  * `{ action, member_id: string, subscription_id?: string | null }`.
+ *
+ * Actions: `retry_payment`, `write_off`, `cancel_subscription`, `dismiss` (archive open row only — no Stripe/membership change).
  */
 export async function POST(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
@@ -82,7 +84,7 @@ export async function POST(request: NextRequest) {
   }
 
   const action = String(body.action ?? "").trim();
-  if (!["cancel_subscription", "retry_payment", "write_off"].includes(action)) {
+  if (!["cancel_subscription", "retry_payment", "write_off", "dismiss"].includes(action)) {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   }
 
@@ -139,6 +141,16 @@ export async function POST(request: NextRequest) {
   if (!openCount || openCount.c < 1) {
     db.close();
     return NextResponse.json({ error: "No open failed payments for this member/subscription" }, { status: 404 });
+  }
+
+  if (action === "dismiss") {
+    dismissFailureGroup(db, memberId, subscriptionKey);
+    db.close();
+    return NextResponse.json({
+      ok: true,
+      message:
+        "Dismissed — this balance no longer appears on the open list. Stripe and the membership were not changed. Find it under Archived if you need history.",
+    });
   }
 
   if (action === "cancel_subscription") {

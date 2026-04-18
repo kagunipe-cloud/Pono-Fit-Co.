@@ -101,7 +101,10 @@ function MoneyOwedContent() {
     load();
   }, [load]);
 
-  async function runAction(row: MoneyOwedAggregatedRow, action: "cancel_subscription" | "retry_payment" | "write_off") {
+  async function runAction(
+    row: MoneyOwedAggregatedRow,
+    action: "cancel_subscription" | "retry_payment" | "write_off" | "dismiss"
+  ) {
     const prompts: Record<typeof action, string> = {
       cancel_subscription:
         "Cancel this membership?\n\nAutomatic renewals will stop, failed payment attempts will be archived here, and door access follows the usual rules if they have no other active membership. Stripe history is unchanged.",
@@ -109,6 +112,8 @@ function MoneyOwedContent() {
         "Charge the card on file now?\n\nWe will charge the default payment method once for this renewal (plus fees/tax, same as the cron). If it succeeds, the membership is extended and door access restored if the waiver allows.",
       write_off:
         "Write off this balance without charging?\n\nTheir monthly membership will be extended one period, door access restored if the waiver allows, and a $0 complimentary sale will be recorded.",
+      dismiss:
+        "Dismiss this money-owed row?\n\nOnly clears it from the open list (e.g. resolved elsewhere or no longer relevant). Does not charge, does not extend membership, and does not cancel. You can still see it under Archived.",
     };
     if (!window.confirm(prompts[action])) return;
 
@@ -500,6 +505,15 @@ function MoneyOwedContent() {
                             className="text-left text-xs font-medium text-stone-700 hover:underline disabled:opacity-50"
                           >
                             Write off
+                          </button>
+                          <button
+                            type="button"
+                            disabled={actionBusy === groupKey(r) || emailBusy === groupKey(r)}
+                            onClick={() => runAction(r, "dismiss")}
+                            title="Remove from open list only — no charge, no membership change."
+                            className="text-left text-xs font-medium text-stone-600 hover:underline disabled:opacity-50"
+                          >
+                            Dismiss (not owed)
                           </button>
                           <button
                             type="button"
