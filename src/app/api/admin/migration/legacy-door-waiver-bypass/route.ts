@@ -22,17 +22,20 @@ function sleep(ms: number): Promise<void> {
  *
  * Body:
  * - `{ "dry_run": true }` — count + sample IDs only (no Kisi, no DB updates).
- * - `{ "confirm": "LEGACY_DOOR_WAIVER_BYPASS" }` — run for real (optional `dry_run: false`).
+ * - `{ "confirm": "LEGACY_DOOR_WAIVER_BYPASS", "offset": 0, "batch_size": 15 }` — process one chunk (avoids **502** proxy timeouts). Repeat with `offset: next_offset` until `done: true`.
  */
+const DEFAULT_BATCH_SIZE = 15;
+const MAX_BATCH_SIZE = 40;
+
 export async function POST(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
   if (!adminId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { dry_run?: boolean; confirm?: string };
+  let body: { dry_run?: boolean; confirm?: string; offset?: number; batch_size?: number };
   try {
-    body = (await request.json()) as { dry_run?: boolean; confirm?: string };
+    body = (await request.json()) as { dry_run?: boolean; confirm?: string; offset?: number; batch_size?: number };
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
@@ -61,15 +64,25 @@ export async function POST(request: NextRequest) {
       date: todayYmd,
       count: memberIds.length,
       member_ids_sample: memberIds.slice(0, 40),
+      hint: `Run confirm in batches: batch_size ${DEFAULT_BATCH_SIZE}, offset 0, then next_offset until done.`,
     });
   }
+
+  let offset = Math.max(0, Math.floor(Number(body.offset ?? 0) || 0));
+  let batchSize = Math.floor(Number(body.batch_size ?? DEFAULT_BATCH_SIZE) || DEFAULT_BATCH_SIZE);
+  if (!Number.isFinite(batchSize) || batchSize < 1) batchSize = DEFAULT_BATCH_SIZE;
+  batchSize = Math.min(batchSize, MAX_BATCH_SIZE);
+
+  const slice = memberIds.slice(offset, offset + batchSize);
+  const nextOffset = offset + slice.length;
+  const done = nextOffset >= memberIds.length;
 
   const granted: string[] = [];
   const skipped_no_email: string[] = [];
   const skipped_no_valid_until: string[] = [];
   const errors: { member_id: string; message: string }[] = [];
 
-  for (const member_id of memberIds) {
+  for (const member_id of slice) {
     const dbLoop = getDb();
     ensureMembersDoorAccessWaiverExemptColumn(dbLoop);
     const row = dbLoop
@@ -140,6 +153,9 @@ export async function POST(request: NextRequest) {
     timezone: tz,
     date: todayYmd,
     total_eligible: memberIds.length,
+    batch: { offset, batch_size: batchSize, processed_in_batch: slice.length },
+    next_offset: done ? null : nextOffset,
+    done,
     granted_count: granted.length,
     granted_member_ids_sample: granted.slice(0, 40),
     skipped_no_email,

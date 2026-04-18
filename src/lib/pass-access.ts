@@ -43,7 +43,8 @@ export function listMemberIdsWithDoorAccessToday(db: ReturnType<typeof getDb>, t
                 AND s.expiry_date >= ?
               )
             )
-          )`
+          )
+       ORDER BY m.member_id`
     )
     .all(todayYmd, todayYmd, todayYmd) as { member_id: string }[];
   return rows.map((r) => r.member_id).filter((id) => id != null && String(id).trim() !== "");
