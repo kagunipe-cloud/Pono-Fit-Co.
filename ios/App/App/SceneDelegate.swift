@@ -27,15 +27,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     private func forwardOpenURLContexts(_ contexts: Set<UIOpenURLContext>) {
         for context in contexts {
-            var options: [UIApplication.OpenURLOptionsKey: Any] = [:]
-            let o = context.options
-            if let source = o.sourceApplication {
-                options[.sourceApplication] = source
-            }
-            if let annotation = o.annotation {
-                options[.annotation] = annotation
-            }
-            _ = ApplicationDelegateProxy.shared.application(UIApplication.shared, open: context.url, options: options)
+            // Capacitor’s bridge still takes the legacy options dictionary. Passing `[:]` avoids using
+            // deprecated `OpenURLOptionsKey` in our code; URL handling does not require source/annotation
+            // for typical deep links. Metadata remains on `context.options` (UISceneOpenURLOptions) if needed later.
+            _ = ApplicationDelegateProxy.shared.application(UIApplication.shared, open: context.url, options: [:])
         }
     }
 
