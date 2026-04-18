@@ -3,6 +3,7 @@ import { SettingsProvider } from "@/lib/settings-context";
 import { WaiverGate } from "@/components/WaiverGate";
 import AppShell from "@/components/AppShell";
 import PwaRegister from "@/components/PwaRegister";
+import WebSplash from "@/components/WebSplash";
 import "./globals.css";
 
 export const metadata = {
@@ -39,6 +40,7 @@ export default function RootLayout({
           <AppShell>{children}</AppShell>
         </WaiverGate>
         </SettingsProvider>
+        <WebSplash />
       </body>
     </html>
   );
