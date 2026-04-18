@@ -1,7 +1,6 @@
 "use client";
 
 import { useLayoutEffect, useState } from "react";
-import { BRAND } from "@/lib/branding";
 import { isNativeAppShell } from "@/lib/native-app-client";
 
 const SESSION_KEY = "ponofit_web_splash_v1";
@@ -47,9 +46,12 @@ export default function WebSplash() {
       }`}
       aria-hidden
     >
-      {/* eslint-disable-next-line @next/next/no-img-element -- small static asset, no layout shift */}
-      <img src="/Lei_Logos.png" alt="" className="h-20 w-auto sm:h-24 drop-shadow-md" />
-      <p className="text-lg sm:text-xl font-semibold text-stone-800 tracking-tight">{BRAND.shortName}</p>
+      {/* eslint-disable-next-line @next/next/no-img-element -- static splash art from public/ */}
+      <img
+        src="/pwa-splash.png"
+        alt=""
+        className="max-h-[min(55vh,640px)] w-auto max-w-[min(92vw,520px)] object-contain drop-shadow-md"
+      />
     </div>
   );
 }
