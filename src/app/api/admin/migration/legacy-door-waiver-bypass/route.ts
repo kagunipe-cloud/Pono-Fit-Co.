@@ -80,7 +80,12 @@ export async function POST(request: NextRequest) {
         last_name: string | null;
         kisi_id: string | null;
       } | undefined;
-    const emailTrim = row?.email?.trim();
+    if (!row) {
+      dbLoop.close();
+      await sleep(20);
+      continue;
+    }
+    const emailTrim = row.email?.trim();
     if (!emailTrim) {
       skipped_no_email.push(member_id);
       dbLoop.close();
@@ -91,7 +96,7 @@ export async function POST(request: NextRequest) {
     let kisiId = row.kisi_id?.trim() || null;
     if (!kisiId) {
       try {
-        const name = [row?.first_name, row?.last_name].filter(Boolean).join(" ").trim() || undefined;
+        const name = [row.first_name, row.last_name].filter(Boolean).join(" ").trim() || undefined;
         kisiId = await ensureKisiUser(emailTrim, name);
         dbLoop.prepare("UPDATE members SET kisi_id = ? WHERE member_id = ?").run(kisiId, member_id);
       } catch (e) {
