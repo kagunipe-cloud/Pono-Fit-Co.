@@ -1,4 +1,4 @@
-import { getDb } from "./db";
+import { getDb, ensureMembersDoorAccessWaiverExemptColumn } from "./db";
 import { ensurePTSlotTables } from "./pt-slots";
 import { randomBytes } from "crypto";
 import { hashPassword } from "./password";
@@ -44,6 +44,7 @@ const ANON_LAST = "Member";
  * Anonymize PII and mark account closed. Keeps member_id and historical FK rows.
  */
 export async function softDeleteAnonymizeMember(db: Db, internalId: number, memberId: string): Promise<void> {
+  ensureMembersDoorAccessWaiverExemptColumn(db);
   const kisiRow = db.prepare("SELECT kisi_id FROM members WHERE id = ?").get(internalId) as { kisi_id: string | null } | undefined;
   const kisiId = kisiRow?.kisi_id?.trim();
   if (kisiId) {
@@ -71,6 +72,7 @@ export async function softDeleteAnonymizeMember(db: Db, internalId: number, memb
       stripe_customer_id = NULL,
       insurance_program = NULL,
       waiver_signed_at = NULL, privacy_terms_accepted_at = NULL,
+      door_access_waiver_exempt = 0,
       auto_renew = 0,
       exp_next_payment_date = NULL,
       pass_activation_day = NULL

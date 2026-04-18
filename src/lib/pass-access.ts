@@ -23,6 +23,32 @@ export function memberHasDoorAccessToday(
   });
 }
 
+/**
+ * Member IDs that have door access today per the same rules as `memberHasDoorAccessToday` (SQL snapshot).
+ */
+export function listMemberIdsWithDoorAccessToday(db: ReturnType<typeof getDb>, todayYmd: string): string[] {
+  ensureMembersPassActivationDayColumn(db);
+  const rows = db
+    .prepare(
+      `SELECT m.member_id FROM members m
+       WHERE TRIM(COALESCE(m.pass_activation_day, '')) = ?
+          OR EXISTS (
+            SELECT 1 FROM subscriptions s
+            WHERE s.member_id = m.member_id AND s.status = 'Active'
+            AND (
+              (s.pass_credits_remaining IS NOT NULL AND TRIM(COALESCE(s.pass_activation_day, '')) = ?)
+              OR (
+                s.pass_credits_remaining IS NULL
+                AND TRIM(COALESCE(s.expiry_date, '')) != ''
+                AND s.expiry_date >= ?
+              )
+            )
+          )`
+    )
+    .all(todayYmd, todayYmd, todayYmd) as { member_id: string }[];
+  return rows.map((r) => r.member_id).filter((id) => id != null && String(id).trim() !== "");
+}
+
 /** Last instant (UTC) that still falls on `ymd` in the given IANA timezone. */
 export function endOfCalendarDayInTimeZone(ymd: string, timeZone: string): Date {
   const parts = ymd.trim().split("-").map(Number);

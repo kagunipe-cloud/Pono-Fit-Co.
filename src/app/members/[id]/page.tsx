@@ -907,6 +907,12 @@ export default function MemberDetailPage() {
                   : "Waiver not signed"}
               </span>
             )}
+            {isAdmin && Number(member.door_access_waiver_exempt ?? 0) === 1 ? (
+              <p className="mt-2 text-xs text-stone-600 max-w-xl">
+                Legacy door access: Kisi renewals can run without a signed waiver (one-time migration cohort). New
+                members are not added to this cohort automatically.
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <Link

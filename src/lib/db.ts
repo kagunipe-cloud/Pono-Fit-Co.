@@ -203,6 +203,23 @@ export function ensureMembersAutoRenewColumn(db: ReturnType<typeof getDb>) {
   }
 }
 
+/**
+ * Legacy / migration only: 1 = may grant Kisi on renewals & purchases without waiver_signed_at.
+ * New members stay 0; use one-time admin migration to set 1 for a Glofox-era cohort.
+ */
+export function ensureMembersDoorAccessWaiverExemptColumn(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE members ADD COLUMN door_access_waiver_exempt INTEGER DEFAULT 0");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("UPDATE members SET door_access_waiver_exempt = 0 WHERE door_access_waiver_exempt IS NULL");
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Ensure sales table exists (created by cart/confirm-payment). */
 function ensureSalesTable(db: ReturnType<typeof getDb>) {
   db.exec(`

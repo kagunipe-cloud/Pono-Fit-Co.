@@ -4,6 +4,7 @@ import {
   getAppTimezone,
   expiryDateSortableSql,
   ensureMembersAutoRenewColumn,
+  ensureMembersDoorAccessWaiverExemptColumn,
   ensureMembersProfileColumns,
   ensureMembersInsuranceProgramColumn,
   ensureSubscriptionPassPackColumns,
@@ -36,6 +37,7 @@ export async function GET(
   try {
     const db = getDb();
     ensureMembersAutoRenewColumn(db);
+    ensureMembersDoorAccessWaiverExemptColumn(db);
     ensureMembersProfileColumns(db);
     ensureMembersInsuranceProgramColumn(db);
     ensureDayPassCreditLedger(db);
@@ -48,7 +50,7 @@ export async function GET(
     const memberStmt = db.prepare(`
       SELECT m.id, m.member_id, m.first_name, m.last_name, m.preferred_name, m.email, m.phone, m.kisi_id, m.kisi_group_id, m.join_date,
         COALESCE(m.exp_next_payment_date, (SELECT s.expiry_date FROM subscriptions s WHERE s.member_id = m.member_id AND s.status = 'Active' ORDER BY ${expiryDateSortableSql("s.expiry_date")} DESC LIMIT 1)) AS exp_next_payment_date,
-        m.role, m.created_at, m.waiver_signed_at, m.stripe_customer_id, m.auto_renew,
+        m.role, m.created_at, m.waiver_signed_at, m.door_access_waiver_exempt, m.stripe_customer_id, m.auto_renew,
         m.emergency_contact_name, m.emergency_contact_phone, m.emergency_info, m.spirit_animal,
         m.pronouns, m.birthday, m.mailing_address, m.pass_activation_day, m.insurance_program
       FROM members m WHERE ${isPurelyNumeric ? "m.id = ? OR m.member_id = ?" : "m.member_id = ?"}
