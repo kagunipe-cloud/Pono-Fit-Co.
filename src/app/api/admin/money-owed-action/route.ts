@@ -22,6 +22,7 @@ import { computeCcFee } from "@/lib/cc-fees";
 import { stripeCustomerIdForApi } from "@/lib/stripe-customer";
 import {
   resolveStripeCustomerCardPaymentMethodId,
+  getOffSessionRenewalBlockerIfResolvedPmIsNull,
   stripeFailureFieldsFromError,
 } from "@/lib/stripe-customer-payment-method";
 import { revokeAccess } from "@/lib/kisi";
@@ -274,6 +275,18 @@ export async function POST(request: NextRequest) {
     recordRetryFailureCents = chargeCents;
 
     const paymentMethodId = await resolveStripeCustomerCardPaymentMethodId(stripe, stripeCustomerId);
+    if (!paymentMethodId) {
+      const blocker = await getOffSessionRenewalBlockerIfResolvedPmIsNull(stripe, stripeCustomerId);
+      if (blocker) {
+        db.prepare(
+          `INSERT INTO payment_failures (member_id, subscription_id, plan_name, amount_cents, reason, stripe_error_code)
+           VALUES (?, ?, ?, ?, ?, ?)`
+        ).run(sub.member_id, sub.subscription_id, sub.plan_name, chargeCents, blocker.message, blocker.code);
+        db.close();
+        return NextResponse.json({ error: blocker.message }, { status: 400 });
+      }
+    }
+
     const piParams: Stripe.PaymentIntentCreateParams = {
       amount: chargeCents,
       currency: "usd",

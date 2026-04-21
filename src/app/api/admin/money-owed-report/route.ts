@@ -81,10 +81,14 @@ export async function GET(request: NextRequest) {
     const whereDismissed = archived
       ? `WHERE f.dismissed_at IS NOT NULL AND TRIM(f.dismissed_at) != ''`
       : `WHERE f.dismissed_at IS NULL OR TRIM(COALESCE(f.dismissed_at, '')) = ''`;
+    /** Parentheses required: else `OR … AND member_id` binds as `OR (… AND member)` and ignores member_id. */
     const whereDismissedBare = archived
       ? `WHERE dismissed_at IS NOT NULL AND TRIM(dismissed_at) != ''`
-      : `WHERE dismissed_at IS NULL OR TRIM(COALESCE(dismissed_at, '')) = ''`;
-    const orderAttempts = archived ? `ORDER BY f.dismissed_at DESC` : `ORDER BY f.attempted_at DESC`;
+      : `WHERE (dismissed_at IS NULL OR TRIM(COALESCE(dismissed_at, '')) = '')`;
+    /** Must match `latestStmt` ordering so Money owed and Transactions show the same “newest” row. */
+    const orderAttempts = archived
+      ? `ORDER BY f.dismissed_at DESC`
+      : `ORDER BY datetime(f.attempted_at) DESC, f.id DESC`;
 
     const rawAttempts = db.prepare(`
       SELECT
@@ -142,12 +146,12 @@ export async function GET(request: NextRequest) {
     }[];
 
     const latestStmt = db.prepare(`
-      SELECT plan_name, amount_cents, reason, stripe_error_code
+      SELECT id, plan_name, amount_cents, reason, stripe_error_code, attempted_at
       FROM payment_failures
       ${whereDismissedBare}
         AND member_id = ?
         AND COALESCE(subscription_id, '') = ?
-      ORDER BY datetime(attempted_at) DESC
+      ORDER BY datetime(attempted_at) DESC, id DESC
       LIMIT 1
     `);
 
@@ -160,7 +164,14 @@ export async function GET(request: NextRequest) {
       const subKey = g.subscription_id != null ? String(g.subscription_id) : "";
       const reminderRow = reminderStmt.get(g.member_id, subKey) as { sent_at: string } | undefined;
       const latest = latestStmt.get(g.member_id, subKey) as
-        | { plan_name: string | null; amount_cents: number | null; reason: string; stripe_error_code: string | null }
+        | {
+            id: number;
+            plan_name: string | null;
+            amount_cents: number | null;
+            reason: string;
+            stripe_error_code: string | null;
+            attempted_at: string;
+          }
         | undefined;
 
       const first = String(g.first_name ?? "").trim();
@@ -187,7 +198,8 @@ export async function GET(request: NextRequest) {
         latest_reason: String(latest?.reason ?? ""),
         latest_stripe_error_code: latest?.stripe_error_code != null ? String(latest.stripe_error_code) : null,
         first_attempted_at: String(g.first_attempted_at ?? ""),
-        last_attempted_at: String(g.last_attempted_at ?? ""),
+        /** Same row as `latest_reason` (not `MAX(attempted_at)` as string, which can disagree). */
+        last_attempted_at: String(latest?.attempted_at ?? g.last_attempted_at ?? ""),
         failure_ids: ids,
         reminder_sent_at:
           reminderRow?.sent_at != null && String(reminderRow.sent_at).trim() !== ""

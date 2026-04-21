@@ -40,6 +40,53 @@ export async function resolveStripeCustomerCardPaymentMethodId(
   return null;
 }
 
+/**
+ * When {@link resolveStripeCustomerCardPaymentMethodId} returns `null`, call this before
+ * `PaymentIntents.create({ confirm: true, off_session: true })` without `payment_method`.
+ * Otherwise Stripe often returns a confusing
+ * "missing a payment method" / `payment_intent_unexpected_state` (e.g. **multiple** saved cards
+ * and **no** default on the customer).
+ *
+ * @returns a human-readable blocker to store in `payment_failures`, or `null` to allow create
+ *          (e.g. legacy `default_source` only, or single-card case resolve missed in edge cases).
+ */
+export async function getOffSessionRenewalBlockerIfResolvedPmIsNull(
+  stripe: Stripe,
+  customerId: string
+): Promise<{ message: string; code: string } | null> {
+  const list = await stripe.paymentMethods.list({ customer: customerId, type: "card", limit: 100 });
+  if (list.data.length >= 2) {
+    return {
+      message:
+        "This member has more than one card on file, but no default in Stripe, so the app can’t choose which to charge. Set a default payment method on the customer in the Stripe Dashboard (or have them save a single card in the app).",
+      code: "multiple_cards_no_default",
+    };
+  }
+  if (list.data.length === 1) {
+    // resolve() should have returned that pm_ — if not, still avoid blocking; PI create may work.
+    return null;
+  }
+  const customer = await stripe.customers.retrieve(customerId, {
+    expand: ["default_source", "invoice_settings.default_payment_method"],
+  });
+  if (typeof customer === "string" || customer.deleted) {
+    return { message: "Stripe customer is missing or was deleted.", code: "customer_invalid" };
+  }
+  const inv = customer.invoice_settings?.default_payment_method;
+  if (inv) {
+    const id = typeof inv === "string" ? inv : inv.id;
+    if (id.startsWith("pm_")) return null;
+  }
+  if (customer.default_source) {
+    return null;
+  }
+  return {
+    message:
+      "No saved card in Stripe for this member (or no card the renewal can use off-session). Have them add or update a card in the app, then try again.",
+    code: "no_card_for_renewal",
+  };
+}
+
 /** Best-effort fields for payment_failures from a thrown Stripe API error (card decline, etc.). */
 export function stripeFailureFieldsFromError(err: unknown): {
   message: string;

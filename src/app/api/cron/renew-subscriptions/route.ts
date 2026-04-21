@@ -18,6 +18,7 @@ import { computeCcFee } from "../../../../lib/cc-fees";
 import { stripeCustomerIdForApi } from "../../../../lib/stripe-customer";
 import {
   resolveStripeCustomerCardPaymentMethodId,
+  getOffSessionRenewalBlockerIfResolvedPmIsNull,
   stripeFailureFieldsFromError,
 } from "../../../../lib/stripe-customer-payment-method";
 import Stripe from "stripe";
@@ -218,6 +219,16 @@ export async function GET(request: NextRequest) {
 
     try {
       const paymentMethodId = await resolveStripeCustomerCardPaymentMethodId(stripe, stripeCustomerId);
+      if (!paymentMethodId) {
+        const blocker = await getOffSessionRenewalBlockerIfResolvedPmIsNull(stripe, stripeCustomerId);
+        if (blocker) {
+          results.push({ member_id: sub.member_id, status: "error", message: blocker.message });
+          insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, chargeCents, blocker.message, blocker.code);
+          await revokeKisiForMember(db, sub.member_id);
+          continue;
+        }
+      }
+
       const piParams: Stripe.PaymentIntentCreateParams = {
         amount: chargeCents,
         currency: "usd",
@@ -230,7 +241,7 @@ export async function GET(request: NextRequest) {
       if (paymentMethodId) {
         piParams.payment_method = paymentMethodId;
       }
-      /** If `payment_method` is omitted, Stripe uses the customer’s default payment method when set (covers some legacy setups). */
+      /** If `payment_method` is omitted, Stripe uses legacy default_source / customer default (only when preflight allows). */
 
       const paymentIntent = await stripe.paymentIntents.create(piParams);
 

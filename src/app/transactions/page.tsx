@@ -216,7 +216,9 @@ export default function TransactionsPage() {
     failedByMember.set(a.member_id, list);
   }
   for (const [, list] of failedByMember) {
-    list.sort((x, y) => (x.attempted_at < y.attempted_at ? 1 : -1));
+    // Match API / Money owed: `payment_failures.id` is autoincrement; use numeric id so order matches
+    // `ORDER BY datetime(attempted_at) DESC, id DESC` (string sort on `attempted_at` was wrong for ISO vs "YYYY-MM-DD HH:MM:SS").
+    list.sort((a, b) => b.id - a.id);
   }
 
   return (
