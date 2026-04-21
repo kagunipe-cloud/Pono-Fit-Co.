@@ -1,11 +1,14 @@
 import Stripe from "stripe";
 
 /**
- * Stripe can charge a customer whose default card is set on the Customer (e.g. Checkout
- * "save as default") even when `paymentMethods.list({ type: "card" })` is empty — e.g. legacy
- * `card_…` sources or default only on invoice settings. This resolves a PaymentMethod id to pass
- * to PaymentIntents, or null if none found (caller may omit `payment_method` so Stripe uses the
- * customer default).
+ * Resolves a PaymentMethod `pm_…` to pass to `PaymentIntents.create`, or `null` to **omit**
+ * `payment_method` so Stripe bills the Customer’s real default (including legacy `card_…` /
+ * `default_source` when `paymentMethods.list` is empty).
+ *
+ * **Important:** We do **not** use `paymentMethods.list()[0]` when multiple cards exist but
+ * `invoice_settings.default_payment_method` is unset — list order is not “the default”, and
+ * forcing the wrong PM causes bogus declines (e.g. `incorrect_cvc`) while another card or
+ * legacy default would succeed.
  */
 export async function resolveStripeCustomerCardPaymentMethodId(
   stripe: Stripe,
@@ -26,10 +29,14 @@ export async function resolveStripeCustomerCardPaymentMethodId(
   const list = await stripe.paymentMethods.list({
     customer: customerId,
     type: "card",
-    limit: 20,
+    limit: 100,
   });
-  if (list.data.length > 0) return list.data[0].id;
+  // Unambiguous: only one saved card and no explicit invoice default — this PM is what Stripe
+  // would use when a single PaymentMethod is attached.
+  if (list.data.length === 1) return list.data[0]!.id;
 
+  // Several PMs but no invoice default: do not guess. Omit `payment_method` on the PI so Stripe
+  // applies Customer default / legacy source; if nothing is set, Stripe returns a clear error.
   return null;
 }
 
