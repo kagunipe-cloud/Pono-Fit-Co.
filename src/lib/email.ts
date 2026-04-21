@@ -452,28 +452,41 @@ ${BRAND.name}`;
   return sendMemberEmail(params.to, `Your gift: ${params.planName}`, text);
 }
 
-/** Send membership expiring in 2 days reminder. Card on file: remind them they're set if card is valid. No card: payment due on expiry date. */
+/** Send membership expiring in 2 days reminder. Auto-charge copy only when member has a billable Stripe customer AND auto_renew; otherwise app link to renew or opt in. */
 export async function sendMembershipExpiryReminder(params: {
   to: string;
   first_name?: string | null;
   expiry_date: string;
   has_card_on_file: boolean;
+  auto_renew: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
-  const cardMessage = params.has_card_on_file
-    ? `You have a card on file—as long as it's still valid, you're all set and we'll charge it automatically. If your card has changed or expired, please update it in the app before ${params.expiry_date} so we can process your renewal.`
-    : `Payment is due by then to continue your access. You can renew in the app or at the front desk.`;
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").trim().replace(/\/$/, "");
+  const willAutoCharge = params.has_card_on_file && params.auto_renew;
+  const fragmentVars: Record<string, string> = {
+    expiry_date: params.expiry_date,
+    app_url: appUrl,
+  };
+  const defaultAutoFragment = `You have a card on file—as long as it's still valid, you're all set and we'll charge it automatically. If your card has changed or expired, please update it in the app before ${params.expiry_date} so we can process your renewal.`;
+  const defaultManualFragment = appUrl
+    ? `If you'd like to purchase another month or update a payment method to opt-in for auto-renew, you can do so here:\n\n${appUrl}`
+    : `If you'd like to purchase another month or update a payment method to opt-in for auto-renew, you can do so in the member app.`;
+  const autoTpl = getEmailSetting("email_membership_expiry_card_auto_renew");
+  const manualTpl = getEmailSetting("email_membership_expiry_card_manual");
+  const cardMessage = applyPlaceholders(
+    willAutoCharge ? (autoTpl ?? defaultAutoFragment) : (manualTpl ?? defaultManualFragment),
+    fragmentVars
+  );
   const vars = {
     first_name: params.first_name ?? "",
     expiry_date: params.expiry_date,
     card_message: cardMessage,
+    app_url: appUrl,
   };
   const customSubject = getEmailSetting("email_membership_expiry_subject");
   const customBody = getEmailSetting("email_membership_expiry_body");
   const subject = customSubject ? applyPlaceholders(customSubject, vars) : "Your membership is expiring soon";
   const closing = "\n\nMahalo Nui Loa,\n\nB & P";
-  const defaultText = params.has_card_on_file
-    ? `Aloha,\n\nBekah & Perry with Pono Fit Co. here! We're just emailing to let you know that your membership expires on ${params.expiry_date}. You have a card on file—as long as it's still valid, you're all set and we'll charge it automatically. If your card has changed or expired, please update it in the app before ${params.expiry_date} so we can process your renewal.${closing}`
-    : `Aloha,\n\nBekah & Perry with Pono Fit Co. here! We're just emailing to let you know that your membership expires on ${params.expiry_date}. Payment is due by then to continue your access. You can renew in the app or at the front desk.${closing}`;
+  const defaultText = `Aloha,\n\nBekah & Perry with Pono Fit Co. here! We're just emailing to let you know that your membership expires on ${params.expiry_date}. ${cardMessage}${closing}`;
   const text = customBody ? applyPlaceholders(customBody, vars) : defaultText;
   return sendMemberEmail(params.to, subject, text);
 }
@@ -625,7 +638,7 @@ If you didn’t ask for this, you can ignore this email — your password won’
   return sendMemberEmail(params.to, subject, text);
 }
 
-/** Sent from Admin → Money owed → Send email reminder. Placeholders include {{pay_url}} (sign-in → Membership to update card). */
+/** Sent from Admin → Money owed → Send email reminder. Uses auto-renew vs no-auto-renew templates. Placeholders: {{pay_url}}, {{app_url}}, {{first_name}}, {{member_name}}, {{plan_name}}, {{amount_formatted}}. */
 export async function sendMoneyOwedReminderEmail(params: {
   to: string;
   first_name: string | null;
@@ -634,6 +647,7 @@ export async function sendMoneyOwedReminderEmail(params: {
   amount_dollars: number;
   /** Absolute URL, e.g. https://gym.com/login?next=%2Fmember%2Fmembership */
   pay_url: string;
+  auto_renew: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
   const amountFormatted = new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -641,30 +655,55 @@ export async function sendMoneyOwedReminderEmail(params: {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   }).format(params.amount_dollars);
+  const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").trim().replace(/\/$/, "");
   const vars: Record<string, string> = {
     first_name: (params.first_name ?? "").trim(),
     member_name: params.member_name.trim(),
     plan_name: (params.plan_name ?? "").trim(),
     amount_formatted: amountFormatted,
     pay_url: params.pay_url.trim(),
+    app_url: appUrl,
   };
-  const customSubject = getEmailSetting("email_money_owed_reminder_subject");
-  const customBody = getEmailSetting("email_money_owed_reminder_body");
-  const subject = customSubject
-    ? applyPlaceholders(customSubject, vars)
-    : "Membership payment reminder";
-  const defaultBody = `Aloha {{first_name}},
 
-Just a friendly reminder that your monthly-membership fee is due, if you'd like to keep using the gym.  Mahalo, and we hope to see you soon :)
+  const legacySubject = getEmailSetting("email_money_owed_reminder_subject");
+  const legacyBody = getEmailSetting("email_money_owed_reminder_body");
 
-Sign in to update your payment method or review your membership (auto-renew will retry once your card works):
+  const defaultAutoSubject = "Membership payment reminder";
+  const defaultAutoBody = `Aloha {{first_name}},
+
+Just a friendly reminder that your monthly-membership fee is due, if you'd like to keep using the gym. Mahalo, and we hope to see you soon :)
+
+You have auto-renew on — sign in to update your payment method if your card changed. We'll retry the renewal once your card works:
 
 {{pay_url}}
 
 Me Ke Aloha,
 
 Bekah & Perry`;
-  const text = customBody ? applyPlaceholders(customBody, vars) : applyPlaceholders(defaultBody, vars);
+
+  const defaultNoAutoSubject = "Membership payment reminder";
+  const defaultNoAutoBody = `Aloha {{first_name}},
+
+Just a friendly reminder that your monthly membership payment is due if you'd like to keep your access. You're not on auto-renew — sign in to renew for another month or add a payment method and turn on auto-renew:
+
+{{pay_url}}
+
+Me Ke Aloha,
+
+Bekah & Perry`;
+
+  let subjectTpl: string | null;
+  let bodyTpl: string | null;
+  if (params.auto_renew) {
+    subjectTpl = getEmailSetting("email_money_owed_auto_renew_subject") ?? legacySubject;
+    bodyTpl = getEmailSetting("email_money_owed_auto_renew_body") ?? legacyBody;
+  } else {
+    subjectTpl = getEmailSetting("email_money_owed_no_auto_renew_subject");
+    bodyTpl = getEmailSetting("email_money_owed_no_auto_renew_body");
+  }
+
+  const subject = applyPlaceholders(subjectTpl ?? (params.auto_renew ? defaultAutoSubject : defaultNoAutoSubject), vars);
+  const text = applyPlaceholders(bodyTpl ?? (params.auto_renew ? defaultAutoBody : defaultNoAutoBody), vars);
   return sendMemberEmail(params.to, subject, text);
 }
 

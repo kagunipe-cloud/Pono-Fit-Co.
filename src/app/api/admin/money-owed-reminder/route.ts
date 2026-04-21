@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, ensurePaymentFailuresTable, ensureMoneyOwedRemindersTable } from "@/lib/db";
+import { getDb, ensurePaymentFailuresTable, ensureMoneyOwedRemindersTable, ensureMembersAutoRenewColumn } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
 import { sendMoneyOwedReminderEmail, isGmailApiConfigured } from "@/lib/email";
 
@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
 
   const db = getDb();
   ensurePaymentFailuresTable(db);
+  ensureMembersAutoRenewColumn(db);
 
   const open = db
     .prepare(
@@ -92,10 +93,15 @@ export async function POST(request: NextRequest) {
 
   const m = db
     .prepare(
-      `SELECT email, first_name, last_name FROM members WHERE member_id = ?`
+      `SELECT email, first_name, last_name, COALESCE(auto_renew, 0) AS auto_renew FROM members WHERE member_id = ?`
     )
     .get(memberId) as
-    | { email: string | null; first_name: string | null; last_name: string | null }
+    | {
+        email: string | null;
+        first_name: string | null;
+        last_name: string | null;
+        auto_renew: number;
+      }
     | undefined;
   db.close();
 
@@ -118,6 +124,7 @@ export async function POST(request: NextRequest) {
     plan_name: latest?.plan_name ?? null,
     amount_dollars: amountDollars,
     pay_url: payUrl,
+    auto_renew: Number(m?.auto_renew) === 1,
   });
 
   if (!result.ok) {

@@ -18,8 +18,14 @@ const EMAIL_KEYS = [
   "email_post_purchase_body",
   "email_membership_expiry_subject",
   "email_membership_expiry_body",
+  "email_membership_expiry_card_auto_renew",
+  "email_membership_expiry_card_manual",
   "email_money_owed_reminder_subject",
   "email_money_owed_reminder_body",
+  "email_money_owed_auto_renew_subject",
+  "email_money_owed_auto_renew_body",
+  "email_money_owed_no_auto_renew_subject",
+  "email_money_owed_no_auto_renew_body",
   "email_app_download_subject",
   "email_app_download_body",
   "email_liability_waiver_subject",
@@ -69,12 +75,38 @@ Bekah & Perry with Pono Fit Co. here! We're just emailing to let you know that y
 Mahalo Nui Loa,
 
  B & P`,
+  email_membership_expiry_card_auto_renew: `You have a card on file—as long as it's still valid, you're all set and we'll charge it automatically. If your card has changed or expired, please update it in the app before {{expiry_date}} so we can process your renewal.`,
+  email_membership_expiry_card_manual: `If you'd like to purchase another month or update a payment method to opt-in for auto-renew, you can do so here:
+
+{{app_url}}`,
   email_money_owed_reminder_subject: "Membership payment reminder",
   email_money_owed_reminder_body: `Aloha {{first_name}},
 
 Just a friendly reminder that your monthly-membership fee is due, if you'd like to keep using the gym.  Mahalo, and we hope to see you soon :)
 
 Sign in to update your payment method or review your membership (auto-renew will retry once your card works):
+
+{{pay_url}}
+
+Me Ke Aloha,
+
+Bekah & Perry`,
+  email_money_owed_auto_renew_subject: "Membership payment reminder",
+  email_money_owed_auto_renew_body: `Aloha {{first_name}},
+
+Just a friendly reminder that your monthly-membership fee is due, if you'd like to keep using the gym. Mahalo, and we hope to see you soon :)
+
+You have auto-renew on — sign in to update your payment method if your card changed. We'll retry the renewal once your card works:
+
+{{pay_url}}
+
+Me Ke Aloha,
+
+Bekah & Perry`,
+  email_money_owed_no_auto_renew_subject: "Membership payment reminder",
+  email_money_owed_no_auto_renew_body: `Aloha {{first_name}},
+
+Just a friendly reminder that your monthly membership payment is due if you'd like to keep your access. You're not on auto-renew — sign in to renew for another month or add a payment method and turn on auto-renew:
 
 {{pay_url}}
 

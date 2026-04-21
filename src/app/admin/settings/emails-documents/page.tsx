@@ -29,8 +29,12 @@ export default function EmailsDocumentsPage() {
   const [emailPostPurchaseBody, setEmailPostPurchaseBody] = useState("");
   const [emailMembershipExpirySubject, setEmailMembershipExpirySubject] = useState("");
   const [emailMembershipExpiryBody, setEmailMembershipExpiryBody] = useState("");
-  const [emailMoneyOwedReminderSubject, setEmailMoneyOwedReminderSubject] = useState("");
-  const [emailMoneyOwedReminderBody, setEmailMoneyOwedReminderBody] = useState("");
+  const [emailMembershipExpiryCardAuto, setEmailMembershipExpiryCardAuto] = useState("");
+  const [emailMembershipExpiryCardManual, setEmailMembershipExpiryCardManual] = useState("");
+  const [emailMoneyOwedAutoSubject, setEmailMoneyOwedAutoSubject] = useState("");
+  const [emailMoneyOwedAutoBody, setEmailMoneyOwedAutoBody] = useState("");
+  const [emailMoneyOwedNoAutoSubject, setEmailMoneyOwedNoAutoSubject] = useState("");
+  const [emailMoneyOwedNoAutoBody, setEmailMoneyOwedNoAutoBody] = useState("");
   const [emailAppDownloadSubject, setEmailAppDownloadSubject] = useState("");
   const [emailAppDownloadBody, setEmailAppDownloadBody] = useState("");
   const [emailLiabilityWaiverSubject, setEmailLiabilityWaiverSubject] = useState("");
@@ -57,8 +61,14 @@ export default function EmailsDocumentsPage() {
           setEmailPostPurchaseBody(data.email_post_purchase_body ?? "");
           setEmailMembershipExpirySubject(data.email_membership_expiry_subject ?? "");
           setEmailMembershipExpiryBody(data.email_membership_expiry_body ?? "");
-          setEmailMoneyOwedReminderSubject(data.email_money_owed_reminder_subject ?? "");
-          setEmailMoneyOwedReminderBody(data.email_money_owed_reminder_body ?? "");
+          setEmailMembershipExpiryCardAuto(data.email_membership_expiry_card_auto_renew ?? "");
+          setEmailMembershipExpiryCardManual(data.email_membership_expiry_card_manual ?? "");
+          setEmailMoneyOwedAutoSubject(
+            data.email_money_owed_auto_renew_subject ?? data.email_money_owed_reminder_subject ?? ""
+          );
+          setEmailMoneyOwedAutoBody(data.email_money_owed_auto_renew_body ?? data.email_money_owed_reminder_body ?? "");
+          setEmailMoneyOwedNoAutoSubject(data.email_money_owed_no_auto_renew_subject ?? "");
+          setEmailMoneyOwedNoAutoBody(data.email_money_owed_no_auto_renew_body ?? "");
           setEmailAppDownloadSubject(data.email_app_download_subject ?? "");
           setEmailAppDownloadBody(data.email_app_download_body ?? "");
           setEmailLiabilityWaiverSubject(data.email_liability_waiver_subject ?? "");
@@ -92,8 +102,12 @@ export default function EmailsDocumentsPage() {
           email_post_purchase_body: emailPostPurchaseBody || null,
           email_membership_expiry_subject: emailMembershipExpirySubject || null,
           email_membership_expiry_body: emailMembershipExpiryBody || null,
-          email_money_owed_reminder_subject: emailMoneyOwedReminderSubject || null,
-          email_money_owed_reminder_body: emailMoneyOwedReminderBody || null,
+          email_membership_expiry_card_auto_renew: emailMembershipExpiryCardAuto || null,
+          email_membership_expiry_card_manual: emailMembershipExpiryCardManual || null,
+          email_money_owed_auto_renew_subject: emailMoneyOwedAutoSubject || null,
+          email_money_owed_auto_renew_body: emailMoneyOwedAutoBody || null,
+          email_money_owed_no_auto_renew_subject: emailMoneyOwedNoAutoSubject || null,
+          email_money_owed_no_auto_renew_body: emailMoneyOwedNoAutoBody || null,
           email_app_download_subject: emailAppDownloadSubject || null,
           email_app_download_body: emailAppDownloadBody || null,
           email_liability_waiver_subject: emailLiabilityWaiverSubject || null,
@@ -273,7 +287,7 @@ export default function EmailsDocumentsPage() {
           <section className="space-y-6">
             <h2 className="text-lg font-semibold text-stone-800">Email Templates</h2>
             <p className="text-sm text-stone-500">
-              Placeholders: {"{{first_name}}"}, {"{{member_id}}"}, {"{{email}}"}, {"{{origin}}"}, {"{{install_url}}"}, {"{{set_password_url}}"}, {"{{expiry_date}}"}, {"{{waiver_url}}"}, {"{{card_message}}"} (membership expiry), and for booking emails: {"{{session_title}}"}, {"{{kind_label}}"}, {"{{date}}"}, {"{{time}}"}, {"{{trainer}}"}, {"{{brand_short}}"}, {"{{brand_name}}"}.
+              Common placeholders: {"{{first_name}}"}, {"{{member_id}}"}, {"{{email}}"}, {"{{origin}}"}, {"{{install_url}}"}, {"{{set_password_url}}"}, {"{{expiry_date}}"}, {"{{waiver_url}}"}, {"{{app_url}}"} (site base URL from env), {"{{card_message}}"} (full paragraph — only if you still use it in the membership body; prefer the editable fragments below). Money owed: {"{{pay_url}}"}, {"{{member_name}}"}, {"{{plan_name}}"}, {"{{amount_formatted}}"}. Booking emails: {"{{session_title}}"}, {"{{kind_label}}"}, {"{{date}}"}, {"{{time}}"}, {"{{trainer}}"}, {"{{brand_short}}"}, {"{{brand_name}}"}.
             </p>
 
             <div className="border border-stone-200 rounded-lg p-4 space-y-3">
@@ -325,7 +339,9 @@ export default function EmailsDocumentsPage() {
                 )}
               </div>
               <div>
-                <label className="block text-sm font-medium text-stone-700 mb-1">Body (use {"{{card_message}}"} for card-on-file vs payment-due paragraph)</label>
+                <label className="block text-sm font-medium text-stone-700 mb-1">
+                  Body — include {"{{card_message}}"} where the card / renew paragraph should appear (see fragments below).
+                </label>
                 <textarea
                   value={emailMembershipExpiryBody}
                   onChange={(e) => setEmailMembershipExpiryBody(e.target.value)}
@@ -340,52 +356,124 @@ export default function EmailsDocumentsPage() {
                   </details>
                 )}
               </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-1">
+                  Paragraph: <strong>card on file + auto-renew</strong> (placeholders {"{{expiry_date}}"}, {"{{app_url}}"})
+                </label>
+                <textarea
+                  value={emailMembershipExpiryCardAuto}
+                  onChange={(e) => setEmailMembershipExpiryCardAuto(e.target.value)}
+                  rows={4}
+                  placeholder="Leave blank to use built-in default"
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200 font-mono text-sm"
+                />
+                {defaults.email_membership_expiry_card_auto_renew && (
+                  <details className="mt-2">
+                    <summary className="text-xs text-stone-500 cursor-pointer hover:text-stone-700">Show default</summary>
+                    <pre className="mt-1 p-3 rounded-lg bg-stone-50 border border-stone-100 text-xs text-stone-600 overflow-x-auto whitespace-pre-wrap font-mono">
+                      {defaults.email_membership_expiry_card_auto_renew}
+                    </pre>
+                  </details>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-stone-700 mb-1">
+                  Paragraph: <strong>not auto-renew</strong> (or no billable card) — renew / opt in ({"{{expiry_date}}"}, {"{{app_url}}"})
+                </label>
+                <textarea
+                  value={emailMembershipExpiryCardManual}
+                  onChange={(e) => setEmailMembershipExpiryCardManual(e.target.value)}
+                  rows={4}
+                  placeholder="Leave blank to use built-in default"
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200 font-mono text-sm"
+                />
+                {defaults.email_membership_expiry_card_manual && (
+                  <details className="mt-2">
+                    <summary className="text-xs text-stone-500 cursor-pointer hover:text-stone-700">Show default</summary>
+                    <pre className="mt-1 p-3 rounded-lg bg-stone-50 border border-stone-100 text-xs text-stone-600 overflow-x-auto whitespace-pre-wrap font-mono">
+                      {defaults.email_membership_expiry_card_manual}
+                    </pre>
+                  </details>
+                )}
+              </div>
             </div>
 
-            <div className="border border-stone-200 rounded-lg p-4 space-y-3">
+            <div className="border border-stone-200 rounded-lg p-4 space-y-4">
               <h3 className="font-semibold text-stone-800">Money owed reminder</h3>
               <p className="text-sm text-stone-500">
                 Sent when staff taps <strong>Send email reminder</strong> on{" "}
                 <Link href="/money-owed" className="text-brand-600 hover:underline">
                   Money owed
                 </Link>
-                . Placeholders:{" "}
+                . The correct template is chosen from the member&apos;s <strong>auto-renew</strong> flag. Placeholders:{" "}
                 <code className="text-xs bg-stone-100 px-1 rounded">{"{{first_name}}"}</code>,{" "}
                 <code className="text-xs bg-stone-100 px-1 rounded">{"{{member_name}}"}</code>,{" "}
                 <code className="text-xs bg-stone-100 px-1 rounded">{"{{plan_name}}"}</code>,{" "}
                 <code className="text-xs bg-stone-100 px-1 rounded">{"{{amount_formatted}}"}</code>,{" "}
-                <code className="text-xs bg-stone-100 px-1 rounded">{"{{pay_url}}"}</code> (sign in, then Membership page to update card).
+                <code className="text-xs bg-stone-100 px-1 rounded">{"{{pay_url}}"}</code>,{" "}
+                <code className="text-xs bg-stone-100 px-1 rounded">{"{{app_url}}"}</code>. If the <strong>auto-renew</strong> fields are empty, your previous single &quot;Money owed&quot; template (if any) is still used for members on auto-renew only.
               </p>
-              <div>
-                <label className="block text-sm font-medium text-stone-700 mb-1">Subject</label>
-                <input
-                  type="text"
-                  value={emailMoneyOwedReminderSubject}
-                  onChange={(e) => setEmailMoneyOwedReminderSubject(e.target.value)}
-                  placeholder="Leave blank to use default"
-                  className="w-full px-3 py-2 rounded-lg border border-stone-200"
-                />
-                {defaults.email_money_owed_reminder_subject && (
-                  <p className="mt-1 text-xs text-stone-500">Default: {defaults.email_money_owed_reminder_subject}</p>
-                )}
+              <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3 space-y-3">
+                <h4 className="text-sm font-semibold text-stone-800">Member has auto-renew ON (renewal charge failed)</h4>
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1">Subject</label>
+                  <input
+                    type="text"
+                    value={emailMoneyOwedAutoSubject}
+                    onChange={(e) => setEmailMoneyOwedAutoSubject(e.target.value)}
+                    placeholder="Leave blank to use default (or legacy money-owed subject)"
+                    className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1">Body</label>
+                  <textarea
+                    value={emailMoneyOwedAutoBody}
+                    onChange={(e) => setEmailMoneyOwedAutoBody(e.target.value)}
+                    rows={8}
+                    placeholder="Leave blank to use default (or legacy money-owed body)"
+                    className="w-full px-3 py-2 rounded-lg border border-stone-200 font-mono text-sm"
+                  />
+                  {defaults.email_money_owed_auto_renew_body && (
+                    <details className="mt-2">
+                      <summary className="text-xs text-stone-500 cursor-pointer hover:text-stone-700">Show default body</summary>
+                      <pre className="mt-1 p-3 rounded-lg bg-white border border-stone-100 text-xs text-stone-600 overflow-x-auto whitespace-pre-wrap font-mono">
+                        {defaults.email_money_owed_auto_renew_body}
+                      </pre>
+                    </details>
+                  )}
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-stone-700 mb-1">Body</label>
-                <textarea
-                  value={emailMoneyOwedReminderBody}
-                  onChange={(e) => setEmailMoneyOwedReminderBody(e.target.value)}
-                  rows={10}
-                  placeholder="Leave blank to use default"
-                  className="w-full px-3 py-2 rounded-lg border border-stone-200 font-mono text-sm"
-                />
-                {defaults.email_money_owed_reminder_body && (
-                  <details className="mt-2">
-                    <summary className="text-xs text-stone-500 cursor-pointer hover:text-stone-700">Show default body</summary>
-                    <pre className="mt-1 p-3 rounded-lg bg-stone-50 border border-stone-100 text-xs text-stone-600 overflow-x-auto whitespace-pre-wrap font-mono">
-                      {defaults.email_money_owed_reminder_body}
-                    </pre>
-                  </details>
-                )}
+              <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-3 space-y-3">
+                <h4 className="text-sm font-semibold text-stone-800">Member has auto-renew OFF</h4>
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1">Subject</label>
+                  <input
+                    type="text"
+                    value={emailMoneyOwedNoAutoSubject}
+                    onChange={(e) => setEmailMoneyOwedNoAutoSubject(e.target.value)}
+                    placeholder="Leave blank to use default"
+                    className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-stone-700 mb-1">Body</label>
+                  <textarea
+                    value={emailMoneyOwedNoAutoBody}
+                    onChange={(e) => setEmailMoneyOwedNoAutoBody(e.target.value)}
+                    rows={8}
+                    placeholder="Leave blank to use default"
+                    className="w-full px-3 py-2 rounded-lg border border-stone-200 font-mono text-sm"
+                  />
+                  {defaults.email_money_owed_no_auto_renew_body && (
+                    <details className="mt-2">
+                      <summary className="text-xs text-stone-500 cursor-pointer hover:text-stone-700">Show default body</summary>
+                      <pre className="mt-1 p-3 rounded-lg bg-white border border-stone-100 text-xs text-stone-600 overflow-x-auto whitespace-pre-wrap font-mono">
+                        {defaults.email_money_owed_no_auto_renew_body}
+                      </pre>
+                    </details>
+                  )}
+                </div>
               </div>
             </div>
 

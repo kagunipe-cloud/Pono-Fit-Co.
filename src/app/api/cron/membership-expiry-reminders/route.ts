@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensureMembersStripeColumn } from "../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn } from "../../../../lib/db";
 import { formatDateForStorage, todayInAppTz } from "../../../../lib/app-timezone";
 import { sendMembershipExpiryReminder } from "../../../../lib/email";
 import { hasBillableStripeCustomer } from "../../../../lib/stripe-customer";
 
 export const dynamic = "force-dynamic";
 
-/** GET: find active subscriptions expiring in 2 days and email members. Card on file = remind them they're set; no card = payment due on expiry date. */
+/** GET: find active subscriptions expiring in 2 days and email members. Auto-charge wording only if billable Stripe customer + auto_renew; else renew / opt-in link. */
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
   if (secret && request.headers.get("x-cron-secret") !== secret && request.headers.get("authorization") !== `Bearer ${secret}`) {
@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
 
   const db = getDb();
   ensureMembersStripeColumn(db);
+  ensureMembersAutoRenewColumn(db);
   const tz = getAppTimezone(db);
 
   /** Date in gym timezone (YYYY-MM-DD) to match expiry_date in DB. */
@@ -32,8 +33,15 @@ export async function GET(request: NextRequest) {
 
   for (const sub of expiring) {
     const member = db.prepare(
-      "SELECT email, first_name, stripe_customer_id FROM members WHERE member_id = ?"
-    ).get(sub.member_id) as { email: string | null; first_name: string | null; stripe_customer_id: string | null } | undefined;
+      "SELECT email, first_name, stripe_customer_id, COALESCE(auto_renew, 0) AS auto_renew FROM members WHERE member_id = ?"
+    ).get(sub.member_id) as
+      | {
+          email: string | null;
+          first_name: string | null;
+          stripe_customer_id: string | null;
+          auto_renew: number;
+        }
+      | undefined;
 
     if (!member?.email?.trim()) {
       results.push({ member_id: sub.member_id, email: "", sent: false, error: "No email" });
@@ -41,11 +49,13 @@ export async function GET(request: NextRequest) {
     }
 
     const has_card_on_file = hasBillableStripeCustomer(member.stripe_customer_id);
+    const auto_renew = Number(member.auto_renew) === 1;
     const r = await sendMembershipExpiryReminder({
       to: member.email.trim(),
       first_name: member.first_name,
       expiry_date: sub.expiry_date,
       has_card_on_file,
+      auto_renew,
     });
     results.push({
       member_id: sub.member_id,
