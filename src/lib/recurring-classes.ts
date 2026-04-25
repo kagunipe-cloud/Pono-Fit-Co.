@@ -54,6 +54,7 @@ export function ensureRecurringClassesTables(db: ReturnType<typeof getDb>) {
       capacity INTEGER DEFAULT 20,
       days_of_week TEXT NOT NULL,
       time TEXT NOT NULL,
+      price TEXT,
       created_at TEXT DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS class_occurrences (
@@ -97,6 +98,11 @@ export function ensureRecurringClassesTables(db: ReturnType<typeof getDb>) {
     CREATE INDEX IF NOT EXISTS idx_ledger_member ON class_credit_ledger(member_id);
     CREATE INDEX IF NOT EXISTS idx_occurrence_bookings_occurrence ON occurrence_bookings(class_occurrence_id);
   `);
+  try {
+    db.exec("ALTER TABLE recurring_classes ADD COLUMN price TEXT");
+  } catch {
+    /* already exists on older DBs that had CREATE without price */
+  }
 }
 
 /** days_of_week: "0,2,4" = Sun, Tue, Thu. time: "18:00". Returns dates in YYYY-MM-DD. */
