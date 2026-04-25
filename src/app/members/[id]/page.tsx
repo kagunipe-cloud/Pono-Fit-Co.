@@ -931,7 +931,7 @@ export default function MemberDetailPage() {
               disabled={changingCard}
               className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium disabled:opacity-50"
             >
-              {changingCard ? "Redirecting…" : "Change payment method"}
+              {changingCard ? "Redirecting…" : "Update payment method"}
             </button>
             <button
               type="button"
@@ -1024,11 +1024,6 @@ export default function MemberDetailPage() {
               </button>
             )}
           </div>
-          <p className="text-xs text-stone-500 max-w-2xl mt-3">
-            After a successful <span className="whitespace-nowrap">Change payment method</span> in Stripe, that method
-            is saved as this member’s default (auto-renew, charge on file, etc.). The cart’s “Charge card on file”
-            only charges that default — it does not change which method is default.
-          </p>
         </div>
 
         <div className="p-6">

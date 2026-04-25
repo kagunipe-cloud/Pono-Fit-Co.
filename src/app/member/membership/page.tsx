@@ -139,7 +139,7 @@ function MemberMembershipContent() {
           disabled={updatingCard}
           className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
         >
-          {updatingCard ? "Redirecting…" : "Change payment method"}
+          {updatingCard ? "Redirecting…" : "Update payment method"}
         </button>
         {cardMessage && <p className="text-sm text-stone-600 mt-2">{cardMessage}</p>}
         <details className="mt-4 p-4 rounded-xl border-2 border-stone-200 bg-stone-100 open:border-stone-300">

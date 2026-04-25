@@ -158,7 +158,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!stripeCustomerId) {
     db.close();
     return NextResponse.json(
-      { error: "Member has no Stripe customer on file. Add a payment method first (e.g. Change payment method)." },
+      { error: "Member has no Stripe customer on file. Add a payment method first (e.g. Update payment method)." },
       { status: 400 }
     );
   }

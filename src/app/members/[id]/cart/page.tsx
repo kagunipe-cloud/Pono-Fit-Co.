@@ -1094,10 +1094,8 @@ export default function MemberCartPage() {
           </div>
           {isStaff && hasSavedCard && items.length > 0 ? (
             <p className="text-xs text-stone-500 max-w-2xl mt-3">
-              “Charge card on file” uses this member’s default payment method in Stripe (or their only saved card if there
-              is no explicit default). It only runs a charge — it does not change which method is default. If they
-              have multiple cards, use <span className="whitespace-nowrap">Change payment method</span> on their
-              profile; that flow saves the new method as the default when setup completes.
+              Does not update preferred payment method. Use <span className="whitespace-nowrap">“Update payment method”</span> on
+              the profile.
             </p>
           ) : null}
 
