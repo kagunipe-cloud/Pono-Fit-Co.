@@ -111,6 +111,10 @@ export default function MemberDetailPage() {
   const [passwordResetMessage, setPasswordResetMessage] = useState<string | null>(null);
   const [unlocks, setUnlocks] = useState<{ id: number; lock_id: number | null; lock_name: string | null; success: number; happened_at: string }[]>([]);
   const searchParams = useSearchParams();
+  /** Canonical member id from API when loaded; use for links/fetches that must match the profile row. */
+  const apiMemberIdForChildRoutes = String(
+    (data?.member as { member_id?: string } | undefined)?.member_id ?? id ?? ""
+  ).trim();
 
   useEffect(() => {
     const sessionId = searchParams.get("session_id");
@@ -199,9 +203,9 @@ export default function MemberDetailPage() {
   }, []);
 
   useEffect(() => {
-    if (!id) return;
-    fetch(`/api/members/${id}/cart-data`)
-      .then((r) => r.ok ? r.json() : null)
+    if (!apiMemberIdForChildRoutes || apiMemberIdForChildRoutes.length < 2) return;
+    fetch(`/api/members/${encodeURIComponent(apiMemberIdForChildRoutes)}/cart-data`)
+      .then((r) => (r.ok ? r.json() : null))
       .then((json) => {
         if (json?.plans) setComplimentaryProducts({
           plans: json.plans ?? [],
@@ -212,7 +216,7 @@ export default function MemberDetailPage() {
         });
       })
       .catch(() => {});
-  }, [id]);
+  }, [id, apiMemberIdForChildRoutes]);
 
   useEffect(() => {
     if (!id) return;
@@ -916,7 +920,7 @@ export default function MemberDetailPage() {
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <Link
-              href={`/members/${id}/cart`}
+              href={`/members/${encodeURIComponent(String(member.member_id ?? id).trim() || id)}/cart`}
               className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700"
             >
               Add to cart / Sell

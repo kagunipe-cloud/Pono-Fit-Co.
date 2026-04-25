@@ -17,20 +17,30 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const id = (await params).id;
-  const isPurelyNumeric = /^\d+$/.test(id);
+  const routeId = String(id ?? "").trim();
   try {
     const db = getDb();
     ensureMembersStripeColumn(db);
 
-    // Prefer member_id (URL from members list uses member_id); fallback to id when numeric
-    let member = db.prepare("SELECT id, member_id, first_name, last_name, stripe_customer_id FROM members WHERE member_id = ?").get(id) as
+    if (!routeId || routeId.length < 2) {
+      db.close();
+      return NextResponse.json({ error: "Invalid member id" }, { status: 400 });
+    }
+    // Must match GET /api/members/[id]: numeric segments resolve id OR member_id in one step (import quirk, legacy ids, etc.)
+    const isPurelyNumeric = /^\d+$/.test(routeId);
+    const member = (
+      isPurelyNumeric
+        ? db
+            .prepare(
+              "SELECT id, member_id, first_name, last_name, stripe_customer_id FROM members WHERE id = ? OR member_id = ?"
+            )
+            .get(parseInt(routeId, 10), routeId)
+        : db
+            .prepare("SELECT id, member_id, first_name, last_name, stripe_customer_id FROM members WHERE member_id = ?")
+            .get(routeId)
+    ) as
       | { member_id: string; first_name: string; last_name: string; stripe_customer_id: string | null }
       | undefined;
-    if (!member && isPurelyNumeric) {
-      member = db.prepare("SELECT id, member_id, first_name, last_name, stripe_customer_id FROM members WHERE id = ?").get(parseInt(id, 10)) as
-        | { member_id: string; first_name: string; last_name: string; stripe_customer_id: string | null }
-        | undefined;
-    }
     if (!member) {
       db.close();
       return NextResponse.json({ error: "Member not found" }, { status: 404 });

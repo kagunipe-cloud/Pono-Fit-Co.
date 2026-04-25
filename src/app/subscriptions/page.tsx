@@ -25,6 +25,7 @@ const COLUMNS = [
   { key: "expiry_date", label: "Expiry date" },
   { key: "days_remaining", label: "Days remaining" },
   { key: "price", label: "Price" },
+  { key: "actions", label: "" },
 ] as const;
 
 type StatusFilter = "all" | "Active" | "Cancelled";
@@ -36,6 +37,10 @@ export default function SubscriptionsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [priceModalRow, setPriceModalRow] = useState<SubReportRow | null>(null);
+  const [priceInput, setPriceInput] = useState("");
+  const [priceSaving, setPriceSaving] = useState(false);
+  const [priceMessage, setPriceMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
@@ -72,11 +77,40 @@ export default function SubscriptionsPage() {
     return String(v);
   };
 
+  function openPriceModal(row: SubReportRow) {
+    setPriceMessage(null);
+    setPriceInput(row.price && row.price !== "—" ? String(row.price).replace(/[$,]/g, "").trim() : "");
+    setPriceModalRow(row);
+  }
+
+  async function savePrice() {
+    if (!priceModalRow) return;
+    setPriceSaving(true);
+    setPriceMessage(null);
+    try {
+      const res = await fetch("/api/admin/subscriptions/adjust-price", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscription_id: priceModalRow.subscription_id, price: priceInput }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof data.error === "string" ? data.error : "Failed to update price");
+      }
+      setPriceModalRow(null);
+      await fetchData();
+    } catch (e) {
+      setPriceMessage(e instanceof Error ? e.message : "Failed to update");
+    } finally {
+      setPriceSaving(false);
+    }
+  }
+
   return (
     <div className="max-w-6xl mx-auto">
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-stone-800 tracking-tight">Subscriptions</h1>
-        <p className="text-stone-500 mt-1">Active and cancelled subscriptions</p>
+        <p className="text-stone-500 mt-1">Active and cancelled subscriptions. Set price updates the amount stored on the subscription (used for renewals per your pricing rules).</p>
       </header>
 
       <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
@@ -147,7 +181,15 @@ export default function SubscriptionsPage() {
                   >
                     {COLUMNS.map((col) => (
                       <td key={col.key} className="py-3 px-4 text-stone-600">
-                        {col.key === "status" && row.status === "Active" ? (
+                        {col.key === "actions" ? (
+                          <button
+                            type="button"
+                            onClick={() => openPriceModal(row)}
+                            className="text-sm font-medium text-brand-600 hover:text-brand-800 hover:underline"
+                          >
+                            Set price
+                          </button>
+                        ) : col.key === "status" && row.status === "Active" ? (
                           <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-brand-100 text-brand-800">
                             {displayValue(row, col.key)}
                           </span>
@@ -167,6 +209,57 @@ export default function SubscriptionsPage() {
           </div>
         )}
       </div>
+
+      {priceModalRow && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sub-price-title"
+        >
+          <div className="bg-white rounded-xl border border-stone-200 shadow-lg max-w-md w-full p-6">
+            <h2 id="sub-price-title" className="text-lg font-semibold text-stone-800">
+              Set subscription price
+            </h2>
+            <p className="text-sm text-stone-500 mt-1">
+              {priceModalRow.member_name} — {priceModalRow.plan_name}
+            </p>
+            <p className="text-xs text-stone-400 mt-1 font-mono">ID {priceModalRow.subscription_id}</p>
+            <label htmlFor="sub-price-input" className="block text-sm font-medium text-stone-700 mt-4">
+              Price (USD)
+            </label>
+            <input
+              id="sub-price-input"
+              type="text"
+              inputMode="decimal"
+              value={priceInput}
+              onChange={(e) => setPriceInput(e.target.value)}
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200"
+              placeholder="0.00"
+              autoFocus
+            />
+            {priceMessage && <p className="text-sm text-red-600 mt-2">{priceMessage}</p>}
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                type="button"
+                onClick={() => setPriceModalRow(null)}
+                className="px-4 py-2 rounded-lg text-stone-700 border border-stone-200 hover:bg-stone-50"
+                disabled={priceSaving}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void savePrice()}
+                disabled={priceSaving}
+                className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
+              >
+                {priceSaving ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -65,8 +65,11 @@ function slotOverlaps(slotMin: number, startMin: number, endMin: number): boolea
 
 export default function MemberCartPage() {
   const params = useParams();
-  const id = params.id as string;
+  const idRaw = params.id;
+  const id = (Array.isArray(idRaw) ? idRaw[0] : idRaw) as string;
   const [memberId, setMemberId] = useState<string | null>(null);
+  /** Server error (500) or network — not the same as “no such member” (404). */
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [memberName, setMemberName] = useState("");
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -135,6 +138,7 @@ export default function MemberCartPage() {
   const [classScheduleWeekStart, setClassScheduleWeekStart] = useState<string>(() => weekStartInAppTz(todayInAppTz(tz)));
   const [classOccurrences, setClassOccurrences] = useState<ClassOccurrence[]>([]);
   const [classScheduleLoading, setClassScheduleLoading] = useState(false);
+  const cartDataUrl = `/api/members/${encodeURIComponent(id != null ? String(id).trim() : "")}/cart-data`;
 
   useEffect(() => {
     fetch("/api/auth/member-me")
@@ -158,36 +162,61 @@ export default function MemberCartPage() {
   }, [terminalOpen, memberId, items.length, discount?.code]);
 
   useEffect(() => {
+    const segment = id != null ? String(id).trim() : "";
+    if (!segment) {
+      setLoadError("Invalid member link.");
+      setMemberId(null);
+      setLoading(false);
+      return;
+    }
+    setLoadError(null);
     let cancelled = false;
-    fetch(`/api/members/${id}/cart-data`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to load");
-        return res.json();
-      })
-      .then((data) => {
+    fetch(cartDataUrl)
+      .then(async (res) => {
+        const data = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: string };
         if (cancelled) return;
-        setMemberId(data.memberId);
-        setMemberName(data.memberName ?? "Member");
-        setItems(data.items ?? []);
-        setPlans(data.plans ?? []);
-        setSessions(data.sessions ?? []);
-        setClassPacks(data.classPacks ?? []);
-        setPtPacks(data.ptPackProducts ?? []);
+        if (res.status === 404) {
+          setMemberId(null);
+          return;
+        }
+        if (!res.ok) {
+          setMemberId(null);
+          setLoadError(
+            typeof data.error === "string" && data.error.trim()
+              ? data.error
+              : "Could not load the cart. Try again; if it keeps failing, the server may be having trouble."
+          );
+          return;
+        }
+        setMemberId(typeof data.memberId === "string" ? data.memberId : null);
+        setMemberName(typeof data.memberName === "string" ? data.memberName : "Member");
+        setItems(Array.isArray(data.items) ? (data.items as CartItem[]) : []);
+        setPlans(Array.isArray(data.plans) ? (data.plans as Plan[]) : []);
+        setSessions(Array.isArray(data.sessions) ? (data.sessions as Session[]) : []);
+        setClassPacks(Array.isArray(data.classPacks) ? (data.classPacks as ClassPack[]) : []);
+        setPtPacks(Array.isArray(data.ptPackProducts) ? (data.ptPackProducts as PTPack[]) : []);
         setHasSavedCard(Boolean(data.has_saved_card));
-        setPromoCode(data.promo_code ?? "");
-        setDiscount(data.discount ?? null);
-        setClassCredits(data.class_credits ?? 0);
+        setPromoCode(typeof data.promo_code === "string" ? data.promo_code : "");
+        setDiscount(
+          (data.discount as { code: string; percent_off: number; description?: string | null } | null) ?? null
+        );
+        setClassCredits(typeof data.class_credits === "number" ? data.class_credits : 0);
         setIsOwnCart(Boolean(data.is_own_cart));
         setIsStaff(Boolean(data.is_staff));
       })
       .catch(() => {
-        if (!cancelled) setMemberId(null);
+        if (!cancelled) {
+          setMemberId(null);
+          setLoadError("Network error. Check your connection and try again.");
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-    return () => { cancelled = true; };
-  }, [id]);
+    return () => {
+      cancelled = true;
+    };
+  }, [id, cartDataUrl]);
 
   const classScheduleFrom = classScheduleWeekStart;
   const classScheduleTo = addDaysToDateStr(classScheduleWeekStart, 6);
@@ -258,16 +287,27 @@ export default function MemberCartPage() {
       body: JSON.stringify({ member_id: memberId, product_type, product_id, quantity: 1 }),
     });
     if (res.ok) {
-      const data = await fetch(`/api/members/${id}/cart-data`).then((r) => r.json());
-      setItems(data.items ?? []);
+      const r2 = await fetch(cartDataUrl);
+      const data = r2.ok ? await r2.json().catch(() => ({})) : {};
+      setItems((data as { items?: CartItem[] }).items ?? []);
       setAddMode(null);
+      return;
+    }
+    const errBody = (await res.json().catch(() => ({}))) as { error?: string };
+    const base = typeof errBody.error === "string" && errBody.error.trim() ? errBody.error : `Could not add to cart (${res.status}).`;
+    if (res.status === 403) {
+      alert(
+        `${base} Staff or the member must be signed in: you can add to this member’s cart only when you’re logged in as an admin or trainer, or as this member.`
+      );
+    } else {
+      alert(base);
     }
   }
 
   async function removeItem(itemId: number) {
     await fetch(`/api/cart/items/${itemId}`, { method: "DELETE" });
     if (memberId && id) {
-      const data = await fetch(`/api/members/${id}/cart-data`).then((r) => r.json());
+      const data = await fetch(cartDataUrl).then((r) => r.json());
       setItems(data.items ?? []);
       setClassCredits(data.class_credits ?? 0);
     }
@@ -285,7 +325,7 @@ export default function MemberCartPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Could not book with credit");
       await fetch(`/api/cart/items/${cartItemId}`, { method: "DELETE" });
-      const cartData = await fetch(`/api/members/${id}/cart-data`).then((r) => r.json());
+      const cartData = await fetch(cartDataUrl).then((r) => r.json());
       setItems(cartData.items ?? []);
       setClassCredits(cartData.class_credits ?? 0);
     } catch (e) {
@@ -420,7 +460,7 @@ export default function MemberCartPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Invalid code");
-      const cartData = await fetch(`/api/members/${id}/cart-data`).then((r) => r.json());
+      const cartData = await fetch(cartDataUrl).then((r) => r.json());
       setDiscount(cartData.discount ?? null);
       setPromoCode(cartData.promo_code ?? code);
     } catch (e) {
@@ -468,7 +508,7 @@ export default function MemberCartPage() {
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error ?? "Could not save");
-      const cartData = await fetch(`/api/members/${id}/cart-data`).then((r) => r.json());
+      const cartData = await fetch(cartDataUrl).then((r) => r.json());
       setItems(cartData.items ?? []);
     } catch (e) {
       alert(e instanceof Error ? e.message : "Save failed");
@@ -496,7 +536,7 @@ export default function MemberCartPage() {
         alert(typeof data.error === "string" ? data.error : "Could not save.");
         return;
       }
-      const cartData = await fetch(`/api/members/${id}/cart-data`).then((r) => r.json());
+      const cartData = await fetch(cartDataUrl).then((r) => r.json());
       setItems(cartData.items ?? []);
     } finally {
       setGiftSavingId(null);
@@ -513,7 +553,7 @@ export default function MemberCartPage() {
         body: JSON.stringify({ member_id: memberId, unit_price_override: "" }),
       });
       if (!res.ok) throw new Error("Could not clear");
-      const cartData = await fetch(`/api/members/${id}/cart-data`).then((r) => r.json());
+      const cartData = await fetch(cartDataUrl).then((r) => r.json());
       setItems(cartData.items ?? []);
     } catch (e) {
       alert(e instanceof Error ? e.message : "Clear failed");
@@ -522,7 +562,15 @@ export default function MemberCartPage() {
     }
   }
 
-  if (loading && !memberId) return <div className="p-12 text-center text-stone-500">Loading…</div>;
+  if (loading && !memberId && !loadError) return <div className="p-12 text-center text-stone-500">Loading…</div>;
+  if (loadError) {
+    return (
+      <div className="max-w-lg mx-auto p-12 text-center">
+        <p className="text-red-600 mb-2">{loadError}</p>
+        <Link href="/members" className="text-brand-600 hover:underline text-sm">← Members</Link>
+      </div>
+    );
+  }
   if (!memberId) return <div className="p-12 text-center text-red-600">Member not found.</div>;
 
   return (
