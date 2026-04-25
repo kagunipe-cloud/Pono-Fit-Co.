@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
       const pi = await stripe.paymentIntents.retrieve(payment_intent_id, { expand: ["customer"] });
       if (pi.status !== "succeeded") {
         return NextResponse.json(
-          { error: "Payment not completed. Only succeeded Terminal payments can be fulfilled." },
+          { error: "Payment not completed. Only succeeded in-person or saved-card charges can be fulfilled." },
           { status: 400 }
         );
       }

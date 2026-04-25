@@ -16,7 +16,7 @@ export default function CartSuccessPage() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    if (source === "terminal") {
+    if (source === "terminal" || source === "saved_card") {
       setStatus("success");
       setMessage("Payment confirmed. Membership and bookings created.");
       const t = setTimeout(() => router.push("/member"), 2000);

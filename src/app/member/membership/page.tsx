@@ -129,7 +129,10 @@ function MemberMembershipContent() {
       <h1 className="text-2xl font-bold text-stone-800 mb-6">My Membership</h1>
       <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-stone-50">
         <p className="text-sm font-medium text-stone-800 mb-1">Payment method</p>
-        <p className="text-sm text-stone-500 mb-2">Used for membership renewals. Add or switch to a card or bank account (ACH). Lower fees with ACH.</p>
+        <p className="text-sm text-stone-500 mb-2">
+          Used for membership renewals. Add or switch to a card or bank account (ACH). When you complete an update
+          here, that method becomes your default in Stripe. Lower fees with ACH.
+        </p>
         <button
           type="button"
           onClick={changeCard}

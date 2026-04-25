@@ -74,6 +74,7 @@ export default function MemberCartPage() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [savedCardChargeLoading, setSavedCardChargeLoading] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [readers, setReaders] = useState<{ id: string; label: string; status: string }[]>([]);
   const [selectedReaderId, setSelectedReaderId] = useState("");
@@ -436,6 +437,47 @@ export default function MemberCartPage() {
       alert(e instanceof Error ? e.message : "Something went wrong");
     } finally {
       setCheckoutLoading(false);
+    }
+  }
+
+  /** Staff: off-session charge of the member’s default/saved card (not Terminal, not checkout redirect). */
+  async function chargeSavedCardOnFile() {
+    if (!memberId || items.length === 0 || !isStaff || !hasSavedCard) return;
+    if (!window.confirm("Charge this member’s card on file for the cart total? This uses their default payment method in Stripe (same as automatic renewals).")) {
+      return;
+    }
+    setSavedCardChargeLoading(true);
+    try {
+      const res = await fetch("/api/cart/charge-saved-card", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          member_id: memberId,
+          ...(hasMonthlyMembershipInCart ? { monthly_recurring: monthlyRecurring } : {}),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof data.error === "string" ? data.error : "Charge failed");
+      }
+      const paymentIntentId = data.payment_intent_id as string | undefined;
+      if (!paymentIntentId) {
+        throw new Error("No payment from server");
+      }
+      const confirmRes = await fetch("/api/cart/confirm-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ member_id: memberId, payment_intent_id: paymentIntentId }),
+      });
+      const confirmData = await confirmRes.json().catch(() => ({}));
+      if (!confirmRes.ok) {
+        throw new Error(typeof confirmData.error === "string" ? confirmData.error : "Could not record purchase");
+      }
+      window.location.href = `/members/${id}/cart/success?source=saved_card`;
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setSavedCardChargeLoading(false);
     }
   }
 
@@ -1035,10 +1077,29 @@ export default function MemberCartPage() {
                 Pay at Front Desk
               </button>
             )}
+            {isStaff && hasSavedCard && items.length > 0 && (
+              <button
+                type="button"
+                onClick={chargeSavedCardOnFile}
+                disabled={savedCardChargeLoading || checkoutLoading}
+                className="px-6 py-3 rounded-lg border-2 border-stone-400 text-stone-800 font-medium hover:bg-stone-100 disabled:opacity-50"
+                title="Charge the member’s default card in Stripe (off-session), without checkout or a reader. May fail if the bank requires 3D Secure."
+              >
+                {savedCardChargeLoading ? "Charging card…" : "Charge card on file"}
+              </button>
+            )}
             <p className="text-stone-500 text-sm self-center">
               You will complete payment on Stripe; then we will activate the membership and notify Kisi for door access.
             </p>
           </div>
+          {isStaff && hasSavedCard && items.length > 0 ? (
+            <p className="text-xs text-stone-500 max-w-2xl mt-3">
+              “Charge card on file” uses this member’s default payment method in Stripe (or their only saved card if there
+              is no explicit default). It only runs a charge — it does not change which method is default. If they
+              have multiple cards, use <span className="whitespace-nowrap">Change payment method</span> on their
+              profile; that flow saves the new method as the default when setup completes.
+            </p>
+          ) : null}
 
           <details className="mt-6 p-6 rounded-xl border-2 border-stone-200 bg-stone-50 open:border-stone-300">
             <summary className="cursor-pointer text-base font-semibold text-stone-800 hover:text-stone-900 list-none [&::-webkit-details-marker]:hidden">
