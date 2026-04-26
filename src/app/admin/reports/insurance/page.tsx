@@ -1,12 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDateTimeInAppTz } from "@/lib/app-timezone";
 import { useAppTimezone } from "@/lib/settings-context";
 import { getPresetRange } from "@/lib/report-date-presets";
-import { INSURANCE_PROGRAM_LABELS, type InsuranceProgramValue } from "@/lib/insurance-program";
+import {
+  formatInsuranceProgramLabel,
+  INSURANCE_PROGRAM_LABELS,
+  type InsuranceProgramValue,
+} from "@/lib/insurance-program";
+
+type ReportProgramFilter = "all" | InsuranceProgramValue;
 
 type Row = {
   id: number;
@@ -20,18 +26,29 @@ type Row = {
   insurance_program: string | null;
 };
 
+type MemberSummary = {
+  member_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  insurance_program: string | null;
+  billable_days: number;
+  all_unlocks: Row[];
+};
+
 export default function InsuranceReportPage() {
   const router = useRouter();
   const tz = useAppTimezone();
 
-  const [program, setProgram] = useState<InsuranceProgramValue>("optum");
+  const [program, setProgram] = useState<ReportProgramFilter>("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [rows, setRows] = useState<Row[]>([]);
+  const [members, setMembers] = useState<MemberSummary[]>([]);
+  const [totalBillableDays, setTotalBillableDays] = useState(0);
   const [timezone, setTimezone] = useState("");
   const [truncated, setTruncated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedMember, setExpandedMember] = useState<string | null>(null);
 
   useEffect(() => {
     const r = getPresetRange("this-month");
@@ -52,16 +69,22 @@ export default function InsuranceReportPage() {
       .then((json) => {
         if (json.error) {
           setError(json.error);
-          setRows([]);
+          setMembers([]);
+          setTotalBillableDays(0);
           return;
         }
-        setRows(json.rows ?? []);
+        setMembers(Array.isArray(json.members) ? json.members : []);
+        setTotalBillableDays(
+          typeof json.total_billable_days === "number" ? json.total_billable_days : 0
+        );
         setTimezone(json.timezone ?? "");
         setTruncated(Boolean(json.truncated));
+        setExpandedMember(null);
       })
       .catch(() => {
         setError("Request failed.");
-        setRows([]);
+        setMembers([]);
+        setTotalBillableDays(0);
       })
       .finally(() => setLoading(false));
   }, [program, from, to, router]);
@@ -76,7 +99,11 @@ export default function InsuranceReportPage() {
     setTo(r.to);
   }
 
-  const name = (r: Row) => [r.first_name, r.last_name].filter(Boolean).join(" ").trim() || r.member_id;
+  const name = (r: { first_name: string | null; last_name: string | null; member_id: string }) =>
+    [r.first_name, r.last_name].filter(Boolean).join(" ").trim() || r.member_id;
+
+  const programFilterLabel =
+    program === "all" ? "All insurance programs" : INSURANCE_PROGRAM_LABELS[program];
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
@@ -85,14 +112,26 @@ export default function InsuranceReportPage() {
       </Link>
       <h1 className="text-2xl font-bold text-stone-800 mb-2">Insurance report</h1>
       <p className="text-stone-600 text-sm mb-6">
-        Door unlocks for members marked <strong>Optum</strong> or <strong>Tivity Health</strong> (e.g. Silver Sneakers / One Pass). Dates use the gym timezone
+        For reporting, <strong>one visit per member per calendar day</strong> — the first successful door unlock that day
+        (gym time). Includes members with <strong>any</strong> insurance program on file, or narrow to Optum / Tivity
+        below. The table lists each member and their <strong>billable visit-day count</strong>; click a count to see every
+        unlock in this range. Dates use the gym timezone
         {timezone ? ` (${timezone})` : ""}.
       </p>
 
       <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-4 mb-6 space-y-4">
         <div>
           <span className="block text-sm font-medium text-stone-700 mb-2">Program</span>
-          <div className="inline-flex rounded-lg border border-stone-200 p-0.5 bg-stone-50">
+          <div className="inline-flex flex-wrap gap-0.5 rounded-lg border border-stone-200 p-0.5 bg-stone-50">
+            <button
+              type="button"
+              onClick={() => setProgram("all")}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                program === "all" ? "bg-white shadow text-stone-900" : "text-stone-600 hover:text-stone-900"
+              }`}
+            >
+              All programs
+            </button>
             {(["optum", "tivity"] as const).map((p) => (
               <button
                 key={p}
@@ -159,47 +198,99 @@ export default function InsuranceReportPage() {
       {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
       {truncated && (
         <p className="text-amber-800 text-sm mb-4 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-          Showing the first 8,000 rows. Narrow the date range if you need everything.
+          Loaded the first 100,000 unlock events in this range (oldest first). Very large ranges may be incomplete —
+          narrow the dates so visit-day counts stay accurate.
         </p>
       )}
 
       <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-stone-100 text-sm text-stone-600">
-          {loading ? "Loading…" : `${rows.length} unlock${rows.length === 1 ? "" : "s"}`} ({INSURANCE_PROGRAM_LABELS[program]})
+          {loading
+            ? "Loading…"
+            : `${totalBillableDays} billable visit day${totalBillableDays === 1 ? "" : "s"} · ${members.length} member${
+                members.length === 1 ? "" : "s"
+              }`}{" "}
+          ({programFilterLabel})
         </div>
-        {rows.length === 0 && !loading ? (
-          <p className="p-6 text-stone-500 text-sm">No successful unlocks in this range for this program.</p>
+        {members.length === 0 && !loading ? (
+          <p className="p-6 text-stone-500 text-sm">No successful unlocks in this range for the selected filter.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm min-w-[640px]">
+            <table className="w-full text-left text-sm min-w-[480px]">
               <thead>
                 <tr className="bg-stone-50 text-stone-500">
-                  <th className="py-2 px-4">Time</th>
                   <th className="py-2 px-4">Member</th>
                   <th className="py-2 px-4">Member ID</th>
-                  <th className="py-2 px-4">Door</th>
-                  <th className="py-2 px-4">Success</th>
+                  <th className="py-2 px-4 min-w-[8rem]">Program</th>
+                  <th className="py-2 px-4 w-40">Visit days (billable)</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} className="border-t border-stone-100">
-                    <td className="py-2 px-4 whitespace-nowrap">
-                      {formatDateTimeInAppTz(new Date(r.happened_at), undefined, tz)}
-                    </td>
-                    <td className="py-2 px-4">
-                      <Link
-                        href={`/members/${r.member_id}`}
-                        className="text-brand-600 hover:underline font-medium"
-                      >
-                        {name(r)}
-                      </Link>
-                    </td>
-                    <td className="py-2 px-4 font-mono text-xs">{r.member_id}</td>
-                    <td className="py-2 px-4">{r.lock_name ?? r.lock_id ?? "—"}</td>
-                    <td className="py-2 px-4">{r.success ? "Yes" : "No"}</td>
-                  </tr>
-                ))}
+                {members.map((m) => {
+                  const expanded = expandedMember === m.member_id;
+                  return (
+                    <Fragment key={m.member_id}>
+                      <tr className="border-t border-stone-100">
+                        <td className="py-2 px-4">
+                          <Link
+                            href={`/members/${m.member_id}`}
+                            className="text-brand-600 hover:underline font-medium"
+                          >
+                            {name(m)}
+                          </Link>
+                        </td>
+                        <td className="py-2 px-4 font-mono text-xs">{m.member_id}</td>
+                        <td className="py-2 px-4 text-stone-700">{formatInsuranceProgramLabel(m.insurance_program)}</td>
+                        <td className="py-2 px-4">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setExpandedMember((v) => (v === m.member_id ? null : m.member_id))
+                            }
+                            className="text-brand-700 font-semibold tabular-nums hover:underline focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-1 rounded"
+                            aria-expanded={expanded}
+                          >
+                            {m.billable_days}
+                          </button>
+                          <span className="text-stone-400 text-xs ml-1.5">({m.all_unlocks.length} event{m.all_unlocks.length === 1 ? "" : "s"})</span>
+                        </td>
+                      </tr>
+                      {expanded ? (
+                        <tr className="bg-stone-50/80">
+                          <td colSpan={4} className="p-0">
+                            <div className="px-4 py-3 border-t border-stone-100 text-left">
+                              <p className="text-xs text-stone-500 mb-3">
+                                All door events in this range (extra same-day swipes do not add billable days).
+                              </p>
+                              <div className="overflow-x-auto rounded-lg border border-stone-200 bg-white">
+                                <table className="w-full text-left text-sm min-w-[560px]">
+                                  <thead>
+                                    <tr className="bg-stone-50 text-stone-500 text-xs">
+                                      <th className="py-1.5 px-3">Time</th>
+                                      <th className="py-1.5 px-3">Door</th>
+                                      <th className="py-1.5 px-3">Success</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {m.all_unlocks.map((r) => (
+                                      <tr key={r.id} className="border-t border-stone-100">
+                                        <td className="py-1.5 px-3 whitespace-nowrap">
+                                          {formatDateTimeInAppTz(new Date(r.happened_at), undefined, tz)}
+                                        </td>
+                                        <td className="py-1.5 px-3">{r.lock_name ?? r.lock_id ?? "—"}</td>
+                                        <td className="py-1.5 px-3">{r.success ? "Yes" : "No"}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
