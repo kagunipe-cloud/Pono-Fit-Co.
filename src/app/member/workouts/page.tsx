@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatDateInAppTz } from "@/lib/app-timezone";
+import { formatDateInAppTz, formatInAppTz } from "@/lib/app-timezone";
 import { getWeightComparisonWithArticle } from "@/lib/workout-congrats";
 import { useAppTimezone } from "@/lib/settings-context";
 import { PRBadge } from "@/components/PRBadge";
@@ -136,21 +136,34 @@ export default function MemberWorkoutsPage() {
     byMonth.set(monthKey, (byMonth.get(monthKey) ?? 0) + vol);
     byYear.set(yearKey, (byYear.get(yearKey) ?? 0) + vol);
   }
+  /** Best month/year by volume; on a tie, prefer the later period so the label matches “this month” when tied. */
   let monthlyRecord: { volume: number; monthKey: string } | null = null;
   let yearlyRecord: { volume: number; yearKey: string } | null = null;
   for (const [monthKey, volume] of byMonth) {
-    if (volume > 0 && (!monthlyRecord || volume > monthlyRecord.volume)) {
+    if (volume <= 0) continue;
+    if (
+      !monthlyRecord ||
+      volume > monthlyRecord.volume ||
+      (volume === monthlyRecord.volume && monthKey > monthlyRecord.monthKey)
+    ) {
       monthlyRecord = { volume, monthKey };
     }
   }
   for (const [yearKey, volume] of byYear) {
-    if (volume > 0 && (!yearlyRecord || volume > yearlyRecord.volume)) {
+    if (volume <= 0) continue;
+    if (
+      !yearlyRecord ||
+      volume > yearlyRecord.volume ||
+      (volume === yearlyRecord.volume && yearKey > yearlyRecord.yearKey)
+    ) {
       yearlyRecord = { volume, yearKey };
     }
   }
+  /** First day of YYYY-MM as noon UTC, then month name in app tz — avoids "April 1" UTC showing as "March" in Hawaii. */
   const formatMonthKey = (key: string) => {
+    if (!/^\d{4}-\d{2}$/.test(key)) return key;
     try {
-      return new Date(key + "-01").toLocaleDateString("en-US", { month: "long", year: "numeric" });
+      return formatInAppTz(new Date(`${key}-01T12:00:00Z`), { month: "long", year: "numeric" }, tz);
     } catch {
       return key;
     }
