@@ -16,6 +16,7 @@ export default function EditDiscountPage() {
     percent_off: "",
     description: "",
     scope: "cart",
+    applies_to_renewals: false,
   });
 
   useEffect(() => {
@@ -31,6 +32,7 @@ export default function EditDiscountPage() {
             percent_off: String(data.percent_off ?? ""),
             description: String(data.description ?? ""),
             scope: String(data.scope ?? "cart"),
+            applies_to_renewals: Number((data as { applies_to_renewals?: number }).applies_to_renewals ?? 0) === 1,
           });
         }
       } catch {
@@ -54,6 +56,7 @@ export default function EditDiscountPage() {
           percent_off: parseInt(form.percent_off, 10),
           description: form.description.trim() || null,
           scope: form.scope,
+          applies_to_renewals: form.applies_to_renewals,
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error ?? "Failed to update");
@@ -119,6 +122,20 @@ export default function EditDiscountPage() {
             className="w-full px-4 py-2.5 rounded-lg border border-stone-200"
           />
         </div>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.applies_to_renewals}
+            onChange={(e) => setForm((f) => ({ ...f, applies_to_renewals: e.target.checked }))}
+            className="mt-1 rounded border-stone-300 text-brand-600"
+          />
+          <span>
+            <span className="block text-sm font-medium text-stone-700">Apply on monthly renewals</span>
+            <span className="block text-xs text-stone-500 mt-0.5">
+              Same percent off each auto-renew for monthly plans. Uncheck for one-time checkout only.
+            </span>
+          </span>
+        </label>
         <div className="flex gap-3 pt-2">
           <button type="submit" disabled={loading} className="px-4 py-2.5 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50">
             {loading ? "Saving…" : "Save"}

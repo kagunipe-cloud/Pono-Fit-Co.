@@ -91,7 +91,12 @@ export default function MemberCartPage() {
   const [monthlyRecurring, setMonthlyRecurring] = useState(true);
   const [promoCode, setPromoCode] = useState("");
   const [promoError, setPromoError] = useState<string | null>(null);
-  const [discount, setDiscount] = useState<{ code: string; percent_off: number; description?: string | null } | null>(null);
+  const [discount, setDiscount] = useState<{
+    code: string;
+    percent_off: number;
+    description?: string | null;
+    applies_to_renewals?: boolean;
+  } | null>(null);
   const [canUseTerminal, setCanUseTerminal] = useState(false);
   const [classCredits, setClassCredits] = useState(0);
   const [isOwnCart, setIsOwnCart] = useState(false);
@@ -199,7 +204,12 @@ export default function MemberCartPage() {
         setHasSavedCard(Boolean(data.has_saved_card));
         setPromoCode(typeof data.promo_code === "string" ? data.promo_code : "");
         setDiscount(
-          (data.discount as { code: string; percent_off: number; description?: string | null } | null) ?? null
+          (data.discount as {
+            code: string;
+            percent_off: number;
+            description?: string | null;
+            applies_to_renewals?: boolean;
+          } | null) ?? null
         );
         setClassCredits(typeof data.class_credits === "number" ? data.class_credits : 0);
         setIsOwnCart(Boolean(data.is_own_cart));
@@ -940,12 +950,21 @@ export default function MemberCartPage() {
         {items.length > 0 && (
           <>
             {discount && (
-              <div className="p-4 border-t border-stone-100 flex justify-between items-center text-green-700">
-                <span className="text-sm">
-                  Promo <span className="font-mono font-medium">{discount.code}</span> ({discount.percent_off}% off)
-                  <button type="button" onClick={removePromoCode} className="ml-2 text-red-600 hover:underline text-xs">Remove</button>
-                </span>
-                <span>-{formatPrice(discountAmount)}</span>
+              <div className="p-4 border-t border-stone-100 text-green-700">
+                <div className="flex justify-between items-center gap-4">
+                  <span className="text-sm">
+                    Promo <span className="font-mono font-medium">{discount.code}</span> ({discount.percent_off}% off)
+                  </span>
+                  <span className="shrink-0">-{formatPrice(discountAmount)}</span>
+                </div>
+                {discount.applies_to_renewals ? (
+                  <p className="text-xs text-stone-600 mt-2 font-normal">
+                    Same percent off applies on each monthly renewal (not only this checkout).
+                  </p>
+                ) : null}
+                <button type="button" onClick={removePromoCode} className="mt-2 text-red-600 hover:underline text-xs">
+                  Remove promo
+                </button>
               </div>
             )}
             {!discount && (

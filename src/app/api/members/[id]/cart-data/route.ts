@@ -143,13 +143,24 @@ export async function GET(
     const ptPackProducts = db.prepare("SELECT id, name, price, credits, duration_minutes FROM pt_pack_products ORDER BY duration_minutes, credits").all() as { id: number; name: string; price: string; credits: number; duration_minutes: number }[];
 
     ensureDiscountsTable(db);
-    let discount: { percent_off: number; code: string; description: string | null } | null = null;
+    let discount: {
+      percent_off: number;
+      code: string;
+      description: string | null;
+      applies_to_renewals: boolean;
+    } | null = null;
     const promoCode = (cart as { promo_code?: string | null }).promo_code?.trim();
     if (promoCode) {
-      const d = db.prepare("SELECT code, percent_off, description FROM discounts WHERE UPPER(TRIM(code)) = ?").get(promoCode.toUpperCase()) as
-        | { code: string; percent_off: number; description: string | null }
+      const d = db.prepare("SELECT code, percent_off, description, COALESCE(applies_to_renewals, 0) AS ar FROM discounts WHERE UPPER(TRIM(code)) = ?").get(promoCode.toUpperCase()) as
+        | { code: string; percent_off: number; description: string | null; ar: number }
         | undefined;
-      if (d) discount = { code: d.code, percent_off: d.percent_off, description: d.description };
+      if (d)
+        discount = {
+          code: d.code,
+          percent_off: d.percent_off,
+          description: d.description,
+          applies_to_renewals: d.ar === 1,
+        };
     }
 
     const class_credits = getMemberCreditBalance(db, member.member_id);
@@ -176,7 +187,14 @@ export async function GET(
       classPacks,
       ptPackProducts,
       promo_code: promoCode || null,
-      discount: discount ? { code: discount.code, percent_off: discount.percent_off, description: discount.description } : null,
+      discount: discount
+        ? {
+            code: discount.code,
+            percent_off: discount.percent_off,
+            description: discount.description,
+            applies_to_renewals: discount.applies_to_renewals,
+          }
+        : null,
     });
   } catch (err) {
     console.error(err);

@@ -44,6 +44,12 @@ export async function PATCH(
     const percentOff = body.percent_off != null ? Math.min(100, Math.max(0, parseInt(String(body.percent_off), 10) || 0)) : undefined;
     const description = body.description !== undefined ? ((body.description ?? "").trim() || null) : undefined;
     const scope = body.scope !== undefined ? ((body.scope ?? "cart").trim() === "item" ? "item" : "cart") : undefined;
+    const appliesToRenewals =
+      body.applies_to_renewals !== undefined
+        ? body.applies_to_renewals === true || body.applies_to_renewals === 1
+          ? 1
+          : 0
+        : undefined;
 
     const db = getDb();
     ensureDiscountsTable(db);
@@ -66,6 +72,7 @@ export async function PATCH(
     if (percentOff !== undefined) { updates.push("percent_off = ?"); values.push(percentOff); }
     if (description !== undefined) { updates.push("description = ?"); values.push(description); }
     if (scope !== undefined) { updates.push("scope = ?"); values.push(scope); }
+    if (appliesToRenewals !== undefined) { updates.push("applies_to_renewals = ?"); values.push(appliesToRenewals); }
     if (updates.length > 0) {
       updates.push("updated_at = datetime('now')");
       values.push(id);

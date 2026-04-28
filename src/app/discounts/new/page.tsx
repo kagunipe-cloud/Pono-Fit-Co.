@@ -13,6 +13,7 @@ export default function NewDiscountPage() {
     percent_off: "",
     description: "",
     scope: "cart",
+    applies_to_renewals: false,
   });
 
   async function handleSubmit(e: React.FormEvent) {
@@ -28,6 +29,7 @@ export default function NewDiscountPage() {
           percent_off: parseInt(form.percent_off, 10) || 0,
           description: form.description.trim() || null,
           scope: form.scope,
+          applies_to_renewals: form.applies_to_renewals,
         }),
       });
       const data = await res.json();
@@ -97,6 +99,20 @@ export default function NewDiscountPage() {
             placeholder="e.g. 10% off"
           />
         </div>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.applies_to_renewals}
+            onChange={(e) => setForm((f) => ({ ...f, applies_to_renewals: e.target.checked }))}
+            className="mt-1 rounded border-stone-300 text-brand-600"
+          />
+          <span>
+            <span className="block text-sm font-medium text-stone-700">Apply on monthly renewals</span>
+            <span className="block text-xs text-stone-500 mt-0.5">
+              When checked, members who sign up with this code get the same percent off each auto-renew (monthly plans only). Leave off for a one-time checkout discount only.
+            </span>
+          </span>
+        </label>
         <div className="flex gap-3 pt-2">
           <button type="submit" disabled={loading} className="px-4 py-2.5 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50">
             {loading ? "Creating…" : "Create discount"}

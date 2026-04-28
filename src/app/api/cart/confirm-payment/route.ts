@@ -8,6 +8,7 @@ import {
   ensureSalesPromoCodeColumn,
   ensureSalesItemTotalCcFeeColumns,
   ensureSubscriptionRenewalPromoColumns,
+  ensureSubscriptionRenewalDiscountPercentColumn,
   ensureGiftPassesTable,
 } from "../../../../lib/db";
 import { isPassPackPlan, passCreditsForPurchase } from "../../../../lib/pass-packs";
@@ -25,7 +26,7 @@ import {
 import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../lib/kisi";
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
 import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
-import { ensureDiscountsTable } from "../../../../lib/discounts";
+import { ensureDiscountsTable, getRenewalDiscountPercentForPromo } from "../../../../lib/discounts";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureTrainerClient, getTrainerMemberIdByDisplayName } from "../../../../lib/trainer-clients";
 import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz, formatDateForStorage, formatDateForDisplay } from "../../../../lib/app-timezone";
@@ -190,7 +191,9 @@ export async function POST(request: NextRequest) {
     const db = getDb();
     ensureCartTables(db);
 
-    const cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member_id) as { id: number } | undefined;
+    const cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member_id) as
+      | { id: number; promo_code?: string | null }
+      | undefined;
     if (!cart) {
       db.close();
       return NextResponse.json({ error: "No cart for this member" }, { status: 404 });
@@ -241,6 +244,10 @@ export async function POST(request: NextRequest) {
     }[] = [];
     const emailLineItems: { name: string; quantity: number; price: string }[] = [];
     const giftSendQueue: { to: string; token: string; planName: string; purchaserFirstName: string | null }[] = [];
+
+    ensureDiscountsTable(db);
+    const cartPromoForRenewal = cart.promo_code?.trim() || null;
+    const cartRenewalDiscountPercent = getRenewalDiscountPercentForPromo(db, cartPromoForRenewal);
 
     db.exec("BEGIN TRANSACTION");
     try {
@@ -294,6 +301,7 @@ export async function POST(request: NextRequest) {
             const daysRemaining = Math.ceil((expiry_date.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
             const sub_id = randomUUID().slice(0, 8);
             ensureSubscriptionRenewalPromoColumns(db);
+            ensureSubscriptionRenewalDiscountPercentColumn(db);
             const hasStaffPrice = !!(it.unit_price_override ?? "").trim();
             const isMonth = (plan.unit || "").trim() === "Month";
             let promoRenewals: number | null = null;
@@ -306,9 +314,10 @@ export async function POST(request: NextRequest) {
                 promoRenewals = Math.max(0, m - 1);
               }
             }
+            const renewalDiscountToStore = isMonth ? cartRenewalDiscountPercent : null;
             db.prepare(`
-              INSERT INTO subscriptions (subscription_id, member_id, product_id, status, start_date, expiry_date, days_remaining, price, sales_id, quantity, promo_renewals_remaining, renewal_price_indefinite)
-              VALUES (?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?, ?, ?)
+              INSERT INTO subscriptions (subscription_id, member_id, product_id, status, start_date, expiry_date, days_remaining, price, sales_id, quantity, promo_renewals_remaining, renewal_price_indefinite, renewal_discount_percent)
+              VALUES (?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).run(
               sub_id,
               member_id,
@@ -320,7 +329,8 @@ export async function POST(request: NextRequest) {
               sales_id,
               it.quantity,
               promoRenewals,
-              renewalIndef
+              renewalIndef,
+              renewalDiscountToStore
             );
             db.prepare("UPDATE members SET exp_next_payment_date = ? WHERE member_id = ?").run(expiryStr, member_id);
             kisiGrants.push({ valid_until: expiry_date });

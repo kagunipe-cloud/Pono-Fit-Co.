@@ -12,8 +12,10 @@ export async function GET(request: NextRequest) {
   try {
     const db = getDb();
     ensureDiscountsTable(db);
-    const row = db.prepare("SELECT id, code, percent_off, description, scope FROM discounts WHERE UPPER(TRIM(code)) = ?").get(code) as
-      | { id: number; code: string; percent_off: number; description: string | null; scope: string }
+    const row = db.prepare(
+      "SELECT id, code, percent_off, description, scope, COALESCE(applies_to_renewals, 0) AS applies_to_renewals FROM discounts WHERE UPPER(TRIM(code)) = ?"
+    ).get(code) as
+      | { id: number; code: string; percent_off: number; description: string | null; scope: string; applies_to_renewals: number }
       | undefined;
     db.close();
     if (!row) return NextResponse.json({ error: "Invalid or expired promo code" }, { status: 404 });
@@ -23,6 +25,7 @@ export async function GET(request: NextRequest) {
       percent_off: row.percent_off,
       description: row.description ?? undefined,
       scope: row.scope ?? "cart",
+      applies_to_renewals: row.applies_to_renewals === 1,
     });
   } catch (err) {
     console.error(err);
