@@ -183,6 +183,7 @@ export const REPORT_EXTRA_LINKS: { href: string; title: string }[] = [
   { href: "/members-expiry", title: "Membership expiry" },
   { href: "/admin/reports/member-unlocks", title: "Member unlocks" },
   { href: "/admin/reports/insurance", title: "Insurance report" },
+  { href: "/admin/reports/workout-volume", title: "Workout volume" },
 ];
 
 /** Slugs that appear under the sidebar "Services" dropdown (admin nav). Rec Leagues is added in the Sidebar. */
