@@ -18,6 +18,29 @@ export async function GET(request: NextRequest) {
   ensureMembersAutoRenewColumn(db);
   const tz = getAppTimezone(db);
 
+  const cronEnabled = db
+    .prepare("SELECT value FROM app_settings WHERE key = ?")
+    .get("email_cron_membership_expiry_enabled") as { value: string } | undefined;
+  if (cronEnabled?.value?.trim() === "0") {
+    db.close();
+    return NextResponse.json({
+      date: todayInAppTz(tz),
+      skipped: true,
+      reason: "Membership expiring cron emails are disabled in Admin → Settings → Emails & documents.",
+      expiry_target: null,
+      count: 0,
+      sent: 0,
+      results: [] as { member_id: string; email: string; sent: boolean; error?: string }[],
+    });
+  }
+
+  const excludeRow = db
+    .prepare("SELECT value FROM app_settings WHERE key = ?")
+    .get("email_membership_expiry_exclude_auto_renew") as { value: string } | undefined;
+  const excludeRaw = excludeRow?.value?.trim() ?? "";
+  /** '0' = send to everyone including auto-renew; otherwise (incl. missing key) = skip auto-renew members. */
+  const excludeAutoRenew = excludeRaw !== "0";
+
   /** Date in gym timezone (YYYY-MM-DD) to match expiry_date in DB. */
   const inTwoDays = new Date();
   inTwoDays.setDate(inTwoDays.getDate() + 2);
@@ -29,7 +52,7 @@ export async function GET(request: NextRequest) {
     WHERE s.status = 'Active' AND s.expiry_date = ?
   `).all(expiryTarget) as { subscription_id: string; member_id: string; expiry_date: string }[];
 
-  const results: { member_id: string; email: string; sent: boolean; error?: string }[] = [];
+  const results: { member_id: string; email: string; sent: boolean; skipped?: boolean; error?: string }[] = [];
 
   for (const sub of expiring) {
     const member = db.prepare(
@@ -43,13 +66,24 @@ export async function GET(request: NextRequest) {
         }
       | undefined;
 
+    const autoRenewOn = Number(member?.auto_renew) === 1;
+    if (excludeAutoRenew && autoRenewOn) {
+      results.push({
+        member_id: sub.member_id,
+        email: member?.email?.trim() ?? "",
+        sent: false,
+        skipped: true,
+      });
+      continue;
+    }
+
     if (!member?.email?.trim()) {
       results.push({ member_id: sub.member_id, email: "", sent: false, error: "No email" });
       continue;
     }
 
     const has_card_on_file = hasBillableStripeCustomer(member.stripe_customer_id);
-    const auto_renew = Number(member.auto_renew) === 1;
+    const auto_renew = autoRenewOn;
     const r = await sendMembershipExpiryReminder({
       to: member.email.trim(),
       first_name: member.first_name,
@@ -68,11 +102,14 @@ export async function GET(request: NextRequest) {
   db.close();
 
   const sent = results.filter((r) => r.sent).length;
+  const skippedAutoRenew = results.filter((r) => r.skipped).length;
   return NextResponse.json({
     date: todayInAppTz(tz),
     expiry_target: expiryTarget,
+    exclude_auto_renew_members: excludeAutoRenew,
     count: expiring.length,
     sent,
+    skipped_auto_renew: skippedAutoRenew,
     results,
   });
 }

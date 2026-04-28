@@ -43,6 +43,10 @@ export default function EmailsDocumentsPage() {
   const [emailBookingConfirmationBody, setEmailBookingConfirmationBody] = useState("");
   const [emailBookingTrainerAssignedSubject, setEmailBookingTrainerAssignedSubject] = useState("");
   const [emailBookingTrainerAssignedBody, setEmailBookingTrainerAssignedBody] = useState("");
+  /** Automated cron emails: membership expiring (2 days out) */
+  const [cronMembershipExpiryEnabled, setCronMembershipExpiryEnabled] = useState(true);
+  /** When true: also email members who have auto-renew on (stored as exclude_auto_renew = '0'). */
+  const [sendMembershipExpiryToAutoRenew, setSendMembershipExpiryToAutoRenew] = useState(false);
   const [defaults, setDefaults] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -77,6 +81,8 @@ export default function EmailsDocumentsPage() {
           setEmailBookingConfirmationBody(data.email_booking_confirmation_body ?? "");
           setEmailBookingTrainerAssignedSubject(data.email_booking_trainer_assigned_subject ?? "");
           setEmailBookingTrainerAssignedBody(data.email_booking_trainer_assigned_body ?? "");
+          setCronMembershipExpiryEnabled(data.email_cron_membership_expiry_enabled !== "0");
+          setSendMembershipExpiryToAutoRenew(data.email_membership_expiry_exclude_auto_renew === "0");
         }
       })
       .catch(() => {})
@@ -116,6 +122,8 @@ export default function EmailsDocumentsPage() {
           email_booking_confirmation_body: emailBookingConfirmationBody || null,
           email_booking_trainer_assigned_subject: emailBookingTrainerAssignedSubject || null,
           email_booking_trainer_assigned_body: emailBookingTrainerAssignedBody || null,
+          email_cron_membership_expiry_enabled: cronMembershipExpiryEnabled ? "1" : "0",
+          email_membership_expiry_exclude_auto_renew: sendMembershipExpiryToAutoRenew ? "0" : "1",
         }),
       });
       const data = await res.json();
@@ -289,6 +297,44 @@ export default function EmailsDocumentsPage() {
             <p className="text-sm text-stone-500">
               Common placeholders: {"{{first_name}}"}, {"{{member_id}}"}, {"{{email}}"}, {"{{origin}}"}, {"{{install_url}}"}, {"{{set_password_url}}"}, {"{{expiry_date}}"}, {"{{waiver_url}}"}, {"{{app_url}}"} (site base URL from env), {"{{card_message}}"} (full paragraph — only if you still use it in the membership body; prefer the editable fragments below). Money owed: {"{{pay_url}}"}, {"{{member_name}}"}, {"{{plan_name}}"}, {"{{amount_formatted}}"}. Booking emails: {"{{session_title}}"}, {"{{kind_label}}"}, {"{{date}}"}, {"{{time}}"}, {"{{trainer}}"}, {"{{brand_short}}"}, {"{{brand_name}}"}.
             </p>
+
+            <div className="border border-brand-100 rounded-xl p-4 space-y-4 bg-brand-50/40">
+              <h3 className="font-semibold text-stone-800">Automated emails (cron)</h3>
+              <p className="text-sm text-stone-600">
+                Scheduled jobs only — for example{" "}
+                <code className="text-xs bg-white px-1 rounded border border-stone-100">/api/cron/membership-expiry-reminders</code>. Turning these off stops those sends without deleting your templates.
+              </p>
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={cronMembershipExpiryEnabled}
+                  onChange={(e) => setCronMembershipExpiryEnabled(e.target.checked)}
+                  className="mt-1 rounded border-stone-300 text-brand-600 focus:ring-brand-500"
+                />
+                <span>
+                  <span className="font-medium text-stone-800">Send &quot;membership expiring soon&quot; reminders</span>
+                  <span className="block text-sm text-stone-500">
+                    Emails members ~2 days before their active subscription period ends (gym timezone).
+                  </span>
+                </span>
+              </label>
+              <label
+                className={`flex items-start gap-3 cursor-pointer ${!cronMembershipExpiryEnabled ? "opacity-50 pointer-events-none" : ""}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={sendMembershipExpiryToAutoRenew}
+                  onChange={(e) => setSendMembershipExpiryToAutoRenew(e.target.checked)}
+                  className="mt-1 rounded border-stone-300 text-brand-600 focus:ring-brand-500"
+                />
+                <span>
+                  <span className="font-medium text-stone-800">Include members who are on auto-renew</span>
+                  <span className="block text-sm text-stone-500">
+                    When unchecked, only members <strong>not</strong> on auto-renew get this reminder (recommended if auto-renew members find the email redundant).
+                  </span>
+                </span>
+              </label>
+            </div>
 
             <div className="border border-stone-200 rounded-lg p-4 space-y-3">
               <h3 className="font-semibold text-stone-800">Post-purchase / Welcome</h3>

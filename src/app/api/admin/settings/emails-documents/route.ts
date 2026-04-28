@@ -34,6 +34,10 @@ const EMAIL_KEYS = [
   "email_booking_confirmation_body",
   "email_booking_trainer_assigned_subject",
   "email_booking_trainer_assigned_body",
+  /** '1' = send cron; '0' = disabled */
+  "email_cron_membership_expiry_enabled",
+  /** '1' = do not email members with auto_renew; '0' = email everyone expiring (legacy) */
+  "email_membership_expiry_exclude_auto_renew",
 ] as const;
 
 function getSetting(db: ReturnType<typeof getDb>, key: string): string | null {
