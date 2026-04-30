@@ -1,6 +1,6 @@
 # Gemini API rate limits (macros / calculate-macros)
 
-The **Calculate** button for macros uses the Gemini API (e.g. `gemini-2.0-flash`). Google’s **free tier** limits are strict:
+The **Calculate** button for macros uses the Gemini API (default `gemini-2.5-flash`; override with `GEMINI_MACRO_MODEL`). Google’s **free tier** limits are strict:
 
 - **~10 requests per minute (RPM)**
 - **~250 requests per day (RPD)**
@@ -22,4 +22,4 @@ References: [Gemini API rate limits](https://ai.google.dev/gemini-api/docs/rate-
 
 1. **Rely on cache**: Repeated foods (e.g. “1 cup oats”) will stop calling Gemini after the first time.
 2. **Upgrade quota**: In [Google AI Studio](https://aistudio.google.com/) or Google Cloud Console you can request higher quotas (paid tier); then you get much higher RPM/RPD.
-3. **Optional env**: You can point to another model/version with `GEMINI_API_VERSION` and `GEMINI_MODEL` if a different model has better limits for your project.
+3. **Optional env**: `GEMINI_API_VERSION` (e.g. `v1beta`) and `GEMINI_MACRO_MODEL` if you need a different model id. `gemini-2.0-flash` is deprecated; avoid it for new keys.
