@@ -21,6 +21,63 @@ type Member = {
 
 const MEMBER_TYPES: MemberType[] = ["Monthly", "Day pass", "Week pass", "Class client", "PT client"];
 
+type SortKey = "name" | "email" | "type" | "role" | "join_date" | "renewal" | "member_id";
+
+function memberDisplayName(m: Member): string {
+  return [m.first_name, m.last_name].filter(Boolean).join(" ") || "";
+}
+
+function memberTypeSortLabel(m: Member): string {
+  return [...(m.types ?? [])].sort((a, b) => a.localeCompare(b)).join(", ");
+}
+
+/** Empty dates sort after non-empty when ascending. */
+function compareDateStrings(a: string | null, b: string | null): number {
+  const as = String(a ?? "").trim();
+  const bs = String(b ?? "").trim();
+  if (!as && !bs) return 0;
+  if (!as) return 1;
+  if (!bs) return -1;
+  return as.localeCompare(bs);
+}
+
+function sortMembers(list: Member[], key: SortKey, dir: "asc" | "desc"): Member[] {
+  const next = [...list];
+  const mul = dir === "asc" ? 1 : -1;
+  const cmp = (a: Member, b: Member): number => {
+    let c = 0;
+    switch (key) {
+      case "name":
+        c = memberDisplayName(a).localeCompare(memberDisplayName(b), undefined, { sensitivity: "base" });
+        break;
+      case "email":
+        c = (a.email ?? "").localeCompare(b.email ?? "", undefined, { sensitivity: "base" });
+        break;
+      case "type":
+        c = memberTypeSortLabel(a).localeCompare(memberTypeSortLabel(b), undefined, { sensitivity: "base" });
+        break;
+      case "role":
+        c = (a.role ?? "").localeCompare(b.role ?? "", undefined, { sensitivity: "base" });
+        break;
+      case "join_date":
+        c = compareDateStrings(a.join_date, b.join_date);
+        break;
+      case "renewal":
+        c = compareDateStrings(a.exp_next_payment_date, b.exp_next_payment_date);
+        break;
+      case "member_id":
+        c = (a.member_id ?? "").localeCompare(b.member_id ?? "", undefined, { sensitivity: "base" });
+        break;
+      default:
+        c = 0;
+    }
+    if (c !== 0) return mul * c;
+    return (a.member_id ?? "").localeCompare(b.member_id ?? "", undefined, { sensitivity: "base" });
+  };
+  next.sort(cmp);
+  return next;
+}
+
 export default function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [search, setSearch] = useState("");
@@ -29,6 +86,10 @@ export default function MembersPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
   const [typeFilter, setTypeFilter] = useState<MemberType | null>(null);
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
+    key: "name",
+    dir: "asc",
+  });
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
@@ -66,6 +127,17 @@ export default function MembersPage() {
     return list;
   }, [members, activeFilter, typeFilter]);
 
+  const sortedMembers = useMemo(
+    () => sortMembers(filteredMembers, sort.key, sort.dir),
+    [filteredMembers, sort.key, sort.dir]
+  );
+
+  function toggleSort(key: SortKey) {
+    setSort((prev) =>
+      prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto">
       <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
@@ -102,7 +174,7 @@ export default function MembersPage() {
               className="flex-1 min-w-[200px] px-4 py-2.5 rounded-lg border border-stone-200 bg-stone-50 text-stone-900 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500"
             />
             <span className="text-sm text-stone-400">
-              {filteredMembers.length} of {members.length} member{members.length !== 1 ? "s" : ""}
+              {sortedMembers.length} of {members.length} member{members.length !== 1 ? "s" : ""}
             </span>
           </div>
 
@@ -171,7 +243,7 @@ export default function MembersPage() {
           )}
           {loading ? (
             <div className="p-12 text-center text-stone-500">Loading…</div>
-          ) : filteredMembers.length === 0 ? (
+          ) : sortedMembers.length === 0 ? (
             <div className="p-12 text-center text-stone-500">
               No members match the current filters.
               {members.length === 0 && (
@@ -186,18 +258,35 @@ export default function MembersPage() {
             <table className="w-full text-left min-w-[600px]">
               <thead>
                 <tr className="bg-stone-50 text-stone-500 text-sm font-medium">
-                  <th className="py-3 px-4">Name</th>
-                  <th className="py-3 px-4">Email</th>
-                  <th className="py-3 px-4">Type</th>
-                  <th className="py-3 px-4">Role</th>
-                  <th className="py-3 px-4">Join date</th>
-                  <th className="py-3 px-4">Renewal date</th>
-                  <th className="py-3 px-4">Member ID</th>
+                  {(
+                    [
+                      { key: "name" as const, label: "Name" },
+                      { key: "email" as const, label: "Email" },
+                      { key: "type" as const, label: "Type" },
+                      { key: "role" as const, label: "Role" },
+                      { key: "join_date" as const, label: "Join date" },
+                      { key: "renewal" as const, label: "Renewal date" },
+                      { key: "member_id" as const, label: "Member ID" },
+                    ] as const
+                  ).map(({ key, label }) => (
+                    <th key={key} className="py-3 px-4" aria-sort={sort.key === key ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}>
+                      <button
+                        type="button"
+                        onClick={() => toggleSort(key)}
+                        className={`inline-flex items-center gap-1 font-medium text-stone-500 hover:text-stone-800 -mx-1 px-1 rounded ${sort.key === key ? "text-stone-800" : ""}`}
+                      >
+                        {label}
+                        <span className="text-xs font-normal text-stone-400 tabular-nums w-3" aria-hidden>
+                          {sort.key === key ? (sort.dir === "asc" ? "↑" : "↓") : ""}
+                        </span>
+                      </button>
+                    </th>
+                  ))}
                   <th className="py-3 px-4 w-20"></th>
                 </tr>
               </thead>
               <tbody>
-                {filteredMembers.map((m) => (
+                {sortedMembers.map((m) => (
                   <tr
                     key={m.id}
                     className="border-t border-stone-100 hover:bg-brand-50/30 transition-colors"

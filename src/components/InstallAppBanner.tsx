@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { BRAND } from "@/lib/branding";
+import { getIosAppStoreUrl } from "@/lib/ios-app-store";
+import { isNativeAppShell } from "@/lib/native-app-client";
 
 const STORAGE_KEY = "pwa-install-banner-dismissed";
 
@@ -40,6 +42,11 @@ export default function InstallAppBanner({
   useEffect(() => {
     if (typeof window === "undefined") return;
     setMounted(true);
+
+    if (isNativeAppShell()) {
+      setDismissed(true);
+      return;
+    }
 
     // Already running as installed PWA
     const standalone =
@@ -107,18 +114,24 @@ export default function InstallAppBanner({
 
   if (!mounted || dismissed) return null;
 
+  const iosStoreUrl = getIosAppStoreUrl();
   const isBanner = variant === "banner";
   const ctaPlatform: Platform =
     installCtaAs === "android" ? "android" : installCtaAs === "ios" ? "ios" : platform;
   /** Chromium (Android + desktop): one-tap when beforeinstallprompt fired. */
   const showNativeInstallButton = installPrompt != null;
   const showIOSLink = ctaPlatform === "ios" && showInstallLink;
+  const showIOSAppStoreLink = showIOSLink && iosStoreUrl != null;
+  const showIOSInstallPageLink = showIOSLink && iosStoreUrl == null;
   const showGenericInstallLink =
     showInstallLink &&
     !showNativeInstallButton &&
     (ctaPlatform === "other" || ctaPlatform === "android");
 
-  if (!showNativeInstallButton && !showIOSLink && !showGenericInstallLink) return null;
+  if (!showNativeInstallButton && !showIOSAppStoreLink && !showIOSInstallPageLink && !showGenericInstallLink) return null;
+
+  const ctaClass =
+    "block w-full py-2.5 px-4 rounded-lg font-medium text-center text-sm border border-brand-600 bg-brand-600 text-white hover:bg-brand-700";
 
   const content = (
     <>
@@ -133,12 +146,19 @@ export default function InstallAppBanner({
           {installing ? "Opening…" : nativeInstallButtonLabel ?? "Add to Home Screen"}
         </button>
       )}
-      {(showIOSLink || showGenericInstallLink) && (
-        <Link
-          href="/install"
+      {showIOSAppStoreLink && (
+        <a
+          href={iosStoreUrl}
+          target="_blank"
+          rel="noopener noreferrer"
           data-dumbbell-btn
-          className="block w-full py-2.5 px-4 rounded-lg font-medium text-center text-sm"
+          className={ctaClass}
         >
+          Download on the App Store
+        </a>
+      )}
+      {(showIOSInstallPageLink || showGenericInstallLink) && (
+        <Link href="/install" data-dumbbell-btn className={ctaClass}>
           {platform === "ios" ? "Add to Home Screen" : fallbackInstallLinkLabel ?? "Install help"}
         </Link>
       )}
@@ -151,11 +171,15 @@ export default function InstallAppBanner({
         <div className="flex items-start gap-3">
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-stone-800">
-              Get {BRAND.shortName} on your home screen
+              {(installCtaAs === "auto" ? platform : ctaPlatform) === "ios" && iosStoreUrl
+                ? `Get ${BRAND.shortName} for iPhone`
+                : `Get ${BRAND.shortName} on your home screen`}
             </p>
             <p className="text-xs text-stone-500 mt-0.5">
               {(installCtaAs === "auto" ? platform : ctaPlatform) === "ios"
-                ? "Tap below for quick steps to add this app."
+                ? iosStoreUrl
+                  ? "Get the official app from the App Store."
+                  : "Tap below for quick steps to add this app."
                 : installPrompt
                   ? "Use the button below — same as other apps’ “Add to Home screen” prompts."
                   : "Opens like an app from your home screen."}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import InstallAppBanner from "@/components/InstallAppBanner";
 import { BRAND } from "@/lib/branding";
+import { getIosAppStoreUrl } from "@/lib/ios-app-store";
 
 function usePageUrl() {
   const [url, setUrl] = useState("");
@@ -80,13 +81,81 @@ function InstallContent() {
     }
   }
 
+  const iosStoreUrl = getIosAppStoreUrl();
+
+  const iosHomeScreenSteps = (
+    <div className="space-y-8">
+      <div>
+        <p className="text-4xl font-black text-brand-600 leading-none mb-2">1</p>
+        {!iosNotSafari ? (
+          <>
+            <p className="text-sm font-semibold text-stone-800 mb-2">You’re in Safari</p>
+            <p className="text-sm text-stone-600 mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+              Good — keep going to step 2. (If the Share button isn’t at the bottom, scroll up slightly.)
+            </p>
+            <button
+              type="button"
+              onClick={copyPageUrlForSafari}
+              className="w-full py-2 text-sm text-brand-700 font-medium hover:underline"
+            >
+              {copiedSafari ? "Copied!" : "Copy link (optional)"}
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-semibold text-stone-800 mb-2">Switch to Safari</p>
+            <p className="text-sm text-amber-900 mb-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              You’re in another browser, not Safari — a link can’t jump you into Safari (Apple’s rule). Use the{" "}
+              <strong>⋯</strong> or <strong>Share</strong> menu → <strong>Open in Safari</strong>, or copy the link and paste it in Safari.
+            </p>
+            <button
+              type="button"
+              onClick={copyPageUrlForSafari}
+              className="flex items-center justify-center w-full py-3.5 px-4 rounded-xl bg-brand-600 text-white font-semibold text-sm hover:bg-brand-700"
+            >
+              {copiedSafari ? "Copied — open Safari and paste" : "Copy link → paste in Safari"}
+            </button>
+          </>
+        )}
+      </div>
+
+      <div>
+        <p className="text-4xl font-black text-brand-600 leading-none mb-2">2</p>
+        <p className="text-sm font-semibold text-stone-800 mb-3">Tap the Share button</p>
+        <img
+          src="/install/ios-step-share.svg"
+          alt=""
+          className="w-full rounded-xl border border-stone-100 bg-stone-50"
+          width={280}
+          height={120}
+        />
+        <p className="text-xs text-stone-500 mt-2 text-center">Square with arrow — bottom of the screen</p>
+      </div>
+
+      <div>
+        <p className="text-4xl font-black text-brand-600 leading-none mb-2">3</p>
+        <p className="text-sm font-semibold text-stone-800 mb-3">Choose Add to Home Screen</p>
+        <img
+          src="/install/ios-step-add-home.svg"
+          alt=""
+          className="w-full rounded-xl border border-stone-100 bg-stone-50"
+          width={280}
+          height={140}
+        />
+        <p className="text-xs text-stone-500 mt-2 text-center">Then tap Add — done.</p>
+      </div>
+    </div>
+  );
+
   return (
     <div className="max-w-md mx-auto py-10 px-4">
       <h1 className="text-2xl font-bold text-stone-800 mb-1">Add {BRAND.name} to your phone</h1>
       <p className="text-stone-500 text-sm mb-8">
         {device === "other"
           ? "On a laptop or desktop, just use this site in your browser — bookmark it if you like. Add-to-home-screen is optional and meant for phones."
-          : "Opens full-screen from your home screen — like a regular app."}
+          : device === "ios" && iosStoreUrl
+            ? `Download ${BRAND.name} from the App Store, or add this site to your Home Screen in Safari if you prefer.`
+            : "Opens full-screen from your home screen — like a regular app."}
       </p>
 
       {/* Send to a friend */}
@@ -130,76 +199,49 @@ function InstallContent() {
         </section>
       )}
 
-      {/* iPhone only */}
+      {/* iPhone / iPad */}
       {device === "ios" && (
-        <section className="mb-10 rounded-2xl border-2 border-stone-200 bg-white p-5 shadow-sm">
-          <h2 className="text-lg font-bold text-stone-900 mb-1">Instructions for iPhone</h2>
-          <p className="text-xs text-stone-500 mb-6">
-            Add-to-home uses <strong>Safari</strong>. Other iPhone browsers (Firefox, Edge, Chrome, …) have to open the page in Safari first — Apple’s rule, not ours.
-          </p>
+        <>
+          {iosStoreUrl ? (
+            <section className="mb-8 rounded-2xl border-2 border-stone-200 bg-white p-5 shadow-sm">
+              <h2 className="text-lg font-bold text-stone-900 mb-1">iPhone &amp; iPad</h2>
+              <p className="text-sm text-stone-600 mb-4">
+                Install the official {BRAND.name} app from the App Store.
+              </p>
+              <a
+                href={iosStoreUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center w-full py-3.5 px-4 rounded-xl bg-brand-600 text-white font-semibold text-sm hover:bg-brand-700"
+              >
+                Download on the App Store
+              </a>
+            </section>
+          ) : null}
 
-          <div className="space-y-8">
-            <div>
-              <p className="text-4xl font-black text-brand-600 leading-none mb-2">1</p>
-              {!iosNotSafari ? (
-                <>
-                  <p className="text-sm font-semibold text-stone-800 mb-2">You’re in Safari</p>
-                  <p className="text-sm text-stone-600 mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
-                    Good — keep going to step 2. (If the Share button isn’t at the bottom, scroll up slightly.)
-                  </p>
-                  <button
-                    type="button"
-                    onClick={copyPageUrlForSafari}
-                    className="w-full py-2 text-sm text-brand-700 font-medium hover:underline"
-                  >
-                    {copiedSafari ? "Copied!" : "Copy link (optional)"}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm font-semibold text-stone-800 mb-2">Switch to Safari</p>
-                  <p className="text-sm text-amber-900 mb-3 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                    You’re in another browser, not Safari — a link can’t jump you into Safari (Apple’s rule). Use the{" "}
-                    <strong>⋯</strong> or <strong>Share</strong> menu → <strong>Open in Safari</strong>, or copy the link and paste it in Safari.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={copyPageUrlForSafari}
-                    className="flex items-center justify-center w-full py-3.5 px-4 rounded-xl bg-brand-600 text-white font-semibold text-sm hover:bg-brand-700"
-                  >
-                    {copiedSafari ? "Copied — open Safari and paste" : "Copy link → paste in Safari"}
-                  </button>
-                </>
-              )}
-            </div>
-
-            <div>
-              <p className="text-4xl font-black text-brand-600 leading-none mb-2">2</p>
-              <p className="text-sm font-semibold text-stone-800 mb-3">Tap the Share button</p>
-              <img
-                src="/install/ios-step-share.svg"
-                alt=""
-                className="w-full rounded-xl border border-stone-100 bg-stone-50"
-                width={280}
-                height={120}
-              />
-              <p className="text-xs text-stone-500 mt-2 text-center">Square with arrow — bottom of the screen</p>
-            </div>
-
-            <div>
-              <p className="text-4xl font-black text-brand-600 leading-none mb-2">3</p>
-              <p className="text-sm font-semibold text-stone-800 mb-3">Choose Add to Home Screen</p>
-              <img
-                src="/install/ios-step-add-home.svg"
-                alt=""
-                className="w-full rounded-xl border border-stone-100 bg-stone-50"
-                width={280}
-                height={140}
-              />
-              <p className="text-xs text-stone-500 mt-2 text-center">Then tap Add — done.</p>
-            </div>
-          </div>
-        </section>
+          {iosStoreUrl ? (
+            <details className="mb-10 rounded-2xl border-2 border-stone-200 bg-white shadow-sm group">
+              <summary className="cursor-pointer list-none px-5 py-4 font-semibold text-stone-800 rounded-2xl [&::-webkit-details-marker]:hidden flex items-center justify-between gap-2">
+                <span>Prefer the website? Add it in Safari</span>
+                <span className="text-stone-400 text-sm shrink-0 group-open:rotate-180 transition-transform">▼</span>
+              </summary>
+              <div className="px-5 pb-5 pt-0 border-t border-stone-100">
+                <p className="text-xs text-stone-500 mb-6 pt-4">
+                  Add-to-home uses <strong>Safari</strong>. Other iPhone browsers (Firefox, Edge, Chrome, …) have to open the page in Safari first — Apple’s rule, not ours.
+                </p>
+                {iosHomeScreenSteps}
+              </div>
+            </details>
+          ) : (
+            <section className="mb-10 rounded-2xl border-2 border-stone-200 bg-white p-5 shadow-sm">
+              <h2 className="text-lg font-bold text-stone-900 mb-1">Instructions for iPhone</h2>
+              <p className="text-xs text-stone-500 mb-6">
+                Add-to-home uses <strong>Safari</strong>. Other iPhone browsers (Firefox, Edge, Chrome, …) have to open the page in Safari first — Apple’s rule, not ours.
+              </p>
+              {iosHomeScreenSteps}
+            </section>
+          )}
+        </>
       )}
 
       {/* Android phone only — single download flow */}

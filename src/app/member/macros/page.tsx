@@ -50,6 +50,8 @@ export default function MemberMacrosPage() {
   const [weekSummary, setWeekSummary] = useState<Record<string, DaySummary> | null>(null);
   const [weighIns, setWeighIns] = useState<{ date: string; weight: number }[]>([]);
   const [weightChartRange, setWeightChartRange] = useState<"week" | "month" | "3m" | "6m" | "1y">("1y");
+  /** Point index whose weight label is shown on hover; last point always shows its label. */
+  const [weightChartHoverIndex, setWeightChartHoverIndex] = useState<number | null>(null);
 
   const today = todayInAppTz(tz);
   const thisWeekMonday = weekStartInAppTz(today);
@@ -208,6 +210,7 @@ export default function MemberMacrosPage() {
               viewBox={isMobile ? "7 -55 495 385" : "-35 -55 570 385"}
               className="w-full h-full block"
               preserveAspectRatio="xMidYMid meet"
+              onPointerLeave={() => setWeightChartHoverIndex(null)}
             >
               {(() => {
                 const pts = weighIns.map((w) => ({ x: w.date, y: w.weight }));
@@ -321,8 +324,14 @@ export default function MemberMacrosPage() {
                       const useSubmarine = isLast && goalWeight != null && lastRecordedWeight != null && goalWeight > lastRecordedWeight;
                       const iconW = 92;
                       const iconH = 72;
+                      const showWeightLabel = isLast || weightChartHoverIndex === i;
                       return (
-                        <g key={p.x}>
+                        <g
+                          key={p.x}
+                          onPointerEnter={() => setWeightChartHoverIndex(i)}
+                          style={{ cursor: "pointer" }}
+                        >
+                          <circle cx={xs[i]} cy={ys[i]} r="22" fill="transparent" />
                           {isLast ? (
                             <image
                               href={useSubmarine ? "/submarine.png" : "/seaplane.png"}
@@ -336,18 +345,20 @@ export default function MemberMacrosPage() {
                           ) : (
                             <circle cx={xs[i]} cy={ys[i]} r="5" fill="var(--brand-600)" />
                           )}
-                          {/* Weight label at each point */}
-                          <text
-                            x={xs[i]}
-                            y={isLast ? ys[i] - iconH - 10 : ys[i] - 14}
-                            textAnchor="middle"
-                            fontSize="20"
-                            fontWeight="600"
-                            fill="var(--brand-700, #0f766e)"
-                            fontFamily="system-ui, sans-serif"
-                          >
-                            {p.y}
-                          </text>
+                          {showWeightLabel ? (
+                            <text
+                              x={xs[i]}
+                              y={isLast ? ys[i] - iconH - 10 : ys[i] - 14}
+                              textAnchor="middle"
+                              fontSize="20"
+                              fontWeight="600"
+                              fill="var(--brand-700, #0f766e)"
+                              fontFamily="system-ui, sans-serif"
+                              style={{ pointerEvents: "none" }}
+                            >
+                              {p.y}
+                            </text>
+                          ) : null}
                         </g>
                       );
                     })}

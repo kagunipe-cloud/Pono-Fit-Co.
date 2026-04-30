@@ -515,8 +515,8 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
       {loading ? (
         <div className="rounded-xl border border-stone-200 bg-white p-12 text-center text-stone-500">Loading…</div>
       ) : (
-        <div className="rounded-xl border border-stone-200 bg-white overflow-hidden">
-          <div className="p-3 border-b border-stone-100 bg-stone-50/80 flex flex-wrap items-center justify-center gap-3 text-sm">
+        <div className="rounded-xl border border-stone-200 bg-white">
+          <div className="p-3 border-b border-stone-100 bg-stone-50/80 flex flex-wrap items-center justify-center gap-3 text-sm rounded-t-xl">
             <span className="font-medium text-stone-600">{weekLabel}</span>
             <span className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-stone-800">Class</span>
             <span className="rounded-lg bg-stone-400 px-2.5 py-1 text-xs font-medium text-stone-100">Unavailable</span>
@@ -529,13 +529,22 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
             )}
             <span className="rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">Available</span>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse" style={{ minWidth: 640 }}>
+          <div className="overflow-x-auto overflow-y-visible rounded-b-xl">
+            <table className="w-full border-collapse relative" style={{ minWidth: 640 }}>
               <thead>
                 <tr>
-                  <th className="w-16 sm:w-20 py-2 px-1 sm:px-2 text-left text-xs font-medium text-stone-500 border-b border-r border-stone-200 bg-stone-50/50">Time</th>
+                  <th
+                    scope="col"
+                    className="w-16 sm:w-20 py-2 px-1 sm:px-2 text-left text-xs font-medium text-stone-500 border-b border-r border-stone-200 bg-stone-50 sticky left-0 top-0 z-[25] shadow-[2px_0_6px_-2px_rgba(0,0,0,0.08)]"
+                  >
+                    Time
+                  </th>
                   {DAY_NAMES.map((name, i) => (
-                    <th key={name} className="py-2 px-1 sm:px-2 text-center text-xs font-medium text-stone-600 border-b border-r border-stone-200 bg-stone-50/50 last:border-r-0">
+                    <th
+                      key={name}
+                      scope="col"
+                      className="py-2 px-1 sm:px-2 text-center text-xs font-medium text-stone-600 border-b border-r border-stone-200 bg-stone-50 last:border-r-0 sticky top-0 z-[20] shadow-[0_2px_6px_-2px_rgba(0,0,0,0.06)]"
+                    >
                       <span className="block">{name}</span>
                       <span className="block text-stone-400 font-normal">{parseInt(dayDates[i].slice(8, 10), 10)}</span>
                     </th>
@@ -545,7 +554,12 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
               <tbody>
                 {timeSlots.map((slotMin, rowIndex) => (
                   <tr key={slotMin} className="border-b border-stone-100 last:border-b-0">
-                    <td className="align-top py-1 px-1 sm:px-2 text-xs text-stone-500 border-r border-stone-200 whitespace-nowrap">{formatTime(slotMin)}</td>
+                    <th
+                      scope="row"
+                      className="align-top py-1 px-1 sm:px-2 text-xs font-normal text-stone-500 border-r border-stone-200 whitespace-nowrap bg-white sticky left-0 z-[15] shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]"
+                    >
+                      {formatTime(slotMin)}
+                    </th>
                     {dayDates.map((date, dateIndex) => {
                       const key = `${date}-${slotMin}`;
                       const item = grid.get(key) ?? ({ type: "available" } as CellItem);
