@@ -112,3 +112,49 @@ export function getSubscriptionDoorAccessValidUntil(
   const d = new Date(other.expiry_date.trim());
   return Number.isNaN(d.getTime()) ? null : d;
 }
+
+/**
+ * Day-pass / pack members get Kisi access via grantAccess at activation. If that was skipped (error, older bug)
+ * or the user already had kisi_id, unlock used to skip grant — Kisi then had no role and the API returned errors
+ * like "no unlocks present". Refresh grant when door access today comes only from a day pass,
+ * not from an active monthly subscription (monthly owns longer valid_until).
+ */
+export function kisiDayPassValidUntilIfUnlockShouldSync(
+  db: ReturnType<typeof getDb>,
+  memberId: string,
+  tz: string
+): Date | null {
+  ensureMembersPassActivationDayColumn(db);
+  const today = todayInAppTz(tz);
+  const hasMonthlyDoor = db
+    .prepare(
+      `SELECT 1 FROM subscriptions
+       WHERE member_id = ? AND status = 'Active'
+         AND pass_credits_remaining IS NULL
+         AND trim(COALESCE(expiry_date, '')) != ''
+         AND expiry_date >= ?
+       LIMIT 1`
+    )
+    .get(memberId, today);
+  if (hasMonthlyDoor) return null;
+
+  const memberAct = db
+    .prepare("SELECT pass_activation_day FROM members WHERE member_id = ?")
+    .get(memberId) as { pass_activation_day: string | null } | undefined;
+  const memberDay = String(memberAct?.pass_activation_day ?? "").trim();
+  if (memberDay === today) {
+    return endOfCalendarDayInTimeZone(memberDay, tz);
+  }
+  const packSub = db
+    .prepare(
+      `SELECT 1 FROM subscriptions
+       WHERE member_id = ? AND status = 'Active' AND pass_credits_remaining IS NOT NULL
+         AND trim(COALESCE(pass_activation_day, '')) = ?
+       LIMIT 1`
+    )
+    .get(memberId, today);
+  if (packSub) {
+    return endOfCalendarDayInTimeZone(today, tz);
+  }
+  return null;
+}

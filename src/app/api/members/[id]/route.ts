@@ -9,6 +9,7 @@ import {
   ensureMembersInsuranceProgramColumn,
   ensureSubscriptionPassPackColumns,
 } from "../../../../lib/db";
+import { getAdminMemberId } from "../../../../lib/admin";
 import { normalizeInsuranceProgram } from "../../../../lib/insurance-program";
 import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../lib/recurring-classes";
 import { todayInAppTz, calendarDaysUntilExpiryYmd } from "../../../../lib/app-timezone";
@@ -193,6 +194,7 @@ export async function PATCH(
     const db = getDb();
     ensureMembersProfileColumns(db);
     ensureMembersInsuranceProgramColumn(db);
+    ensureMembersDoorAccessWaiverExemptColumn(db);
     const isPurelyNumeric = /^\d+$/.test(id);
     const existing = (isPurelyNumeric
       ? db.prepare("SELECT id FROM members WHERE id = ? OR member_id = ?").get(parseInt(id, 10), id)
@@ -204,6 +206,28 @@ export async function PATCH(
     const memberId = existing.id;
 
     const body = await request.json() as Record<string, unknown>;
+
+    let doorAccessWaiverExempt: number | undefined;
+    if (body.door_access_waiver_exempt !== undefined) {
+      const adminMemberId = await getAdminMemberId(request);
+      if (!adminMemberId) {
+        db.close();
+        return NextResponse.json({ error: "Admin only" }, { status: 403 });
+      }
+      const raw = body.door_access_waiver_exempt;
+      const n =
+        raw === true || raw === 1 || raw === "1"
+          ? 1
+          : raw === false || raw === 0 || raw === "0"
+            ? 0
+            : Number.NaN;
+      if (n !== 0 && n !== 1) {
+        db.close();
+        return NextResponse.json({ error: "door_access_waiver_exempt must be 0 or 1" }, { status: 400 });
+      }
+      doorAccessWaiverExempt = n;
+    }
+
     if (body.birthday !== undefined) {
       const r = parseBirthday(String(body.birthday ?? ""));
       if (!r.ok) {
@@ -257,6 +281,10 @@ export async function PATCH(
         values.push(val);
       }
     }
+    if (doorAccessWaiverExempt !== undefined) {
+      updates.push("door_access_waiver_exempt = ?");
+      values.push(doorAccessWaiverExempt);
+    }
     if (updates.length === 0) {
       db.close();
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });
@@ -269,7 +297,7 @@ export async function PATCH(
     stmt.run(...values);
     const row = db.prepare(
       `SELECT id, member_id, first_name, last_name, preferred_name, email, phone, kisi_id, kisi_group_id, join_date, exp_next_payment_date, role, created_at,
-              waiver_signed_at, stripe_customer_id, auto_renew,
+              waiver_signed_at, door_access_waiver_exempt, stripe_customer_id, auto_renew,
               emergency_contact_name, emergency_contact_phone, emergency_info, spirit_animal,
               pronouns, birthday, mailing_address, insurance_program
        FROM members WHERE id = ?`
@@ -284,7 +312,8 @@ export async function PATCH(
     } | undefined;
 
     // Sync email/name to Kisi regardless of current door access (handles cancel-and-return members)
-    const profileChanged = body.email !== undefined || body.first_name !== undefined || body.last_name !== undefined;
+    const profileChanged =
+      body.email !== undefined || body.first_name !== undefined || body.last_name !== undefined;
     const email = row?.email?.trim();
     const name = [row?.first_name, row?.last_name].filter(Boolean).join(" ").trim() || undefined;
     if (profileChanged && email && row) {

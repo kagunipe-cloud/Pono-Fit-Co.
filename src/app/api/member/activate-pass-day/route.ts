@@ -63,6 +63,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "You already activated a pass for today." }, { status: 400 });
   }
 
+  const origin = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
+  const waiverFirst = await ensureWaiverBeforeKisi(
+    memberId,
+    { email: memberRow.email ?? null, first_name: memberRow.first_name ?? null },
+    origin
+  );
+  if (!waiverFirst.shouldGrantKisi) {
+    db.close();
+    return NextResponse.json(
+      {
+        error:
+          "Sign the liability waiver in the app before activating a day pass. My Account → waivers, or ask staff for help.",
+      },
+      { status: 403 }
+    );
+  }
+
   const insertUse = db.prepare(
     `INSERT INTO day_pass_credit_ledger (member_id, amount, reason, reference_type, reference_id)
      VALUES (?, -1, 'activate', 'day', ?)`
@@ -86,16 +103,9 @@ export async function POST(request: NextRequest) {
   const remaining = getMemberDayPassLedgerBalance(db, memberId);
   db.close();
 
-  const origin = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
-  const waiver = await ensureWaiverBeforeKisi(
-    memberId,
-    { email: memberRow.email ?? null, first_name: memberRow.first_name ?? null },
-    origin
-  );
-
   const validUntil = endOfCalendarDayInTimeZone(today, tz);
 
-  if (waiver.shouldGrantKisi && memberRow.email?.trim()) {
+  if (memberRow.email?.trim()) {
     try {
       let kisiId = memberRow.kisi_id?.trim() || null;
       if (!kisiId) {

@@ -249,6 +249,7 @@ export async function POST(request: NextRequest) {
     const cartPromoForRenewal = cart.promo_code?.trim() || null;
     const cartRenewalDiscountPercent = getRenewalDiscountPercentForPromo(db, cartPromoForRenewal);
 
+    let purchasedDayPassPack = false;
     db.exec("BEGIN TRANSACTION");
     try {
       for (const it of items) {
@@ -291,6 +292,7 @@ export async function POST(request: NextRequest) {
                 `INSERT INTO day_pass_credit_ledger (member_id, amount, reason, reference_type, reference_id)
                  VALUES (?, ?, 'purchase', 'sale', ?)`
               ).run(member_id, credits, sales_id);
+              purchasedDayPassPack = true;
               continue;
             }
             emailLineItems.push({ name: plan.plan_name ?? "Membership", quantity: it.quantity, price: formatPrice(effUnit) });
@@ -681,13 +683,28 @@ export async function POST(request: NextRequest) {
         }
       })();
 
+      let confirmMessage: string;
+      if (purchasedDayPassPack) {
+        confirmMessage = waiver.shouldGrantKisi
+          ? "Payment confirmed. Your day passes are banked. On days you visit, open My Membership, tap Activate pass for today, then use Unlock Door."
+          : "Payment confirmed. Your day passes are banked. Sign the liability waiver next, then open My Membership to activate a day when you visit.";
+        if (kisiGrants.length > 0) {
+          confirmMessage += " Your recurring membership was also set up.";
+        }
+      } else if (waiver.shouldGrantKisi) {
+        confirmMessage =
+          "Payment confirmed. Membership/bookings created. Kisi notified for door access (if configured).";
+      } else {
+        confirmMessage = "Payment confirmed. Sign the liability waiver in the app to activate door access.";
+      }
+
       return NextResponse.json({
         success: true,
         sale_id: sales_id,
         grand_total,
-        message: waiver.shouldGrantKisi
-          ? "Payment confirmed. Membership/bookings created. Kisi notified for door access (if configured)."
-          : "Payment confirmed. Sign the liability waiver in the app to activate door access.",
+        message: confirmMessage,
+        day_pass_pack_purchased: purchasedDayPassPack,
+        waiver_complete_for_door: waiver.shouldGrantKisi,
       });
     } catch (e) {
       db.exec("ROLLBACK");

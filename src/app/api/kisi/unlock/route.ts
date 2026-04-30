@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone } from "../../../../lib/db";
 import { createLoginForUser, ensureKisiUser, grantAccess, unlockWithUserSecret } from "../../../../lib/kisi";
-import { getSubscriptionDoorAccessValidUntil } from "../../../../lib/pass-access";
+import { getSubscriptionDoorAccessValidUntil, kisiDayPassValidUntilIfUnlockShouldSync } from "../../../../lib/pass-access";
 import { addOccupancyEntry, ensureOccupancyTable } from "../../../../lib/occupancy";
 
 export const dynamic = "force-dynamic";
@@ -49,9 +49,10 @@ export async function POST(request: NextRequest) {
       kisiId = await ensureKisiUser(member.email.trim(), name);
       db.prepare("UPDATE members SET kisi_id = ? WHERE member_id = ?").run(kisiId, member_id);
     }
-    db.close();
+    const tzUnlock = getAppTimezone(db);
+    const dayPassValidUntil = kisiDayPassValidUntilIfUnlockShouldSync(db, member_id, tzUnlock);
 
-    // One-time grant when we first attach kisi_id. Purchase / waiver / pass activation / complimentary already call grantAccess elsewhere.
+    // One-time grant when we first attach kisi_id. Day-pass-only: re-grant here if activation didn't (or failed).
     if (needsInitialKisiGrant) {
       try {
         const db2 = getDb();
@@ -64,7 +65,15 @@ export async function POST(request: NextRequest) {
       } catch (e) {
         console.warn("[Kisi unlock] grant check failed, continuing:", e);
       }
+    } else if (dayPassValidUntil && dayPassValidUntil.getTime() > Date.now()) {
+      try {
+        await grantAccess(kisiId, dayPassValidUntil);
+      } catch (e) {
+        console.warn("[Kisi unlock] day-pass Kisi sync failed:", e);
+      }
     }
+
+    db.close();
 
     const secret = await createLoginForUser(member.email);
     await unlockWithUserSecret(secret, {

@@ -25,6 +25,7 @@ function MemberMembershipContent() {
     today_ymd?: string;
     day_pass_credits?: number;
     pass_activation_day?: string | null;
+    waiver_complete_for_door?: boolean;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingCard, setUpdatingCard] = useState(false);
@@ -123,6 +124,8 @@ function MemberMembershipContent() {
   const todayYmd = (data.today_ymd ?? "").trim();
   const dayPassCredits = Number(data.day_pass_credits ?? 0);
   const passAct = String(data.pass_activation_day ?? "").trim();
+  const waiverOk = data.waiver_complete_for_door !== false;
+  const needsWaiverForDayPass = dayPassCredits > 0 && !waiverOk;
 
   return (
     <div className="max-w-2xl mx-auto p-6">
@@ -189,19 +192,38 @@ function MemberMembershipContent() {
       {(dayPassCredits > 0 || (todayYmd && passAct === todayYmd)) && (
         <div className="mb-6 p-4 rounded-xl border border-brand-200 bg-brand-50/50">
           <h2 className="text-sm font-semibold text-stone-800 mb-1">Day pass credits</h2>
+          {needsWaiverForDayPass && (
+            <div className="mb-3 p-3 rounded-lg border border-amber-300 bg-amber-50 text-amber-950">
+              <p className="text-sm font-medium mb-1">Sign the liability waiver first</p>
+              <p className="text-sm text-amber-900/90 mb-3">
+                You have banked day passes, but the waiver must be on file before you can activate a day and use
+                the door. This is separate from checkout.
+              </p>
+              <Link
+                href="/sign-waiver"
+                className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-amber-800 text-white text-sm font-medium hover:bg-amber-900"
+              >
+                Sign waiver now
+              </Link>
+            </div>
+          )}
           <p className="text-sm text-stone-600 mb-2">
             {dayPassCredits > 0
               ? `${dayPassCredits} day${dayPassCredits !== 1 ? "s" : ""} banked — activate when you plan to visit.`
               : "No banked days left."}
           </p>
-          <p className="text-xs text-stone-500 mb-2">Door access applies for that calendar day (waiver may be required).</p>
+          <p className="text-xs text-stone-500 mb-2">
+            {needsWaiverForDayPass
+              ? "Activate will stay disabled until the waiver is signed."
+              : "On a visit day: activate below, then use Unlock Door on the home screen."}
+          </p>
           {todayYmd && passAct === todayYmd && (
             <p className="text-sm font-medium text-green-800 mb-2">Pass active for today — you can unlock the door.</p>
           )}
           {activateMessage && <p className="text-sm text-stone-700 mb-2">{activateMessage}</p>}
           <button
             type="button"
-            disabled={activatingPass || dayPassCredits <= 0 || (!!todayYmd && passAct === todayYmd)}
+            disabled={activatingPass || dayPassCredits <= 0 || (!!todayYmd && passAct === todayYmd) || needsWaiverForDayPass}
             onClick={() => void activatePassForToday()}
             className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >

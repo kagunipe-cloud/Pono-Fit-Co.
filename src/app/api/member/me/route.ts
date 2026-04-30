@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensureMembersAutoRenewColumn, ensureMembersProfileColumns } from "../../../../lib/db";
+import {
+  getDb,
+  getAppTimezone,
+  ensureMembersAutoRenewColumn,
+  ensureMembersProfileColumns,
+  ensureMembersDoorAccessWaiverExemptColumn,
+} from "../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../lib/recurring-classes";
 import { getMemberIdFromSession } from "../../../../lib/session";
@@ -25,12 +31,13 @@ export async function GET() {
     const db = getDb();
     ensureMembersAutoRenewColumn(db);
     ensureMembersProfileColumns(db);
+    ensureMembersDoorAccessWaiverExemptColumn(db);
     ensureDayPassCreditLedger(db);
     ensureMembersPassActivationDayColumn(db);
     migrateLegacyPassPackSubscriptionsToLedger(db);
 
     const member = db.prepare(
-      "SELECT member_id, first_name, last_name, preferred_name, email, stripe_customer_id, auto_renew, pass_activation_day FROM members WHERE member_id = ?"
+      "SELECT member_id, first_name, last_name, preferred_name, email, stripe_customer_id, auto_renew, pass_activation_day, waiver_signed_at, door_access_waiver_exempt FROM members WHERE member_id = ?"
     ).get(memberId) as {
       member_id: string;
       first_name: string | null;
@@ -40,6 +47,8 @@ export async function GET() {
       stripe_customer_id: string | null;
       auto_renew?: number | null;
       pass_activation_day?: string | null;
+      waiver_signed_at?: string | null;
+      door_access_waiver_exempt?: number | null;
     } | undefined;
     if (!member) {
       db.close();
@@ -174,6 +183,8 @@ export async function GET() {
 
     const legalName = [member.first_name, member.last_name].filter(Boolean).join(" ") || "Member";
     const displayName = (member.preferred_name ?? "").trim() || legalName;
+    const waiverCompleteForDoor =
+      Boolean(String(member.waiver_signed_at ?? "").trim()) || Number(member.door_access_waiver_exempt) === 1;
 
     return NextResponse.json({
       member: {
@@ -196,6 +207,7 @@ export async function GET() {
       show_activate_pass_hint: showActivatePassHint,
       has_saved_card: hasBillableStripeCustomer(member.stripe_customer_id),
       auto_renew: (member.auto_renew ?? 0) === 1,
+      waiver_complete_for_door: waiverCompleteForDoor,
     });
   } catch (err) {
     console.error(err);

@@ -108,6 +108,7 @@ export default function MemberDetailPage() {
   const [adjustSubId, setAdjustSubId] = useState<string | null>(null);
   const [adjustDateStr, setAdjustDateStr] = useState("");
   const [waiverResult, setWaiverResult] = useState<{ message: string; url?: string } | null>(null);
+  const [waiverExemptSaving, setWaiverExemptSaving] = useState(false);
   const [passwordResetMessage, setPasswordResetMessage] = useState<string | null>(null);
   const [unlocks, setUnlocks] = useState<{ id: number; lock_id: number | null; lock_name: string | null; success: number; happened_at: string }[]>([]);
   const searchParams = useSearchParams();
@@ -282,6 +283,33 @@ export default function MemberDetailPage() {
       setWaiverResult({ message: "Failed to send waiver." });
     } finally {
       setSendingWaiver(false);
+    }
+  }
+
+  async function setDoorAccessWaiverExempt(next: 0 | 1) {
+    if (!data?.member) return;
+    const msg =
+      next === 1
+        ? "Allow this member to use door access and activate day passes without a signed waiver? Use sparingly (staff exception)."
+        : "Remove the waiver exception? They will need a signed waiver again for door / day-pass activation.";
+    if (!window.confirm(msg)) return;
+    setWaiverExemptSaving(true);
+    try {
+      const res = await fetch(`/api/members/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ door_access_waiver_exempt: next }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        window.alert(json.error ?? "Could not update waiver exception.");
+        return;
+      }
+      await fetchMember();
+    } catch {
+      window.alert("Could not update waiver exception.");
+    } finally {
+      setWaiverExemptSaving(false);
     }
   }
 
@@ -913,10 +941,33 @@ export default function MemberDetailPage() {
             )}
             {isAdmin && Number(member.door_access_waiver_exempt ?? 0) === 1 ? (
               <p className="mt-2 text-xs text-stone-600 max-w-xl">
-                Legacy door access: Kisi renewals can run without a signed waiver (one-time migration cohort). New
-                members are not added to this cohort automatically.
+                Waiver bypass: door access and day-pass activation are allowed without a signed waiver (legacy cohort
+                or staff exception).
               </p>
             ) : null}
+            {isAdmin && (
+              <div className="mt-2 flex flex-wrap gap-2 items-center">
+                {Number(member.door_access_waiver_exempt ?? 0) !== 1 ? (
+                  <button
+                    type="button"
+                    disabled={waiverExemptSaving}
+                    onClick={() => void setDoorAccessWaiverExempt(1)}
+                    className="px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-sm font-medium hover:bg-amber-100 disabled:opacity-50"
+                  >
+                    {waiverExemptSaving ? "Saving…" : "Allow door / day passes without signed waiver"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={waiverExemptSaving}
+                    onClick={() => void setDoorAccessWaiverExempt(0)}
+                    className="px-3 py-1.5 rounded-lg border border-stone-200 text-stone-700 text-sm font-medium hover:bg-stone-50 disabled:opacity-50"
+                  >
+                    {waiverExemptSaving ? "Saving…" : "Remove waiver exception"}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <Link
