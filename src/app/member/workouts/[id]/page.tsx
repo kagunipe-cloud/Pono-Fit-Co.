@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { getWeightComparisonWithArticle } from "@/lib/workout-congrats";
@@ -107,7 +108,7 @@ function PRInfo({ exerciseId, exerciseName, weight, excludeWorkoutId }: PRInfoPr
         .finally(() => setLoading(false));
     }, 300);
     return () => clearTimeout(t);
-  }, [exerciseId, exerciseName, weight, excludeWorkoutId, valid]);
+  }, [exerciseId, exerciseName, weight, weightNum, excludeWorkoutId, valid]);
 
   if (!valid || (data?.pr_reps == null && data?.last_session_reps == null && !loading)) return null;
   if (loading) return <span className="text-xs text-stone-400">Loading PR…</span>;
@@ -226,7 +227,7 @@ export default function MemberWorkoutDetailPage() {
     return map;
   }, [sourceWorkout]);
 
-  function fetchWorkout() {
+  const fetchWorkout = useCallback(() => {
     fetch(`/api/member/workouts/${id}`)
       .then((res) => {
         if (res.status === 401) router.replace("/login");
@@ -239,11 +240,11 @@ export default function MemberWorkoutDetailPage() {
       })
       .catch(() => setWorkout(null))
       .finally(() => setLoading(false));
-  }
+  }, [id, router]);
 
   useEffect(() => {
     fetchWorkout();
-  }, [id]);
+  }, [fetchWorkout]);
 
   function fetchMy1rm() {
     fetch("/api/member/workouts/my-1rm")
@@ -2184,9 +2185,11 @@ export default function MemberWorkoutDetailPage() {
           >
             {congratsPrCount > 0 && (
               <div className="mb-4 flex flex-col items-center">
-                <img
+                <Image
                   src="/PR_Badge.png"
                   alt="PR Badge"
+                  width={96}
+                  height={96}
                   className="w-24 h-24 object-contain"
                 />
                 <p className="text-xl font-bold text-stone-800 mt-2">
@@ -2259,10 +2262,12 @@ export default function MemberWorkoutDetailPage() {
             </div>
             <div className="p-4 overflow-y-auto space-y-4">
               {instructionsModal.exerciseId && (
-                <img
+                <Image
                   src={`/api/exercises/${instructionsModal.exerciseId}/image`}
                   alt={instructionsModal.exerciseName}
-                  className="w-full rounded-lg border border-stone-200 object-cover max-h-72"
+                  width={640}
+                  height={360}
+                  className="w-full h-auto max-h-72 rounded-lg border border-stone-200 object-cover"
                 />
               )}
               {instructionsModal.instructions.length === 0 ? (

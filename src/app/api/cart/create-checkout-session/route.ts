@@ -3,6 +3,7 @@ import { getDb, ensureMembersStripeColumn } from "../../../../lib/db";
 import { ensureCartTables } from "../../../../lib/cart";
 import { getEffectiveUnitPriceString } from "../../../../lib/cart-line-prices";
 import { ensureRecurringClassesTables, ensureClassesRecurringColumns, ensureClassOccurrencesClassId } from "../../../../lib/recurring-classes";
+import { isOpenGroupSessionKind } from "../../../../lib/open-group-pt";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureDiscountsTable } from "../../../../lib/discounts";
 import { getMemberIdFromSession } from "../../../../lib/session";
@@ -67,6 +68,25 @@ export async function POST(request: NextRequest) {
       unit_price_override?: string | null;
       gift_recipient_email?: string | null;
     }[];
+
+    for (const it of rawItems) {
+      if (it.product_type !== "class_occurrence") continue;
+      const og = db
+        .prepare(
+          `SELECT COALESCE(r.session_kind, 'standard') AS session_kind
+           FROM class_occurrences o
+           LEFT JOIN recurring_classes r ON r.id = o.recurring_class_id
+           WHERE o.id = ?`
+        )
+        .get(it.product_id) as { session_kind: string } | undefined;
+      if (og && isOpenGroupSessionKind(og.session_kind)) {
+        db.close();
+        return NextResponse.json(
+          { error: "Open Group PT is booked on the schedule, not checkout. Remove it from your cart." },
+          { status: 400 }
+        );
+      }
+    }
 
     let hasMonthlyMembershipInCart = false;
     // ACH allowed when: (a) cart has ONLY monthly membership plans, OR (b) member has active monthly membership (Option A)

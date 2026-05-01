@@ -99,6 +99,33 @@ export function ensureRecurringClassesTables(db: ReturnType<typeof getDb>) {
     CREATE INDEX IF NOT EXISTS idx_occurrence_bookings_occurrence ON occurrence_bookings(class_occurrence_id);
   `);
   try {
+    db.exec("ALTER TABLE recurring_classes ADD COLUMN session_kind TEXT DEFAULT 'standard'");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE recurring_classes ADD COLUMN flat_session_price TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE class_occurrences ADD COLUMN open_group_share_token TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_class_occurrences_open_group_token ON class_occurrences(open_group_share_token) WHERE open_group_share_token IS NOT NULL AND TRIM(open_group_share_token) != ''"
+    );
+  } catch {
+    /* ignore */
+  }
+  try {
+    db.exec("ALTER TABLE occurrence_bookings ADD COLUMN booking_role TEXT DEFAULT 'standard'");
+  } catch {
+    /* already exists */
+  }
+  try {
     db.exec("ALTER TABLE recurring_classes ADD COLUMN price TEXT");
   } catch {
     /* already exists on older DBs that had CREATE without price */

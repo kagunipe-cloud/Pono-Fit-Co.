@@ -74,7 +74,7 @@ export default function DataTable({
     } else {
       initialDone.current = true;
     }
-  }, [debouncedSearch]);
+  }, [debouncedSearch, fetchData]);
 
   const displayValue = (row: Record<string, unknown>, key: string): string => {
     const v = row[key];

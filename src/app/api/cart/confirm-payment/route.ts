@@ -26,6 +26,7 @@ import {
 import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../lib/kisi";
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
 import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
+import { isOpenGroupSessionKind } from "../../../../lib/open-group-pt";
 import { ensureDiscountsTable, getRenewalDiscountPercentForPromo } from "../../../../lib/discounts";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureTrainerClient, getTrainerMemberIdByDisplayName } from "../../../../lib/trainer-clients";
@@ -213,6 +214,26 @@ export async function POST(request: NextRequest) {
     if (items.length === 0) {
       db.close();
       return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
+    }
+
+    ensureRecurringClassesTables(db);
+    for (const it of items) {
+      if (it.product_type !== "class_occurrence") continue;
+      const og = db
+        .prepare(
+          `SELECT COALESCE(r.session_kind, 'standard') AS session_kind
+           FROM class_occurrences o
+           LEFT JOIN recurring_classes r ON r.id = o.recurring_class_id
+           WHERE o.id = ?`
+        )
+        .get(it.product_id) as { session_kind: string } | undefined;
+      if (og && isOpenGroupSessionKind(og.session_kind)) {
+        db.close();
+        return NextResponse.json(
+          { error: "Open Group PT cannot be purchased here — book from the schedule (pay at the gym)." },
+          { status: 400 }
+        );
+      }
     }
 
     const sales_id = randomUUID().slice(0, 8);

@@ -4,9 +4,27 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { formatDateForDisplay } from "@/lib/app-timezone";
+import { isOpenGroupSessionKind, OPEN_GROUP_DEFAULT_FLAT_PRICE } from "@/lib/open-group-pt";
 
-type Member = { booking_id: number; member_id: string; first_name: string | null; last_name: string | null; email: string | null };
-type Roster = { occurrence: { class_name: string; occurrence_date: string; occurrence_time: string; instructor: string | null }; members: Member[] };
+type Member = {
+  booking_id: number;
+  member_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  booking_role?: string;
+};
+type Roster = {
+  occurrence: {
+    class_name: string;
+    occurrence_date: string;
+    occurrence_time: string;
+    instructor: string | null;
+    session_kind?: string;
+    flat_session_price?: string | null;
+  };
+  members: Member[];
+};
 
 export default function RosterPage() {
   const params = useParams();
@@ -65,6 +83,11 @@ export default function RosterPage() {
       <Link href="/schedule" className="text-stone-500 hover:text-stone-700 text-sm mb-4 inline-block">← Schedule</Link>
       <h1 className="text-2xl font-bold text-stone-800 mb-1">{data.occurrence.class_name}</h1>
       <p className="text-stone-500 mb-6">{formatDateForDisplay(data.occurrence.occurrence_date)} at {data.occurrence.occurrence_time} {data.occurrence.instructor ? `· ${data.occurrence.instructor}` : ""}</p>
+      {isOpenGroupSessionKind(data.occurrence.session_kind) && (
+        <p className="mb-6 text-sm rounded-lg border border-orange-200 bg-orange-50 px-3 py-2 text-orange-950">
+          Open Group PT — <strong>${data.occurrence.flat_session_price ?? OPEN_GROUP_DEFAULT_FLAT_PRICE} flat</strong> at the gym for the whole group (not charged online per person).
+        </p>
+      )}
       <h2 className="font-semibold text-stone-700 mb-2">Who’s Booked ({data.members.length})</h2>
       {data.members.length === 0 ? (
         <p className="text-stone-500">No one has booked yet.</p>
@@ -72,7 +95,18 @@ export default function RosterPage() {
         <ul className="space-y-2">
           {data.members.map((m) => (
             <li key={m.member_id} className="flex flex-wrap justify-between items-center gap-2 py-2 border-b border-stone-100">
-              <span className="font-medium text-stone-800">{name(m)}</span>
+              <span className="font-medium text-stone-800 flex flex-wrap items-center gap-2">
+                {name(m)}
+                {m.booking_role === "organizer" ? (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-900 border border-orange-200">
+                    Organizer
+                  </span>
+                ) : m.booking_role === "guest" ? (
+                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-stone-100 text-stone-700 border border-stone-200">
+                    Guest
+                  </span>
+                ) : null}
+              </span>
               <div className="flex flex-wrap items-center gap-3">
                 <span className="text-sm text-stone-500">{m.email ?? "—"}</span>
                 <Link href={`/members/${encodeURIComponent(m.member_id)}`} className="text-xs text-brand-600 hover:underline font-medium whitespace-nowrap">

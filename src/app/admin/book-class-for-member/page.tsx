@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatDateForDisplay } from "@/lib/app-timezone";
+import { isOpenGroupSessionKind, OPEN_GROUP_DEFAULT_FLAT_PRICE } from "@/lib/open-group-pt";
 
 type Member = { member_id: string; first_name: string | null; last_name: string | null; email: string | null };
 type Occurrence = {
@@ -15,6 +16,8 @@ type Occurrence = {
   instructor: string | null;
   price: string;
   booked_count: number;
+  session_kind?: string;
+  flat_session_price?: string | null;
 };
 
 function AdminBookClassForMemberContent() {
@@ -99,6 +102,7 @@ function AdminBookClassForMemberContent() {
   }
 
   const canSubmit = selectedMemberId && occurrence;
+  const isOpenGroup = occurrence ? isOpenGroupSessionKind(occurrence.session_kind) : false;
 
   return (
     <div className="max-w-lg mx-auto">
@@ -115,14 +119,31 @@ function AdminBookClassForMemberContent() {
       )}
 
       {occurrence && (
-        <div className="mb-4 p-3 rounded-lg bg-stone-100 text-sm">
-          <span className="font-medium text-stone-700">{occurrence.class_name ?? "Class"}</span>
-          {occurrence.instructor && <span className="text-stone-500"> — {occurrence.instructor}</span>}
-          <span className="text-stone-500 block mt-0.5">
-            {formatDateForDisplay(occurrence.occurrence_date)} at {occurrence.occurrence_time} · ${occurrence.price}
-            {occurrence.capacity != null && ` · ${occurrence.booked_count}/${occurrence.capacity} booked`}
-          </span>
-        </div>
+        <>
+          {isOpenGroup && (
+            <div className="mb-4 p-3 rounded-lg border border-orange-200 bg-orange-50 text-sm text-orange-950">
+              <strong>Open Group Personal Training</strong> is booked by members from the schedule (reserve slot / invite link).
+              Cart checkout is not used. Collect{" "}
+              <strong>${occurrence.flat_session_price ?? OPEN_GROUP_DEFAULT_FLAT_PRICE} flat</strong> at the gym for the session.
+              Share{" "}
+              <Link
+                href={`/member/book-classes?occurrence=${occurrence.id}`}
+                className="underline font-medium text-orange-900"
+              >
+                member book link for this time
+              </Link>{" "}
+              if someone needs help finding it.
+            </div>
+          )}
+          <div className="mb-4 p-3 rounded-lg bg-stone-100 text-sm">
+            <span className="font-medium text-stone-700">{occurrence.class_name ?? "Class"}</span>
+            {occurrence.instructor && <span className="text-stone-500"> — {occurrence.instructor}</span>}
+            <span className="text-stone-500 block mt-0.5">
+              {formatDateForDisplay(occurrence.occurrence_date)} at {occurrence.occurrence_time} · ${occurrence.price}
+              {occurrence.capacity != null && ` · ${occurrence.booked_count}/${occurrence.capacity} booked`}
+            </span>
+          </div>
+        </>
       )}
 
       <div className="space-y-4 mb-6">
@@ -157,7 +178,7 @@ function AdminBookClassForMemberContent() {
         <button
           type="button"
           onClick={handleAddToCart}
-          disabled={!canSubmit || submitting}
+          disabled={!canSubmit || submitting || isOpenGroup}
           className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
         >
           {submitting ? "Adding…" : "Add to cart & go to checkout"}

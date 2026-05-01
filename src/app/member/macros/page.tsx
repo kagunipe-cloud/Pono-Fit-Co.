@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { formatDateForDisplay, formatInAppTz, formatWeekdayShortInAppTz, todayInAppTz, weekStartInAppTz } from "@/lib/app-timezone";
+import { useAppTimezone } from "@/lib/settings-context";
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -13,9 +16,6 @@ function useIsMobile() {
   }, []);
   return isMobile;
 }
-import { useRouter } from "next/navigation";
-import { formatDateForDisplay, formatInAppTz, formatWeekdayShortInAppTz, todayInAppTz, weekStartInAppTz } from "@/lib/app-timezone";
-import { useAppTimezone } from "@/lib/settings-context";
 
 type JournalDay = { id: number; member_id: string; date: string; created_at: string };
 type MacroGoals = { calories_goal: number | null; protein_pct: number | null; fat_pct: number | null; carbs_pct: number | null; weight_goal: number | null; fiber_goal: number | null };
@@ -33,6 +33,14 @@ function weekLabel(monday: string, tz: string): string {
 function daySlug(d: string, tz: string): string {
   return formatWeekdayShortInAppTz(d, tz);
 }
+
+const WEIGH_IN_RANGE_DAYS: Record<"week" | "month" | "3m" | "6m" | "1y", number> = {
+  week: 7,
+  month: 30,
+  "3m": 90,
+  "6m": 180,
+  "1y": 365,
+};
 
 export default function MemberMacrosPage() {
   const router = useRouter();
@@ -57,7 +65,7 @@ export default function MemberMacrosPage() {
   const thisWeekMonday = weekStartInAppTz(today);
   const weekList = weeks.includes(thisWeekMonday) ? weeks : [thisWeekMonday, ...weeks];
 
-  function fetchWeeks() {
+  const fetchWeeks = useCallback(() => {
     fetch("/api/member/journal/weeks")
       .then((res) => {
         if (res.status === 401) {
@@ -69,11 +77,11 @@ export default function MemberMacrosPage() {
       .then((list: string[]) => setWeeks(Array.isArray(list) ? list : []))
       .catch(() => setWeeks([]))
       .finally(() => setLoading(false));
-  }
+  }, [router]);
 
   useEffect(() => {
     fetchWeeks();
-  }, [router]);
+  }, [fetchWeeks]);
 
   useEffect(() => {
     fetch("/api/member/macro-goals")
@@ -149,9 +157,8 @@ export default function MemberMacrosPage() {
   }, [selectedWeek]);
 
   const toDate = today;
-  const fromDateByRange: Record<typeof weightChartRange, number> = { week: 7, month: 30, "3m": 90, "6m": 180, "1y": 365 };
   useEffect(() => {
-    const days = fromDateByRange[weightChartRange];
+    const days = WEIGH_IN_RANGE_DAYS[weightChartRange];
     const from = new Date(toDate + "T12:00:00Z");
     from.setUTCDate(from.getUTCDate() - days);
     const fromStr = from.toISOString().slice(0, 10);

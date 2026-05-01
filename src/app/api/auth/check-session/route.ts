@@ -4,7 +4,7 @@ import { getMemberIdFromSession, clearMemberSession } from "../../../../lib/sess
 
 export const dynamic = "force-dynamic";
 
-/** GET: Returns { ok, role?, member_id? } for middleware. No redirect. */
+/** GET: Returns { ok, role?, member_id? } for src/proxy.ts. No redirect. */
 export async function GET() {
   try {
     const memberId = await getMemberIdFromSession();

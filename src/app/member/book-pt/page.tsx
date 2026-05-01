@@ -82,7 +82,7 @@ function MemberBookPTContent() {
         }
       })
       .catch(() => setSessionProducts([]));
-  }, [selectedTrainerNameFromUrl]);
+  }, [selectedTrainerNameFromUrl, productIdFromUrl]);
 
   const slotProduct = useMemo(
     () => (selectedProductId != null ? sessionProducts.find((p) => p.id === selectedProductId) ?? null : null),

@@ -324,7 +324,7 @@ export default function MemberCartPage() {
     }
   }
 
-  async function useCreditForClass(cartItemId: number, occurrenceId: number) {
+  async function bookClassWithCredit(cartItemId: number, occurrenceId: number) {
     setUseCreditConfirm(null);
     setUseCreditLoadingId(cartItemId);
     try {
@@ -1022,7 +1022,7 @@ export default function MemberCartPage() {
               </button>
               <button
                 type="button"
-                onClick={() => useCreditForClass(useCreditConfirm.cartItemId, useCreditConfirm.occurrenceId)}
+                onClick={() => bookClassWithCredit(useCreditConfirm.cartItemId, useCreditConfirm.occurrenceId)}
                 disabled={useCreditLoadingId === useCreditConfirm.cartItemId}
                 className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
               >

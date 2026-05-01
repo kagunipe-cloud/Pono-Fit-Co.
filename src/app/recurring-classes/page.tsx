@@ -2,8 +2,24 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  OPEN_GROUP_DEFAULT_FLAT_PRICE,
+  OPEN_GROUP_MAX_PARTICIPANTS,
+  SESSION_KIND_OPEN_GROUP_PT,
+  SESSION_KIND_STANDARD,
+  isOpenGroupSessionKind,
+} from "@/lib/open-group-pt";
 
-type RecurringClass = { id: number; name: string; instructor: string | null; days_of_week: string; time: string; capacity: number };
+type RecurringClass = {
+  id: number;
+  name: string;
+  instructor: string | null;
+  days_of_week: string;
+  time: string;
+  capacity: number;
+  session_kind?: string | null;
+  flat_session_price?: string | null;
+};
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -16,7 +32,15 @@ export default function RecurringClassesPage() {
   const [loading, setLoading] = useState(true);
   const [generatingId, setGeneratingId] = useState<number | null>(null);
   const [generateWeeks, setGenerateWeeks] = useState(12);
-  const [form, setForm] = useState({ name: "", instructor: "", days_of_week: "2,4", time: "18:00", capacity: 20 });
+  const [form, setForm] = useState({
+    name: "",
+    instructor: "",
+    days_of_week: "2,4",
+    time: "18:00",
+    capacity: 20,
+    session_kind: SESSION_KIND_STANDARD,
+    flat_session_price: OPEN_GROUP_DEFAULT_FLAT_PRICE,
+  });
   const [submitting, setSubmitting] = useState(false);
 
   function fetchList() {
@@ -40,7 +64,15 @@ export default function RecurringClassesPage() {
         body: JSON.stringify(form),
       });
       if (res.ok) {
-        setForm({ name: "", instructor: "", days_of_week: "2,4", time: "18:00", capacity: 20 });
+        setForm({
+          name: "",
+          instructor: "",
+          days_of_week: "2,4",
+          time: "18:00",
+          capacity: 20,
+          session_kind: SESSION_KIND_STANDARD,
+          flat_session_price: OPEN_GROUP_DEFAULT_FLAT_PRICE,
+        });
         fetchList();
       }
     } finally {
@@ -91,9 +123,59 @@ export default function RecurringClassesPage() {
             <label className="block text-sm font-medium text-stone-600 mb-1">Time</label>
             <input value={form.time} onChange={(e) => setForm((f) => ({ ...f, time: e.target.value }))} className="w-full px-3 py-2 rounded-lg border border-stone-200" placeholder="18:00" />
           </div>
+          <div className="sm:col-span-2">
+            <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-stone-200 p-3 hover:bg-stone-50">
+              <input
+                type="checkbox"
+                className="mt-1 text-brand-600"
+                checked={form.session_kind === SESSION_KIND_OPEN_GROUP_PT}
+                onChange={(e) =>
+                  setForm((f) =>
+                    e.target.checked
+                      ? {
+                          ...f,
+                          session_kind: SESSION_KIND_OPEN_GROUP_PT,
+                          capacity: OPEN_GROUP_MAX_PARTICIPANTS,
+                          name: f.name.trim() ? f.name : "Open Group Personal Training",
+                          flat_session_price: f.flat_session_price || OPEN_GROUP_DEFAULT_FLAT_PRICE,
+                        }
+                      : { ...f, session_kind: SESSION_KIND_STANDARD, capacity: 20 }
+                  )
+                }
+              />
+              <span>
+                <span className="font-medium text-stone-800">Open Group Personal Training</span>
+                <span className="text-sm text-stone-500 block mt-0.5">
+                  Shows <strong className="text-orange-800">orange</strong> on the schedule. First member reserves the slot (free signup); they share an invite link for up to{" "}
+                  {OPEN_GROUP_MAX_PARTICIPANTS - 1} friends. One flat fee (${form.flat_session_price || OPEN_GROUP_DEFAULT_FLAT_PRICE} default) is collected at the gym for the whole group.
+                </span>
+              </span>
+            </label>
+          </div>
+          {form.session_kind === SESSION_KIND_OPEN_GROUP_PT && (
+            <div>
+              <label className="block text-sm font-medium text-stone-600 mb-1">Flat desk total ($)</label>
+              <input
+                value={form.flat_session_price}
+                onChange={(e) => setForm((f) => ({ ...f, flat_session_price: e.target.value }))}
+                className="w-full px-3 py-2 rounded-lg border border-stone-200"
+                placeholder={OPEN_GROUP_DEFAULT_FLAT_PRICE}
+              />
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-stone-600 mb-1">Capacity</label>
-            <input type="number" min={1} value={form.capacity} onChange={(e) => setForm((f) => ({ ...f, capacity: parseInt(e.target.value, 10) || 20 }))} className="w-full px-3 py-2 rounded-lg border border-stone-200" />
+            <input
+              type="number"
+              min={1}
+              max={form.session_kind === SESSION_KIND_OPEN_GROUP_PT ? OPEN_GROUP_MAX_PARTICIPANTS : undefined}
+              value={form.capacity}
+              onChange={(e) => setForm((f) => ({ ...f, capacity: parseInt(e.target.value, 10) || 20 }))}
+              className="w-full px-3 py-2 rounded-lg border border-stone-200"
+            />
+            {form.session_kind === SESSION_KIND_OPEN_GROUP_PT ? (
+              <p className="text-xs text-stone-500 mt-1">Max {OPEN_GROUP_MAX_PARTICIPANTS} (organizer + guests).</p>
+            ) : null}
           </div>
         </div>
         <button type="submit" disabled={submitting} className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50">{submitting ? "Adding…" : "Add recurring class"}</button>
@@ -113,7 +195,14 @@ export default function RecurringClassesPage() {
             {list.map((r) => (
               <li key={r.id} className="p-4 flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="font-medium text-stone-800">{r.name}</p>
+                  <p className="font-medium text-stone-800 flex flex-wrap items-center gap-2">
+                    {r.name}
+                    {isOpenGroupSessionKind(r.session_kind) ? (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-100 text-orange-900 border border-orange-200">
+                        Open Group PT
+                      </span>
+                    ) : null}
+                  </p>
                   <p className="text-sm text-stone-500">{r.instructor || "—"} · {formatDays(r.days_of_week)} at {r.time} · cap {r.capacity}</p>
                 </div>
                 <div className="flex gap-2">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -102,10 +103,12 @@ export default function EditExercisePage() {
         {exercise.image_path && (
           <div>
             <label className="block text-sm font-medium text-stone-700 mb-1">Image</label>
-            <img
+            <Image
               src={`/api/exercises/${id}/image`}
               alt={exercise.name}
-              className="max-w-xs rounded-lg border border-stone-200 object-cover"
+              width={320}
+              height={240}
+              className="max-w-xs w-full h-auto rounded-lg border border-stone-200 object-cover"
             />
           </div>
         )}

@@ -23,6 +23,8 @@ export async function GET(request: NextRequest) {
              COALESCE(c.instructor, r.instructor) AS instructor,
              COALESCE(c.price, '0') AS price,
              COALESCE(c.duration_minutes, r.duration_minutes, 60) AS duration_minutes,
+             COALESCE(r.session_kind, 'standard') AS session_kind,
+             r.flat_session_price AS flat_session_price,
              (SELECT COUNT(*) FROM occurrence_bookings b WHERE b.class_occurrence_id = o.id) AS booked_count
       FROM class_occurrences o
       LEFT JOIN classes c ON c.id = o.class_id

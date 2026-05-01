@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { formatInAppTz, todayInAppTz, weekStartInAppTz, addDaysToDateStr } from "@/lib/app-timezone";
 import { useAppTimezone, useOpenHours } from "@/lib/settings-context";
 import type { BlockSegment } from "@/lib/pt-availability";
+import { isOpenGroupSessionKind } from "@/lib/open-group-pt";
 
 type Occurrence = {
   id: number;
@@ -18,6 +19,8 @@ type Occurrence = {
   duration_minutes?: number;
   class_id?: number | null;
   recurring_class_id?: number | null;
+  session_kind?: string;
+  flat_session_price?: string | null;
 };
 
 type PtBlockWithSegments = { id: number; trainer: string; date: string; start_time: string; end_time: string; segments?: BlockSegment[] };
@@ -25,7 +28,7 @@ type PtBlockWithSegments = { id: number; trainer: string; date: string; start_ti
 type UnavailableOccurrence = { id: number; trainer: string; date: string; start_time: string; end_time: string; description: string };
 
 type CellItem =
-  | { type: "class"; id: number; name: string; sub: string | null; occurrence_date: string; occurrence_time: string; booked_count: number; capacity: number; duration_minutes: number; classStartSlot: number; spanSlots: number; class_id?: number | null; recurring_class_id?: number | null }
+  | { type: "class"; id: number; name: string; sub: string | null; occurrence_date: string; occurrence_time: string; booked_count: number; capacity: number; duration_minutes: number; classStartSlot: number; spanSlots: number; class_id?: number | null; recurring_class_id?: number | null; session_kind?: string; flat_session_price?: string | null }
   | { type: "class_span" }
   | { type: "unavailable"; id: number; description: string }
   | { type: "pt_segment"; blockId: number; trainer: string; start_time: string; end_time: string; booked: boolean; member_name?: string; member_id?: string; booking_id?: number; unavailable?: boolean; description?: string; payment_type?: string }
@@ -209,6 +212,8 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
               spanSlots,
               ...(o.class_id != null && { class_id: o.class_id }),
               ...(o.recurring_class_id != null && { recurring_class_id: o.recurring_class_id }),
+              ...(o.session_kind != null && String(o.session_kind).trim() !== "" && { session_kind: String(o.session_kind) }),
+              ...(o.flat_session_price != null && { flat_session_price: String(o.flat_session_price) }),
             });
           } else {
             map.set(key, { type: "class_span" });
@@ -504,6 +509,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
           )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-stone-800">Class</span>
+            <span className="rounded-lg border border-orange-300 bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-900">Open Group PT</span>
             <span className="rounded-lg bg-stone-400 px-2.5 py-1 text-xs font-medium text-stone-100">Unavailable</span>
             {(isMaster || isTrainer || allowAdminEdit) && (
               <>
@@ -537,6 +543,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
           <div className="p-3 border-b border-stone-100 bg-stone-50/80 flex flex-wrap items-center justify-center gap-3 text-sm rounded-t-xl">
             <span className="font-medium text-stone-600">{weekLabel}</span>
             <span className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-stone-800">Class</span>
+            <span className="rounded-lg border border-orange-300 bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-900">Open Group PT</span>
             <span className="rounded-lg bg-stone-400 px-2.5 py-1 text-xs font-medium text-stone-100">Unavailable</span>
             {(isMaster || isTrainer || allowAdminEdit) && (
               <>
@@ -597,14 +604,26 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                           style={isMaster || isTrainer ? { cursor: "pointer" } : undefined}
                         >
                           {item.type === "class" && (
-                            <div className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 hover:bg-blue-100/80 hover:border-blue-300 transition-colors">
+                            <div
+                              className={
+                                isOpenGroupSessionKind(item.session_kind)
+                                  ? "rounded-lg border border-orange-300 bg-orange-50 px-2 py-1.5 hover:bg-orange-100/80 hover:border-orange-400 transition-colors"
+                                  : "rounded-lg border border-blue-200 bg-blue-50 px-2 py-1.5 hover:bg-blue-100/80 hover:border-blue-300 transition-colors"
+                              }
+                            >
                               <span className="font-medium text-stone-800 text-sm leading-tight block truncate" title={item.name}>{item.name}</span>
                               {item.sub && <span className="text-xs text-stone-500 block truncate" title={item.sub}>{item.sub}</span>}
-                              <span className="text-xs text-stone-500 block">{item.booked_count}/{item.capacity}</span>
+                              {isOpenGroupSessionKind(item.session_kind) ? (
+                                <span className="text-xs text-orange-900 font-medium block">
+                                  ${item.flat_session_price ?? "80"} total at gym · {item.booked_count}/{item.capacity} spots
+                                </span>
+                              ) : (
+                                <span className="text-xs text-stone-500 block">{item.booked_count}/{item.capacity}</span>
+                              )}
                               <div className="flex flex-wrap gap-1 mt-1">
-                                <Link href={`/schedule/${item.id}/roster`} className="text-xs text-blue-600 hover:underline font-medium" onClick={(e) => e.stopPropagation()}>Roster</Link>
+                                <Link href={`/schedule/${item.id}/roster`} className={`text-xs font-medium hover:underline ${isOpenGroupSessionKind(item.session_kind) ? "text-orange-700" : "text-blue-600"}`} onClick={(e) => e.stopPropagation()}>Roster</Link>
                                 <span className="text-stone-300">·</span>
-                                <Link href={variant === "master" ? `/admin/book-class-for-member?occurrence_id=${item.id}` : `/member/book-classes?occurrence=${item.id}`} className="text-xs text-blue-600 hover:underline font-medium" onClick={(e) => e.stopPropagation()}>Book</Link>
+                                <Link href={variant === "master" ? `/admin/book-class-for-member?occurrence_id=${item.id}` : `/member/book-classes?occurrence=${item.id}`} className={`text-xs font-medium hover:underline ${isOpenGroupSessionKind(item.session_kind) ? "text-orange-700" : "text-blue-600"}`} onClick={(e) => e.stopPropagation()}>Book</Link>
                               </div>
                             </div>
                           )}

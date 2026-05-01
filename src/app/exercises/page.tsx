@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 
 type ExerciseRow = {
@@ -421,9 +422,11 @@ export default function ExercisesPage() {
                   <tr key={ex.id} className="border-t border-stone-200 text-stone-700">
                     <td className="px-3 py-2">
                       {ex.image_path ? (
-                        <img
+                        <Image
                           src={`/api/exercises/${ex.id}/image`}
                           alt=""
+                          width={40}
+                          height={40}
                           className="w-10 h-10 object-cover rounded border border-stone-200"
                         />
                       ) : (

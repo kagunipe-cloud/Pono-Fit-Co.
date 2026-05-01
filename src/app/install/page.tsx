@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState, useEffect } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import InstallAppBanner from "@/components/InstallAppBanner";
@@ -122,7 +123,7 @@ function InstallContent() {
       <div>
         <p className="text-4xl font-black text-brand-600 leading-none mb-2">2</p>
         <p className="text-sm font-semibold text-stone-800 mb-3">Tap the Share button</p>
-        <img
+        <Image
           src="/install/ios-step-share.svg"
           alt=""
           className="w-full rounded-xl border border-stone-100 bg-stone-50"
@@ -135,7 +136,7 @@ function InstallContent() {
       <div>
         <p className="text-4xl font-black text-brand-600 leading-none mb-2">3</p>
         <p className="text-sm font-semibold text-stone-800 mb-3">Choose Add to Home Screen</p>
-        <img
+        <Image
           src="/install/ios-step-add-home.svg"
           alt=""
           className="w-full rounded-xl border border-stone-100 bg-stone-50"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -11,7 +11,7 @@ export default function AdminOccupancyWidget() {
   const [actionLoading, setActionLoading] = useState<"add" | "remove" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function fetchOccupancy() {
+  const fetchOccupancy = useCallback(() => {
     fetch("/api/occupancy")
       .then((r) => {
         if (r.status === 401) {
@@ -27,13 +27,13 @@ export default function AdminOccupancyWidget() {
       })
       .catch(() => setError("Failed to load"))
       .finally(() => setLoading(false));
-  }
+  }, [router]);
 
   useEffect(() => {
     fetchOccupancy();
     const interval = setInterval(fetchOccupancy, 30_000);
     return () => clearInterval(interval);
-  }, [router]);
+  }, [fetchOccupancy]);
 
   async function handleAction(action: "add" | "remove") {
     setActionLoading(action);

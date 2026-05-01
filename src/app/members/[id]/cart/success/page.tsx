@@ -77,7 +77,7 @@ export default function CartSuccessPage() {
         setStatus("error");
         setMessage(e instanceof Error ? e.message : "Something went wrong.");
       });
-  }, [id, sessionId, source]);
+  }, [id, sessionId, source, router]);
 
   if (status === "loading") {
     return (

@@ -7,7 +7,7 @@
     "dev:webpack": "next dev --hostname 127.0.0.1 -p 3000 --webpack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --max-warnings 0",
     "import": "node scripts/import-csv.js",
     "cap:sync": "cap sync",
     "cap:ios": "cap open ios",

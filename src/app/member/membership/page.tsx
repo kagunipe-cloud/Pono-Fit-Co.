@@ -170,7 +170,7 @@ function MemberMembershipContent() {
         <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-stone-50">
           <p className="text-sm font-medium text-stone-800 mb-1">Opt-in for auto-renewal</p>
           <p className="text-sm text-stone-500 mb-2">
-            When enabled, we'll automatically charge your saved card when your membership expires so you don't have to renew manually. Add a payment method above first, then check the box below.
+            When enabled, we&apos;ll automatically charge your saved card when your membership expires so you don&apos;t have to renew manually. Add a payment method above first, then check the box below.
           </p>
           <label className="flex items-center gap-2 cursor-pointer">
             <input

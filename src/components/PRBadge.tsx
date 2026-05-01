@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 /** PR badge types: Reps PR, 1RM PR (Auto 1RM), or 1RM PR (My 1RM) */
 export type PRBadgeType = "Reps" | "Auto 1RM" | "My 1RM";
 
@@ -20,15 +22,20 @@ type PRBadgeProps = {
 export function PRBadge({ type, badgeImageSrc = DEFAULT_BADGE_IMAGE, size = "sm" }: PRBadgeProps) {
   const isSm = size === "sm";
   const dim = isSm ? "w-6 h-6" : "w-8 h-8";
+  const px = isSm ? 24 : 32;
   const textSize = isSm ? "text-[10px]" : "text-xs";
+  const remote = /^https?:\/\//i.test(badgeImageSrc);
 
   return (
     <div className="flex flex-col items-center gap-0.5">
       {badgeImageSrc ? (
-        <img
+        <Image
           src={badgeImageSrc}
           alt={`${type} PR`}
+          width={px}
+          height={px}
           className={`${dim} object-contain`}
+          unoptimized={remote}
         />
       ) : (
         <div

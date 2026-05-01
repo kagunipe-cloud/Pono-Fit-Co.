@@ -4,6 +4,7 @@ import { ensureRecurringClassesTables } from "@/lib/recurring-classes";
 import { getMemberIdFromSession } from "@/lib/session";
 import { sendStaffEmail, sendMemberEmail } from "@/lib/email";
 import { formatDateTimeInAppTz } from "@/lib/app-timezone";
+import { isOpenGroupSessionKind } from "@/lib/open-group-pt";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,8 @@ export async function DELETE(
         `SELECT ob.id,
                 ob.member_id,
                 ob.class_occurrence_id,
+                COALESCE(ob.booking_role, 'standard') AS booking_role,
+                COALESCE(r.session_kind, 'standard') AS session_kind,
                 o.occurrence_date,
                 o.occurrence_time,
                 COALESCE(c.class_name, r.name) AS class_name,
@@ -46,6 +49,8 @@ export async function DELETE(
           id: number;
           member_id: string;
           class_occurrence_id: number;
+          booking_role: string;
+          session_kind: string;
           occurrence_date: string;
           occurrence_time: string | null;
           class_name: string | null;
@@ -70,12 +75,21 @@ export async function DELETE(
       return NextResponse.json({ error: "You can only cancel classes at least 24 hours before the start time." }, { status: 400 });
     }
 
-    // Cancel: delete booking and restore 1 credit
-    db.prepare("DELETE FROM occurrence_bookings WHERE id = ?").run(bookingId);
-    db.prepare(
-      `INSERT INTO class_credit_ledger (member_id, amount, reason, reference_type, reference_id)
+    const openGroup = isOpenGroupSessionKind(booking.session_kind);
+    const role = booking.booking_role || "standard";
+
+    if (openGroup && role === "organizer") {
+      db.prepare("DELETE FROM occurrence_bookings WHERE class_occurrence_id = ?").run(booking.class_occurrence_id);
+      db.prepare("UPDATE class_occurrences SET open_group_share_token = NULL WHERE id = ?").run(booking.class_occurrence_id);
+    } else if (openGroup && role === "guest") {
+      db.prepare("DELETE FROM occurrence_bookings WHERE id = ?").run(bookingId);
+    } else {
+      db.prepare("DELETE FROM occurrence_bookings WHERE id = ?").run(bookingId);
+      db.prepare(
+        `INSERT INTO class_credit_ledger (member_id, amount, reason, reference_type, reference_id)
        VALUES (?, 1, 'member_cancel', 'occurrence_booking', ?)`
-    ).run(memberId, String(bookingId));
+      ).run(memberId, String(bookingId));
+    }
 
     // Email notifications
     try {
@@ -86,8 +100,14 @@ export async function DELETE(
       const whenStr = `${booking.occurrence_date} ${booking.occurrence_time ?? ""}`.trim();
       const className = booking.class_name || "Class";
 
-      const staffSubject = `Class cancellation: ${memberName} → ${className}`;
-      const staffBody = `${memberName} cancelled their booking for ${className} on ${whenStr || booking.occurrence_date}.`;
+      const staffSubject =
+        openGroup && role === "organizer"
+          ? `Open Group PT cancelled: ${className}`
+          : `Class cancellation: ${memberName} → ${className}`;
+      const staffBody =
+        openGroup && role === "organizer"
+          ? `${memberName} cancelled the Open Group PT session "${className}" on ${whenStr || booking.occurrence_date} (entire group released).`
+          : `${memberName} cancelled their booking for ${className} on ${whenStr || booking.occurrence_date}.`;
       sendStaffEmail(staffSubject, staffBody).catch(() => {});
 
       const trainerId = (booking.trainer_member_id ?? "").trim();
@@ -97,9 +117,9 @@ export async function DELETE(
           .get(trainerId) as { email: string | null; first_name: string | null; last_name: string | null } | undefined;
         const trainerEmail = trainerRow?.email?.trim();
         if (trainerEmail) {
-          const trainerSubject = `Class booking cancelled for ${className}`;
-          const trainerBody = `${memberName} cancelled their spot in your class "${className}" on ${whenStr || booking.occurrence_date}.`;
-          sendMemberEmail(trainerEmail, trainerSubject, trainerBody).catch(() => {});
+          const trainerSubject =
+            openGroup && role === "organizer" ? `Open Group PT cancelled: ${className}` : `Class booking cancelled for ${className}`;
+          sendMemberEmail(trainerEmail, trainerSubject, staffBody).catch(() => {});
         }
       }
     } catch {

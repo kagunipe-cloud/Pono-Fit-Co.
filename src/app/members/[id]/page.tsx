@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatDateTimeInAppTz } from "@/lib/app-timezone";
@@ -117,6 +117,24 @@ export default function MemberDetailPage() {
     (data?.member as { member_id?: string } | undefined)?.member_id ?? id ?? ""
   ).trim();
 
+  const fetchMember = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/members/${id}`);
+      if (!res.ok) {
+        if (res.status === 404) setError("Member not found");
+        else setError("Failed to load member");
+        return;
+      }
+      const json = await res.json();
+      setData(json);
+      setEditForm(buildMemberEditForm((json.member ?? {}) as Record<string, unknown>));
+    } catch {
+      setError("Something went wrong");
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
   useEffect(() => {
     const sessionId = searchParams.get("session_id");
     const cardUpdated = searchParams.get("card_updated");
@@ -129,7 +147,7 @@ export default function MemberDetailPage() {
         .then(() => fetchMember())
         .finally(() => window.history.replaceState({}, "", `/members/${id}`));
     }
-  }, [id, searchParams]);
+  }, [id, searchParams, fetchMember]);
 
   async function handleReactivateMembership() {
     const ok = window.confirm(
@@ -172,29 +190,11 @@ export default function MemberDetailPage() {
     }
   }
 
-  async function fetchMember() {
-    try {
-      const res = await fetch(`/api/members/${id}`);
-      if (!res.ok) {
-        if (res.status === 404) setError("Member not found");
-        else setError("Failed to load member");
-        return;
-      }
-      const json = await res.json();
-      setData(json);
-      setEditForm(buildMemberEditForm((json.member ?? {}) as Record<string, unknown>));
-    } catch {
-      setError("Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
     setLoading(true);
     setError(null);
     fetchMember();
-  }, [id]);
+  }, [id, fetchMember]);
 
   useEffect(() => {
     fetch("/api/auth/member-me")

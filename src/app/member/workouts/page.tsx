@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDateInAppTz, formatInAppTz } from "@/lib/app-timezone";
@@ -30,7 +30,7 @@ export default function MemberWorkoutsPage() {
   const [prBadgesByWorkout, setPrBadgesByWorkout] = useState<Record<number, ("Reps" | "Auto 1RM" | "My 1RM")[]>>({});
   const [my1rmList, setMy1rmList] = useState<{ exercise_name: string; current_1rm_lbs: number | null }[]>([]);
 
-  function fetchWorkouts() {
+  const fetchWorkouts = useCallback(() => {
     fetch("/api/member/workouts")
       .then((res) => {
         if (res.status === 401) {
@@ -42,11 +42,11 @@ export default function MemberWorkoutsPage() {
       .then((data) => setWorkouts(Array.isArray(data) ? data : []))
       .catch(() => setWorkouts([]))
       .finally(() => setLoading(false));
-  }
+  }, [router]);
 
   useEffect(() => {
     fetchWorkouts();
-  }, [router]);
+  }, [fetchWorkouts]);
 
   useEffect(() => {
     const finishedIds = workouts.filter((w) => w.finished_at).map((w) => w.id);

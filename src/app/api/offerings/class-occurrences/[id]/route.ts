@@ -22,12 +22,14 @@ export async function GET(
              COALESCE(c.class_name, r.name) AS class_name,
              COALESCE(c.instructor, r.instructor) AS instructor,
              COALESCE(c.price, '0') AS price,
+             COALESCE(r.session_kind, 'standard') AS session_kind,
+             r.flat_session_price AS flat_session_price,
              (SELECT COUNT(*) FROM occurrence_bookings b WHERE b.class_occurrence_id = o.id) AS booked_count
       FROM class_occurrences o
       LEFT JOIN classes c ON c.id = o.class_id
       LEFT JOIN recurring_classes r ON r.id = o.recurring_class_id
       WHERE o.id = ? AND (o.class_id IS NOT NULL OR o.recurring_class_id IS NOT NULL)
-    `).get(numericId) as { id: number; occurrence_date: string; occurrence_time: string; capacity: number | null; class_name: string | null; instructor: string | null; price: string; booked_count: number } | undefined;
+    `).get(numericId) as { id: number; occurrence_date: string; occurrence_time: string; capacity: number | null; class_name: string | null; instructor: string | null; price: string; session_kind: string; flat_session_price: string | null; booked_count: number } | undefined;
     db.close();
     if (!row) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });

@@ -8,6 +8,7 @@ import {
   sendMemberBookingConfirmationEmail,
   getTrainerDisplayNameFromMemberId,
 } from "../../../../lib/email";
+import { isOpenGroupSessionKind } from "../../../../lib/open-group-pt";
 
 export const dynamic = "force-dynamic";
 
@@ -26,27 +27,44 @@ export async function POST(request: NextRequest) {
 
     const db = getDb();
     ensureRecurringClassesTables(db);
-    const balance = getMemberCreditBalance(db, memberId);
-    if (balance < 1) {
-      db.close();
-      return NextResponse.json({ error: "No class credits. Purchase a class pack first." }, { status: 400 });
-    }
     const occurrence = db
       .prepare(
         `SELECT o.id,
                 o.occurrence_date,
                 o.occurrence_time,
                 COALESCE(c.class_name, r.name) AS class_name,
-                c.trainer_member_id
+                c.trainer_member_id,
+                COALESCE(r.session_kind, 'standard') AS session_kind
          FROM class_occurrences o
          LEFT JOIN classes c ON c.id = o.class_id
          LEFT JOIN recurring_classes r ON r.id = o.recurring_class_id
          WHERE o.id = ?`
       )
-      .get(occurrenceId) as { id: number; occurrence_date: string; occurrence_time: string | null; class_name: string | null; trainer_member_id: string | null } | undefined;
+      .get(occurrenceId) as {
+      id: number;
+      occurrence_date: string;
+      occurrence_time: string | null;
+      class_name: string | null;
+      trainer_member_id: string | null;
+      session_kind: string;
+    } | undefined;
     if (!occurrence) {
       db.close();
       return NextResponse.json({ error: "Class occurrence not found" }, { status: 404 });
+    }
+    if (isOpenGroupSessionKind(occurrence.session_kind)) {
+      db.close();
+      return NextResponse.json(
+        {
+          error: "Open Group Personal Training uses a different booking flow — reserve from Book a Class or your invite link.",
+        },
+        { status: 400 }
+      );
+    }
+    const balance = getMemberCreditBalance(db, memberId);
+    if (balance < 1) {
+      db.close();
+      return NextResponse.json({ error: "No class credits. Purchase a class pack first." }, { status: 400 });
     }
     const today = new Date().toISOString().slice(0, 10);
     if (occurrence.occurrence_date < today) {

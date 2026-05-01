@@ -29,7 +29,7 @@ export default function MemberWorkoutProgressPage() {
       })
       .then((list: ChartExercise[]) => {
         setExercises(list);
-        if (list.length > 0 && !selectedId) setSelectedId(list[0].exercise_id);
+        setSelectedId((prev) => (list.length > 0 && prev == null ? list[0].exercise_id : prev));
       })
       .catch(() => setExercises([]))
       .finally(() => setLoading(false));

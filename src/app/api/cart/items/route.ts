@@ -3,6 +3,8 @@ import { getDb } from "../../../../lib/db";
 import { ensureCartTables } from "../../../../lib/cart";
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { getTrainerMemberId } from "../../../../lib/admin";
+import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
+import { isOpenGroupSessionKind } from "../../../../lib/open-group-pt";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +53,32 @@ export async function POST(request: NextRequest) {
 
     const db = getDb();
     ensureCartTables(db);
+
+    if (product_type === "class_occurrence") {
+      ensureRecurringClassesTables(db);
+      const occMeta = db
+        .prepare(
+          `SELECT COALESCE(r.session_kind, 'standard') AS session_kind
+           FROM class_occurrences o
+           LEFT JOIN recurring_classes r ON r.id = o.recurring_class_id
+           WHERE o.id = ?`
+        )
+        .get(product_id) as { session_kind: string } | undefined;
+      if (!occMeta) {
+        db.close();
+        return NextResponse.json({ error: "Class occurrence not found" }, { status: 404 });
+      }
+      if (isOpenGroupSessionKind(occMeta.session_kind)) {
+        db.close();
+        return NextResponse.json(
+          {
+            error:
+              "Open Group PT is reserved on the schedule (flat fee at the gym). Use Schedule → Book to start or join a group.",
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     let cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member_id) as { id: number } | undefined;
     if (!cart) {

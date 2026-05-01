@@ -455,7 +455,7 @@ export default function MemberMacrosDayPage() {
         .then((list: Favorite[]) => setFavorites(Array.isArray(list) ? list : []))
         .catch(() => setFavorites([]));
     }
-  }, [day?.id]);
+  }, [day]);
 
   /** Merge USDA + OFF lists, filter, score, sort. Used so we can show results as each source arrives. */
   function mergeAndSortHits(usdaList: USDAFoodHit[], offList: OFFSearchFood[], query: string): SearchHit[] {

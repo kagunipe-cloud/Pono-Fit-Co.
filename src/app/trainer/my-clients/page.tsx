@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
 type ClientRow = {
@@ -34,7 +34,7 @@ export default function MyClientsPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  function fetchClients() {
+  const fetchClients = useCallback(() => {
     const url = filterTrainerId
       ? `/api/trainer/clients?trainer_member_id=${encodeURIComponent(filterTrainerId)}`
       : "/api/trainer/clients";
@@ -46,13 +46,13 @@ export default function MyClientsPage() {
       .then((data) => setClients(Array.isArray(data) ? data : []))
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }
+  }, [filterTrainerId]);
 
   useEffect(() => {
     setLoading(true);
     setError(null);
     fetchClients();
-  }, [filterTrainerId]);
+  }, [fetchClients]);
 
   useEffect(() => {
     fetch("/api/auth/member-me")

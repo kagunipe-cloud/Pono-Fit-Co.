@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { BRAND } from "@/lib/branding";
@@ -563,7 +564,7 @@ export default function Sidebar() {
       {/* Mobile: fixed header with hamburger */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-40 h-14 bg-white border-b border-stone-200 flex items-center justify-between px-4 safe-area-inset">
         <Link href={logoHref} className="flex items-center shrink-0" aria-label={BRAND.name} onClick={() => setMobileMenuOpen(false)}>
-          <img src="/Lei_Logos.png" alt="" className="h-8 w-auto" />
+          <Image src="/Lei_Logos.png" alt="" width={160} height={40} className="h-8 w-auto" priority />
         </Link>
         <button
           type="button"
@@ -592,7 +593,7 @@ export default function Sidebar() {
           <div className="md:hidden fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-brand-gray shadow-xl flex flex-col overflow-hidden border-r border-white/20">
             <div className="p-4 border-b border-white/20 shrink-0">
               <Link href={logoHref} className="block rounded-lg overflow-hidden" onClick={() => setMobileMenuOpen(false)}>
-                <img src="/Lei_Logos.png" alt={BRAND.name} className="w-full h-auto block" />
+                <Image src="/Lei_Logos.png" alt={BRAND.name} width={240} height={64} className="w-full h-auto block" priority />
               </Link>
               {isMember && member && (
                 <p className="text-xs text-white mt-1 truncate" title={member.email ?? undefined}>{member.name}</p>
@@ -618,7 +619,7 @@ export default function Sidebar() {
       <aside className="hidden md:flex w-56 shrink-0 border-r border-white/20 bg-brand-gray flex-col">
       <div className="p-4 border-b border-white/20">
         <Link href={logoHref} className="block rounded-lg overflow-hidden" aria-label={BRAND.name}>
-          <img src="/Lei_Logos.png" alt={BRAND.name} className="w-full h-auto block" />
+          <Image src="/Lei_Logos.png" alt={BRAND.name} width={240} height={64} className="w-full h-auto block" priority />
         </Link>
         {isMember && member && (
           <p className="text-xs text-white mt-1 truncate" title={member.email ?? undefined}>{member.name}</p>

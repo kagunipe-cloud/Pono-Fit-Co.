@@ -33,12 +33,13 @@ export default function GenerateRecurringPTBookingPage() {
       .then(([memData, sessData]) => {
         setMembers(Array.isArray(memData) ? memData : []);
         setSessionTypes(Array.isArray(sessData) ? sessData : []);
-        if (Array.isArray(memData) && memData.length > 0 && !form.member_id) {
-          setForm((f) => ({ ...f, member_id: memData[0].member_id ?? "" }));
-        }
-        if (Array.isArray(sessData) && sessData.length > 0 && !form.pt_session_id) {
-          setForm((f) => ({ ...f, pt_session_id: String(sessData[0].id) }));
-        }
+        setForm((f) => ({
+          ...f,
+          member_id: f.member_id || (Array.isArray(memData) && memData[0]?.member_id ? String(memData[0].member_id) : ""),
+          pt_session_id:
+            f.pt_session_id ||
+            (Array.isArray(sessData) && sessData[0]?.id != null ? String(sessData[0].id) : ""),
+        }));
       })
       .catch(() => {})
       .finally(() => setLoading(false));

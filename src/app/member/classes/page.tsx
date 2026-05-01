@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatPrice, toTitleCase } from "@/lib/format";
@@ -122,8 +123,8 @@ export default function MemberClassesPage() {
             className="p-4 rounded-xl border border-stone-200 bg-white flex flex-wrap gap-4 items-start"
           >
             {c.image_url && (
-              <div className="shrink-0 w-24 h-24 rounded-lg overflow-hidden bg-stone-100">
-                <img src={c.image_url} alt="" className="w-full h-full object-cover" />
+              <div className="relative shrink-0 w-24 h-24 rounded-lg overflow-hidden bg-stone-100">
+                <Image src={c.image_url} alt="" fill className="object-cover" sizes="96px" unoptimized />
               </div>
             )}
             <div className="min-w-0 flex-1">

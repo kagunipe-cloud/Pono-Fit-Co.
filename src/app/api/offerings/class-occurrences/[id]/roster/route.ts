@@ -16,7 +16,9 @@ export async function GET(
     const occurrence = db.prepare(`
       SELECT o.id, o.occurrence_date, o.occurrence_time, o.capacity,
              COALESCE(c.class_name, r.name) AS class_name,
-             COALESCE(c.instructor, r.instructor) AS instructor
+             COALESCE(c.instructor, r.instructor) AS instructor,
+             COALESCE(r.session_kind, 'standard') AS session_kind,
+             r.flat_session_price AS flat_session_price
       FROM class_occurrences o
       LEFT JOIN classes c ON c.id = o.class_id
       LEFT JOIN recurring_classes r ON r.id = o.recurring_class_id
@@ -27,7 +29,8 @@ export async function GET(
       return NextResponse.json({ error: "Occurrence not found" }, { status: 404 });
     }
     const members = db.prepare(`
-      SELECT b.id AS booking_id, m.member_id, m.first_name, m.last_name, m.email, b.created_at AS booked_at
+      SELECT b.id AS booking_id, m.member_id, m.first_name, m.last_name, m.email, b.created_at AS booked_at,
+             COALESCE(b.booking_role, 'standard') AS booking_role
       FROM occurrence_bookings b
       JOIN members m ON m.member_id = b.member_id
       WHERE b.class_occurrence_id = ?
