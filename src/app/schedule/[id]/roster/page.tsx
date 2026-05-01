@@ -71,10 +71,13 @@ export default function RosterPage() {
       ) : (
         <ul className="space-y-2">
           {data.members.map((m) => (
-            <li key={m.member_id} className="flex justify-between items-center py-2 border-b border-stone-100">
+            <li key={m.member_id} className="flex flex-wrap justify-between items-center gap-2 py-2 border-b border-stone-100">
               <span className="font-medium text-stone-800">{name(m)}</span>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <span className="text-sm text-stone-500">{m.email ?? "—"}</span>
+                <Link href={`/members/${encodeURIComponent(m.member_id)}`} className="text-xs text-brand-600 hover:underline font-medium whitespace-nowrap">
+                  Member profile
+                </Link>
                 {isAdmin && (
                   <button
                     type="button"
@@ -82,7 +85,7 @@ export default function RosterPage() {
                     disabled={cancelling === m.booking_id}
                     className="text-xs px-2 py-1 rounded border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
                   >
-                    {cancelling === m.booking_id ? "…" : "Cancel"}
+                    {cancelling === m.booking_id ? "…" : "Cancel booking"}
                   </button>
                 )}
               </div>

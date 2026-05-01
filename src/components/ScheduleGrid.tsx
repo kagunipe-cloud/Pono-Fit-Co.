@@ -28,8 +28,8 @@ type CellItem =
   | { type: "class"; id: number; name: string; sub: string | null; occurrence_date: string; occurrence_time: string; booked_count: number; capacity: number; duration_minutes: number; classStartSlot: number; spanSlots: number; class_id?: number | null; recurring_class_id?: number | null }
   | { type: "class_span" }
   | { type: "unavailable"; id: number; description: string }
-  | { type: "pt_segment"; blockId: number; trainer: string; start_time: string; end_time: string; booked: boolean; member_name?: string; booking_id?: number; unavailable?: boolean; description?: string; payment_type?: string }
-  | { type: "open_booked"; id?: number; member_name?: string; trainer_name?: string | null; payment_type?: string }
+  | { type: "pt_segment"; blockId: number; trainer: string; start_time: string; end_time: string; booked: boolean; member_name?: string; member_id?: string; booking_id?: number; unavailable?: boolean; description?: string; payment_type?: string }
+  | { type: "open_booked"; id?: number; member_id?: string; member_name?: string; trainer_name?: string | null; payment_type?: string }
   | { type: "available" }
   | { type: "trainer_not_available" };
 
@@ -81,7 +81,19 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
   const [occurrences, setOccurrences] = useState<Occurrence[]>([]);
   const [unavailable, setUnavailable] = useState<UnavailableOccurrence[]>([]);
   const [ptBlocks, setPtBlocks] = useState<PtBlockWithSegments[]>([]);
-  const [openBookings, setOpenBookings] = useState<{ id?: number; occurrence_date: string; start_time: string; duration_minutes: number; member_name?: string; trainer_name?: string | null; trainer_member_id?: string | null; payment_type?: string | null }[]>([]);
+  const [openBookings, setOpenBookings] = useState<
+    {
+      id?: number;
+      member_id?: string;
+      occurrence_date: string;
+      start_time: string;
+      duration_minutes: number;
+      member_name?: string;
+      trainer_name?: string | null;
+      trainer_member_id?: string | null;
+      payment_type?: string | null;
+    }[]
+  >([]);
   const [loading, setLoading] = useState(true);
   const bookPtQuery = productId ? `&product=${encodeURIComponent(productId)}` : "";
   const isMaster = variant === "master";
@@ -217,6 +229,8 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
           map.set(key, {
             type: "open_booked",
             ...(openBookingAtSlot.id != null && { id: openBookingAtSlot.id }),
+            ...(openBookingAtSlot.member_id != null &&
+              String(openBookingAtSlot.member_id).trim() !== "" && { member_id: String(openBookingAtSlot.member_id).trim() }),
             ...(openBookingAtSlot.member_name != null && { member_name: openBookingAtSlot.member_name }),
             ...(openBookingAtSlot.trainer_name != null && { trainer_name: openBookingAtSlot.trainer_name }),
             ...(openBookingAtSlot.payment_type != null && { payment_type: openBookingAtSlot.payment_type }),
@@ -241,6 +255,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                   end_time: seg.end_time,
                   booked: seg.booked,
                   ...(seg.member_name != null && { member_name: seg.member_name }),
+                  ...(seg.member_id != null && String(seg.member_id).trim() !== "" && { member_id: String(seg.member_id).trim() }),
                   ...(seg.booking_id != null && { booking_id: seg.booking_id }),
                   ...(seg.unavailable && { unavailable: true, description: seg.description }),
                   ...(seg.payment_type != null && { payment_type: seg.payment_type }),
@@ -284,6 +299,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
               end_time: first.seg.end_time,
               booked: true,
               ...(first.seg.member_name != null && { member_name: first.seg.member_name }),
+              ...(first.seg.member_id != null && String(first.seg.member_id).trim() !== "" && { member_id: String(first.seg.member_id).trim() }),
               ...(first.seg.booking_id != null && { booking_id: first.seg.booking_id }),
               ...(first.seg.unavailable && { unavailable: true, description: first.seg.description }),
               ...(first.seg.payment_type != null && { payment_type: first.seg.payment_type }),
@@ -401,8 +417,9 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
     }
   }
 
-  async function handleCancelOpenBooking(id: number) {
-    if (!confirm("Cancel this PT session for the client? Their credit will be restored.")) return;
+  async function handleCancelOpenBooking(id: number, paymentType?: string | null) {
+    const restore = paymentType === "credit";
+    if (!confirm(restore ? "Cancel this PT session? Their PT credit will be restored." : "Cancel this PT session for the client?")) return;
     try {
       const res = await fetch(`/api/offerings/pt-open-bookings/${id}`, { method: "DELETE" });
       if (res.ok) {
@@ -417,8 +434,9 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
     }
   }
 
-  async function handleCancelBlockBooking(id: number) {
-    if (!confirm("Cancel this PT session for the client? Their credit will be restored.")) return;
+  async function handleCancelBlockBooking(id: number, paymentType?: string | null) {
+    const restore = paymentType === "credit";
+    if (!confirm(restore ? "Cancel this PT session? Their PT credit will be restored." : "Cancel this PT session for the client?")) return;
     try {
       const res = await fetch("/api/admin/pt-bookings/cancel", {
         method: "POST",
@@ -695,7 +713,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
 
       {(isMaster || isTrainer) && selectedSlot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setSelectedSlot(null)}>
-          <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-semibold text-stone-800">Slot: {selectedSlot.date} at {selectedSlot.timeStr}</h3>
             <ul className="space-y-2 text-sm">
               <li>
@@ -708,6 +726,26 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                   Add blocked-off time
                 </Link>
               </li>
+              {selectedSlot.item.type === "class" && selectedSlot.item.booked_count > 0 && (isMaster || allowAdminEdit) && (
+                <>
+                  <li className="pt-2 mt-1 border-t border-stone-200 text-xs font-semibold uppercase tracking-wide text-stone-500">
+                    Booked class
+                  </li>
+                  <li>
+                    <Link href={`/schedule/${selectedSlot.item.id}/roster`} className="text-brand-600 hover:underline block font-medium">
+                      Roster — view members & cancel a booking
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href={`/admin/book-class-for-member?occurrence_id=${selectedSlot.item.id}`} className="text-brand-600 hover:underline block">
+                      Add another booking
+                    </Link>
+                  </li>
+                  <li className="text-xs text-stone-500 pl-0 leading-snug">
+                    To move someone to a different class, cancel them on the roster, then book the new occurrence from the schedule.
+                  </li>
+                </>
+              )}
               {selectedSlot.item.type === "unavailable" && (isMaster || allowAdminEdit) && (
                 <li>
                   <button type="button" onClick={() => { if (selectedSlot.item.type === "unavailable") { handleRemoveUnavailable(selectedSlot.item.id); setSelectedSlot(null); } }} className="text-red-600 hover:underline">
@@ -729,7 +767,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                   )}
                   <li>
                     <button type="button" onClick={() => { if (selectedSlot.item.type === "class") { handleDeleteClassOccurrence(selectedSlot.item.id); setSelectedSlot(null); } }} className="text-red-600 hover:underline">
-                      Delete this occurrence
+                      {selectedSlot.item.booked_count > 0 ? "Remove entire class from schedule" : "Delete this occurrence"}
                     </button>
                   </li>
                 </>
@@ -741,15 +779,95 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                   </Link>
                 </li>
               )}
-              {selectedSlot.item.type === "pt_segment" && selectedSlot.item.booked && selectedSlot.item.booking_id != null && (isMaster || allowAdminEdit) && (
-                <li>
-                  <button type="button" onClick={() => { if (selectedSlot.item.type === "pt_segment" && selectedSlot.item.booking_id != null) { handleCancelBlockBooking(selectedSlot.item.booking_id); setSelectedSlot(null); } }} className="text-red-600 hover:underline">
-                    Cancel PT for client
-                  </button>
-                </li>
+              {selectedSlot.item.type === "pt_segment" && selectedSlot.item.booked && selectedSlot.item.booking_id != null && !selectedSlot.item.unavailable && (isMaster || allowAdminEdit) && (
+                <>
+                  <li className="pt-2 mt-1 border-t border-stone-200 text-xs font-semibold uppercase tracking-wide text-stone-500">
+                    Booked PT session
+                  </li>
+                  {selectedSlot.item.member_id ? (
+                    <li>
+                      <Link href={`/members/${encodeURIComponent(selectedSlot.item.member_id)}`} className="text-brand-600 hover:underline block font-medium">
+                        Member profile
+                      </Link>
+                    </li>
+                  ) : null}
+                  <li>
+                    <Link
+                      href={`/admin/book-pt-for-member?date=${encodeURIComponent(selectedSlot.date)}&time=${encodeURIComponent(String(selectedSlot.item.start_time ?? "").trim().slice(0, 5))}&block=${selectedSlot.item.blockId}${selectedSlot.item.member_id ? `&member_id=${encodeURIComponent(selectedSlot.item.member_id)}` : ""}`}
+                      className="text-brand-600 hover:underline block"
+                    >
+                      Book a new time (cancel this session first if moving them)
+                    </Link>
+                  </li>
+                  {selectedSlot.item.payment_type === "pay_on_arrival" && selectedSlot.item.member_id ? (
+                    <>
+                      <li>
+                        <Link href={`/members/${encodeURIComponent(selectedSlot.item.member_id)}/cart`} className="text-brand-600 hover:underline block">
+                          Pay now (desk checkout)
+                        </Link>
+                      </li>
+                      <li>
+                        <Link href={`/members/${encodeURIComponent(selectedSlot.item.member_id)}`} className="text-brand-600 hover:underline block">
+                          Update payment method
+                        </Link>
+                      </li>
+                    </>
+                  ) : selectedSlot.item.member_id ? (
+                    <li>
+                      <Link href={`/members/${encodeURIComponent(selectedSlot.item.member_id)}`} className="text-brand-600 hover:underline block">
+                        Update payment method
+                      </Link>
+                    </li>
+                  ) : null}
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedSlot.item.type === "pt_segment" && selectedSlot.item.booking_id != null) {
+                          handleCancelBlockBooking(selectedSlot.item.booking_id, selectedSlot.item.payment_type ?? null);
+                          setSelectedSlot(null);
+                        }
+                      }}
+                      className="text-red-600 hover:underline"
+                    >
+                      Cancel PT session
+                    </button>
+                  </li>
+                </>
               )}
               {selectedSlot.item.type === "open_booked" && selectedSlot.item.id != null && (isMaster || allowAdminEdit) && (
                 <>
+                  <li className="pt-2 mt-1 border-t border-stone-200 text-xs font-semibold uppercase tracking-wide text-stone-500">
+                    Booked PT session
+                  </li>
+                  {selectedSlot.item.member_id ? (
+                    <li>
+                      <Link href={`/members/${encodeURIComponent(selectedSlot.item.member_id)}`} className="text-brand-600 hover:underline block font-medium">
+                        Member profile
+                      </Link>
+                    </li>
+                  ) : null}
+                  <li>
+                    <Link href={`/admin/edit-open-pt-booking?id=${selectedSlot.item.id}`} className="text-brand-600 hover:underline block">
+                      Reschedule (change date or time)
+                    </Link>
+                  </li>
+                  {selectedSlot.item.member_id ? (
+                    <>
+                      {selectedSlot.item.payment_type === "pay_on_arrival" ? (
+                        <li>
+                          <Link href={`/members/${encodeURIComponent(selectedSlot.item.member_id)}/cart`} className="text-brand-600 hover:underline block">
+                            Pay now (desk checkout)
+                          </Link>
+                        </li>
+                      ) : null}
+                      <li>
+                        <Link href={`/members/${encodeURIComponent(selectedSlot.item.member_id)}`} className="text-brand-600 hover:underline block">
+                          Update payment method
+                        </Link>
+                      </li>
+                    </>
+                  ) : null}
                   {assignTrainerBookingId === selectedSlot.item.id ? (
                     <li className="space-y-2">
                       <span className="font-medium text-stone-700">Assign to trainer:</span>
@@ -808,8 +926,8 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                     </li>
                   )}
                   <li>
-                    <button type="button" onClick={() => { if (selectedSlot.item.type === "open_booked" && selectedSlot.item.id != null) { handleCancelOpenBooking(selectedSlot.item.id); setSelectedSlot(null); } }} className="text-red-600 hover:underline">
-                      Cancel PT for client
+                    <button type="button" onClick={() => { if (selectedSlot.item.type === "open_booked" && selectedSlot.item.id != null) { handleCancelOpenBooking(selectedSlot.item.id, selectedSlot.item.payment_type ?? null); setSelectedSlot(null); } }} className="text-red-600 hover:underline">
+                      Cancel PT session
                     </button>
                   </li>
                 </>

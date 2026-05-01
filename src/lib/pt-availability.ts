@@ -176,7 +176,18 @@ export function getBookableStartsInInterval(intervalStart: number, intervalEnd: 
 }
 
 /** Segment of a block: free (AVAILABLE), booked (with member_name, booking_id, payment_type), or unavailable (with description). */
-export type BlockSegment = { start_time: string; end_time: string; booked: boolean; member_name?: string; trainer: string; unavailable?: boolean; description?: string; booking_id?: number; payment_type?: string };
+export type BlockSegment = {
+  start_time: string;
+  end_time: string;
+  booked: boolean;
+  member_name?: string;
+  member_id?: string;
+  trainer: string;
+  unavailable?: boolean;
+  description?: string;
+  booking_id?: number;
+  payment_type?: string;
+};
 
 /** Unavailable ranges overlapping a block (trainer must match or unavailable.trainer is ''). In minutes. */
 export function getUnavailableRangesForBlock(
@@ -225,7 +236,17 @@ export function getBlockSegments(
     const startMin = timeToMinutes(b.start_time);
     const endMin = startMin + b.reserved_minutes;
     const member_name = [b.first_name, b.last_name].filter(Boolean).join(" ").trim() || b.member_id;
-    segments.push({ start_time: minutesToTime(startMin), end_time: minutesToTime(endMin), booked: true, member_name, trainer: block.trainer, booking_id: b.id, payment_type: b.payment_type ?? "paid", ...(blockDesc && { description: blockDesc }) });
+    segments.push({
+      start_time: minutesToTime(startMin),
+      end_time: minutesToTime(endMin),
+      booked: true,
+      member_name,
+      member_id: b.member_id,
+      trainer: block.trainer,
+      booking_id: b.id,
+      payment_type: b.payment_type ?? "paid",
+      ...(blockDesc && { description: blockDesc }),
+    });
   }
   for (const u of unavailableOccurrences) {
     if (u.date !== occurrence_date) continue;

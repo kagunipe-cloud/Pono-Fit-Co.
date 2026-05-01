@@ -21,6 +21,7 @@ function AdminBookPTForMemberContent() {
   const date = searchParams.get("date")?.trim() || "";
   const time = searchParams.get("time")?.trim() || "";
   const block = searchParams.get("block")?.trim() || "";
+  const memberIdPrefill = searchParams.get("member_id")?.trim() || "";
 
   const [members, setMembers] = useState<Member[]>([]);
   const [sessions, setSessions] = useState<PtSession[]>([]);
@@ -34,6 +35,11 @@ function AdminBookPTForMemberContent() {
   const [payOnArrivalSubmitting, setPayOnArrivalSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [credits, setCredits] = useState<Record<number, number>>({});
+
+  useEffect(() => {
+    if (!memberIdPrefill) return;
+    setSelectedMemberId(memberIdPrefill);
+  }, [memberIdPrefill]);
 
   useEffect(() => {
     fetch("/api/members")
