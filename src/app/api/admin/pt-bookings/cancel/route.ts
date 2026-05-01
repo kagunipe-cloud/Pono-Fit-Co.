@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
-import { getAdminMemberId } from "../../../../../lib/admin";
+import { getAdminMemberId, getTrainerMemberId } from "../../../../../lib/admin";
 import { sendStaffEmail, sendMemberEmail } from "../../../../../lib/email";
 
 export const dynamic = "force-dynamic";
 
-/** POST { type, id } | { type, ids: number[] } — Admin only. Cancels PT booking(s); trainer-specific/open credit bookings get credit restored. */
+/** POST { type, id } | { type, ids: number[] } — Admin or the owning trainer (trainer-specific sessions only). Cancels PT booking(s); trainer-specific/open credit bookings get credit restored. */
 export async function POST(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
-  if (!adminId) {
-    return NextResponse.json({ error: "Admin only" }, { status: 403 });
+  const trainerActorId = await getTrainerMemberId(request);
+  if (!adminId && !trainerActorId) {
+    return NextResponse.json({ error: "Admin or trainer session required" }, { status: 403 });
   }
   try {
     const body = await request.json();
@@ -24,6 +25,9 @@ export async function POST(request: NextRequest) {
     }
     if (!["slot", "trainer_specific", "open"].includes(type) || ids.length === 0) {
       return NextResponse.json({ error: "type must be 'slot', 'trainer_specific', or 'open', and id or ids required" }, { status: 400 });
+    }
+    if (!adminId && trainerActorId && type !== "trainer_specific") {
+      return NextResponse.json({ error: "Trainers can only cancel trainer-specific PT sessions from My Schedule" }, { status: 403 });
     }
     const db = getDb();
     ensurePTSlotTables(db);
@@ -70,8 +74,14 @@ export async function POST(request: NextRequest) {
           /* ignore */
         }
       } else {
-        let row = db.prepare("SELECT id, member_id, session_duration_minutes, payment_type FROM pt_trainer_specific_bookings WHERE id = ?").get(id) as { id: number; member_id: string; session_duration_minutes: number; payment_type: string } | undefined;
+        let row = db.prepare(
+          `SELECT b.id, b.member_id, b.session_duration_minutes, b.payment_type, a.trainer_member_id
+           FROM pt_trainer_specific_bookings b
+           JOIN trainer_availability a ON a.id = b.trainer_availability_id
+           WHERE b.id = ?`
+        ).get(id) as { id: number; member_id: string; session_duration_minutes: number; payment_type: string; trainer_member_id: string | null } | undefined;
         if (!row) {
+          if (!adminId) continue;
           const openRow = db.prepare("SELECT id, member_id, duration_minutes, payment_type FROM pt_open_bookings WHERE id = ?").get(id) as { id: number; member_id: string; duration_minutes: number; payment_type: string } | undefined;
           if (openRow) {
             db.prepare("DELETE FROM pt_open_bookings WHERE id = ?").run(id);
@@ -90,6 +100,13 @@ export async function POST(request: NextRequest) {
             continue;
           }
           continue;
+        }
+        if (!adminId && trainerActorId) {
+          const tid = (row.trainer_member_id ?? "").trim();
+          if (!tid || tid !== trainerActorId.trim()) {
+            db.close();
+            return NextResponse.json({ error: "You can only cancel sessions on your own trainer availability" }, { status: 403 });
+          }
         }
         db.prepare("DELETE FROM pt_trainer_specific_bookings WHERE id = ?").run(id);
         if (row.payment_type === "credit") {

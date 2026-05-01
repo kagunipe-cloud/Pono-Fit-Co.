@@ -17,11 +17,11 @@ The app tracks how many people are in the gym and records snapshots for analytic
 
 ### 1. Cron not running (Vercel)
 
-On Vercel, the in-process cron (instrumentation) is disabled. Use **Vercel Cron** instead:
+On Vercel, the in-process cron in **`src/instrumentation.ts`** does not run (`VERCEL=1`). Use **Vercel Cron** instead:
 
-- `vercel.json` includes cron jobs. Deploy and they run automatically.
-- Set `CRON_SECRET` in Vercel env (recommended). Vercel sends it in the `Authorization` header.
-- **Note**: Vercel cron runs in **UTC**. Adjust schedules if needed for your timezone.
+- This repo’s **`vercel.json`** schedules **`/api/cron/occupancy-snapshot`** (and renewal / reminders / PT jobs). Deploy and those routes are invoked on the schedule.
+- Set **`CRON_SECRET`** in Vercel env (recommended). Cron invocations include **`Authorization: Bearer <CRON_SECRET>`** when that variable is set; our handlers also accept **`x-cron-secret`** for manual calls.
+- **Note**: Vercel cron runs in **UTC**. Adjust schedules if needed for your timezone (see **`CRON-RENEWALS.md`** for renewal times vs Honolulu).
 
 ### 2. Kisi webhook not configured or failing
 

@@ -28,7 +28,7 @@ function BlockTimeContent() {
   const [dayOfWeek, setDayOfWeek] = useState(1);
   const [startTime, setStartTime] = useState("12:00");
   const [endTime, setEndTime] = useState("13:00");
-  const [description, setDescription] = useState("Unavailable");
+  const [description, setDescription] = useState("");
   const [recurrenceType, setRecurrenceType] = useState<"one_time" | "recurring">("recurring");
   const [occurrenceDate, setOccurrenceDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [weeksCount, setWeeksCount] = useState<string>(""); // "" = indefinitely
@@ -66,6 +66,11 @@ function BlockTimeContent() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const trimmedDesc = description.trim();
+    if (trimmedDesc.length < 2) {
+      alert("Enter a description for this blocked-off time (at least 2 characters). Everyone sees it on the schedule.");
+      return;
+    }
     if (recurrenceType === "one_time" && !occurrenceDate) {
       alert("Please select a date for one-time blocks.");
       return;
@@ -76,7 +81,7 @@ function BlockTimeContent() {
         trainer: trainer.trim(),
         start_time: startTime,
         end_time: endTime,
-        description: description.trim() || "Unavailable",
+        description: trimmedDesc,
         recurrence_type: recurrenceType,
       };
       if (recurrenceType === "one_time") {
@@ -94,7 +99,7 @@ function BlockTimeContent() {
       const data = await res.json();
       if (res.ok) {
         loadBlocks();
-        setDescription("Unavailable");
+        setDescription("");
         setOccurrenceDate(new Date().toISOString().slice(0, 10));
         setWeeksCount("");
       } else {
@@ -240,14 +245,17 @@ function BlockTimeContent() {
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-stone-600 mb-1">Description</label>
+          <label className="block text-sm font-medium text-stone-600 mb-1">Description (required)</label>
           <input
             type="text"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="e.g. Meeting"
+            placeholder="e.g. Staff meeting, holiday closure"
+            required
+            minLength={2}
             className="w-full px-3 py-2 rounded-lg border border-stone-200"
           />
+          <p className="text-xs text-stone-500 mt-1">Shown on the schedule for blocked slots (members and staff).</p>
         </div>
         <button
           type="submit"

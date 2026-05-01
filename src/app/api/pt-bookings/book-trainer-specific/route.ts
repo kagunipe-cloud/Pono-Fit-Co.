@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone } from "../../../../lib/db";
 import { getMemberIdFromSession } from "../../../../lib/session";
-import { getAdminMemberId } from "../../../../lib/admin";
+import { getAdminMemberId, getTrainerMemberId } from "../../../../lib/admin";
 import { ensurePTSlotTables, getPTCreditBalance, normalizePtDurationMinutes, reservedMinutes } from "../../../../lib/pt-slots";
 import { ensureTrainerClient } from "../../../../lib/trainer-clients";
 import { getBlocksInRange, getFreeIntervals, getBookingsForBlock } from "../../../../lib/pt-availability";
@@ -37,8 +37,24 @@ export async function POST(request: NextRequest) {
 
     const sessionMemberId = await getMemberIdFromSession();
     const isAdmin = !!(await getAdminMemberId(request));
-    if (sessionMemberId !== member_id && !isAdmin) {
-      return NextResponse.json({ error: "Forbidden: can only book for yourself unless admin" }, { status: 403 });
+    const trainerActorId = await getTrainerMemberId(request);
+    const blockRowEarly = (() => {
+      const dbEarly = getDb();
+      ensurePTSlotTables(dbEarly);
+      const b = dbEarly.prepare("SELECT trainer_member_id FROM trainer_availability WHERE id = ?").get(trainer_availability_id) as
+        | { trainer_member_id: string | null }
+        | undefined;
+      dbEarly.close();
+      return b;
+    })();
+    const trainerBookingForMember =
+      !!trainerActorId &&
+      !!blockRowEarly &&
+      (blockRowEarly.trainer_member_id ?? "").trim() === trainerActorId.trim() &&
+      sessionMemberId !== member_id;
+
+    if (sessionMemberId !== member_id && !isAdmin && !trainerBookingForMember) {
+      return NextResponse.json({ error: "Forbidden: can only book for yourself unless admin or this trainer" }, { status: 403 });
     }
     if (pay_on_arrival && !isAdmin) {
       return NextResponse.json({ error: "Only admins can book pay-on-arrival" }, { status: 403 });

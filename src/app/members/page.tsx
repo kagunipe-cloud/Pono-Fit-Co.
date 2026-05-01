@@ -152,7 +152,7 @@ export default function MembersPage() {
             href="/admin/email-members"
             className="inline-flex items-center px-4 py-2.5 rounded-lg border border-stone-200 bg-white text-stone-700 font-medium hover:bg-stone-50 transition-colors"
           >
-            Email all members
+            Email members
           </Link>
           <Link
             href="/members/new"

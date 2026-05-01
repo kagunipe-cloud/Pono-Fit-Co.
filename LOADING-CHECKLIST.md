@@ -1,52 +1,52 @@
-# If the page won't load at all
+# If the app won’t load locally
 
-The app is now stripped to the **minimum**: one layout, one page with "The Fox Says" and a link. No database, no sidebar component, no Tailwind in the layout.
+Use this when the dev server fails to start, the browser shows a blank page, or you cannot connect.
 
 ## 1. Start the dev server
 
-In **Cursor**: menu **Terminal → New Terminal**. In that terminal run:
+From the project root:
 
 ```bash
-cd /Users/pbearlives442/Desktop/The-Fox-Says
+cd /path/to/The-Fox-Says
 rm -rf .next
+npm run dev
+```
+
+Wait until the terminal shows something like **Ready** and **Local: http://127.0.0.1:3000**.
+
+- Prefer **`http://127.0.0.1:3000`** (matches `package.json`; avoids some DNS/`localhost` quirks).
+
+If Turbopack or the default bundler causes odd errors, try:
+
+```bash
 npm run dev:webpack
 ```
 
-Wait until you see something like:
+## 2. Open the app
 
-- `✓ Ready in 3s`
-- `- Local: http://127.0.0.1:3000`
+You should get the real app shell (login / dashboard), not a placeholder page.
 
-Leave this terminal open.
+## 3. Common problems
 
-## 2. Open the app in the browser
+**“Can’t connect” / browser cannot open the page**
 
-- Open **Safari** (or Chrome/Firefox).
-- In the address bar type exactly: **http://127.0.0.1:3000**
-- Press Enter.
+- Confirm the dev server is still running and shows no fatal error.
+- Use **`http://127.0.0.1:3000`** (not `https`, unless you’ve added TLS locally).
 
-You should see: **The Fox Says** and a link **Go to Members**.
+**Blank white page**
 
-## 3. If you still see a blank page or "can't connect"
-
-**"Can't connect" / "Safari can't open the page":**
-- The dev server is probably not running. Check the terminal for errors.
-- Try the URL again: **http://127.0.0.1:3000** (not https, not localhost:3001).
-
-**Blank white page:**
-- Try **http://127.0.0.1:3000** (use 127.0.0.1 instead of localhost).
 - Hard refresh: **Cmd+Shift+R** (Mac) or **Ctrl+Shift+R** (Windows).
-- Open **Develop → Show JavaScript Console** (or right‑click → Inspect → Console) and tell me any **red error messages**.
+- Open DevTools → **Console** and note any **red** errors.
 
-**Terminal shows "Address already in use":**
-- Stop whatever is using port 3000, then start again:
-  ```bash
-  lsof -ti :3000 | xargs kill -9
-  npm run dev:webpack
-  ```
+**Port already in use**
 
-## 4. What to tell me
+```bash
+lsof -ti :3000 | xargs kill -9
+npm run dev
+```
 
-- What you see in the **terminal** when you run `npm run dev:webpack` (last few lines).
-- What you see in the **browser** (blank, error message, "can't connect", etc.).
-- Any **red errors** in the browser Console (Develop → Show JavaScript Console).
+## 4. What to capture when asking for help
+
+- Last ~20 lines from the **terminal** after `npm run dev` (or `dev:webpack`).
+- Whether the browser shows blank, an error string, or “can’t connect”.
+- Any **Console** errors from DevTools.

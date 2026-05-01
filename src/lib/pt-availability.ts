@@ -184,6 +184,8 @@ export type BlockSegment = {
   member_id?: string;
   trainer: string;
   unavailable?: boolean;
+  /** When `unavailable`, row id in `unavailable_blocks` (for trainer/admin removing a one-time block). */
+  unavailable_block_id?: number;
   description?: string;
   booking_id?: number;
   payment_type?: string;
@@ -262,6 +264,7 @@ export function getBlockSegments(
         booked: true,
         trainer: block.trainer,
         unavailable: true,
+        unavailable_block_id: u.id,
         description: u.description,
       });
     }

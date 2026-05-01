@@ -1,5 +1,7 @@
 # The Fox Says — Gym Management App Roadmap
 
+> **Note:** This doc mixes shipped milestones with older planning. Implemented behavior and naming can differ (for example, auto-renew is **`members.auto_renew`** and renewal cron details are in **`CRON-RENEWALS.md`**). For day-to-day accuracy, use **`README.md`**, **`MEMBER-LOGIN.md`**, **`KISI.md`**, **`DEPLOY.md`**, and **`docs/`** runbooks.
+
 ## Vision
 Single interface to manage **members**, **offerings** (plans, classes, PT, products), and **bookings**. Members can be assigned subscriptions, class/PT bookings, and one-off purchases via a **shopping cart** that connects to **Stripe** for payment. Memberships support **durations**, **expiry notifications**, and optional **auto-billing**.
 
@@ -9,15 +11,16 @@ Single interface to manage **members**, **offerings** (plans, classes, PT, produ
 
 | Area | Tables | Links |
 |------|--------|--------|
-| **Members** | `members` | → subscriptions, sales, class_bookings, pt_bookings, shopping_cart |
+| **Members** | `members` | → subscriptions, sales, class_bookings, pt_bookings, cart |
 | **Offerings** | `membership_plans`, `classes`, `pt_sessions` (+ products if needed) | Referenced by subscriptions, bookings, cart |
-| **Commerce** | `sales`, `shopping_cart` | sales → member_id; cart line items → member when assigned |
+| **Commerce** | `sales`, `cart`, `cart_items` | sales → member_id; cart line items reference member when assigned |
 | **Bookings** | `class_bookings`, `pt_bookings`, `subscriptions` | member_id, product_id, dates, payment_status |
 
 **Planned additions:**
-- `subscriptions.auto_bill` (boolean) for optional auto-charge on expiry
-- Optional `products` table for retail (or reuse existing structure)
-- Stripe: store `payment_intent_id` / `customer_id` on members or sales as needed
+- Optional retail **`products`** table (or reuse existing structure)
+- Stripe: additional linkage fields on sales/members as needed
+
+**Shipped (was once “planned”):** optional auto-charge on expiry is driven by **`members.auto_renew`**, subscription rows, and **`/api/cron/renew-subscriptions`** — see **`CRON-RENEWALS.md`** (not a `subscriptions.auto_bill` column).
 
 ---
 

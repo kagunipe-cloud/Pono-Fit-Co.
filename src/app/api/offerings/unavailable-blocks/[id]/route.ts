@@ -1,9 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
-import { getAdminMemberId } from "../../../../../lib/admin";
+import { getAdminMemberId, getTrainerMemberId } from "../../../../../lib/admin";
 
 export const dynamic = "force-dynamic";
+
+function trainerDisplayNameMatchesRow(db: ReturnType<typeof getDb>, trainerMemberId: string, rowTrainer: string): boolean {
+  const member = db.prepare("SELECT first_name, last_name FROM members WHERE member_id = ?").get(trainerMemberId) as
+    | { first_name: string | null; last_name: string | null }
+    | undefined;
+  const display = member ? [member.first_name, member.last_name].filter(Boolean).join(" ").trim() : "";
+  const a = display.trim().toLowerCase();
+  const b = (rowTrainer ?? "").trim().toLowerCase();
+  return a !== "" && b !== "" && a === b;
+}
 
 export async function PATCH(
   request: NextRequest,
@@ -51,12 +61,15 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const adminId = await getAdminMemberId(_request);
-    if (!adminId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const adminId = await getAdminMemberId(request);
+    const trainerActorId = await getTrainerMemberId(request);
+    if (!adminId && !trainerActorId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const { id } = await params;
     const numericId = parseInt(id, 10);
     if (Number.isNaN(numericId)) {
@@ -64,11 +77,24 @@ export async function DELETE(
     }
     const db = getDb();
     ensurePTSlotTables(db);
-    const exists = db.prepare("SELECT 1 FROM unavailable_blocks WHERE id = ?").get(numericId);
-    if (!exists) {
+    const row = db.prepare("SELECT id, trainer FROM unavailable_blocks WHERE id = ?").get(numericId) as { id: number; trainer: string } | undefined;
+    if (!row) {
       db.close();
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+
+    if (!adminId && trainerActorId) {
+      const t = (row.trainer ?? "").trim();
+      if (!t) {
+        db.close();
+        return NextResponse.json({ error: "Only an admin can remove facility-wide blocks" }, { status: 403 });
+      }
+      if (!trainerDisplayNameMatchesRow(db, trainerActorId, row.trainer)) {
+        db.close();
+        return NextResponse.json({ error: "You can only remove your own blocked-off time" }, { status: 403 });
+      }
+    }
+
     db.prepare("DELETE FROM unavailable_blocks WHERE id = ?").run(numericId);
     db.close();
     return NextResponse.json({ ok: true });

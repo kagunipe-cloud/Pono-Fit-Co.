@@ -284,7 +284,7 @@ function NavList({
       {isAdmin && member?.show_onboarding_nav !== false && (
         <li>{link("/admin/settings/onboarding", "Onboarding docs")}</li>
       )}
-      {isAdmin && <li>{link("/admin/email-members", "Email all members")}</li>}
+      {isAdmin && <li>{link("/admin/email-members", "Email members")}</li>}
       {mainSections.map((s) => (
         <React.Fragment key={s.slug}>
           <li>{link(`/${s.slug}`, s.title, pathname === `/${s.slug}`)}</li>

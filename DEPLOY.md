@@ -1,6 +1,6 @@
 # Deploying The Fox Says (Pono Fit Co.) for testing
 
-Your app is **Next.js** with **SQLite** (file at `data/the-fox-says.db`) and **in-process cron** (subscription renewal, expiry reminders, PT session processing). For that stack you need:
+Your app is **Next.js** with **SQLite** (file at `data/the-fox-says.db`) and **in-process cron** when not on Vercel (`src/instrumentation.ts`: subscription renewal, expiry reminders, hourly PT processing, occupancy snapshots every 15 minutes). For that stack you need:
 
 1. A host that can run a **long-running Node process** (so the DB file and cron work).
 2. **Persistent storage** for the `data/` folder (so the SQLite DB isn’t wiped on redeploy).
@@ -42,6 +42,7 @@ In Railway → your service → **Variables**, add every variable from `.env.loc
 - `EMAIL_SMTP_USER`
 - `EMAIL_SMTP_PASS`
 - `EMAIL_FROM`
+  - If your host blocks SMTP (port 587), use **Gmail API** env vars instead — see **`docs/EMAIL_GMAIL_API_SETUP.md`** (`GMAIL_OAUTH_*`, `GMAIL_FROM_EMAIL`).
 - `BRAND_NAME`
 - `ADMIN_EMAIL`
 - `FDC_API_KEY`
@@ -61,7 +62,7 @@ Do **not** commit these values; only set them in Railway.
 
 ### 6. Cron
 
-- Your `instrumentation.ts` only runs when **not** on Vercel (`VERCEL !== "1"`). On Railway it will run, so the in-process cron (daily renewal, expiry reminders, hourly PT processing) will run as long as the service is up.
+- Your `src/instrumentation.ts` only runs when **not** on Vercel (`VERCEL !== "1"`). On Railway it will run, so the in-process cron (daily renewal, expiry reminders, hourly PT processing, occupancy snapshots) will run as long as the service is up.
 - For production you can later add an external cron (e.g. cron-job.org) that calls your API with `x-cron-secret` / `CRON_SECRET` if you want a backup or move off in-process cron.
 
 ---
@@ -73,7 +74,7 @@ Do **not** commit these values; only set them in Railway.
 3. **Start**: `npm start`
 4. Add a **Disk** (persistent storage) and mount it so that your app’s `data/` directory is on that disk (Render docs show the mount path, e.g. `/opt/render/project/data`). You may need to set an env var or change `db.ts` to use a path on that disk (e.g. `process.env.DATA_PATH || "data"`).
 5. Set all the same env vars as in Option A; set `NEXT_PUBLIC_APP_URL` to your Render URL.
-6. Deploy. Cron in `instrumentation.ts` will run on Render because it’s not Vercel.
+6. Deploy. Cron in **`src/instrumentation.ts`** will run on Render because it’s not Vercel.
 
 ---
 

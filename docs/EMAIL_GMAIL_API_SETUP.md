@@ -60,5 +60,5 @@ If Google says "The website of your home page URL is not registered to you":
 
 ## Notes
 
-- You can remove SMTP variables (`SMTP_HOST`, etc.) if you use Gmail API only.
+- You can remove SMTP variables (`EMAIL_SMTP_HOST`, `EMAIL_SMTP_USER`, `EMAIL_SMTP_PASS`, etc.) if you use Gmail API only.
 - If both SMTP and Gmail API are set, **Gmail API is used** (so it works on hosts that block SMTP).

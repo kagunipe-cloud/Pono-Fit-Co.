@@ -31,13 +31,16 @@ type CellItem =
   | { type: "class"; id: number; name: string; sub: string | null; occurrence_date: string; occurrence_time: string; booked_count: number; capacity: number; duration_minutes: number; classStartSlot: number; spanSlots: number; class_id?: number | null; recurring_class_id?: number | null; session_kind?: string; flat_session_price?: string | null }
   | { type: "class_span" }
   | { type: "unavailable"; id: number; description: string }
-  | { type: "pt_segment"; blockId: number; trainer: string; start_time: string; end_time: string; booked: boolean; member_name?: string; member_id?: string; booking_id?: number; unavailable?: boolean; description?: string; payment_type?: string }
+  | { type: "pt_segment"; blockId: number; trainer: string; start_time: string; end_time: string; booked: boolean; member_name?: string; member_id?: string; booking_id?: number; unavailable?: boolean; unavailable_block_id?: number; description?: string; payment_type?: string }
   | { type: "open_booked"; id?: number; member_id?: string; member_name?: string; trainer_name?: string | null; payment_type?: string }
   | { type: "available" }
   | { type: "trainer_not_available" };
 
 const SLOT_MINUTES = 30;
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+/** Light-gray PT slots: no recurring trainer hours (not an admin block). */
+const SCHEDULE_LABEL_TRAINER_NO_HOURS = "Trainer/s Unavailable";
 
 /** Week range in gym timezone: Monday YYYY-MM-DD. */
 function getInitialWeekStartStr(tz: string): string {
@@ -115,6 +118,18 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
   const refreshKey = scheduleRefreshKey ?? localRefreshKey;
   type SelectedSlot = { date: string; slotMin: number; timeStr: string; item: CellItem };
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
+
+  const [trainerPickMembers, setTrainerPickMembers] = useState<{ member_id: string; first_name: string | null; last_name: string | null; email: string | null }[]>(
+    []
+  );
+  const [trainerPickLoading, setTrainerPickLoading] = useState(false);
+  const [trainerBookMemberQuery, setTrainerBookMemberQuery] = useState("");
+  const [trainerBookMemberId, setTrainerBookMemberId] = useState("");
+  const [trainerBookDuration, setTrainerBookDuration] = useState<30 | 60 | 90>(60);
+  const [trainerBookUseCredit, setTrainerBookUseCredit] = useState(false);
+  const [trainerBookSubmitting, setTrainerBookSubmitting] = useState(false);
+  const [trainerBlockSubmitting, setTrainerBlockSubmitting] = useState(false);
+  const [trainerHoldDescription, setTrainerHoldDescription] = useState("");
 
   // Recompute initial week when gym timezone loads/updates (SettingsContext fetches async)
   useEffect(() => {
@@ -263,6 +278,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                   ...(seg.member_id != null && String(seg.member_id).trim() !== "" && { member_id: String(seg.member_id).trim() }),
                   ...(seg.booking_id != null && { booking_id: seg.booking_id }),
                   ...(seg.unavailable && { unavailable: true, description: seg.description }),
+                  ...(seg.unavailable_block_id != null && { unavailable_block_id: seg.unavailable_block_id }),
                   ...(seg.payment_type != null && { payment_type: seg.payment_type }),
                 };
                 break;
@@ -307,6 +323,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
               ...(first.seg.member_id != null && String(first.seg.member_id).trim() !== "" && { member_id: String(first.seg.member_id).trim() }),
               ...(first.seg.booking_id != null && { booking_id: first.seg.booking_id }),
               ...(first.seg.unavailable && { unavailable: true, description: first.seg.description }),
+              ...(first.seg.unavailable_block_id != null && { unavailable_block_id: first.seg.unavailable_block_id }),
               ...(first.seg.payment_type != null && { payment_type: first.seg.payment_type }),
             };
             map.set(key, ptItem);
@@ -364,7 +381,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
   }
 
   async function handleRemoveUnavailable(id: number) {
-    if (!confirm("Remove this blocked-off time?")) return;
+    if (!confirm("Clear this blocked-off hold? If members could book this window, it becomes bookable again.")) return;
     setUnavailableDeletingId(id);
     try {
       const res = await fetch(`/api/offerings/unavailable-blocks/${id}`, { method: "DELETE" });
@@ -476,6 +493,114 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
     }
   }
 
+  const trainerFilteredPickMembers = useMemo(() => {
+    const q = trainerBookMemberQuery.trim().toLowerCase();
+    if (!trainerPickMembers.length) return [];
+    if (!q) return trainerPickMembers.slice(0, 40);
+    return trainerPickMembers
+      .filter(
+        (m) =>
+          (m.first_name ?? "").toLowerCase().includes(q) ||
+          (m.last_name ?? "").toLowerCase().includes(q) ||
+          (m.email ?? "").toLowerCase().includes(q) ||
+          (m.member_id ?? "").toLowerCase().includes(q)
+      )
+      .slice(0, 40);
+  }, [trainerPickMembers, trainerBookMemberQuery]);
+
+  useEffect(() => {
+    if (!selectedSlot) {
+      setTrainerBookMemberId("");
+      setTrainerBookMemberQuery("");
+      setTrainerPickMembers([]);
+      setTrainerPickLoading(false);
+      setTrainerBookDuration(60);
+      setTrainerBookUseCredit(false);
+      setTrainerHoldDescription("");
+      return;
+    }
+    if (!isTrainer) return;
+    const it = selectedSlot.item;
+    if (it.type !== "pt_segment" || it.booked || it.unavailable) return;
+    setTrainerBookMemberId("");
+    setTrainerBookMemberQuery("");
+    setTrainerBookDuration(60);
+    setTrainerBookUseCredit(false);
+    setTrainerPickLoading(true);
+    fetch("/api/members")
+      .then((r) => r.json())
+      .then((list) => setTrainerPickMembers(Array.isArray(list) ? list.slice(0, 250) : []))
+      .catch(() => setTrainerPickMembers([]))
+      .finally(() => setTrainerPickLoading(false));
+  }, [selectedSlot, isTrainer]);
+
+  async function handleTrainerQuickBlock() {
+    if (!selectedSlot) return;
+    const desc = trainerHoldDescription.trim();
+    if (desc.length < 2) {
+      alert("Enter a short reason for this hold (everyone sees it on the schedule).");
+      return;
+    }
+    setTrainerBlockSubmitting(true);
+    try {
+      const endMin = parseTimeToMinutes(selectedSlot.timeStr) + SLOT_MINUTES;
+      const res = await fetch("/api/offerings/unavailable-blocks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recurrence_type: "one_time",
+          occurrence_date: selectedSlot.date,
+          start_time: selectedSlot.timeStr,
+          end_time: timeMinutesToTimeString(endMin),
+          description: desc,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setLocalRefreshKey((k) => k + 1);
+        setSelectedSlot(null);
+      } else {
+        alert(typeof data.error === "string" ? data.error : "Failed to block time");
+      }
+    } finally {
+      setTrainerBlockSubmitting(false);
+    }
+  }
+
+  async function handleTrainerBookPt() {
+    if (!selectedSlot || selectedSlot.item.type !== "pt_segment") return;
+    const item = selectedSlot.item;
+    if (item.booked || item.unavailable) return;
+    if (!trainerBookMemberId) {
+      alert("Choose a member to book.");
+      return;
+    }
+    setTrainerBookSubmitting(true);
+    try {
+      const res = await fetch("/api/pt-bookings/book-trainer-specific", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trainer_availability_id: item.blockId,
+          occurrence_date: selectedSlot.date,
+          start_time: selectedSlot.timeStr,
+          session_duration_minutes: trainerBookDuration,
+          member_id: trainerBookMemberId,
+          use_credit: trainerBookUseCredit,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setLocalRefreshKey((k) => k + 1);
+        setSelectedSlot(null);
+      } else {
+        alert(typeof data.error === "string" ? data.error : "Could not book this slot");
+      }
+    } finally {
+      setTrainerBookSubmitting(false);
+    }
+  }
+
   const weekLabel = `${formatInAppTz(new Date(weekStartStr + "T12:00:00Z"), { month: "short", day: "numeric", year: "numeric" }, tz)} – ${formatInAppTz(new Date(toStr + "T12:00:00Z"), { month: "short", day: "numeric", year: "numeric" }, tz)}`;
 
   return (
@@ -500,6 +625,11 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
               </p>
             </>
           )}
+          {isTrainer && !allowAdminEdit && (
+            <p className="mt-1 text-base font-medium text-stone-700">
+              Tap a cell: add weekly hours where you have none yet, clear a blocked hold, add a one-off hold, or book open PT slots.
+            </p>
+          )}
           {isTrainer && allowAdminEdit && trainerDisplayName && (
             <p className="mt-1 text-sm text-stone-500">
               Adjust this trainer&apos;s availability:{" "}
@@ -510,7 +640,8 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-stone-800">Class</span>
             <span className="rounded-lg border border-orange-300 bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-900">Open Group PT</span>
-            <span className="rounded-lg bg-stone-400 px-2.5 py-1 text-xs font-medium text-stone-100">Unavailable</span>
+            <span className="rounded-lg border border-stone-300 bg-stone-200 px-2.5 py-1 text-xs font-medium text-stone-700">{SCHEDULE_LABEL_TRAINER_NO_HOURS}</span>
+            <span className="rounded-lg bg-stone-600 px-2.5 py-1 text-xs font-medium text-stone-100">Blocked hold</span>
             {(isMaster || isTrainer || allowAdminEdit) && (
               <>
                 <span className="rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-medium text-amber-50">Open (needs trainer)</span>
@@ -544,7 +675,8 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
             <span className="font-medium text-stone-600">{weekLabel}</span>
             <span className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-stone-800">Class</span>
             <span className="rounded-lg border border-orange-300 bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-900">Open Group PT</span>
-            <span className="rounded-lg bg-stone-400 px-2.5 py-1 text-xs font-medium text-stone-100">Unavailable</span>
+            <span className="rounded-lg border border-stone-300 bg-stone-200 px-2.5 py-1 text-xs font-medium text-stone-700">{SCHEDULE_LABEL_TRAINER_NO_HOURS}</span>
+            <span className="rounded-lg bg-stone-600 px-2.5 py-1 text-xs font-medium text-stone-100">Blocked hold</span>
             {(isMaster || isTrainer || allowAdminEdit) && (
               <>
                 <span className="rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-medium text-amber-50">Open (needs trainer)</span>
@@ -627,26 +759,28 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                               </div>
                             </div>
                           )}
-                          {item.type === "unavailable" && (
+                          {item.type === "unavailable" && (() => {
+                            const holdLabel = (item.description ?? "").trim() || "Blocked hold";
+                            const staff = isMaster || allowAdminEdit || isTrainer;
+                            return (
                             <div
-                              className="rounded-lg bg-stone-400 min-h-[2.5rem] flex items-center justify-between gap-1 px-2 py-1.5 text-stone-100"
-                              title={isMaster || isTrainer || allowAdminEdit ? item.description : "Unavailable"}
+                              className={`rounded-lg bg-stone-600 border border-stone-700 min-h-[2.5rem] flex items-center gap-1 px-2 py-1.5 text-stone-100 ${staff ? "justify-between" : "justify-center"}`}
+                              title={holdLabel}
                             >
-                              {(isMaster || isTrainer || allowAdminEdit) && item.description ? (
-                                <span className="text-xs truncate flex-1 min-w-0" title={item.description}>{item.description}</span>
-                              ) : null}
-                              {(isMaster || allowAdminEdit) && (
+                              <span className={`text-xs truncate flex-1 min-w-0 ${staff ? "" : "text-center"}`}>{holdLabel}</span>
+                              {staff ? (
                                 <button
                                   type="button"
                                   onClick={(e) => { e.stopPropagation(); handleRemoveUnavailable(item.id); }}
                                   disabled={unavailableDeletingId === item.id}
                                   className="text-xs text-red-200 hover:text-white shrink-0 disabled:opacity-50"
                                 >
-                                  {unavailableDeletingId === item.id ? "…" : "Remove"}
+                                  {unavailableDeletingId === item.id ? "…" : "Clear"}
                                 </button>
-                              )}
+                              ) : null}
                             </div>
-                          )}
+                            );
+                          })()}
                           {item.type === "open_booked" && (
                             <div
                               className={`rounded-lg min-h-[2.5rem] flex items-center px-2 py-1.5 ${
@@ -673,13 +807,21 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                                 ? "bg-red-500 border-red-600 text-red-50"
                                 : (isMaster || isTrainer || allowAdminEdit) && !item.unavailable
                                   ? "bg-violet-500 border-violet-600 text-violet-50"
-                                  : "bg-stone-400 border-stone-500 text-stone-100"
+                                  : item.unavailable
+                                    ? "bg-stone-600 border-stone-700 text-stone-100"
+                                    : "bg-stone-400 border-stone-500 text-stone-100"
                               : "bg-brand-50 border-2 border-brand-500 hover:border-brand-600"}`}>
-                              {item.booked ? (isMaster || isTrainer || allowAdminEdit ? (
-                                <span className={`text-xs block truncate ${item.payment_type === "pay_on_arrival" ? "text-red-100" : item.unavailable ? "text-stone-200" : "text-violet-100"}`} title={item.unavailable ? (item.description ?? "Blocked") : (item.payment_type === "pay_on_arrival" ? `${item.member_name ?? "Booked"} (pay on arrival)` : `Booked: ${item.trainer}`)}>
-                                  {item.unavailable ? (item.description ?? "Blocked") : (item.payment_type === "pay_on_arrival" ? `${item.member_name ?? "Booked"} · Pay on arrival` : `Booked: ${item.trainer}`)}
-                                </span>
-                              ) : null) : (
+                              {item.booked ? (
+                                item.unavailable ? (
+                                  <span className="text-xs block truncate text-center w-full px-0.5" title={(item.description ?? "").trim() || "Blocked hold"}>
+                                    {(item.description ?? "").trim() || "Blocked hold"}
+                                  </span>
+                                ) : (isMaster || isTrainer || allowAdminEdit) ? (
+                                  <span className={`text-xs block truncate ${item.payment_type === "pay_on_arrival" ? "text-red-100" : "text-violet-100"}`} title={item.payment_type === "pay_on_arrival" ? `${item.member_name ?? "Booked"} (pay on arrival)` : `Booked: ${item.trainer}`}>
+                                    {item.payment_type === "pay_on_arrival" ? `${item.member_name ?? "Booked"} · Pay on arrival` : `Booked: ${item.trainer}`}
+                                  </span>
+                                ) : null
+                              ) : (
                                 <>
                                   <span className="text-xs font-medium text-stone-800">Available</span>
                                   {!isTrainer && <span className="text-xs text-stone-500 block truncate">{item.trainer}</span>}
@@ -697,15 +839,18 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                                 : "border-brand-200 bg-brand-50 hover:bg-brand-100"
                             } px-2 py-1.5`}>
                               {isTrainer ? (
-                                <span className="text-xs text-stone-500">Unavailable</span>
+                                <span className="text-xs text-stone-600 font-medium">{SCHEDULE_LABEL_TRAINER_NO_HOURS}</span>
                               ) : (
                                 <Link href={variant === "master" ? `/admin/book-pt-for-member?date=${date}&time=${timeStr}` : `/member/book-pt?date=${date}&time=${timeStr}${bookPtQuery || ""}${trainerQuery || ""}`} className="text-xs text-brand-700 hover:text-brand-800 hover:underline">Available</Link>
                               )}
                             </div>
                           )}
                           {item.type === "trainer_not_available" && (
-                            <div className="rounded-lg border border-stone-400 bg-stone-300 min-h-[2.5rem] flex items-center justify-center px-2 py-1.5">
-                              <span className="text-xs text-stone-500">Unavailable</span>
+                            <div
+                              className="rounded-lg border border-stone-300 bg-stone-200 min-h-[2.5rem] flex items-center justify-center px-2 py-1.5"
+                              title="No recurring PT hours here yet — not an admin hold"
+                            >
+                              <span className="text-xs text-stone-700 font-medium text-center leading-tight">{SCHEDULE_LABEL_TRAINER_NO_HOURS}</span>
                             </div>
                           )}
                         </td>
@@ -732,19 +877,70 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
 
       {(isMaster || isTrainer) && selectedSlot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setSelectedSlot(null)}>
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-semibold text-stone-800">Slot: {selectedSlot.date} at {selectedSlot.timeStr}</h3>
             <ul className="space-y-2 text-sm">
-              <li>
-                <Link
-                  href={isTrainer && trainerDisplayName
-                    ? `/admin/block-time?trainer=${encodeURIComponent(trainerDisplayName)}&day=${getDayOfWeek(selectedSlot.date)}&start=${selectedSlot.timeStr}&end=${timeMinutesToTimeString(parseTimeToMinutes(selectedSlot.timeStr) + SLOT_MINUTES)}`
-                    : `/admin/block-time?day=${getDayOfWeek(selectedSlot.date)}&start=${selectedSlot.timeStr}&end=${timeMinutesToTimeString(parseTimeToMinutes(selectedSlot.timeStr) + SLOT_MINUTES)}`}
-                  className="text-brand-600 hover:underline block"
-                >
-                  Add blocked-off time
-                </Link>
-              </li>
+              {isTrainer && !allowAdminEdit && selectedSlot.item.type === "trainer_not_available" && onAddAvailabilityForSlot && (
+                <li className="rounded-lg border border-brand-100 bg-brand-50/90 p-3 space-y-2">
+                  <p className="text-xs text-stone-700 leading-snug">
+                    This slot shows as <strong>{SCHEDULE_LABEL_TRAINER_NO_HOURS}</strong> until you add weekly PT hours here — that&apos;s the default, not a staff hold you remove.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onAddAvailabilityForSlot(getDayOfWeek(selectedSlot.date), selectedSlot.timeStr, timeMinutesToTimeString(parseTimeToMinutes(selectedSlot.timeStr) + SLOT_MINUTES));
+                      setSelectedSlot(null);
+                    }}
+                    className="w-full py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700"
+                  >
+                    Add weekly PT availability for this time
+                  </button>
+                </li>
+              )}
+              {(isMaster || allowAdminEdit) && (
+                <li>
+                  <Link
+                    href={
+                      isTrainer && trainerDisplayName
+                        ? `/admin/block-time?trainer=${encodeURIComponent(trainerDisplayName)}&day=${getDayOfWeek(selectedSlot.date)}&start=${selectedSlot.timeStr}&end=${timeMinutesToTimeString(parseTimeToMinutes(selectedSlot.timeStr) + SLOT_MINUTES)}`
+                        : `/admin/block-time?day=${getDayOfWeek(selectedSlot.date)}&start=${selectedSlot.timeStr}&end=${timeMinutesToTimeString(parseTimeToMinutes(selectedSlot.timeStr) + SLOT_MINUTES)}`
+                    }
+                    className="text-brand-600 hover:underline block"
+                  >
+                    Add blocked-off time (full editor)
+                  </Link>
+                </li>
+              )}
+              {isTrainer && !allowAdminEdit && (
+                <li className="rounded-lg border border-stone-100 bg-stone-50 p-3 space-y-1.5">
+                  <label className="block text-xs font-medium text-stone-600">Hold description (required)</label>
+                  <p className="text-xs text-stone-500">Everyone sees this text on dark &quot;Blocked hold&quot; cells when you add a one-off hold.</p>
+                  <input
+                    type="text"
+                    value={trainerHoldDescription}
+                    onChange={(e) => setTrainerHoldDescription(e.target.value)}
+                    placeholder="e.g. Dentist, vacation day"
+                    className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                  />
+                </li>
+              )}
+              {isTrainer && !allowAdminEdit && (
+                <li>
+                  <button
+                    type="button"
+                    disabled={trainerBlockSubmitting}
+                    onClick={() => void handleTrainerQuickBlock()}
+                    className="text-left text-brand-600 hover:underline disabled:opacity-50"
+                  >
+                    {trainerBlockSubmitting ? "Saving…" : "Block this 30-minute slot (one-time)"}
+                  </button>
+                  <span className="block text-xs text-stone-500 mt-0.5">
+                    {selectedSlot.item.type === "trainer_not_available"
+                      ? "Optional: adds an explicit one-date hold on top of having no weekly hours (e.g. appointment)."
+                      : "Creates an explicit hold for just this half-hour on this date (vacation, personal time)."}
+                  </span>
+                </li>
+              )}
               {selectedSlot.item.type === "class" && selectedSlot.item.booked_count > 0 && (isMaster || allowAdminEdit) && (
                 <>
                   <li className="pt-2 mt-1 border-t border-stone-200 text-xs font-semibold uppercase tracking-wide text-stone-500">
@@ -765,10 +961,10 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                   </li>
                 </>
               )}
-              {selectedSlot.item.type === "unavailable" && (isMaster || allowAdminEdit) && (
+              {selectedSlot.item.type === "unavailable" && (isMaster || allowAdminEdit || isTrainer) && (
                 <li>
                   <button type="button" onClick={() => { if (selectedSlot.item.type === "unavailable") { handleRemoveUnavailable(selectedSlot.item.id); setSelectedSlot(null); } }} className="text-red-600 hover:underline">
-                    Remove this blocked-off time
+                    Clear blocked-off hold
                   </button>
                 </li>
               )}
@@ -798,7 +994,86 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                   </Link>
                 </li>
               )}
-              {selectedSlot.item.type === "pt_segment" && selectedSlot.item.booked && selectedSlot.item.booking_id != null && !selectedSlot.item.unavailable && (isMaster || allowAdminEdit) && (
+              {selectedSlot.item.type === "pt_segment" && selectedSlot.item.unavailable && selectedSlot.item.unavailable_block_id != null && (isTrainer || allowAdminEdit) && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const id = selectedSlot.item.type === "pt_segment" ? selectedSlot.item.unavailable_block_id : undefined;
+                      if (id != null) {
+                        handleRemoveUnavailable(id);
+                        setSelectedSlot(null);
+                      }
+                    }}
+                    className="text-red-600 hover:underline"
+                  >
+                    Clear one-off hold (this blocked window)
+                  </button>
+                </li>
+              )}
+              {selectedSlot.item.type === "pt_segment" && !selectedSlot.item.booked && !selectedSlot.item.unavailable && isTrainer && (
+                <li className="rounded-lg border border-stone-200 bg-stone-50 p-3 space-y-2">
+                  <span className="font-medium text-stone-800 block">Book PT for a member</span>
+                  <span className="text-xs text-stone-600 block">
+                    Session is with you ({trainerDisplayName ?? "trainer"}). Starts at {selectedSlot.timeStr} for this slot.
+                  </span>
+                  <label className="block text-xs font-medium text-stone-500">Find member</label>
+                  <input
+                    type="search"
+                    value={trainerBookMemberQuery}
+                    onChange={(e) => setTrainerBookMemberQuery(e.target.value)}
+                    placeholder="Name, email, or member ID"
+                    className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                  />
+                  <select
+                    value={trainerBookMemberId}
+                    onChange={(e) => setTrainerBookMemberId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                    disabled={trainerPickLoading}
+                  >
+                    <option value="">{trainerPickLoading ? "Loading members…" : "— Select member —"}</option>
+                    {trainerFilteredPickMembers.map((m) => (
+                      <option key={m.member_id} value={m.member_id}>
+                        {[m.first_name, m.last_name].filter(Boolean).join(" ").trim() || m.member_id}
+                        {m.email ? ` · ${m.email}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <span className="text-xs font-medium text-stone-500">Duration</span>
+                    <select
+                      value={trainerBookDuration}
+                      onChange={(e) => setTrainerBookDuration(Number(e.target.value) as 30 | 60 | 90)}
+                      className="px-2 py-1.5 rounded-lg border border-stone-200 text-sm"
+                    >
+                      <option value={30}>30 min</option>
+                      <option value={60}>60 min</option>
+                      <option value={90}>90 min</option>
+                    </select>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm text-stone-700 cursor-pointer">
+                    <input type="checkbox" checked={trainerBookUseCredit} onChange={(e) => setTrainerBookUseCredit(e.target.checked)} />
+                    Use member&apos;s PT credit (if they have one for this length)
+                  </label>
+                  <button
+                    type="button"
+                    disabled={trainerBookSubmitting}
+                    onClick={() => void handleTrainerBookPt()}
+                    className="w-full py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+                  >
+                    {trainerBookSubmitting ? "Booking…" : "Book session"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={trainerBlockSubmitting}
+                    onClick={() => void handleTrainerQuickBlock()}
+                    className="w-full py-2 rounded-lg border border-stone-300 text-stone-700 text-sm font-medium hover:bg-stone-100 disabled:opacity-50"
+                  >
+                    {trainerBlockSubmitting ? "Saving…" : "Or block this slot instead (one-time)"}
+                  </button>
+                </li>
+              )}
+              {selectedSlot.item.type === "pt_segment" && selectedSlot.item.booked && selectedSlot.item.booking_id != null && !selectedSlot.item.unavailable && (isMaster || allowAdminEdit || isTrainer) && (
                 <>
                   <li className="pt-2 mt-1 border-t border-stone-200 text-xs font-semibold uppercase tracking-wide text-stone-500">
                     Booked PT session
@@ -810,34 +1085,38 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                       </Link>
                     </li>
                   ) : null}
-                  <li>
-                    <Link
-                      href={`/admin/book-pt-for-member?date=${encodeURIComponent(selectedSlot.date)}&time=${encodeURIComponent(String(selectedSlot.item.start_time ?? "").trim().slice(0, 5))}&block=${selectedSlot.item.blockId}${selectedSlot.item.member_id ? `&member_id=${encodeURIComponent(selectedSlot.item.member_id)}` : ""}`}
-                      className="text-brand-600 hover:underline block"
-                    >
-                      Book a new time (cancel this session first if moving them)
-                    </Link>
-                  </li>
-                  {selectedSlot.item.payment_type === "pay_on_arrival" && selectedSlot.item.member_id ? (
+                  {(isMaster || allowAdminEdit) && (
                     <>
                       <li>
-                        <Link href={`/members/${encodeURIComponent(selectedSlot.item.member_id)}/cart`} className="text-brand-600 hover:underline block">
-                          Pay now (desk checkout)
+                        <Link
+                          href={`/admin/book-pt-for-member?date=${encodeURIComponent(selectedSlot.date)}&time=${encodeURIComponent(String(selectedSlot.item.start_time ?? "").trim().slice(0, 5))}&block=${selectedSlot.item.blockId}${selectedSlot.item.member_id ? `&member_id=${encodeURIComponent(selectedSlot.item.member_id)}` : ""}`}
+                          className="text-brand-600 hover:underline block"
+                        >
+                          Book a new time (cancel this session first if moving them)
                         </Link>
                       </li>
-                      <li>
-                        <Link href={`/members/${encodeURIComponent(selectedSlot.item.member_id)}`} className="text-brand-600 hover:underline block">
-                          Update payment method
-                        </Link>
-                      </li>
+                      {selectedSlot.item.payment_type === "pay_on_arrival" && selectedSlot.item.member_id ? (
+                        <>
+                          <li>
+                            <Link href={`/members/${encodeURIComponent(selectedSlot.item.member_id)}/cart`} className="text-brand-600 hover:underline block">
+                              Pay now (desk checkout)
+                            </Link>
+                          </li>
+                          <li>
+                            <Link href={`/members/${encodeURIComponent(selectedSlot.item.member_id)}`} className="text-brand-600 hover:underline block">
+                              Update payment method
+                            </Link>
+                          </li>
+                        </>
+                      ) : selectedSlot.item.member_id ? (
+                        <li>
+                          <Link href={`/members/${encodeURIComponent(selectedSlot.item.member_id)}`} className="text-brand-600 hover:underline block">
+                            Update payment method
+                          </Link>
+                        </li>
+                      ) : null}
                     </>
-                  ) : selectedSlot.item.member_id ? (
-                    <li>
-                      <Link href={`/members/${encodeURIComponent(selectedSlot.item.member_id)}`} className="text-brand-600 hover:underline block">
-                        Update payment method
-                      </Link>
-                    </li>
-                  ) : null}
+                  )}
                   <li>
                     <button
                       type="button"
@@ -958,19 +1237,21 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                   </Link>
                 </li>
               )}
-              {selectedSlot.item.type === "pt_segment" && !selectedSlot.item.booked && isTrainer && (
+              {selectedSlot.item.type === "pt_segment" && !selectedSlot.item.booked && !selectedSlot.item.unavailable && isTrainer && (
                 <li>
                   <button
                     type="button"
                     onClick={() => { if (selectedSlot.item.type === "pt_segment") { handleRemoveAvailabilityBlock(selectedSlot.item.blockId); } }}
                     disabled={availabilityDeletingId === (selectedSlot.item.type === "pt_segment" ? selectedSlot.item.blockId : null)}
-                    className="text-red-600 hover:underline disabled:opacity-50"
+                    className="text-red-600 hover:underline disabled:opacity-50 text-sm"
                   >
-                    {availabilityDeletingId === (selectedSlot.item.type === "pt_segment" ? selectedSlot.item.blockId : null) ? "Removing…" : "Remove this availability block"}
+                    {availabilityDeletingId === (selectedSlot.item.type === "pt_segment" ? selectedSlot.item.blockId : null)
+                      ? "Removing…"
+                      : "Remove entire recurring availability block (not just this week)"}
                   </button>
                 </li>
               )}
-              {isTrainer && onAddAvailabilityForSlot && (selectedSlot.item.type === "available" || allowAdminEdit) && (
+              {isTrainer && onAddAvailabilityForSlot && selectedSlot.item.type === "available" && (
                 <li>
                   <button
                     type="button"
@@ -980,7 +1261,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                     }}
                     className="text-brand-600 hover:underline"
                   >
-                    Add availability for this slot
+                    Add weekly PT availability for this time
                   </button>
                 </li>
               )}

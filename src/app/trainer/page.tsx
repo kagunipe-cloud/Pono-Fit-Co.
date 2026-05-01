@@ -120,7 +120,7 @@ export default function TrainerSchedulePage() {
   return (
     <div>
       <p className="mb-4 text-sm text-stone-600">
-        Your availability time slots and admin-blocked-off time. Members book PT with you from the Schedule.
+        Tap the weekly grid to block one-off time, book a member on open PT slots, or scroll down for recurring availability blocks. Members still book you from the public Schedule page.
       </p>
       <ScheduleGrid
         variant="trainer"

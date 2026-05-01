@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { getUnavailableInRange } from "../../../../lib/pt-availability";
-import { getAdminMemberId } from "../../../../lib/admin";
+import { getAdminMemberId, getTrainerMemberId } from "../../../../lib/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -29,22 +29,51 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/** POST { trainer?, day_of_week?, start_time, end_time, description, recurrence_type: 'one_time'|'recurring', occurrence_date?, weeks_count? } — Admin only.
- * one_time: occurrence_date required (single date).
- * recurring: day_of_week required, occurrence_date = start date (default today), weeks_count = null (indefinitely) or N weeks. */
+/** POST { trainer?, day_of_week?, start_time, end_time, description, recurrence_type: 'one_time'|'recurring', occurrence_date?, weeks_count? }
+ * Admin: full behavior.
+ * Trainer (not acting as admin): only **one_time** blocks; `trainer` is forced to their display name (body trainer ignored). */
 export async function POST(request: NextRequest) {
   try {
     const adminId = await getAdminMemberId(request);
-    if (!adminId) {
+    const trainerActorId = await getTrainerMemberId(request);
+    if (!adminId && !trainerActorId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const dbAuth = getDb();
+    ensurePTSlotTables(dbAuth);
+    let trainerNameForced: string | null = null;
+    if (!adminId && trainerActorId) {
+      const member = dbAuth.prepare("SELECT first_name, last_name FROM members WHERE member_id = ?").get(trainerActorId) as
+        | { first_name: string | null; last_name: string | null }
+        | undefined;
+      trainerNameForced = member ? [member.first_name, member.last_name].filter(Boolean).join(" ").trim() || "Trainer" : "Trainer";
+    }
+    dbAuth.close();
+
     const body = await request.json();
-    const trainer = (body.trainer ?? "").trim();
+    let trainer = (body.trainer ?? "").trim();
     const recurrenceType = (body.recurrence_type ?? "recurring").toString().toLowerCase();
-    const isOneTime = recurrenceType === "one_time";
+    let isOneTime = recurrenceType === "one_time";
+
+    if (!adminId && trainerActorId) {
+      if (!isOneTime) {
+        return NextResponse.json({ error: "Trainers can only create one-time unavailable blocks from the schedule" }, { status: 400 });
+      }
+      trainer = trainerNameForced ?? trainer;
+    }
+
+    const isTrainerOnly = !adminId && !!trainerActorId;
     const start_time = (body.start_time ?? "12:00").toString().trim();
     const end_time = (body.end_time ?? "13:00").toString().trim();
-    const description = (body.description ?? "").trim() || "Unavailable";
+    const rawDesc = (body.description ?? "").toString().trim();
+    if (adminId && rawDesc.length < 2) {
+      return NextResponse.json({ error: "Description is required for blocked-off time (at least 2 characters)." }, { status: 400 });
+    }
+    if (isTrainerOnly && rawDesc.length < 2) {
+      return NextResponse.json({ error: "Description is required for a hold (at least 2 characters)." }, { status: 400 });
+    }
+    const description = rawDesc;
 
     let day_of_week: number;
     let occurrence_date: string | null = null;
@@ -73,6 +102,10 @@ export async function POST(request: NextRequest) {
 
     const db = getDb();
     ensurePTSlotTables(db);
+    if (isTrainerOnly && !trainer.trim()) {
+      db.close();
+      return NextResponse.json({ error: "Could not resolve trainer name" }, { status: 400 });
+    }
     const result = db.prepare(
       "INSERT INTO unavailable_blocks (trainer, day_of_week, start_time, end_time, description, recurrence_type, occurrence_date, weeks_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(trainer, day_of_week, start_time, end_time, description, isOneTime ? "one_time" : "recurring", occurrence_date, weeks_count);

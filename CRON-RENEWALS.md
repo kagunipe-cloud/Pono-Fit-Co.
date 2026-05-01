@@ -4,7 +4,7 @@ The app can auto-charge members whose subscription expires **today** if they cho
 
 ## Option A: In-app scheduler (easiest if you run your own server)
 
-If you run the app with **`next start`** (e.g. on Railway, Docker, or a long-running Node server), a **daily renewal job is already built in**. It runs at **2:00 AM** in the **gym timezone from the database** (`getAppTimezone`: `gyms.timezone` for gym `id = 1`, else `app_settings.timezone`) via `node-cron` in `instrumentation.ts`, with **expiry reminders at 2:10 AM** in that same zone. That matches schedules, renewals, and “today” everywhere else in the app.
+If you run the app with **`next start`** (e.g. on Railway, Docker, or a long-running Node server), **cron jobs are built in** via `node-cron` in **`src/instrumentation.ts`**: **daily renewal at 2:00 AM**, **expiry reminders at 2:10 AM**, **hourly PT processing**, and **occupancy snapshots every 15 minutes** — all in the **gym timezone from the database** (`getAppTimezone`: `gyms.timezone` for gym `id = 1`, else `app_settings.timezone`). That matches schedules, renewals, and “today” everywhere else in the app.
 
 **Multi-gym later:** one process currently uses **gym 1** for the clock. True per-gym overnight jobs would need separate schedulers or workers per tenant.
 

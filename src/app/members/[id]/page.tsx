@@ -945,29 +945,30 @@ export default function MemberDetailPage() {
                 or staff exception).
               </p>
             ) : null}
-            {isAdmin && (
-              <div className="mt-2 flex flex-wrap gap-2 items-center">
-                {Number(member.door_access_waiver_exempt ?? 0) !== 1 ? (
-                  <button
-                    type="button"
-                    disabled={waiverExemptSaving}
-                    onClick={() => void setDoorAccessWaiverExempt(1)}
-                    className="px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-sm font-medium hover:bg-amber-100 disabled:opacity-50"
-                  >
-                    {waiverExemptSaving ? "Saving…" : "Allow door / day passes without signed waiver"}
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={waiverExemptSaving}
-                    onClick={() => void setDoorAccessWaiverExempt(0)}
-                    className="px-3 py-1.5 rounded-lg border border-stone-200 text-stone-700 text-sm font-medium hover:bg-stone-50 disabled:opacity-50"
-                  >
-                    {waiverExemptSaving ? "Saving…" : "Remove waiver exception"}
-                  </button>
-                )}
-              </div>
-            )}
+            {isAdmin &&
+              (!(member.waiver_signed_at as string)?.trim() || Number(member.door_access_waiver_exempt ?? 0) === 1) && (
+                <div className="mt-2 flex flex-wrap gap-2 items-center">
+                  {Number(member.door_access_waiver_exempt ?? 0) !== 1 ? (
+                    <button
+                      type="button"
+                      disabled={waiverExemptSaving}
+                      onClick={() => void setDoorAccessWaiverExempt(1)}
+                      className="px-3 py-1.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-900 text-sm font-medium hover:bg-amber-100 disabled:opacity-50"
+                    >
+                      {waiverExemptSaving ? "Saving…" : "Allow door / day passes without signed waiver"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={waiverExemptSaving}
+                      onClick={() => void setDoorAccessWaiverExempt(0)}
+                      className="px-3 py-1.5 rounded-lg border border-stone-200 text-stone-700 text-sm font-medium hover:bg-stone-50 disabled:opacity-50"
+                    >
+                      {waiverExemptSaving ? "Saving…" : "Remove waiver exception"}
+                    </button>
+                  )}
+                </div>
+              )}
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <Link

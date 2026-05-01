@@ -65,7 +65,7 @@ export async function POST(
         return NextResponse.json(
           {
             error:
-              "This member has not set an app password yet. Have them use “Set your password” on the login page, or send a welcome email from Email all members.",
+              "This member has not set an app password yet. Have them use “Set your password” on the login page, or send a welcome email from Admin → Email members.",
           },
           { status: 400 }
         );
