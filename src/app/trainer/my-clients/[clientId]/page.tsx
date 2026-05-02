@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { kmToMiles } from "@/lib/workouts";
 import { useParams } from "next/navigation";
+import { formatDateTimeInAppTz, parseStoredUtcToDate } from "@/lib/app-timezone";
+import { useAppTimezone } from "@/lib/settings-context";
 
 type BookingItem = { type: string; sortKey: string; label: string; trainer?: string };
 type WorkoutItem = {
@@ -41,6 +43,7 @@ type ClientGoals = {
 
 export default function ClientPTDashboardPage() {
   const params = useParams();
+  const tz = useAppTimezone();
   const clientId = (params.clientId as string) ?? "";
   const [clientName, setClientName] = useState<string>("");
   const [bookings, setBookings] = useState<BookingItem[]>([]);
@@ -93,14 +96,11 @@ export default function ClientPTDashboardPage() {
       .finally(() => setLoading(false));
   }, [clientId]);
 
-  function formatDate(s: string) {
+  function formatWorkoutStamp(s: string) {
     if (!s) return "";
-    try {
-      const d = new Date(s);
-      return d.toLocaleDateString("en-US", { dateStyle: "short" }) + (s.includes("T") ? " " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : "");
-    } catch {
-      return s.slice(0, 16);
-    }
+    const d = parseStoredUtcToDate(s);
+    if (Number.isNaN(d.getTime())) return s.slice(0, 16);
+    return formatDateTimeInAppTz(d, { dateStyle: "short", timeStyle: "short" }, tz);
   }
 
   function submitBodyComp(e: React.FormEvent) {
@@ -513,7 +513,7 @@ export default function ClientPTDashboardPage() {
             {workouts.map((w) => (
               <li key={w.id} className="p-4 rounded-xl border border-stone-200 bg-white">
                 <div className="flex items-center gap-2 flex-wrap mb-2">
-                  <span className="font-medium text-stone-800">{formatDate(w.started_at)}</span>
+                  <span className="font-medium text-stone-800">{formatWorkoutStamp(w.started_at)}</span>
                   {w.finished_at ? (
                     <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Completed — results below</span>
                   ) : (

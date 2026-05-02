@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatDateInAppTz, formatInAppTz } from "@/lib/app-timezone";
+import { formatDateInAppTz, formatInAppTz, parseStoredUtcToDate } from "@/lib/app-timezone";
 import { getWeightComparisonWithArticle } from "@/lib/workout-congrats";
 import { useAppTimezone } from "@/lib/settings-context";
 import { PRBadge } from "@/components/PRBadge";
@@ -14,7 +14,7 @@ function getWorkoutDateInTz(w: Workout, tz: string): string {
   const raw = w.finished_at ?? w.started_at ?? "";
   if (!raw) return "";
   try {
-    return new Date(raw).toLocaleDateString("en-CA", { timeZone: tz });
+    return parseStoredUtcToDate(raw).toLocaleDateString("en-CA", { timeZone: tz });
   } catch {
     return raw.slice(0, 10);
   }

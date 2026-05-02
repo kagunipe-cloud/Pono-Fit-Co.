@@ -1,6 +1,29 @@
 /** App-wide timezone default (Hawaii). Overridden by gym setting in DB. */
 export const APP_TIMEZONE = "Pacific/Honolulu";
 
+/**
+ * Parse timestamps from SQLite/API that use UTC wall time but omit a `Z` suffix
+ * (e.g. `datetime('now')` → `YYYY-MM-DD HH:MM:SS`). Browsers would otherwise treat
+ * that as **local** time and show gym zones (e.g. Hawaii) ~10h off.
+ *
+ * Date-only `YYYY-MM-DD` uses noon UTC so calendar formatting matches other app helpers.
+ */
+export function parseStoredUtcToDate(raw: string): Date {
+  const s = raw.trim();
+  if (!s) return new Date(NaN);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    return new Date(`${s}T12:00:00Z`);
+  }
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) {
+    return new Date(s);
+  }
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?(\.\d+)?$/.test(s)) {
+    // SQLite `datetime('now')` etc.: UTC wall time without `Z`
+    return new Date(s.replace(" ", "T") + "Z");
+  }
+  return new Date(s);
+}
+
 type DateFormatOptions = Intl.DateTimeFormatOptions;
 
 /** Format a Date in the given timezone (default APP_TIMEZONE). */
@@ -34,7 +57,7 @@ export function formatDateInAppTz(
   timeZone: string = APP_TIMEZONE
 ): string {
   if (!iso) return "";
-  return formatInAppTz(new Date(iso), options, timeZone);
+  return formatInAppTz(parseStoredUtcToDate(iso), options, timeZone);
 }
 
 /** Format a YYYY-MM-DD date string for display in the given timezone (default APP_TIMEZONE). */
@@ -56,7 +79,7 @@ export function formatDateForDisplay(dateStr: string | null | undefined, timeZon
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
     d = new Date(`${s}T12:00:00Z`);
   } else {
-    d = new Date(s.includes("T") ? s : s.replace(" ", "T"));
+    d = parseStoredUtcToDate(s);
   }
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric", timeZone });
@@ -111,7 +134,7 @@ export function normalizeDateToYMD(dateStr: string | null | undefined): string |
 /** Date (YYYY-MM-DD) in the given timezone for an ISO timestamp (default APP_TIMEZONE). */
 export function dateStringInAppTz(iso: string | null, timeZone: string = APP_TIMEZONE): string {
   if (!iso) return "";
-  return new Date(iso).toLocaleDateString("en-CA", { timeZone });
+  return parseStoredUtcToDate(iso).toLocaleDateString("en-CA", { timeZone });
 }
 
 /** Monday (YYYY-MM-DD) of the week containing the given date string. */

@@ -689,7 +689,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
           {/* overflow-y-clip: keeps horizontal scroll without forcing overflow-y:auto on this wrapper,
               which would break position:sticky thead relative to the shell main scroll container */}
           <div className="overflow-x-auto overflow-y-clip overscroll-x-contain rounded-b-xl">
-            <table className="w-full border-collapse relative" style={{ minWidth: 640 }}>
+            <table className="w-full border-separate border-spacing-0 relative" style={{ minWidth: 640 }}>
               <thead>
                 <tr>
                   <th
@@ -712,10 +712,10 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
               </thead>
               <tbody>
                 {timeSlots.map((slotMin, rowIndex) => (
-                  <tr key={slotMin} className="border-b border-stone-100 last:border-b-0">
+                  <tr key={slotMin}>
                     <th
                       scope="row"
-                      className="align-top py-1 px-1 sm:px-2 text-xs font-normal text-stone-500 border-r border-stone-200 whitespace-nowrap bg-white sticky left-0 z-[15] shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]"
+                      className="align-top py-1 px-1 sm:px-2 text-xs font-normal text-stone-500 border-b border-r border-stone-200 whitespace-nowrap bg-white sticky left-0 z-[15] shadow-[2px_0_6px_-2px_rgba(0,0,0,0.06)]"
                     >
                       {formatTime(slotMin)}
                     </th>
@@ -729,7 +729,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                         <td
                           key={date}
                           rowSpan={item.type === "class" ? item.spanSlots : undefined}
-                          className="align-top p-1 min-w-[100px] sm:min-w-[120px] border-r border-stone-100 last:border-r-0"
+                          className="align-top p-1 min-w-[100px] sm:min-w-[120px] border-b border-r border-stone-100 last:border-r-0"
                           onClick={isMaster || isTrainer ? (e) => {
                             if ((e.target as HTMLElement).closest("a, button")) return;
                             setSelectedSlot({ date, slotMin, timeStr, item });
