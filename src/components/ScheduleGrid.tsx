@@ -686,13 +686,15 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
             )}
             <span className="rounded-lg border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">Available</span>
           </div>
-          <div className="overflow-x-auto overflow-y-visible rounded-b-xl">
+          {/* overflow-y-clip: keeps horizontal scroll without forcing overflow-y:auto on this wrapper,
+              which would break position:sticky thead relative to the shell main scroll container */}
+          <div className="overflow-x-auto overflow-y-clip overscroll-x-contain rounded-b-xl">
             <table className="w-full border-collapse relative" style={{ minWidth: 640 }}>
               <thead>
                 <tr>
                   <th
                     scope="col"
-                    className="w-16 sm:w-20 py-2 px-1 sm:px-2 text-left text-xs font-medium text-stone-500 border-b border-r border-stone-200 bg-stone-50 sticky left-0 top-0 z-[25] shadow-[2px_0_6px_-2px_rgba(0,0,0,0.08)]"
+                    className="w-16 sm:w-20 py-2 px-1 sm:px-2 text-left text-xs font-medium text-stone-500 border-b border-r border-stone-200 bg-stone-50 sticky left-0 top-0 z-[35] shadow-[2px_0_6px_-2px_rgba(0,0,0,0.08)]"
                   >
                     Time
                   </th>
@@ -700,7 +702,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                     <th
                       key={name}
                       scope="col"
-                      className="py-2 px-1 sm:px-2 text-center text-xs font-medium text-stone-600 border-b border-r border-stone-200 bg-stone-50 last:border-r-0 sticky top-0 z-[20] shadow-[0_2px_6px_-2px_rgba(0,0,0,0.06)]"
+                      className="py-2 px-1 sm:px-2 text-center text-xs font-medium text-stone-600 border-b border-r border-stone-200 bg-stone-50 last:border-r-0 sticky top-0 z-[30] shadow-[0_2px_6px_-2px_rgba(0,0,0,0.06)]"
                     >
                       <span className="block">{name}</span>
                       <span className="block text-stone-400 font-normal">{parseInt(dayDates[i].slice(8, 10), 10)}</span>
