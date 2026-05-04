@@ -82,6 +82,14 @@ export function ensureWorkoutTables(db: ReturnType<typeof getDb>) {
       /* ignore */
     }
   }
+  const colsAfterClientNotes = db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[];
+  if (colsAfterClientNotes.every((c) => c.name !== "shared_by_member_id")) {
+    try {
+      db.prepare("ALTER TABLE workouts ADD COLUMN shared_by_member_id TEXT").run();
+    } catch {
+      /* ignore */
+    }
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS exercises (

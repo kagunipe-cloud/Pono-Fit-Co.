@@ -6,19 +6,43 @@ import { ensureWorkoutTables, estimate1RM } from "../../../../../lib/workouts";
 export const dynamic = "force-dynamic";
 
 async function getWorkoutWithExercises(db: ReturnType<typeof getDb>, workoutId: number, memberId: string) {
-  const hasName = (db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[]).some((c) => c.name === "name");
-  const hasTrainer = (db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[]).some((c) => c.name === "assigned_by_trainer_member_id");
-  const hasTrainerNotes = (db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[]).some((c) => c.name === "trainer_notes");
-  const hasClientNotes = (db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[]).some((c) => c.name === "client_completion_notes");
+  const woCols = db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[];
+  const hasName = woCols.some((c) => c.name === "name");
+  const hasTrainer = woCols.some((c) => c.name === "assigned_by_trainer_member_id");
+  const hasTrainerNotes = woCols.some((c) => c.name === "trainer_notes");
+  const hasClientNotes = woCols.some((c) => c.name === "client_completion_notes");
+  const hasSharedBy = woCols.some((c) => c.name === "shared_by_member_id");
   const cols = ["id", "member_id", "started_at", "finished_at", "source_workout_id", "assigned_by_admin"];
   if (hasName) cols.push("name");
   if (hasTrainer) cols.push("assigned_by_trainer_member_id");
   if (hasTrainerNotes) cols.push("trainer_notes");
   if (hasClientNotes) cols.push("client_completion_notes");
+  if (hasSharedBy) cols.push("shared_by_member_id");
   const workout = db
     .prepare(`SELECT ${cols.join(", ")} FROM workouts WHERE id = ? AND member_id = ?`)
-    .get(workoutId, memberId) as { id: number; member_id: string; started_at: string; finished_at: string | null; source_workout_id: number | null; assigned_by_admin: number; name?: string | null; assigned_by_trainer_member_id?: string | null; trainer_notes?: string | null; client_completion_notes?: string | null } | undefined;
+    .get(workoutId, memberId) as {
+    id: number;
+    member_id: string;
+    started_at: string;
+    finished_at: string | null;
+    source_workout_id: number | null;
+    assigned_by_admin: number;
+    name?: string | null;
+    assigned_by_trainer_member_id?: string | null;
+    trainer_notes?: string | null;
+    client_completion_notes?: string | null;
+    shared_by_member_id?: string | null;
+  } | undefined;
   if (!workout) return null;
+  let shared_by_first_name: string | null = null;
+  let shared_by_last_name: string | null = null;
+  if (hasSharedBy && workout.shared_by_member_id?.trim()) {
+    const sharer = db
+      .prepare("SELECT first_name, last_name FROM members WHERE member_id = ?")
+      .get(workout.shared_by_member_id.trim()) as { first_name: string | null; last_name: string | null } | undefined;
+    shared_by_first_name = sharer?.first_name ?? null;
+    shared_by_last_name = sharer?.last_name ?? null;
+  }
   const hasUseForMy1rm = (db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[]).some((c) => c.name === "use_for_my_1rm");
   const exerciseCols = ["id", "workout_id", "type", "exercise_name", "sort_order", "exercise_id"];
   if (hasUseForMy1rm) exerciseCols.push("use_for_my_1rm");
@@ -41,6 +65,7 @@ async function getWorkoutWithExercises(db: ReturnType<typeof getDb>, workoutId: 
   }
   return {
     ...workout,
+    ...(hasSharedBy ? { shared_by_first_name, shared_by_last_name } : {}),
     exercises: exercises.map((e) => ({ ...e, sets: setsByExercise[e.id] ?? [] })),
   };
 }

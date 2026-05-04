@@ -49,6 +49,9 @@ type WorkoutData = {
   source_workout_id?: number | null;
   assigned_by_admin?: number;
   assigned_by_trainer_member_id?: string | null;
+  shared_by_member_id?: string | null;
+  shared_by_first_name?: string | null;
+  shared_by_last_name?: string | null;
   trainer_notes?: string | null;
   client_completion_notes?: string | null;
   name?: string | null;
@@ -924,11 +927,30 @@ export default function MemberWorkoutDetailPage() {
               </button>
             </>
           )}
-          {workout.assigned_by_admin || workout.assigned_by_trainer_member_id ? (
-            <span className="px-2.5 py-1 rounded-md text-sm font-medium bg-brand-100 text-brand-800">From trainer</span>
-          ) : !isOpen ? (
-            <span className="px-2.5 py-1 rounded-md text-sm font-medium bg-stone-100 text-stone-600">My workout</span>
-          ) : null}
+          {(() => {
+            const sid = workout.shared_by_member_id?.trim();
+            if (sid) {
+              const fn = workout.shared_by_first_name?.trim();
+              const ln = workout.shared_by_last_name?.trim();
+              const who = [fn, ln].filter(Boolean).join(" ").trim();
+              return (
+                <span className="px-2.5 py-1 rounded-md text-sm font-medium bg-sky-100 text-sky-900">
+                  {who ? `From ${who}` : "From friend"}
+                </span>
+              );
+            }
+            if (workout.assigned_by_admin || workout.assigned_by_trainer_member_id) {
+              return (
+                <span className="px-2.5 py-1 rounded-md text-sm font-medium bg-brand-100 text-brand-800">From trainer</span>
+              );
+            }
+            if (!isOpen) {
+              return (
+                <span className="px-2.5 py-1 rounded-md text-sm font-medium bg-stone-100 text-stone-600">My workout</span>
+              );
+            }
+            return null;
+          })()}
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {!isOpen && (

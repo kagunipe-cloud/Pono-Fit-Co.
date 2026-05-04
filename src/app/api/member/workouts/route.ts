@@ -12,22 +12,42 @@ export async function GET() {
 
     const db = getDb();
     ensureWorkoutTables(db);
-    const hasName = (db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[]).some((c) => c.name === "name");
-    const hasTrainer = (db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[]).some((c) => c.name === "assigned_by_trainer_member_id");
+    const cols = db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[];
+    const hasName = cols.some((c) => c.name === "name");
+    const hasTrainer = cols.some((c) => c.name === "assigned_by_trainer_member_id");
+    const hasSharedBy = cols.some((c) => c.name === "shared_by_member_id");
     const nameCol = hasName ? "w.name," : "";
     const trainerCol = hasTrainer ? "w.assigned_by_trainer_member_id," : "";
+    const sharedCols = hasSharedBy
+      ? "w.shared_by_member_id, sharer.first_name AS shared_by_first_name, sharer.last_name AS shared_by_last_name,"
+      : "";
+    const fromClause = hasSharedBy
+      ? "FROM workouts w LEFT JOIN members sharer ON sharer.member_id = w.shared_by_member_id"
+      : "FROM workouts w";
     const rows = db
       .prepare(
-        `SELECT w.id, w.member_id, w.started_at, w.finished_at, w.assigned_by_admin, ${trainerCol} ${nameCol}
+        `SELECT w.id, w.member_id, w.started_at, w.finished_at, w.assigned_by_admin, ${trainerCol} ${nameCol} ${sharedCols}
                 (SELECT COALESCE(SUM(COALESCE(ws.reps, 0) * COALESCE(ws.weight_kg, 0)), 0)
                  FROM workout_exercises we
                  JOIN workout_sets ws ON ws.workout_exercise_id = we.id
                  WHERE we.workout_id = w.id AND we.type = 'lift') AS total_volume
-         FROM workouts w
+         ${fromClause}
          WHERE w.member_id = ?
          ORDER BY w.started_at DESC`
       )
-      .all(memberId) as { id: number; member_id: string; started_at: string; finished_at: string | null; assigned_by_admin: number; assigned_by_trainer_member_id?: string | null; name?: string | null; total_volume: number }[];
+      .all(memberId) as {
+      id: number;
+      member_id: string;
+      started_at: string;
+      finished_at: string | null;
+      assigned_by_admin: number;
+      assigned_by_trainer_member_id?: string | null;
+      shared_by_member_id?: string | null;
+      shared_by_first_name?: string | null;
+      shared_by_last_name?: string | null;
+      name?: string | null;
+      total_volume: number;
+    }[];
     db.close();
     return NextResponse.json(rows);
   } catch (err) {

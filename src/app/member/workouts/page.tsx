@@ -8,7 +8,34 @@ import { getWeightComparisonWithArticle } from "@/lib/workout-congrats";
 import { useAppTimezone } from "@/lib/settings-context";
 import { PRBadge } from "@/components/PRBadge";
 
-type Workout = { id: number; member_id: string; started_at: string; finished_at: string | null; total_volume?: number; assigned_by_admin?: number; assigned_by_trainer_member_id?: string | null; name?: string | null };
+type Workout = {
+  id: number;
+  member_id: string;
+  started_at: string;
+  finished_at: string | null;
+  total_volume?: number;
+  assigned_by_admin?: number;
+  assigned_by_trainer_member_id?: string | null;
+  shared_by_member_id?: string | null;
+  shared_by_first_name?: string | null;
+  shared_by_last_name?: string | null;
+  name?: string | null;
+};
+
+function isFromTrainer(w: Workout): boolean {
+  return w.assigned_by_trainer_member_id != null && String(w.assigned_by_trainer_member_id).trim() !== "";
+}
+
+function isFromFriend(w: Workout): boolean {
+  return w.shared_by_member_id != null && String(w.shared_by_member_id).trim() !== "";
+}
+
+function friendSenderDisplay(w: Workout): string | null {
+  const fn = w.shared_by_first_name?.trim();
+  const ln = w.shared_by_last_name?.trim();
+  const full = [fn, ln].filter(Boolean).join(" ").trim();
+  return full || null;
+}
 
 function getWorkoutDateInTz(w: Workout, tz: string): string {
   const raw = w.finished_at ?? w.started_at ?? "";
@@ -111,23 +138,27 @@ export default function MemberWorkoutsPage() {
   if (loading) return <div className="p-8 text-center text-stone-500">Loading…</div>;
 
   const openWorkout = workouts.find((w) => !w.finished_at);
-  const pastWorkouts = workouts.filter((w) => w.finished_at && !(w.assigned_by_trainer_member_id != null && w.assigned_by_trainer_member_id !== "")).sort((a, b) => (b.finished_at ?? "").localeCompare(a.finished_at ?? ""));
-  const fromTrainerWorkouts = workouts.filter((w) => w.assigned_by_trainer_member_id != null && w.assigned_by_trainer_member_id !== "").sort((a, b) => (b.started_at ?? "").localeCompare(a.started_at ?? ""));
+  const pastWorkouts = workouts
+    .filter((w) => w.finished_at && !isFromTrainer(w) && !isFromFriend(w))
+    .sort((a, b) => (b.finished_at ?? "").localeCompare(a.finished_at ?? ""));
+  const fromTrainerWorkouts = workouts.filter(isFromTrainer).sort((a, b) => (b.started_at ?? "").localeCompare(a.started_at ?? ""));
   const fromTrainerFinished = fromTrainerWorkouts.filter((w) => w.finished_at);
+  const fromFriendWorkouts = workouts.filter(isFromFriend).sort((a, b) => (b.started_at ?? "").localeCompare(a.started_at ?? ""));
+  const fromFriendFinished = fromFriendWorkouts.filter((w) => w.finished_at);
 
   const now = new Date();
   const thisYear = now.toLocaleDateString("en-CA", { timeZone: tz }).slice(0, 4);
   const thisMonth = now.toLocaleDateString("en-CA", { timeZone: tz }).slice(0, 7);
-  const volumeThisMonth = [...pastWorkouts, ...fromTrainerFinished]
+  const volumeThisMonth = [...pastWorkouts, ...fromTrainerFinished, ...fromFriendFinished]
     .filter((w) => getWorkoutDateInTz(w, tz).startsWith(thisMonth))
     .reduce((sum, w) => sum + (w.total_volume ?? 0), 0);
-  const volumeThisYear = [...pastWorkouts, ...fromTrainerFinished]
+  const volumeThisYear = [...pastWorkouts, ...fromTrainerFinished, ...fromFriendFinished]
     .filter((w) => getWorkoutDateInTz(w, tz).startsWith(thisYear))
     .reduce((sum, w) => sum + (w.total_volume ?? 0), 0);
 
   const byMonth = new Map<string, number>();
   const byYear = new Map<string, number>();
-  for (const w of [...pastWorkouts, ...fromTrainerFinished]) {
+  for (const w of [...pastWorkouts, ...fromTrainerFinished, ...fromFriendFinished]) {
     const dateStr = getWorkoutDateInTz(w, tz);
     if (!dateStr) continue;
     const vol = w.total_volume ?? 0;
@@ -282,6 +313,46 @@ export default function MemberWorkoutsPage() {
                     <span className="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">Not started — click to start</span>
                   )}
                 </div>
+                <span className="text-stone-500 ml-0 block mt-0.5 sm:ml-2 sm:inline sm:mt-0">{formatDateInAppTz(w.finished_at ?? w.started_at)}</span>
+                {w.finished_at && (w.total_volume ?? 0) > 0 && (
+                  <span className="ml-0 block sm:ml-2 text-sm font-medium text-brand-600 mt-0.5 sm:mt-0 sm:inline">
+                    · {Number(w.total_volume).toLocaleString()} lbs total volume
+                  </span>
+                )}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <h2 className="text-sm font-medium text-stone-500 mb-3">Workouts from Friends</h2>
+      {fromFriendWorkouts.length === 0 ? (
+        <p className="text-stone-500 text-sm mb-6">When someone sends you a finished workout, it appears here.</p>
+      ) : (
+        <ul className="space-y-2 mb-6">
+          {fromFriendWorkouts.map((w) => (
+            <li key={w.id}>
+              <Link
+                href={`/member/workouts/${w.id}`}
+                className="block p-4 rounded-xl border border-stone-200 bg-white hover:border-sky-300 hover:bg-sky-50/30 transition-colors"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium text-stone-800">{w.name?.trim() || "Workout from friend"}</span>
+                  <span className="px-2 py-0.5 rounded text-xs font-medium bg-sky-100 text-sky-900">From friend</span>
+                  {(prBadgesByWorkout[w.id] ?? []).length > 0 && (
+                    <span className="inline-flex flex-wrap items-center gap-1">
+                      {(prBadgesByWorkout[w.id] ?? []).map((b) => (
+                        <PRBadge key={b} type={b} size="sm" />
+                      ))}
+                    </span>
+                  )}
+                  {!w.finished_at && (
+                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">Not started — click to start</span>
+                  )}
+                </div>
+                {friendSenderDisplay(w) ? (
+                  <span className="text-xs text-stone-500 block mt-1">Shared by {friendSenderDisplay(w)}</span>
+                ) : null}
                 <span className="text-stone-500 ml-0 block mt-0.5 sm:ml-2 sm:inline sm:mt-0">{formatDateInAppTz(w.finished_at ?? w.started_at)}</span>
                 {w.finished_at && (w.total_volume ?? 0) > 0 && (
                   <span className="ml-0 block sm:ml-2 text-sm font-medium text-brand-600 mt-0.5 sm:mt-0 sm:inline">

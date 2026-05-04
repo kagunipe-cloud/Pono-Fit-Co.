@@ -53,7 +53,7 @@ function SetPasswordContent() {
         setError(data.error ?? "Failed to set password.");
         return;
       }
-      router.push("/login?password_set=1");
+      router.push(`/login?password_set=1&email=${encodeURIComponent(em)}`);
       router.refresh();
     } catch {
       setError("Something went wrong.");
@@ -89,7 +89,8 @@ function SetPasswordContent() {
               onChange={(e) => setMemberId(e.target.value)}
               placeholder="e.g. M001"
               className="w-full px-3 py-2 rounded-lg border border-stone-200"
-              autoComplete="username"
+              autoComplete="off"
+              name="member_id"
             />
           </div>
           <div>

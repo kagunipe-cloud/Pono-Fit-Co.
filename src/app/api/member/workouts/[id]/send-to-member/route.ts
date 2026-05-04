@@ -69,7 +69,13 @@ export async function POST(
     const exerciseExists = db.prepare("SELECT 1 FROM exercises WHERE id = ?");
 
     const workoutName = workout.name?.trim() || null;
-    const insertWorkout = db.prepare("INSERT INTO workouts (member_id, started_at, finished_at, assigned_by_admin, name) VALUES (?, datetime('now'), datetime('now'), 0, ?)");
+    const workoutCols = db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[];
+    const hasSharedBy = workoutCols.some((c) => c.name === "shared_by_member_id");
+    const insertWorkout = hasSharedBy
+      ? db.prepare(
+          "INSERT INTO workouts (member_id, started_at, finished_at, assigned_by_admin, name, shared_by_member_id) VALUES (?, datetime('now'), datetime('now'), 0, ?, ?)"
+        )
+      : db.prepare("INSERT INTO workouts (member_id, started_at, finished_at, assigned_by_admin, name) VALUES (?, datetime('now'), datetime('now'), 0, ?)");
     const insertEx = hasUseForMy1rm
       ? db.prepare("INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id, use_for_my_1rm) VALUES (?, ?, ?, ?, ?, ?)")
       : db.prepare("INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id) VALUES (?, ?, ?, ?, ?)");
@@ -81,7 +87,9 @@ export async function POST(
           "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order) VALUES (?, ?, ?, ?, ?, ?)"
         );
 
-    const workoutInsert = insertWorkout.run(recipient.member_id, workoutName);
+    const workoutInsert = hasSharedBy
+      ? insertWorkout.run(recipient.member_id, workoutName, senderId)
+      : insertWorkout.run(recipient.member_id, workoutName);
     const newId = Number(workoutInsert.lastInsertRowid);
     if (!Number.isFinite(newId) || newId < 1) {
       db.close();

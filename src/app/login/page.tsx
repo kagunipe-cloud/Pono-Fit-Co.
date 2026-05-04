@@ -16,10 +16,17 @@ function LoginContent() {
   const [showBootstrap, setShowBootstrap] = useState(false);
 
   useEffect(() => {
-    if (searchParams.get("password_set") === "1") {
+    const pwOk = searchParams.get("password_set") === "1";
+    if (pwOk) {
       setSuccess("Password set. You can sign in with your email and password.");
     }
-  }, [searchParams]);
+    const pref = searchParams.get("email")?.trim();
+    const emailOk = Boolean(pref && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pref));
+    if (emailOk && pref) {
+      setEmail(pref);
+      router.replace(pwOk ? "/login?password_set=1" : "/login");
+    }
+  }, [searchParams, router]);
 
   useEffect(() => {
     fetch("/api/auth/bootstrap-status")
@@ -99,7 +106,8 @@ function LoginContent() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               className="w-full px-3 py-2 rounded-lg border border-stone-200"
-              autoComplete="email"
+              autoComplete="username"
+              inputMode="email"
             />
           </div>
           <div>

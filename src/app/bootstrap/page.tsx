@@ -43,7 +43,7 @@ export default function BootstrapPage() {
         setError(data.error ?? "Bootstrap failed.");
         return;
       }
-      router.push("/login?password_set=1");
+      router.push(`/login?password_set=1&email=${encodeURIComponent(form.email.trim().toLowerCase())}`);
       router.refresh();
     } catch {
       setError("Something went wrong.");
