@@ -73,7 +73,7 @@ export default function WorkoutVolumeReportPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
-      <Link href="/sales" className="text-stone-500 hover:text-stone-700 text-sm mb-4 inline-block">
+      <Link href="/reports" className="text-stone-500 hover:text-stone-700 text-sm mb-4 inline-block">
         ← Reports
       </Link>
       <h1 className="text-2xl font-bold text-stone-800 mb-2">Workout volume by member</h1>

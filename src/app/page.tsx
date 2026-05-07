@@ -9,7 +9,7 @@ const HOME_CARDS = [
   { href: "/pt-bookings", title: "Bookings", description: "PT and class bookings" },
   { href: "/master-schedule", title: "Master Schedule", description: "Classes, PT sessions, and availability" },
   { href: "/membership-plans", title: "Services", description: "Plans, classes, PT sessions, packs, rec leagues" },
-  { href: "/sales", title: "Reports", description: "Sales, transactions, money owed, subscriptions" },
+  { href: "/reports", title: "Reports", description: "Choose from sales, transactions, money owed, subscriptions, and more" },
   { href: "/admin/analytics", title: "Analytics", description: "Usage and performance insights" },
   { href: "/admin/leads", title: "Leads", description: "Prospects and inquiries" },
 ] as const;

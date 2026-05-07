@@ -5,6 +5,7 @@ import { isNativeAppStoreClient } from "@/lib/native-app-request";
 const ADMIN_PATHS = [
   "/",
   "/members",
+  "/reports",
   "/money-owed",
   "/pt-bookings",
   "/class-bookings",

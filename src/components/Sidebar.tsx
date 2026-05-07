@@ -147,7 +147,8 @@ function NavList({
   );
   const isOnReportPage =
     pathname != null &&
-    (REPORT_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`)) ||
+    (pathname === "/reports" ||
+      REPORT_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`)) ||
       REPORT_EXTRA_LINKS.some((l) => pathname === l.href || pathname.startsWith(`${l.href}/`)) ||
       pathname === "/admin/usage" ||
       pathname.startsWith("/admin/usage/"));
@@ -441,10 +442,26 @@ function NavList({
           createPortal(
             <div
               ref={reportsDropdownRef}
-              className="fixed min-w-[10rem] py-1 rounded-lg border border-stone-200 bg-white shadow-lg z-[100]"
-              style={{ top: dropdownPosition.top, left: dropdownPosition.left, marginLeft: 4 }}
+              className="fixed min-w-[10rem] py-1 rounded-lg border border-stone-200 bg-white shadow-lg z-[100] overflow-y-auto overscroll-contain"
+              style={{
+                top: dropdownPosition.top,
+                left: dropdownPosition.left,
+                marginLeft: 4,
+                maxHeight: `calc(100vh - ${dropdownPosition.top + 16}px)`,
+              }}
               role="menu"
             >
+              <Link
+                href="/reports"
+                className={`block px-3 py-2 text-sm font-medium ${
+                  pathname === "/reports" ? "bg-brand-gray-100 text-brand-500" : "text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                }`}
+                role="menuitem"
+                onClick={() => setReportsOpen(false)}
+              >
+                All reports
+              </Link>
+              <div className="my-1 border-t border-stone-200" role="separator" />
               {reportSubs.map(({ slug, title }) => (
                 <Link
                   key={slug}

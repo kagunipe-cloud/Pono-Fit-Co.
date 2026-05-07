@@ -188,6 +188,8 @@ export default function MemberWorkoutDetailPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingExId, setDeletingExId] = useState<number | null>(null);
   const [reordering, setReordering] = useState(false);
+  /** Index of workout exercise being dragged (drag handle); null when not dragging */
+  const [dragExIndex, setDragExIndex] = useState<number | null>(null);
   /** `"${exerciseId}-${setOrder}"` while a set delete request is in flight */
   const [deletingSetKey, setDeletingSetKey] = useState<string | null>(null);
   const [deletingWorkout, setDeletingWorkout] = useState(false);
@@ -807,15 +809,8 @@ export default function MemberWorkoutDetailPage() {
   const isOpen = !workout.finished_at;
   const isRepeatMode = isOpen && !!sourceWorkout;
 
-  async function moveExercise(fromIndex: number, direction: -1 | 1) {
+  async function applyExerciseOrder(next: Exercise[]) {
     if (!workout || reordering) return;
-    const toIndex = fromIndex + direction;
-    if (toIndex < 0 || toIndex >= workout.exercises.length) return;
-    const next = [...workout.exercises];
-    const a = next[fromIndex]!;
-    const b = next[toIndex]!;
-    next[fromIndex] = b;
-    next[toIndex] = a;
     setReordering(true);
     try {
       const res = await fetch(`/api/member/workouts/${id}/exercises/reorder`, {
@@ -832,6 +827,28 @@ export default function MemberWorkoutDetailPage() {
     } finally {
       setReordering(false);
     }
+  }
+
+  async function moveExercise(fromIndex: number, direction: -1 | 1) {
+    if (!workout || reordering) return;
+    const toIndex = fromIndex + direction;
+    if (toIndex < 0 || toIndex >= workout.exercises.length) return;
+    const next = [...workout.exercises];
+    const a = next[fromIndex]!;
+    const b = next[toIndex]!;
+    next[fromIndex] = b;
+    next[toIndex] = a;
+    await applyExerciseOrder(next);
+  }
+
+  async function dropExerciseAt(fromIndex: number, toIndex: number) {
+    if (!workout || reordering || fromIndex === toIndex) return;
+    if (fromIndex < 0 || fromIndex >= workout.exercises.length) return;
+    if (toIndex < 0 || toIndex >= workout.exercises.length) return;
+    const next = [...workout.exercises];
+    const [removed] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, removed);
+    await applyExerciseOrder(next);
   }
 
   async function saveWorkoutName() {
@@ -1368,8 +1385,29 @@ export default function MemberWorkoutDetailPage() {
               const isAddingSets = addSetsForExId === ex.id;
               const editResolvedExerciseId =
                 editingExId === ex.id ? editSelectedOfficialId ?? ex.exercise_id ?? null : null;
+              const canReorderExercises =
+                workout.exercises.length > 1 && editingExId == null && !reordering;
               return (
-                <li key={ex.id} className="p-4 rounded-xl border border-stone-200 bg-white min-w-0 max-w-full overflow-x-hidden">
+                <li
+                  key={ex.id}
+                  className={`p-4 rounded-xl border border-stone-200 bg-white min-w-0 max-w-full overflow-x-hidden ${
+                    dragExIndex === exIndex ? "ring-2 ring-brand-400/60" : ""
+                  }`}
+                  onDragOver={(e) => {
+                    if (!canReorderExercises) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                  }}
+                  onDrop={(e) => {
+                    if (!canReorderExercises) return;
+                    e.preventDefault();
+                    const fromStr = e.dataTransfer.getData("text/plain");
+                    const from = parseInt(fromStr, 10);
+                    setDragExIndex(null);
+                    if (Number.isNaN(from)) return;
+                    void dropExerciseAt(from, exIndex);
+                  }}
+                >
                   {editingExId === ex.id ? (
                     <div className="space-y-3">
                       <label className="block text-xs font-medium text-stone-600">Exercise</label>
@@ -1667,28 +1705,51 @@ export default function MemberWorkoutDetailPage() {
                           </span>
                         )}
                       </p>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
-                        {workout.exercises.length > 1 && (
-                          <span className="inline-flex items-center gap-1 mr-1">
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2">
+                        {canReorderExercises && (
+                          <span className="inline-flex flex-wrap items-center gap-1.5 mr-1">
+                            <span
+                              draggable
+                              onDragStart={(e) => {
+                                e.dataTransfer.setData("text/plain", String(exIndex));
+                                e.dataTransfer.effectAllowed = "move";
+                                setDragExIndex(exIndex);
+                              }}
+                              onDragEnd={() => setDragExIndex(null)}
+                              className="hidden md:inline-flex select-none cursor-grab active:cursor-grabbing text-stone-500 hover:text-stone-700 px-2 py-1 rounded border border-dashed border-stone-200 bg-stone-50/80 text-xs font-medium leading-none"
+                              title="Drag to reorder"
+                              aria-label="Drag to reorder exercise"
+                            >
+                              <span aria-hidden>⋮⋮</span>
+                            </span>
+                            <span className="hidden md:inline text-xs text-stone-500">Reorder</span>
                             <button
                               type="button"
                               onClick={() => moveExercise(exIndex, -1)}
                               disabled={reordering || exIndex === 0}
-                              className="px-2 py-0.5 rounded border border-stone-200 text-stone-600 text-sm hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                              title="Move up"
+                              className="px-2.5 py-1 rounded border border-stone-200 text-stone-600 text-xs sm:text-sm font-medium hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed"
                               aria-label="Move exercise up"
                             >
-                              ↑
+                              <span className="sm:hidden" aria-hidden>
+                                ↑
+                              </span>
+                              <span className="hidden sm:inline" aria-hidden>
+                                Up
+                              </span>
                             </button>
                             <button
                               type="button"
                               onClick={() => moveExercise(exIndex, 1)}
                               disabled={reordering || exIndex >= workout.exercises.length - 1}
-                              className="px-2 py-0.5 rounded border border-stone-200 text-stone-600 text-sm hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed"
-                              title="Move down"
+                              className="px-2.5 py-1 rounded border border-stone-200 text-stone-600 text-xs sm:text-sm font-medium hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed"
                               aria-label="Move exercise down"
                             >
-                              ↓
+                              <span className="sm:hidden" aria-hidden>
+                                ↓
+                              </span>
+                              <span className="hidden sm:inline" aria-hidden>
+                                Down
+                              </span>
                             </button>
                           </span>
                         )}
