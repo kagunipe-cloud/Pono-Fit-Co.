@@ -1696,7 +1696,7 @@ export default function MemberWorkoutDetailPage() {
                     </div>
                   ) : (
                     <>
-                      <p className="font-medium text-stone-800">
+                      <div className="font-medium text-stone-800">
                         {ex.exercise_name}
                         <span className="ml-2 text-xs font-normal text-stone-500 capitalize">({ex.type})</span>
                         {(ex.use_for_my_1rm ?? 0) === 1 && (
@@ -1714,7 +1714,7 @@ export default function MemberWorkoutDetailPage() {
                             {vol.toLocaleString()} lbs volume
                           </span>
                         )}
-                      </p>
+                      </div>
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2">
                         {canReorderExercises && (
                           <span className="inline-flex flex-wrap items-center gap-1.5 mr-1">
