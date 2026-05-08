@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { getWeightComparisonWithArticle } from "@/lib/workout-congrats";
 import { milesToKm, kmToMiles } from "@/lib/workouts";
+import { MuscleMapPicker } from "@/components/MuscleMapPicker";
 import { PRBadge } from "@/components/PRBadge";
 import { LiftSetPrPercent } from "@/components/LiftSetPrPercent";
 
@@ -1050,6 +1051,15 @@ export default function MemberWorkoutDetailPage() {
 
       {mode && (
         <div className="mb-8 space-y-4">
+          {mode === "lift" && (
+            <MuscleMapPicker
+              onPickExercise={(ex) => {
+                pickOfficialExercise(ex);
+                setUseForMy1rm(false);
+              }}
+            />
+          )}
+
           <div className="p-4 rounded-xl border border-stone-200 bg-stone-50">
             <h2 className="font-semibold text-stone-800 mb-3">{mode === "lift" ? "Add Lift" : "Add Cardio"}</h2>
             <label className="block text-sm font-medium text-stone-600 mb-1">Choose exercise</label>
