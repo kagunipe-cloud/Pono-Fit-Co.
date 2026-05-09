@@ -472,10 +472,10 @@ export default function AdminRetailProductsPage() {
       <Link href="/" className="text-sm text-stone-500 hover:text-stone-700 mb-4 inline-block">
         ← Home
       </Link>
-      <h1 className="text-2xl font-bold text-stone-900 mb-1">Pro shop inventory</h1>
+      <h1 className="text-2xl font-bold text-stone-900 mb-1">Pro Shop Inventory</h1>
       <p className="text-stone-600 text-sm mb-4">
         Use <strong>Add item</strong> for everything new: one SKU is a standalone product; use <strong>Add variation</strong> when several SKUs
-        share the same price and cost (e.g. flavors). Pick a <strong>category</strong> so items group nicely in the member Pro shop.
+        share the same price and cost (e.g. flavors). Pick a <strong>category</strong> so items group nicely in the member Pro Shop.
       </p>
 
       <div className="mb-6 p-4 rounded-xl border border-amber-200 bg-amber-50/80 flex flex-wrap items-center justify-between gap-4">
@@ -483,8 +483,8 @@ export default function AdminRetailProductsPage() {
           <p className="font-semibold text-stone-900">Member self-checkout (scan &amp; pay)</p>
           <p className="text-sm text-stone-600 mt-1">
             {memberSelfCheckout
-              ? "Members see Pro shop on their home screen and can scan items themselves."
-              : "Off by default — members will not see Pro shop; only staff add items from the member cart."}
+              ? "Members see Pro Shop on their home screen and can scan items themselves."
+              : "Off by default — members will not see Pro Shop; only staff add items from the member cart."}
           </p>
         </div>
         <button
@@ -654,7 +654,7 @@ export default function AdminRetailProductsPage() {
 
       <section className="mb-8 p-4 rounded-xl border border-stone-200 bg-white space-y-3">
         <h2 className="font-semibold text-stone-800">Add category</h2>
-        <p className="text-xs text-stone-500">Used to group items in the member Pro shop list. Lower sort = earlier in the list.</p>
+        <p className="text-xs text-stone-500">Used to group items in the member Pro Shop list. Lower sort = earlier in the list.</p>
         <form onSubmit={addCategory} className="flex flex-wrap gap-2 items-end">
           <label className="block flex-1 min-w-[140px]">
             <span className="text-xs font-medium text-stone-600">New category</span>

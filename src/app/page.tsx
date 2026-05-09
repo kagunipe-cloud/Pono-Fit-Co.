@@ -18,7 +18,7 @@ export default function Home() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-stone-800 mb-2">{BRAND.name}</h1>
-      <p className="text-stone-600 mb-6">Gym management dashboard</p>
+      <p className="text-stone-600 mb-6">Gym Management Dashboard</p>
       <AdminOccupancyWidget />
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {HOME_CARDS.map((c) => (

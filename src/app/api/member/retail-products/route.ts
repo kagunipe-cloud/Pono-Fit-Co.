@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     db.close();
     return NextResponse.json(
       {
-        error: "Self-checkout for the pro shop is not available yet. Please see the front desk.",
+        error: "Self-checkout for the Pro Shop is not available yet. Please see the front desk.",
         code: "MEMBER_RETAIL_DISABLED",
       },
       { status: 403 }

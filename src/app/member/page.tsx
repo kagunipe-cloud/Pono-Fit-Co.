@@ -227,7 +227,7 @@ export default function MemberHomePage() {
               href="/member/retail"
               className="px-4 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-900 font-medium hover:bg-emerald-100"
             >
-              Pro shop (scan & pay)
+              Pro Shop (scan & pay)
             </Link>
           ) : null}
           <Link

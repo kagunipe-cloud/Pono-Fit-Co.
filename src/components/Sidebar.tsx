@@ -212,7 +212,7 @@ function NavList({
                   role="menuitem"
                   onClick={() => setBookingsOpen(false)}
                 >
-                  Class bookings
+                  Class Bookings
                 </Link>
                 <Link
                   href="/member/pt-bookings"
@@ -220,7 +220,7 @@ function NavList({
                   role="menuitem"
                   onClick={() => setBookingsOpen(false)}
                 >
-                  PT bookings
+                  PT Bookings
                 </Link>
               </div>,
               document.body
@@ -283,10 +283,10 @@ function NavList({
       {isAdmin && <li>{link("/admin/leads", "Leads")}</li>}
       {isAdmin && <li>{link("/admin/settings", "Settings")}</li>}
       {isAdmin && member?.show_onboarding_nav !== false && (
-        <li>{link("/admin/settings/onboarding", "Onboarding docs")}</li>
+        <li>{link("/admin/settings/onboarding", "Onboarding Docs")}</li>
       )}
-      {isAdmin && <li>{link("/admin/email-members", "Email members")}</li>}
-      {isAdmin && <li>{link("/admin/retail-products", "Pro shop inventory")}</li>}
+      {isAdmin && <li>{link("/admin/email-members", "Email Members")}</li>}
+      {isAdmin && <li>{link("/admin/retail-products", "Pro Shop Inventory")}</li>}
       {mainSections.map((s) => (
         <React.Fragment key={s.slug}>
           <li>{link(`/${s.slug}`, s.title, pathname === `/${s.slug}`)}</li>
@@ -460,7 +460,7 @@ function NavList({
                 role="menuitem"
                 onClick={() => setReportsOpen(false)}
               >
-                All reports
+                All Reports
               </Link>
               <div className="my-1 border-t border-stone-200" role="separator" />
               {reportSubs.map(({ slug, title }) => (
@@ -508,9 +508,9 @@ function NavList({
       {isAdmin && (
         <>
           <li className="pt-2 mt-2 border-t border-white/20">
-            <span className="block px-3 py-1 text-xs font-medium text-white/80">Member area</span>
+            <span className="block px-3 py-1 text-xs font-medium text-white/80">Member Area</span>
           </li>
-          <li>{link("/member", "Member home", pathname === "/member")}</li>
+          <li>{link("/member", "Member Home", pathname === "/member")}</li>
           <li>{link("/member/workouts", "My Workouts", pathname?.startsWith("/member/workouts"))}</li>
           <li>{link("/member/macros", "My Macros", pathname?.startsWith("/member/macros"))}</li>
           <li className="pt-2 mt-2 border-t border-white/20">

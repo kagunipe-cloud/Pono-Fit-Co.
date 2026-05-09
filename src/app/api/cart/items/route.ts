@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error:
-              "Member self-checkout for the pro shop is not turned on yet. A staff member can add items at the front desk.",
+              "Member self-checkout for the Pro Shop is not turned on yet. A staff member can add items at the front desk.",
           },
           { status: 403 }
         );

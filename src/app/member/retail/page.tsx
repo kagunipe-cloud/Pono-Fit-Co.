@@ -55,7 +55,7 @@ export default function MemberRetailPage() {
       const catRes = await fetch("/api/member/retail-products");
       if (!catRes.ok) {
         if (!cancelled) {
-          setError("Could not load the pro shop catalog.");
+          setError("Could not load the Pro Shop catalog.");
           setLoading(false);
         }
         return;
@@ -141,7 +141,7 @@ export default function MemberRetailPage() {
   if (selfCheckoutEnabled === false) {
     return (
       <div className="max-w-lg mx-auto p-6">
-        <h1 className="text-2xl font-bold text-stone-900 mb-2">Pro shop</h1>
+        <h1 className="text-2xl font-bold text-stone-900 mb-2">Pro Shop</h1>
         <p className="text-stone-600 mb-4">
           Self-checkout for drinks, shakes, and bars is run by the front desk for now. Staff can add items to your cart from
           their screen. When your gym turns on member scanning, you&apos;ll see the barcode flow here.
@@ -163,7 +163,7 @@ export default function MemberRetailPage() {
 
   return (
     <div className="max-w-lg mx-auto p-4 pb-24">
-      <h1 className="text-2xl font-bold text-stone-900 mb-1">Pro shop</h1>
+      <h1 className="text-2xl font-bold text-stone-900 mb-1">Pro Shop</h1>
       <p className="text-sm text-stone-600 mb-6">
         Scan a barcode on drinks, shakes, or bars — then check out with your card on file, the front-desk reader, or Stripe.
       </p>
