@@ -73,6 +73,11 @@ export function ensureRetailProductsTable(db: ReturnType<typeof getDb>) {
   } catch {
     /* exists */
   }
+  try {
+    db.exec("ALTER TABLE retail_products ADD COLUMN category_id INTEGER REFERENCES retail_categories(id)");
+  } catch {
+    /* exists */
+  }
 }
 
 export function syncGroupPricesToVariants(db: ReturnType<typeof getDb>, groupId: number): void {

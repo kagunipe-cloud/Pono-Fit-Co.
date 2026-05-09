@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
-import { ensureRetailCategoriesTable, ensureRetailProductGroupsTable } from "@/lib/retail-products";
+import { ensureRetailCategoriesTable, ensureRetailProductGroupsTable, ensureRetailProductsTable } from "@/lib/retail-products";
 
 export const dynamic = "force-dynamic";
 
@@ -73,10 +73,16 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   }
   const db = getDb();
   ensureRetailProductGroupsTable(db);
-  const used = db.prepare("SELECT 1 FROM retail_product_groups WHERE category_id = ? LIMIT 1").get(id) as unknown;
-  if (used) {
+  const usedGroup = db.prepare("SELECT 1 FROM retail_product_groups WHERE category_id = ? LIMIT 1").get(id) as unknown;
+  if (usedGroup) {
     db.close();
     return NextResponse.json({ error: "Remove this category from all product groups first" }, { status: 409 });
+  }
+  ensureRetailProductsTable(db);
+  const usedProduct = db.prepare("SELECT 1 FROM retail_products WHERE category_id = ? LIMIT 1").get(id) as unknown;
+  if (usedProduct) {
+    db.close();
+    return NextResponse.json({ error: "Remove this category from all products first" }, { status: 409 });
   }
   db.prepare("DELETE FROM retail_categories WHERE id = ?").run(id);
   db.close();

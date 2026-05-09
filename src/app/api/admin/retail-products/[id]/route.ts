@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
-import { ensureRetailProductsTable, normalizeRetailSku } from "@/lib/retail-products";
+import {
+  ensureRetailCategoriesTable,
+  ensureRetailProductsTable,
+  normalizeRetailSku,
+} from "@/lib/retail-products";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +47,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
 
   const updates: string[] = [];
-  const vals: (string | number)[] = [];
+  const vals: (string | number | null)[] = [];
   if (body.sku != null) {
     const sku = normalizeRetailSku(body.sku);
     if (!sku) {
@@ -86,6 +90,33 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     updates.push("unit_cost = ?");
     vals.push(uc);
   }
+  if ("category_id" in body) {
+    if (existing.group_id != null) {
+      db.close();
+      return NextResponse.json(
+        { error: "This SKU is a variant: set category on the product group, not the variant row." },
+        { status: 400 }
+      );
+    }
+    const rawCat = body.category_id;
+    if (rawCat === null || rawCat === "" || rawCat === undefined) {
+      updates.push("category_id = NULL");
+    } else {
+      const cid = parseInt(String(rawCat), 10);
+      if (!Number.isFinite(cid) || cid < 1) {
+        db.close();
+        return NextResponse.json({ error: "Invalid category_id" }, { status: 400 });
+      }
+      ensureRetailCategoriesTable(db);
+      const cat = db.prepare("SELECT id FROM retail_categories WHERE id = ?").get(cid) as { id: number } | undefined;
+      if (!cat) {
+        db.close();
+        return NextResponse.json({ error: "Category not found" }, { status: 400 });
+      }
+      updates.push("category_id = ?");
+      vals.push(cid);
+    }
+  }
 
   if (updates.length === 0) {
     db.close();
@@ -96,7 +127,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     vals.push(id);
     db.prepare(`UPDATE retail_products SET ${updates.join(", ")} WHERE id = ?`).run(...vals);
     const row = db
-      .prepare("SELECT id, sku, name, price, unit_cost, stock_quantity, active, group_id FROM retail_products WHERE id = ?")
+      .prepare(
+        `SELECT p.id, p.sku, p.name, p.price, p.unit_cost, p.stock_quantity, p.active, p.group_id,
+                p.category_id, c.name AS category_name
+         FROM retail_products p
+         LEFT JOIN retail_categories c ON c.id = p.category_id
+         WHERE p.id = ?`
+      )
       .get(id) as {
         id: number;
         sku: string;
@@ -106,6 +143,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         stock_quantity: number;
         active: number;
         group_id: number | null;
+        category_id: number | null;
+        category_name: string | null;
       };
     db.close();
     return NextResponse.json(row);

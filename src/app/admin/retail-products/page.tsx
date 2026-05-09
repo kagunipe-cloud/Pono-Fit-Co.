@@ -26,6 +26,7 @@ type ProductGroup = {
   created_at: string | null;
   variants: VariantRow[];
 };
+type ItemRow = { sku: string; name: string; stock: string };
 type StandaloneRow = {
   id: number;
   sku: string;
@@ -35,6 +36,8 @@ type StandaloneRow = {
   stock_quantity: number;
   active: number;
   created_at: string | null;
+  category_id: number | null;
+  category_name: string | null;
 };
 
 type GroupEdit = {
@@ -58,12 +61,13 @@ export default function AdminRetailProductsPage() {
   const [newCatName, setNewCatName] = useState("");
   const [newCatSort, setNewCatSort] = useState("");
 
-  const [gDisplayName, setGDisplayName] = useState("");
-  const [gCategoryId, setGCategoryId] = useState("");
-  const [gPrice, setGPrice] = useState("");
-  const [gUnitCost, setGUnitCost] = useState("");
-  const [gVariantRows, setGVariantRows] = useState([{ sku: "", name: "", stock: "" }]);
-  const [groupSaving, setGroupSaving] = useState(false);
+  const [itemCategoryId, setItemCategoryId] = useState("");
+  const [itemPrice, setItemPrice] = useState("");
+  const [itemUnitCost, setItemUnitCost] = useState("");
+  const [itemGroupDisplayName, setItemGroupDisplayName] = useState("");
+  const [itemRows, setItemRows] = useState<ItemRow[]>([{ sku: "", name: "", stock: "" }]);
+  const [itemSaving, setItemSaving] = useState(false);
+  const [skuScanRowIdx, setSkuScanRowIdx] = useState(0);
 
   const [addVarGroupId, setAddVarGroupId] = useState("");
   const [addVarSku, setAddVarSku] = useState("");
@@ -71,12 +75,6 @@ export default function AdminRetailProductsPage() {
   const [addVarStock, setAddVarStock] = useState("");
   const [addVarBusy, setAddVarBusy] = useState(false);
 
-  const [sku, setSku] = useState("");
-  const [name, setName] = useState("");
-  const [price, setPrice] = useState("");
-  const [unitCost, setUnitCost] = useState("");
-  const [initialStock, setInitialStock] = useState("");
-  const [saving, setSaving] = useState(false);
   const [adjustProductId, setAdjustProductId] = useState<number | null>(null);
   const [adjustDelta, setAdjustDelta] = useState("");
   const [adjustReason, setAdjustReason] = useState<"receive" | "shrink" | "adjustment" | "count">("receive");
@@ -84,7 +82,7 @@ export default function AdminRetailProductsPage() {
   const [adjustBusy, setAdjustBusy] = useState(false);
   const [coolerQrUrl, setCoolerQrUrl] = useState("");
   const [skuScanOpen, setSkuScanOpen] = useState(false);
-  const skuInputRef = useRef<HTMLInputElement | null>(null);
+  const firstSkuInputRef = useRef<HTMLInputElement | null>(null);
   const [groupPatchBusy, setGroupPatchBusy] = useState<number | null>(null);
 
   useEffect(() => {
@@ -128,7 +126,7 @@ export default function AdminRetailProductsPage() {
 
   useEffect(() => {
     if (loading) return;
-    const id = window.setTimeout(() => skuInputRef.current?.focus(), 50);
+    const id = window.setTimeout(() => firstSkuInputRef.current?.focus(), 50);
     return () => window.clearTimeout(id);
   }, [loading]);
 
@@ -174,7 +172,7 @@ export default function AdminRetailProductsPage() {
   }
 
   async function deleteCategory(id: number) {
-    if (!confirm("Delete this category? Groups using it must be reassigned first.")) return;
+    if (!confirm("Delete this category? Products and groups using it must be reassigned first.")) return;
     setError(null);
     const res = await fetch(`/api/admin/retail-categories/${id}`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
@@ -185,47 +183,78 @@ export default function AdminRetailProductsPage() {
     await load();
   }
 
-  async function createProductGroup(e: React.FormEvent) {
+  async function submitAddItem(e: React.FormEvent) {
     e.preventDefault();
-    if (!gDisplayName.trim() || !gPrice.trim()) return;
-    const variants = gVariantRows
+    if (!itemPrice.trim()) {
+      setError("Enter a sell price.");
+      return;
+    }
+    const valid = itemRows
       .map((r) => ({
         sku: r.sku.trim(),
         name: r.name.trim(),
-        initial_stock: r.stock.trim() ? r.stock.trim() : undefined,
+        stock: r.stock.trim(),
       }))
       .filter((r) => r.sku && r.name);
-    if (variants.length < 1) {
-      setError("Add at least one variant with SKU and name (e.g. flavor).");
+    if (valid.length < 1) {
+      setError("Add at least one row with SKU and name.");
       return;
     }
-    setGroupSaving(true);
+    if (valid.length >= 2 && !itemGroupDisplayName.trim()) {
+      setError("Enter a line name for items with multiple SKUs (e.g. brand + pack size).");
+      return;
+    }
+    setItemSaving(true);
     setError(null);
+    let added = false;
     try {
-      const res = await fetch("/api/admin/retail-products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          kind: "group",
-          display_name: gDisplayName.trim(),
-          price: gPrice.trim(),
-          ...(gUnitCost.trim() ? { unit_cost: gUnitCost.trim() } : {}),
-          ...(gCategoryId ? { category_id: parseInt(gCategoryId, 10) } : {}),
-          variants,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Save failed");
-      setGDisplayName("");
-      setGCategoryId("");
-      setGPrice("");
-      setGUnitCost("");
-      setGVariantRows([{ sku: "", name: "", stock: "" }]);
+      if (valid.length === 1) {
+        const res = await fetch("/api/admin/retail-products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sku: valid[0].sku,
+            name: valid[0].name,
+            price: itemPrice.trim(),
+            ...(itemUnitCost.trim() ? { unit_cost: itemUnitCost.trim() } : {}),
+            ...(valid[0].stock ? { initial_stock: valid[0].stock } : {}),
+            ...(itemCategoryId ? { category_id: parseInt(itemCategoryId, 10) } : {}),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Save failed");
+      } else {
+        const res = await fetch("/api/admin/retail-products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kind: "group",
+            display_name: itemGroupDisplayName.trim(),
+            price: itemPrice.trim(),
+            ...(itemUnitCost.trim() ? { unit_cost: itemUnitCost.trim() } : {}),
+            ...(itemCategoryId ? { category_id: parseInt(itemCategoryId, 10) } : {}),
+            variants: valid.map((r) => ({
+              sku: r.sku,
+              name: r.name,
+              ...(r.stock ? { initial_stock: r.stock } : {}),
+            })),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Save failed");
+      }
+      added = true;
+      setItemCategoryId("");
+      setItemPrice("");
+      setItemUnitCost("");
+      setItemGroupDisplayName("");
+      setItemRows([{ sku: "", name: "", stock: "" }]);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
-      setGroupSaving(false);
+      setItemSaving(false);
+      if (added) setTimeout(() => firstSkuInputRef.current?.focus(), 0);
     }
   }
 
@@ -288,39 +317,26 @@ export default function AdminRetailProductsPage() {
     }
   }
 
-  async function createProduct(e: React.FormEvent) {
-    e.preventDefault();
-    if (!sku.trim() || !name.trim() || !price.trim()) return;
-    setSaving(true);
+  function openSkuScan(rowIdx: number) {
+    setSkuScanRowIdx(rowIdx);
+    setSkuScanOpen(true);
+  }
+
+  async function patchStandaloneCategory(p: StandaloneRow, categoryIdStr: string) {
     setError(null);
-    let added = false;
-    try {
-      const res = await fetch("/api/admin/retail-products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sku: sku.trim(),
-          name: name.trim(),
-          price: price.trim(),
-          ...(unitCost.trim() ? { unit_cost: unitCost.trim() } : {}),
-          ...(initialStock.trim() ? { initial_stock: initialStock.trim() } : {}),
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Save failed");
-      added = true;
-      setSku("");
-      setName("");
-      setPrice("");
-      setUnitCost("");
-      setInitialStock("");
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Save failed");
-    } finally {
-      setSaving(false);
-      if (added) setTimeout(() => skuInputRef.current?.focus(), 0);
+    const body =
+      categoryIdStr === "" ? { category_id: null } : { category_id: parseInt(categoryIdStr, 10) };
+    const res = await fetch(`/api/admin/retail-products/${p.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(typeof data.error === "string" ? data.error : "Update failed");
+      return;
     }
+    await load();
   }
 
   async function toggleActive(p: StandaloneRow | VariantRow) {
@@ -458,8 +474,8 @@ export default function AdminRetailProductsPage() {
       </Link>
       <h1 className="text-2xl font-bold text-stone-900 mb-1">Pro shop inventory</h1>
       <p className="text-stone-600 text-sm mb-4">
-        Use <strong>product groups</strong> when several SKUs share the same price and unit cost (e.g. protein bar flavors). Assign a{" "}
-        <strong>category</strong> for tidy ordering in member Pro shop (drinks, bars, apparel…). Standalone products are one-offs without a group.
+        Use <strong>Add item</strong> for everything new: one SKU is a standalone product; use <strong>Add variation</strong> when several SKUs
+        share the same price and cost (e.g. flavors). Pick a <strong>category</strong> so items group nicely in the member Pro shop.
       </p>
 
       <div className="mb-6 p-4 rounded-xl border border-amber-200 bg-amber-50/80 flex flex-wrap items-center justify-between gap-4">
@@ -485,9 +501,160 @@ export default function AdminRetailProductsPage() {
 
       {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">{error}</div>}
 
+      <form onSubmit={submitAddItem} className="mb-8 p-4 rounded-xl border border-emerald-200 bg-emerald-50/40 space-y-3">
+        <h2 className="font-semibold text-stone-800">Add item</h2>
+        <p className="text-xs text-stone-600">
+          One row → standalone product. <strong>Add variation</strong> for more SKUs at the same sell price and unit cost (creates a product group).
+        </p>
+        <div className="grid sm:grid-cols-2 gap-3">
+          <label className="block">
+            <span className="text-xs font-medium text-stone-600">Category</span>
+            <select
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm bg-white"
+              value={itemCategoryId}
+              onChange={(e) => setItemCategoryId(e.target.value)}
+            >
+              <option value="">Uncategorized</option>
+              {categories.map((c) => (
+                <option key={c.id} value={String(c.id)}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs font-medium text-stone-600">Sell price (all rows)</span>
+            <input
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm bg-white"
+              value={itemPrice}
+              onChange={(e) => setItemPrice(e.target.value)}
+              placeholder="3.50"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs font-medium text-stone-600">Unit cost (optional)</span>
+            <input
+              className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm bg-white"
+              value={itemUnitCost}
+              onChange={(e) => setItemUnitCost(e.target.value)}
+              placeholder="2.00"
+            />
+          </label>
+          {itemRows.length > 1 ? (
+            <label className="block sm:col-span-2">
+              <span className="text-xs font-medium text-stone-600">Line name (brand / product — shared by all SKUs)</span>
+              <input
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm bg-white"
+                value={itemGroupDisplayName}
+                onChange={(e) => setItemGroupDisplayName(e.target.value)}
+                placeholder="e.g. Aloha Protein Bar 2.1oz"
+              />
+            </label>
+          ) : null}
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-stone-600">SKU, label, initial stock</p>
+          {itemRows.length > 1 ? (
+            <p className="text-xs text-stone-500">
+              Each row is a different barcode; <strong>Name</strong> is the variant label (e.g. chocolate).
+            </p>
+          ) : (
+            <p className="text-xs text-stone-500">
+              <strong>Name</strong> is what members see for this SKU.
+            </p>
+          )}
+          {itemRows.map((row, i) => (
+            <div key={i} className="flex flex-wrap gap-2 items-end">
+              <label className="block min-w-[10rem] flex-1">
+                <span className="text-xs text-stone-600">SKU / barcode</span>
+                <div className="mt-0.5 flex flex-wrap gap-2">
+                  <input
+                    ref={i === 0 ? firstSkuInputRef : undefined}
+                    className="min-w-[8rem] flex-1 px-3 py-2 rounded-lg border border-stone-200 text-sm font-mono bg-white"
+                    placeholder="Scan or type"
+                    value={row.sku}
+                    onChange={(e) => {
+                      const next = [...itemRows];
+                      next[i] = { ...next[i], sku: e.target.value };
+                      setItemRows(next);
+                    }}
+                    onFocus={() => setSkuScanRowIdx(i)}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => openSkuScan(i)}
+                    className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 shrink-0"
+                  >
+                    Scan
+                  </button>
+                </div>
+              </label>
+              <label className="block min-w-[8rem] flex-1">
+                <span className="text-xs text-stone-600">Name</span>
+                <input
+                  className="mt-0.5 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm bg-white"
+                  placeholder={itemRows.length > 1 ? "e.g. Peanut butter" : "Product name"}
+                  value={row.name}
+                  onChange={(e) => {
+                    const next = [...itemRows];
+                    next[i] = { ...next[i], name: e.target.value };
+                    setItemRows(next);
+                  }}
+                />
+              </label>
+              <label className="block w-24">
+                <span className="text-xs text-stone-600">Stock</span>
+                <input
+                  className="mt-0.5 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm bg-white"
+                  placeholder="0"
+                  value={row.stock}
+                  onChange={(e) => {
+                    const next = [...itemRows];
+                    next[i] = { ...next[i], stock: e.target.value };
+                    setItemRows(next);
+                  }}
+                />
+              </label>
+              {itemRows.length > 1 ? (
+                <button
+                  type="button"
+                  className="text-sm text-red-600 hover:underline pb-2"
+                  onClick={() => {
+                    setItemRows((prev) => {
+                      const next = prev.filter((_, j) => j !== i);
+                      setSkuScanRowIdx((idx) => (idx >= next.length ? Math.max(0, next.length - 1) : idx));
+                      return next;
+                    });
+                  }}
+                >
+                  Remove
+                </button>
+              ) : null}
+            </div>
+          ))}
+          <button
+            type="button"
+            className="text-sm text-emerald-700 font-medium hover:underline"
+            onClick={() => setItemRows([...itemRows, { sku: "", name: "", stock: "" }])}
+          >
+            + Add variation
+          </button>
+        </div>
+        <button
+          type="submit"
+          disabled={itemSaving}
+          className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+        >
+          {itemSaving ? "Saving…" : "Save item"}
+        </button>
+      </form>
+
       <section className="mb-8 p-4 rounded-xl border border-stone-200 bg-white space-y-3">
-        <h2 className="font-semibold text-stone-800">Categories</h2>
-        <p className="text-xs text-stone-500">Used to group items in the member Pro shop list. Optional sort (lower = first).</p>
+        <h2 className="font-semibold text-stone-800">Add category</h2>
+        <p className="text-xs text-stone-500">Used to group items in the member Pro shop list. Lower sort = earlier in the list.</p>
         <form onSubmit={addCategory} className="flex flex-wrap gap-2 items-end">
           <label className="block flex-1 min-w-[140px]">
             <span className="text-xs font-medium text-stone-600">New category</span>
@@ -525,117 +692,6 @@ export default function AdminRetailProductsPage() {
           </ul>
         )}
       </section>
-
-      <form onSubmit={createProductGroup} className="mb-8 p-4 rounded-xl border border-emerald-200 bg-emerald-50/40 space-y-3">
-        <h2 className="font-semibold text-stone-800">New product group (shared price &amp; cost)</h2>
-        <p className="text-xs text-stone-600">
-          One brand / pack size: same sell price and unit cost for every variant below. Each row is a different SKU (e.g. flavor).
-        </p>
-        <div className="grid sm:grid-cols-2 gap-3">
-          <label className="block sm:col-span-2">
-            <span className="text-xs font-medium text-stone-600">Display name (e.g. brand + product line)</span>
-            <input
-              className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm bg-white"
-              value={gDisplayName}
-              onChange={(e) => setGDisplayName(e.target.value)}
-              placeholder="e.g. Aloha Protein Bar 2.1oz"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs font-medium text-stone-600">Category</span>
-            <select
-              className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm bg-white"
-              value={gCategoryId}
-              onChange={(e) => setGCategoryId(e.target.value)}
-            >
-              <option value="">Uncategorized</option>
-              {categories.map((c) => (
-                <option key={c.id} value={String(c.id)}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-xs font-medium text-stone-600">Sell price</span>
-            <input
-              className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm bg-white"
-              value={gPrice}
-              onChange={(e) => setGPrice(e.target.value)}
-              placeholder="3.50"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs font-medium text-stone-600">Unit cost (optional)</span>
-            <input
-              className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm bg-white"
-              value={gUnitCost}
-              onChange={(e) => setGUnitCost(e.target.value)}
-              placeholder="2.00"
-            />
-          </label>
-        </div>
-        <div className="space-y-2">
-          <p className="text-xs font-medium text-stone-600">Variants (SKU + label, e.g. chocolate / peanut butter)</p>
-          {gVariantRows.map((row, i) => (
-            <div key={i} className="flex flex-wrap gap-2 items-end">
-              <input
-                className="min-w-[8rem] flex-1 px-3 py-2 rounded-lg border border-stone-200 text-sm font-mono bg-white"
-                placeholder="SKU / barcode"
-                value={row.sku}
-                onChange={(e) => {
-                  const next = [...gVariantRows];
-                  next[i] = { ...next[i], sku: e.target.value };
-                  setGVariantRows(next);
-                }}
-              />
-              <input
-                className="min-w-[8rem] flex-1 px-3 py-2 rounded-lg border border-stone-200 text-sm bg-white"
-                placeholder="Flavor / variant name"
-                value={row.name}
-                onChange={(e) => {
-                  const next = [...gVariantRows];
-                  next[i] = { ...next[i], name: e.target.value };
-                  setGVariantRows(next);
-                }}
-              />
-              <input
-                className="w-24 px-3 py-2 rounded-lg border border-stone-200 text-sm bg-white"
-                placeholder="Stock"
-                value={row.stock}
-                onChange={(e) => {
-                  const next = [...gVariantRows];
-                  next[i] = { ...next[i], stock: e.target.value };
-                  setGVariantRows(next);
-                }}
-              />
-              {gVariantRows.length > 1 && (
-                <button
-                  type="button"
-                  className="text-sm text-red-600 hover:underline"
-                  onClick={() => setGVariantRows(gVariantRows.filter((_, j) => j !== i))}
-                >
-                  Remove row
-                </button>
-              )}
-            </div>
-          ))}
-          <button
-            type="button"
-            className="text-sm text-emerald-700 font-medium hover:underline"
-            onClick={() => setGVariantRows([...gVariantRows, { sku: "", name: "", stock: "" }])}
-          >
-            + Add another variant row
-          </button>
-        </div>
-        <button
-          type="submit"
-          disabled={groupSaving}
-          className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
-        >
-          {groupSaving ? "Saving…" : "Create group & variants"}
-        </button>
-      </form>
 
       {groups.length > 0 && (
         <section className="mb-8 space-y-4">
@@ -743,134 +799,55 @@ export default function AdminRetailProductsPage() {
         </section>
       )}
 
-      <form onSubmit={submitAddVariant} className="mb-8 p-4 rounded-xl border border-stone-200 bg-white space-y-2">
-        <h2 className="font-semibold text-stone-800">Add variant to existing group</h2>
-        <div className="flex flex-wrap gap-2 items-end">
-          <label className="block min-w-[200px]">
-            <span className="text-xs font-medium text-stone-600">Product group</span>
-            <select
-              className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
-              value={addVarGroupId}
-              onChange={(e) => setAddVarGroupId(e.target.value)}
-            >
-              <option value="">Select…</option>
-              {groups.map((g) => (
-                <option key={g.id} value={String(g.id)}>
-                  {g.display_name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <input
-            className="px-3 py-2 rounded-lg border border-stone-200 text-sm font-mono min-w-[8rem]"
-            placeholder="SKU"
-            value={addVarSku}
-            onChange={(e) => setAddVarSku(e.target.value)}
-          />
-          <input
-            className="px-3 py-2 rounded-lg border border-stone-200 text-sm min-w-[8rem] flex-1"
-            placeholder="Variant name"
-            value={addVarName}
-            onChange={(e) => setAddVarName(e.target.value)}
-          />
-          <input
-            className="w-24 px-3 py-2 rounded-lg border border-stone-200 text-sm"
-            placeholder="Stock"
-            value={addVarStock}
-            onChange={(e) => setAddVarStock(e.target.value)}
-          />
-          <button
-            type="submit"
-            disabled={addVarBusy}
-            className="px-4 py-2 rounded-lg bg-stone-800 text-white text-sm font-medium hover:bg-stone-900 disabled:opacity-50"
-          >
-           Add variant
-          </button>
-        </div>
-      </form>
-
-      <form onSubmit={createProduct} className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50 space-y-3">
-        <h2 className="font-semibold text-stone-800">Add standalone product</h2>
-        <p className="text-xs text-stone-500 -mt-1">One SKU with its own price (not part of a flavor group).</p>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          <label className="block sm:col-span-2 lg:col-span-2">
-            <span className="text-xs font-medium text-stone-600">SKU / barcode</span>
-            <div className="mt-1 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => setSkuScanOpen(true)}
-                className="w-full px-4 py-3 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 shadow-sm sm:hidden"
+      <details className="mb-8 group">
+        <summary className="cursor-pointer text-sm font-medium text-stone-700 hover:text-stone-900 py-2">
+          Add variant to an existing group…
+        </summary>
+        <form onSubmit={submitAddVariant} className="mt-2 p-4 rounded-xl border border-stone-200 bg-white space-y-2">
+          <div className="flex flex-wrap gap-2 items-end">
+            <label className="block min-w-[200px]">
+              <span className="text-xs font-medium text-stone-600">Product group</span>
+              <select
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                value={addVarGroupId}
+                onChange={(e) => setAddVarGroupId(e.target.value)}
               >
-                Open camera — scan barcode for SKU
-              </button>
-              <div className="flex flex-wrap gap-2">
-                <input
-                  ref={skuInputRef}
-                  className="min-w-[12rem] flex-1 px-3 py-2 rounded-lg border border-stone-200 text-sm font-mono bg-white"
-                  value={sku}
-                  onChange={(e) => setSku(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") e.preventDefault();
-                  }}
-                  placeholder="Barcode appears here after you scan"
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                <button
-                  type="button"
-                  onClick={() => setSkuScanOpen(true)}
-                  className="hidden sm:inline-flex px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 shrink-0"
-                >
-                  Scan with camera
-                </button>
-              </div>
-            </div>
-          </label>
-          <label className="block sm:col-span-2">
-            <span className="text-xs font-medium text-stone-600">Name</span>
+                <option value="">Select…</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={String(g.id)}>
+                    {g.display_name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <input
-              className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm bg-white"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Energy drink — flavor"
+              className="px-3 py-2 rounded-lg border border-stone-200 text-sm font-mono min-w-[8rem]"
+              placeholder="SKU"
+              value={addVarSku}
+              onChange={(e) => setAddVarSku(e.target.value)}
             />
-          </label>
-          <label className="block">
-            <span className="text-xs font-medium text-stone-600">Sell price</span>
             <input
-              className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm bg-white"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              placeholder="3.50"
+              className="px-3 py-2 rounded-lg border border-stone-200 text-sm min-w-[8rem] flex-1"
+              placeholder="Variant name"
+              value={addVarName}
+              onChange={(e) => setAddVarName(e.target.value)}
             />
-          </label>
-          <label className="block">
-            <span className="text-xs font-medium text-stone-600">Unit cost (optional)</span>
             <input
-              className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm bg-white"
-              value={unitCost}
-              onChange={(e) => setUnitCost(e.target.value)}
-              placeholder="2.00"
+              className="w-24 px-3 py-2 rounded-lg border border-stone-200 text-sm"
+              placeholder="Stock"
+              value={addVarStock}
+              onChange={(e) => setAddVarStock(e.target.value)}
             />
-          </label>
-          <label className="block">
-            <span className="text-xs font-medium text-stone-600">Initial stock (optional)</span>
-            <input
-              className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm bg-white"
-              value={initialStock}
-              onChange={(e) => setInitialStock(e.target.value)}
-              placeholder="24"
-            />
-          </label>
-        </div>
-        <button
-          type="submit"
-          disabled={saving}
-          className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
-        >
-          {saving ? "Saving…" : "Add standalone product"}
-        </button>
-      </form>
+            <button
+              type="submit"
+              disabled={addVarBusy}
+              className="px-4 py-2 rounded-lg bg-stone-800 text-white text-sm font-medium hover:bg-stone-900 disabled:opacity-50"
+            >
+              Add variant
+            </button>
+          </div>
+        </form>
+      </details>
 
       <h2 className="font-semibold text-stone-800 mb-2">Standalone items</h2>
       {standalone.length === 0 ? (
@@ -888,6 +865,21 @@ export default function AdminRetailProductsPage() {
                     </span>
                   </p>
                   <p className="text-xs text-stone-500">SKU {p.sku}</p>
+                  <label className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-stone-600">Category</span>
+                    <select
+                      className="py-1 px-2 rounded border border-stone-200 bg-white text-xs"
+                      value={p.category_id != null ? String(p.category_id) : ""}
+                      onChange={(e) => void patchStandaloneCategory(p, e.target.value)}
+                    >
+                      <option value="">Uncategorized</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={String(c.id)}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span className="text-stone-700">
@@ -938,7 +930,7 @@ export default function AdminRetailProductsPage() {
         >
           <div className="w-full sm:max-w-md bg-white sm:rounded-xl shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="p-3 border-b border-stone-100 flex justify-between items-center">
-              <h2 className="font-semibold text-stone-900">Scan barcode for SKU</h2>
+              <h2 className="font-semibold text-stone-900">Scan barcode</h2>
               <button type="button" className="text-sm text-stone-500 hover:text-stone-800" onClick={() => setSkuScanOpen(false)}>
                 Close
               </button>
@@ -946,9 +938,15 @@ export default function AdminRetailProductsPage() {
             <Suspense fallback={<div className="p-8 text-center text-stone-500">Starting camera…</div>}>
               <CameraBarcodeScanner
                 onScan={(code) => {
-                  setSku(code.trim());
+                  const trimmed = code.trim();
+                  setItemRows((prev) => {
+                    const next = [...prev];
+                    const i = Math.min(skuScanRowIdx, Math.max(0, next.length - 1));
+                    if (next[i]) next[i] = { ...next[i], sku: trimmed };
+                    return next;
+                  });
                   setSkuScanOpen(false);
-                  skuInputRef.current?.focus();
+                  firstSkuInputRef.current?.focus();
                 }}
                 onClose={() => setSkuScanOpen(false)}
               />

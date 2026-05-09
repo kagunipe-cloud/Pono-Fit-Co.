@@ -12,7 +12,7 @@ const rowSelect = `
     COALESCE(c.name, '') AS category
   FROM retail_products p
   LEFT JOIN retail_product_groups g ON g.id = p.group_id
-  LEFT JOIN retail_categories c ON c.id = g.category_id
+  LEFT JOIN retail_categories c ON c.id = COALESCE(g.category_id, p.category_id)
   WHERE p.active = 1 AND (p.group_id IS NULL OR g.active = 1)
 `;
 

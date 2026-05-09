@@ -72,8 +72,11 @@ export async function GET(request: NextRequest) {
 
   const standalone_products = db
     .prepare(
-      `SELECT id, sku, name, price, unit_cost, stock_quantity, active, created_at
-       FROM retail_products WHERE group_id IS NULL ORDER BY active DESC, name COLLATE NOCASE`
+      `SELECT p.id, p.sku, p.name, p.price, p.unit_cost, p.stock_quantity, p.active, p.created_at,
+              p.category_id, c.name AS category_name
+       FROM retail_products p
+       LEFT JOIN retail_categories c ON c.id = p.category_id
+       WHERE p.group_id IS NULL ORDER BY p.active DESC, p.name COLLATE NOCASE`
     )
     .all() as {
       id: number;
@@ -84,6 +87,8 @@ export async function GET(request: NextRequest) {
       stock_quantity: number;
       active: number;
       created_at: string | null;
+      category_id: number | null;
+      category_name: string | null;
     }[];
 
   db.close();
@@ -296,10 +301,27 @@ export async function POST(request: NextRequest) {
 
   const db = getDb();
   ensureRetailProductsTable(db);
+  let category_id: number | null = null;
+  if (body.category_id != null && String(body.category_id).trim() !== "") {
+    const cid = parseInt(String(body.category_id), 10);
+    if (!Number.isFinite(cid) || cid < 1) {
+      return NextResponse.json({ error: "Invalid category_id" }, { status: 400 });
+    }
+    ensureRetailCategoriesTable(db);
+    const cat = db.prepare("SELECT id FROM retail_categories WHERE id = ?").get(cid) as { id: number } | undefined;
+    if (!cat) {
+      db.close();
+      return NextResponse.json({ error: "Category not found" }, { status: 400 });
+    }
+    category_id = cid;
+  }
+
   try {
     const r = db
-      .prepare("INSERT INTO retail_products (sku, name, price, unit_cost, stock_quantity, active) VALUES (?, ?, ?, ?, ?, 1)")
-      .run(sku, name, price, unit_cost, initial);
+      .prepare(
+        "INSERT INTO retail_products (sku, name, price, unit_cost, stock_quantity, active, category_id) VALUES (?, ?, ?, ?, ?, 1, ?)"
+      )
+      .run(sku, name, price, unit_cost, initial, category_id);
     const pid = Number(r.lastInsertRowid);
     if (initial > 0) {
       ensureRetailInventoryLedgerTable(db);
@@ -312,7 +334,12 @@ export async function POST(request: NextRequest) {
       });
     }
     const row = db
-      .prepare("SELECT id, sku, name, price, unit_cost, stock_quantity, active FROM retail_products WHERE id = ?")
+      .prepare(
+        `SELECT p.id, p.sku, p.name, p.price, p.unit_cost, p.stock_quantity, p.active, p.category_id, c.name AS category_name
+         FROM retail_products p
+         LEFT JOIN retail_categories c ON c.id = p.category_id
+         WHERE p.id = ?`
+      )
       .get(pid) as Record<string, unknown>;
     db.close();
     return NextResponse.json(row);

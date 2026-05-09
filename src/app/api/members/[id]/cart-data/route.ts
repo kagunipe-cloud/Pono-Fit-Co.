@@ -188,7 +188,7 @@ export async function GET(
             COALESCE(c.name, '') AS category_name
            FROM retail_products p
            LEFT JOIN retail_product_groups g ON g.id = p.group_id
-           LEFT JOIN retail_categories c ON c.id = g.category_id
+           LEFT JOIN retail_categories c ON c.id = COALESCE(g.category_id, p.category_id)
            WHERE p.active = 1 AND (p.group_id IS NULL OR g.active = 1)
            ORDER BY COALESCE(c.sort_order, 999999), c.name COLLATE NOCASE, g.display_name COLLATE NOCASE, p.name COLLATE NOCASE`
         )
