@@ -9,6 +9,7 @@ import { getTrainerMemberId } from "../../../../../lib/admin";
 import { hasBillableStripeCustomer } from "../../../../../lib/stripe-customer";
 import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
 import { ensureDiscountsTable } from "../../../../../lib/discounts";
+import { ensureRetailProductsTable } from "../../../../../lib/retail-products";
 
 export const dynamic = "force-dynamic";
 
@@ -114,6 +115,12 @@ export async function GET(
         ensurePTSlotTables(db);
         const row = db.prepare("SELECT name, credits, duration_minutes FROM pt_pack_products WHERE id = ?").get(it.product_id) as { name: string; credits: number; duration_minutes: number } | undefined;
         if (row) name = `${row.name ?? "—"} (${row.credits}×${row.duration_minutes} min)`;
+      } else if (it.product_type === "retail") {
+        ensureRetailProductsTable(db);
+        const row = db.prepare("SELECT name, sku FROM retail_products WHERE id = ?").get(it.product_id) as
+          | { name: string; sku: string }
+          | undefined;
+        if (row) name = `${row.name ?? "—"} (SKU ${row.sku})`;
       }
       const catalog_price = getCatalogUnitPriceString(db, it);
       const price = getEffectiveUnitPriceString(db, it);
@@ -167,6 +174,19 @@ export async function GET(
     const sessionMemberId = await getMemberIdFromSession();
     const is_own_cart = !!sessionMemberId && sessionMemberId === member.member_id;
     const is_staff = !!(await getTrainerMemberId(_req));
+
+    let retailProducts:
+      | { id: number; sku: string; name: string; price: string; unit_cost: string | null; stock_quantity: number }[]
+      | undefined;
+    if (is_staff) {
+      ensureRetailProductsTable(db);
+      retailProducts = db
+        .prepare(
+          `SELECT id, sku, name, price, unit_cost, stock_quantity FROM retail_products WHERE active = 1 ORDER BY name COLLATE NOCASE`
+        )
+        .all() as { id: number; sku: string; name: string; price: string; unit_cost: string | null; stock_quantity: number }[];
+    }
+
     db.close();
 
     const memberName = [member.first_name, member.last_name].filter(Boolean).join(" ") || "Member";
@@ -186,6 +206,7 @@ export async function GET(
       classes,
       classPacks,
       ptPackProducts,
+      ...(retailProducts != null ? { retailProducts } : {}),
       promo_code: promoCode || null,
       discount: discount
         ? {

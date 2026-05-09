@@ -4,7 +4,66 @@
 
 import { getDb } from "./db";
 
-export function ensureWorkoutTables(db: ReturnType<typeof getDb>) {
+type AppDb = ReturnType<typeof getDb>;
+
+function migrateExerciseTypeConstraint(db: AppDb, table: "exercises" | "workout_exercises"): void {
+  const row = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(table) as { sql?: string } | undefined;
+  if (!row?.sql || row.sql.includes("'stretch'")) return;
+
+  const tempTable = `${table}_old_type_constraint`;
+  try {
+    db.exec("PRAGMA foreign_keys = OFF");
+    db.prepare(`ALTER TABLE ${table} RENAME TO ${tempTable}`).run();
+    if (table === "exercises") {
+      db.exec(`
+        CREATE TABLE exercises (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          type TEXT NOT NULL CHECK (type IN ('lift', 'cardio', 'stretch')),
+          primary_muscles TEXT,
+          secondary_muscles TEXT,
+          equipment TEXT,
+          muscle_group TEXT,
+          created_at TEXT DEFAULT (datetime('now')),
+          instructions TEXT,
+          image_path TEXT
+        );
+        INSERT INTO exercises (id, name, type, primary_muscles, secondary_muscles, equipment, muscle_group, created_at, instructions, image_path)
+        SELECT id, name, type, primary_muscles, secondary_muscles, equipment, muscle_group, created_at, instructions, image_path
+        FROM ${tempTable};
+      `);
+    } else {
+      db.exec(`
+        CREATE TABLE workout_exercises (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          workout_id INTEGER NOT NULL,
+          type TEXT NOT NULL CHECK (type IN ('lift', 'cardio', 'stretch')),
+          exercise_name TEXT NOT NULL,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          exercise_id INTEGER REFERENCES exercises(id),
+          use_for_my_1rm INTEGER NOT NULL DEFAULT 0,
+          FOREIGN KEY (workout_id) REFERENCES workouts(id) ON DELETE CASCADE
+        );
+        INSERT INTO workout_exercises (id, workout_id, type, exercise_name, sort_order, exercise_id, use_for_my_1rm)
+        SELECT id, workout_id, type, exercise_name, sort_order, exercise_id, coalesce(use_for_my_1rm, 0)
+        FROM ${tempTable};
+      `);
+    }
+    db.prepare(`DROP TABLE ${tempTable}`).run();
+  } catch {
+    try {
+      db.prepare(`ALTER TABLE ${tempTable} RENAME TO ${table}`).run();
+    } catch {
+      /* ignore rollback failure */
+    }
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+}
+
+export function ensureWorkoutTables(db: AppDb) {
   // Migrate workouts if it was created with invalid FK (members PK is id, not member_id)
   try {
     const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='workouts'").get() as { sql: string } | undefined;
@@ -95,7 +154,7 @@ export function ensureWorkoutTables(db: ReturnType<typeof getDb>) {
     CREATE TABLE IF NOT EXISTS exercises (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
-      type TEXT NOT NULL CHECK (type IN ('lift', 'cardio')),
+      type TEXT NOT NULL CHECK (type IN ('lift', 'cardio', 'stretch')),
       primary_muscles TEXT,
       secondary_muscles TEXT,
       equipment TEXT,
@@ -105,6 +164,9 @@ export function ensureWorkoutTables(db: ReturnType<typeof getDb>) {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_exercises_name_type ON exercises(name, type);
     CREATE INDEX IF NOT EXISTS idx_exercises_name ON exercises(name);
   `);
+  migrateExerciseTypeConstraint(db, "exercises");
+  db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_exercises_name_type ON exercises(name, type)").run();
+  db.prepare("CREATE INDEX IF NOT EXISTS idx_exercises_name ON exercises(name)").run();
   const exerciseCols = db.prepare("PRAGMA table_info(exercises)").all() as { name: string }[];
   for (const col of ["primary_muscles", "secondary_muscles", "equipment", "muscle_group", "instructions", "image_path"]) {
     if (exerciseCols.every((c) => c.name !== col)) {
@@ -120,7 +182,7 @@ export function ensureWorkoutTables(db: ReturnType<typeof getDb>) {
     CREATE TABLE IF NOT EXISTS workout_exercises (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       workout_id INTEGER NOT NULL,
-      type TEXT NOT NULL CHECK (type IN ('lift', 'cardio')),
+      type TEXT NOT NULL CHECK (type IN ('lift', 'cardio', 'stretch')),
       exercise_name TEXT NOT NULL,
       sort_order INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY (workout_id) REFERENCES workouts(id) ON DELETE CASCADE
@@ -141,6 +203,9 @@ export function ensureWorkoutTables(db: ReturnType<typeof getDb>) {
     CREATE INDEX IF NOT EXISTS idx_workout_exercises_workout ON workout_exercises(workout_id);
     CREATE INDEX IF NOT EXISTS idx_workout_sets_exercise ON workout_sets(workout_exercise_id);
   `);
+  migrateExerciseTypeConstraint(db, "workout_exercises");
+  db.prepare("CREATE INDEX IF NOT EXISTS idx_workout_exercises_workout ON workout_exercises(workout_id)").run();
+  db.prepare("CREATE INDEX IF NOT EXISTS idx_workout_sets_exercise ON workout_sets(workout_exercise_id)").run();
 
   const exCols = db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[];
   if (exCols.every((c) => c.name !== "exercise_id")) {

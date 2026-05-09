@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { EXERCISE_TYPES, parseExerciseType } from "@/lib/exercise-types";
 import { exerciseSearchScore, type ExerciseStat } from "@/lib/exercise-search-rank";
 import { getMemberIdFromSession } from "@/lib/session";
 import { getCanonicalPrimaryMuscles, getMuscleGroup } from "@/lib/muscle-groups";
@@ -9,7 +10,7 @@ import { ensureWorkoutTables } from "@/lib/workouts";
 export const dynamic = "force-dynamic";
 
 /**
- * GET ?type=lift|cardio&limit=15&for_member_id=...
+ * GET ?type=lift|cardio|stretch&limit=15&for_member_id=...
  * Exercises this member has logged often, plus pinned favorites, ranked by favorites + frequency + recency.
  * for_member_id: trainer/admin may pass a client member_id (must be allowed).
  */
@@ -19,13 +20,14 @@ export async function GET(request: NextRequest) {
     if (!sessionMemberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
 
     const { searchParams } = new URL(request.url);
-    const type = searchParams.get("type");
+    const rawType = searchParams.get("type");
     const limit = Math.min(25, Math.max(1, parseInt(searchParams.get("limit") ?? "15", 10) || 15));
     const forMemberParam = searchParams.get("for_member_id")?.trim() || null;
 
-    if (type !== "lift" && type !== "cardio") {
-      return NextResponse.json({ error: "type=lift or type=cardio required" }, { status: 400 });
+    if (!rawType || !EXERCISE_TYPES.includes(rawType as (typeof EXERCISE_TYPES)[number])) {
+      return NextResponse.json({ error: "type=lift, type=cardio, or type=stretch required" }, { status: 400 });
     }
+    const type = parseExerciseType(rawType);
 
     const db = getDb();
     ensureWorkoutTables(db);

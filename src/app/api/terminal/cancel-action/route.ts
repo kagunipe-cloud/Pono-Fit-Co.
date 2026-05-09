@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminMemberId } from "@/lib/admin";
+import { getMemberIdFromSession } from "@/lib/session";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
 
-/** POST — Cancel current reader action (admin only). Body: { reader_id } */
+/** POST — Cancel current reader action (admin or signed-in member). Body: { reader_id } */
 export async function POST(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
-  if (!adminId) {
+  const memberId = await getMemberIdFromSession();
+  if (!adminId && !memberId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

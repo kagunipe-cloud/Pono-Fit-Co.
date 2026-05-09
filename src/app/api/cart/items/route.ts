@@ -5,6 +5,12 @@ import { getMemberIdFromSession } from "../../../../lib/session";
 import { getTrainerMemberId } from "../../../../lib/admin";
 import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
 import { isOpenGroupSessionKind } from "../../../../lib/open-group-pt";
+import {
+  ensureRetailProductsTable,
+  normalizeRetailSku,
+  getMemberRetailSelfCheckoutEnabled,
+  getRetailInCartQty,
+} from "../../../../lib/retail-products";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +19,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const member_id = (body.member_id ?? "").trim();
     const product_type = (body.product_type ?? "").trim();
-    const product_id = parseInt(String(body.product_id), 10);
+    const product_id_raw = body.product_id;
+    const product_id =
+      product_id_raw === undefined || product_id_raw === null || String(product_id_raw).trim() === ""
+        ? NaN
+        : parseInt(String(product_id_raw), 10);
     const quantity = Math.max(1, parseInt(String(body.quantity), 10) || 1);
 
     const sessionMemberId = await getMemberIdFromSession();
@@ -22,11 +32,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    if (!member_id || !product_type || Number.isNaN(product_id)) {
-      return NextResponse.json({ error: "member_id, product_type, product_id required" }, { status: 400 });
+    if (!member_id || !product_type) {
+      return NextResponse.json({ error: "member_id and product_type required" }, { status: 400 });
     }
-    if (!["membership_plan", "pt_session", "class", "class_pack", "class_occurrence", "pt_pack"].includes(product_type)) {
-      return NextResponse.json({ error: "product_type must be membership_plan, pt_session, class, class_pack, class_occurrence, or pt_pack" }, { status: 400 });
+    if (product_type !== "retail" && Number.isNaN(product_id)) {
+      return NextResponse.json({ error: "product_id required" }, { status: 400 });
+    }
+    if (
+      !["membership_plan", "pt_session", "class", "class_pack", "class_occurrence", "pt_pack", "retail"].includes(
+        product_type
+      )
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "product_type must be membership_plan, pt_session, class, class_pack, class_occurrence, pt_pack, or retail",
+        },
+        { status: 400 }
+      );
     }
 
     const slot = body.slot;
@@ -53,6 +76,45 @@ export async function POST(request: NextRequest) {
 
     const db = getDb();
     ensureCartTables(db);
+
+    let resolvedProductId = product_id;
+    if (product_type === "retail") {
+      ensureRetailProductsTable(db);
+      const sku = normalizeRetailSku(body.sku);
+      if (sku) {
+        const row = db.prepare("SELECT id FROM retail_products WHERE sku = ? AND active = 1").get(sku) as
+          | { id: number }
+          | undefined;
+        if (!row) {
+          db.close();
+          return NextResponse.json({ error: "Unknown SKU" }, { status: 404 });
+        }
+        resolvedProductId = row.id;
+      } else if (Number.isNaN(product_id)) {
+        db.close();
+        return NextResponse.json({ error: "retail requires product_id or sku" }, { status: 400 });
+      } else {
+        const row = db.prepare("SELECT id FROM retail_products WHERE id = ? AND active = 1").get(product_id) as
+          | { id: number }
+          | undefined;
+        if (!row) {
+          db.close();
+          return NextResponse.json({ error: "Retail product not found or inactive" }, { status: 404 });
+        }
+        resolvedProductId = row.id;
+      }
+
+      if (!isStaff && sessionMemberId === member_id && !getMemberRetailSelfCheckoutEnabled(db)) {
+        db.close();
+        return NextResponse.json(
+          {
+            error:
+              "Member self-checkout for the pro shop is not turned on yet. A staff member can add items at the front desk.",
+          },
+          { status: 403 }
+        );
+      }
+    }
 
     if (product_type === "class_occurrence") {
       ensureRecurringClassesTables(db);
@@ -86,9 +148,31 @@ export async function POST(request: NextRequest) {
       cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member_id) as { id: number };
     }
 
+    if (product_type === "retail") {
+      ensureRetailProductsTable(db);
+      const already = getRetailInCartQty(db, cart.id, resolvedProductId);
+      const stockRow = db
+        .prepare("SELECT name, stock_quantity FROM retail_products WHERE id = ? AND active = 1")
+        .get(resolvedProductId) as { name: string; stock_quantity: number } | undefined;
+      if (!stockRow) {
+        db.close();
+        return NextResponse.json({ error: "Retail product not found or inactive" }, { status: 404 });
+      }
+      const have = Math.max(0, Math.floor(Number(stockRow.stock_quantity) || 0));
+      if (have < already + quantity) {
+        db.close();
+        return NextResponse.json(
+          {
+            error: `Not enough stock for ${stockRow.name} (${have} on hand; ${already} already in this cart).`,
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     db.prepare(
       "INSERT INTO cart_items (cart_id, product_type, product_id, quantity, slot_json, gift_recipient_email) VALUES (?, ?, ?, ?, ?, ?)"
-    ).run(cart.id, product_type, product_id, quantity, slot_json, gift_recipient_email);
+    ).run(cart.id, product_type, resolvedProductId, quantity, slot_json, gift_recipient_email);
     const row = db.prepare("SELECT * FROM cart_items WHERE cart_id = ? ORDER BY id DESC LIMIT 1").get(cart.id);
     db.close();
     return NextResponse.json(row);

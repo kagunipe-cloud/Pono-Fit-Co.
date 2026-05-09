@@ -6,6 +6,8 @@ import { ensureDiscountsTable } from "@/lib/discounts";
 import { ensureRecurringClassesTables, ensureClassesRecurringColumns, ensureClassOccurrencesClassId } from "@/lib/recurring-classes";
 import { ensurePTSlotTables } from "@/lib/pt-slots";
 import { getAdminMemberId } from "@/lib/admin";
+import { getMemberIdFromSession } from "@/lib/session";
+import { ensureRetailProductsTable } from "@/lib/retail-products";
 import { computeCcFee } from "@/lib/cc-fees";
 import Stripe from "stripe";
 
@@ -17,16 +19,20 @@ function parsePrice(p: string | null): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
-/** GET ?member_id= — Returns terminal charge breakdown (subtotal, cc_fee, tax, total). Admin only. */
+/** GET ?member_id= — Terminal charge breakdown (admin, or member viewing their own cart). */
 export async function GET(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
-  if (!adminId) {
+  const sessionMemberId = await getMemberIdFromSession();
+  if (!sessionMemberId && !adminId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const member_id = request.nextUrl.searchParams.get("member_id")?.trim();
   if (!member_id) {
     return NextResponse.json({ error: "member_id required" }, { status: 400 });
+  }
+  if (!adminId && sessionMemberId !== member_id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const db = getDb();
@@ -35,6 +41,7 @@ export async function GET(request: NextRequest) {
   ensureClassesRecurringColumns(db);
   ensureClassOccurrencesClassId(db);
   ensurePTSlotTables(db);
+  ensureRetailProductsTable(db);
 
   const cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member_id) as { id: number; promo_code?: string | null } | undefined;
   if (!cart) {

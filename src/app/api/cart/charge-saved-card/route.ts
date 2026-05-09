@@ -4,8 +4,10 @@ import { ensureCartTables } from "@/lib/cart";
 import { getEffectiveUnitPriceString } from "@/lib/cart-line-prices";
 import { ensureDiscountsTable } from "@/lib/discounts";
 import { ensurePTSlotTables } from "@/lib/pt-slots";
+import { assertRetailStockForCart } from "@/lib/retail-products";
 import { ensureRecurringClassesTables, ensureClassesRecurringColumns, ensureClassOccurrencesClassId } from "@/lib/recurring-classes";
 import { getTrainerMemberId } from "@/lib/admin";
+import { getMemberIdFromSession } from "@/lib/session";
 import { computeCcFee } from "@/lib/cc-fees";
 import { stripeCustomerIdForApi } from "@/lib/stripe-customer";
 import {
@@ -23,16 +25,17 @@ function parsePrice(p: string | null): number {
 }
 
 /**
- * POST — Staff (admin or trainer) charges the member’s saved card for the current cart
- * (off-session, same as subscription retry). Fulfilment: client calls /api/cart/confirm-payment
- * with the returned `payment_intent_id` on success.
+ * POST — Charge the member’s saved card for the current cart (off-session).
+ * Staff may charge on behalf of a member; members may charge only their own cart.
+ * On success, call /api/cart/confirm-payment with payment_intent_id.
  *
  * Body: { member_id: string, monthly_recurring?: boolean } — `monthly_recurring` only when
  * the cart includes a monthly membership (false = one period, default true = auto-renew).
  */
 export async function POST(request: NextRequest) {
+  const sessionMemberId = await getMemberIdFromSession();
   const staffId = await getTrainerMemberId(request);
-  if (!staffId) {
+  if (!sessionMemberId && !staffId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -45,6 +48,9 @@ export async function POST(request: NextRequest) {
   const member_id = (body.member_id ?? "").trim();
   if (!member_id) {
     return NextResponse.json({ error: "member_id required" }, { status: 400 });
+  }
+  if (!staffId && sessionMemberId !== member_id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const db = getDb();
@@ -71,6 +77,16 @@ export async function POST(request: NextRequest) {
   if (rawItems.length === 0) {
     db.close();
     return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
+  }
+
+  try {
+    assertRetailStockForCart(db, cart.id);
+  } catch (stockErr) {
+    db.close();
+    return NextResponse.json(
+      { error: stockErr instanceof Error ? stockErr.message : "Insufficient stock" },
+      { status: 409 }
+    );
   }
 
   let hasMonthlyMembershipInCart = false;
@@ -163,7 +179,7 @@ export async function POST(request: NextRequest) {
       customer: stripeCustomerId,
       off_session: true,
       confirm: true,
-      description: "Cart (saved card, staff)",
+      description: staffId ? "Cart (saved card, staff)" : "Cart (saved card on file)",
       metadata: {
         member_id,
         type: "cart_off_session",

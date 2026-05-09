@@ -1,4 +1,5 @@
 import type { getDb } from "./db";
+import { ensureRetailProductsTable } from "./retail-products";
 
 /** Cart row from DB including optional staff overrides. */
 export type CartItemForPricing = {
@@ -17,7 +18,13 @@ function parsePrice(p: string | null | undefined): number {
 /** Catalog unit price (before staff override). */
 export function getCatalogUnitPriceString(db: ReturnType<typeof getDb>, it: CartItemForPricing): string {
   let price = "0";
-  if (it.product_type === "membership_plan") {
+  if (it.product_type === "retail") {
+    ensureRetailProductsTable(db);
+    const row = db.prepare("SELECT price FROM retail_products WHERE id = ? AND active = 1").get(it.product_id) as
+      | { price: string }
+      | undefined;
+    price = row?.price ?? "0";
+  } else if (it.product_type === "membership_plan") {
     const row = db.prepare("SELECT price FROM membership_plans WHERE id = ?").get(it.product_id) as { price: string } | undefined;
     price = row?.price ?? "0";
   } else if (it.product_type === "pt_session") {

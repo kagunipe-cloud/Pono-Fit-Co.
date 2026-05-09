@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { EXERCISE_TYPE_OPTIONS, isTimedExerciseType, type ExerciseType } from "@/lib/exercise-types";
 import { getWeightComparisonWithArticle } from "@/lib/workout-congrats";
 import { milesToKm, kmToMiles } from "@/lib/workouts";
 import { MuscleMapPicker } from "@/components/MuscleMapPicker";
@@ -13,6 +14,10 @@ import { LiftSetPrPercent } from "@/components/LiftSetPrPercent";
 type LiftSetRow = { reps: string; weight: string; drops?: { reps: string; weight: string }[] };
 type CardioSetRow = { time: string; distance: string };
 type SetRow = LiftSetRow | CardioSetRow;
+
+function exerciseTypeLabel(type: string | null | undefined): string {
+  return EXERCISE_TYPE_OPTIONS.find((option) => option.value === type)?.label ?? "Exercise";
+}
 
 /** Per-field: false = still showing last session’s values (purple); true = member edited. */
 type LiftAddRepeatTouched = { w: boolean; r: boolean; drops: { w: boolean; r: boolean }[] };
@@ -161,7 +166,7 @@ export default function MemberWorkoutDetailPage() {
   const id = params.id as string;
   const [workout, setWorkout] = useState<WorkoutData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState<"lift" | "cardio" | null>(null);
+  const [mode, setMode] = useState<ExerciseType | null>(null);
   const [exerciseName, setExerciseName] = useState("");
   const [sets, setSets] = useState<SetRow[]>([{ reps: "", weight: "", drops: [] }]);
   const [saving, setSaving] = useState(false);
@@ -180,7 +185,7 @@ export default function MemberWorkoutDetailPage() {
   const [loadingInstructions, setLoadingInstructions] = useState(false);
   const [editingExId, setEditingExId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
-  const [editType, setEditType] = useState<"lift" | "cardio">("lift");
+  const [editType, setEditType] = useState<ExerciseType>("lift");
   const [editSets, setEditSets] = useState<SetRow[]>([{ reps: "", weight: "", drops: [] }]);
   /** While editing, official catalog id (may be set after re-linking a custom-named lift). */
   const [editSelectedOfficialId, setEditSelectedOfficialId] = useState<number | null>(null);
@@ -328,6 +333,16 @@ export default function MemberWorkoutDetailPage() {
     setSets([{ time: "", distance: "" }]);
   }
 
+  function startAddStretch() {
+    setMode("stretch");
+    setExerciseName("");
+    setSelectedOfficialId(null);
+    setShowCustomNameReminder(false);
+    setExerciseSuggestions([]);
+    setSets([{ time: "", distance: "" }]);
+    setUseForMy1rm(false);
+  }
+
   useEffect(() => {
     if (!mode && editingExId == null) return;
     fetch("/api/member/exercises/favorites")
@@ -339,13 +354,13 @@ export default function MemberWorkoutDetailPage() {
   }, [mode, editingExId]);
 
   useEffect(() => {
-    if (editingExId == null || editType !== "lift") {
+    if (editingExId == null) {
       setEditExerciseSuggestions([]);
       return;
     }
     if (!editName.trim()) {
       let cancelled = false;
-      fetch(`/api/member/exercises/frequent?type=lift&limit=20`)
+      fetch(`/api/member/exercises/frequent?type=${editType}&limit=20`)
         .then((r) => (r.ok ? r.json() : { exercises: [] }))
         .then((d: { exercises?: OfficialExercise[] }) => {
           if (!cancelled) setEditExerciseSuggestions(Array.isArray(d.exercises) ? d.exercises : []);
@@ -358,7 +373,7 @@ export default function MemberWorkoutDetailPage() {
       };
     }
     const t = setTimeout(() => {
-      fetch(`/api/exercises?q=${encodeURIComponent(editName.trim())}&type=lift&boost_member=1`)
+      fetch(`/api/exercises?q=${encodeURIComponent(editName.trim())}&type=${editType}&boost_member=1`)
         .then((r) => (r.ok ? r.json() : []))
         .then((list: OfficialExercise[]) => setEditExerciseSuggestions(list))
         .catch(() => setEditExerciseSuggestions([]));
@@ -456,7 +471,7 @@ export default function MemberWorkoutDetailPage() {
     setSaving(true);
     try {
       const base = {
-        type: mode === "lift" ? "lift" : "cardio",
+        type: mode,
         exercise_name: exerciseName.trim(),
         ...(selectedOfficialId != null && { exercise_id: selectedOfficialId }),
         ...(mode === "lift" && useForMy1rm && selectedOfficialId != null && { use_for_my_1rm: true }),
@@ -477,7 +492,7 @@ export default function MemberWorkoutDetailPage() {
                 const row = s as { time: string; distance: string };
                 return {
                   time_seconds: parseInt(row.time, 10) ? parseInt(row.time, 10) * 60 : parseInt(row.time, 10) || null,
-                  distance_km: parseFloat(row.distance) ? milesToKm(parseFloat(row.distance)) : null,
+                  distance_km: mode === "cardio" && parseFloat(row.distance) ? milesToKm(parseFloat(row.distance)) : null,
                 };
               }),
             };
@@ -635,7 +650,7 @@ export default function MemberWorkoutDetailPage() {
           : {
               sets: (addSetsRows as { time: string; distance: string }[]).map((r) => ({
                 time_seconds: parseInt(r.time, 10) ? parseInt(r.time, 10) * 60 : null,
-                distance_km: parseFloat(r.distance) ? milesToKm(parseFloat(r.distance)) : null,
+                distance_km: ex.type === "cardio" && parseFloat(r.distance) ? milesToKm(parseFloat(r.distance)) : null,
               })),
             };
       const res = await fetch(`/api/member/workouts/${id}/exercises/${addSetsForExId}/sets`, {
@@ -657,7 +672,7 @@ export default function MemberWorkoutDetailPage() {
   function startEditing(ex: Exercise) {
     setEditingExId(ex.id);
     setEditName(ex.exercise_name);
-    const type = ex.type === "cardio" ? "cardio" : "lift";
+    const type = EXERCISE_TYPE_OPTIONS.some((option) => option.value === ex.type) ? (ex.type as ExerciseType) : "lift";
     setEditType(type);
     setEditSelectedOfficialId(ex.exercise_id ?? null);
     setEditExerciseSuggestions([]);
@@ -721,7 +736,7 @@ export default function MemberWorkoutDetailPage() {
           : {
               sets: (editSets as { time: string; distance: string }[]).map((r) => ({
                 time_seconds: parseInt(r.time, 10) ? parseInt(r.time, 10) * 60 : null,
-                distance_km: parseFloat(r.distance) ? milesToKm(parseFloat(r.distance)) : null,
+                distance_km: editType === "cardio" && parseFloat(r.distance) ? milesToKm(parseFloat(r.distance)) : null,
               })),
             };
       const setsRes = await fetch(`/api/member/workouts/${id}/exercises/${editingExId}/sets`, {
@@ -1041,6 +1056,13 @@ export default function MemberWorkoutDetailPage() {
           >
             Add Cardio
           </button>
+          <button
+            type="button"
+            onClick={startAddStretch}
+            className="px-4 py-2.5 rounded-lg border border-stone-200 bg-white font-medium hover:bg-stone-50"
+          >
+            Add Stretch
+          </button>
           {isRepeatMode && (
             <span className="text-sm text-stone-500">
               Last session’s numbers are prefilled in purple; edit a field when you log this session’s result.
@@ -1061,7 +1083,7 @@ export default function MemberWorkoutDetailPage() {
           )}
 
           <div className="p-4 rounded-xl border border-stone-200 bg-stone-50">
-            <h2 className="font-semibold text-stone-800 mb-3">{mode === "lift" ? "Add Lift" : "Add Cardio"}</h2>
+            <h2 className="font-semibold text-stone-800 mb-3">Add {exerciseTypeLabel(mode)}</h2>
             <label className="block text-sm font-medium text-stone-600 mb-1">Choose exercise</label>
             <input
               type="text"
@@ -1072,7 +1094,7 @@ export default function MemberWorkoutDetailPage() {
               }}
               onBlur={onExerciseInputBlur}
               className="w-full px-3 py-2 rounded-lg border border-stone-200"
-              placeholder="e.g. Bench Press, Treadmill"
+              placeholder="e.g. Bench Press, Treadmill, Couch Stretch"
               list="exercise-suggestions"
               autoComplete="off"
             />
@@ -1297,7 +1319,7 @@ export default function MemberWorkoutDetailPage() {
                       <span className="text-sm text-stone-500 w-10">Set {i + 1}</span>
                       <input
                         type="text"
-                        placeholder="Time (min)"
+                        placeholder={mode === "stretch" ? "Duration (min)" : "Time (min)"}
                         value={row.time}
                         onChange={(e) =>
                           setSets((s) => {
@@ -1308,26 +1330,27 @@ export default function MemberWorkoutDetailPage() {
                         }
                         className="w-24 px-2 py-1.5 rounded border border-stone-200"
                       />
-                      <input
-                        type="text"
-                        placeholder="Distance (mi)"
-                        value={row.distance}
-                        onChange={(e) =>
-                          setSets((s) => {
-                            const next = [...s];
-                            (next[i] as { time: string; distance: string }).distance = e.target.value;
-                            return next;
-                          })
-                        }
-                        className="w-24 px-2 py-1.5 rounded border border-stone-200"
-                      />
+                      {mode === "cardio" && (
+                        <input
+                          type="text"
+                          placeholder="Distance (mi)"
+                          value={row.distance}
+                          onChange={(e) =>
+                            setSets((s) => {
+                              const next = [...s];
+                              (next[i] as { time: string; distance: string }).distance = e.target.value;
+                              return next;
+                            })
+                          }
+                          className="w-24 px-2 py-1.5 rounded border border-stone-200"
+                        />
+                      )}
                     </div>
                   ))
                 )}
               </div>
-              {mode === "cardio" && (
-                <p className="mt-1 text-xs text-stone-500">Time in minutes; distance in miles.</p>
-              )}
+              {mode === "cardio" && <p className="mt-1 text-xs text-stone-500">Time in minutes; distance in miles.</p>}
+              {mode === "stretch" && <p className="mt-1 text-xs text-stone-500">Duration in minutes.</p>}
               <div className="flex flex-wrap gap-2 mt-4">
                 <button
                   type="button"
@@ -1370,7 +1393,7 @@ export default function MemberWorkoutDetailPage() {
       )}
       <h2 className="text-sm font-medium text-stone-500 mb-2">{isOpen ? "Open Workout" : "Exercises"}</h2>
       {workout.exercises.length === 0 ? (
-        <p className="text-stone-500 mb-6">No exercises yet. Add a lift or cardio above.</p>
+              <p className="text-stone-500 mb-6">No exercises yet. Add a lift, cardio, or stretch above.</p>
       ) : (
         <>
           {totalWorkoutVolume(workout.exercises) > 0 && (
@@ -1428,7 +1451,7 @@ export default function MemberWorkoutDetailPage() {
                           setEditName(e.target.value);
                           setEditSelectedOfficialId(null);
                         }}
-                        onBlur={editType === "lift" ? onEditExerciseInputBlur : undefined}
+                        onBlur={onEditExerciseInputBlur}
                         className="w-full px-3 py-2 rounded-lg border border-stone-200 text-stone-800"
                         placeholder="e.g. Barbell Squat"
                         list="edit-exercise-suggestions"
@@ -1439,10 +1462,10 @@ export default function MemberWorkoutDetailPage() {
                           <option key={sug.id} value={sug.name} />
                         ))}
                       </datalist>
-                      {editType === "lift" && editExerciseSuggestions.length > 0 && !editName.trim() && (
+                      {editExerciseSuggestions.length > 0 && !editName.trim() && (
                         <p className="text-xs font-semibold text-stone-600">Pinned &amp; often used — ☆ to pin</p>
                       )}
-                      {editType === "lift" && editExerciseSuggestions.length > 0 && (
+                      {editExerciseSuggestions.length > 0 && (
                         <ul className="border border-stone-200 rounded-lg bg-stone-50 max-h-36 overflow-auto divide-y divide-stone-100">
                           {editExerciseSuggestions.map((sug) => (
                             <li key={sug.id} className="flex items-stretch">
@@ -1466,17 +1489,17 @@ export default function MemberWorkoutDetailPage() {
                           ))}
                         </ul>
                       )}
-                      {editShowCustomNameReminder && editSelectedOfficialId == null && editName.trim() && editType === "lift" && (
+                      {editShowCustomNameReminder && editSelectedOfficialId == null && editName.trim() && (
                         <p className="text-xs text-stone-500">
-                          Custom name — pick from the list above to link progress and My 1RM.
+                          Custom name — pick from the list above to link instructions and exercise history.
                         </p>
                       )}
                       <select
                         value={editType}
                         onChange={(e) => {
-                          const newType = e.target.value === "cardio" ? "cardio" : "lift";
+                          const newType = e.target.value as ExerciseType;
                           setEditType(newType);
-                          if (newType === "cardio") {
+                          if (newType !== "lift") {
                             setUseForMy1rmEdit(false);
                             setEditSelectedOfficialId(null);
                           }
@@ -1484,8 +1507,11 @@ export default function MemberWorkoutDetailPage() {
                         }}
                         className="px-3 py-2 rounded-lg border border-stone-200 text-stone-800"
                       >
-                        <option value="lift">Lift</option>
-                        <option value="cardio">Cardio</option>
+                        {EXERCISE_TYPE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
                       </select>
                       {editType === "lift" && editSelectedOfficialId != null && editName.trim() && (
                         <label className="flex items-center gap-2 cursor-pointer">
@@ -1629,7 +1655,7 @@ export default function MemberWorkoutDetailPage() {
                                   <span className="text-sm text-stone-500 w-10">Set {i + 1}</span>
                                   <input
                                     type="text"
-                                    placeholder="Time (min)"
+                                    placeholder={editType === "stretch" ? "Duration (min)" : "Time (min)"}
                                     value={row.time}
                                     onChange={(e) =>
                                       setEditSets((s) => {
@@ -1640,19 +1666,21 @@ export default function MemberWorkoutDetailPage() {
                                     }
                                     className="w-24 px-2 py-1.5 rounded border border-stone-200"
                                   />
-                                  <input
-                                    type="text"
-                                    placeholder="Distance (mi)"
-                                    value={row.distance}
-                                    onChange={(e) =>
-                                      setEditSets((s) => {
-                                        const next = [...s];
-                                        (next[i] as { time: string; distance: string }).distance = e.target.value;
-                                        return next;
-                                      })
-                                    }
-                                    className="w-24 px-2 py-1.5 rounded border border-stone-200"
-                                  />
+                                  {editType === "cardio" && (
+                                    <input
+                                      type="text"
+                                      placeholder="Distance (mi)"
+                                      value={row.distance}
+                                      onChange={(e) =>
+                                        setEditSets((s) => {
+                                          const next = [...s];
+                                          (next[i] as { time: string; distance: string }).distance = e.target.value;
+                                          return next;
+                                        })
+                                      }
+                                      className="w-24 px-2 py-1.5 rounded border border-stone-200"
+                                    />
+                                  )}
                                 </div>
                                 <button
                                   type="button"
@@ -2106,7 +2134,7 @@ export default function MemberWorkoutDetailPage() {
                                     <span className="text-sm text-stone-500 w-8">Set {i + 1}</span>
                                     <input
                                       type="text"
-                                      placeholder="Time (min)"
+                                      placeholder={ex.type === "stretch" ? "Duration (min)" : "Time (min)"}
                                       value={row.time}
                                       onChange={(e) => {
                                         const v = e.target.value;
@@ -2121,23 +2149,25 @@ export default function MemberWorkoutDetailPage() {
                                       }}
                                       className={repeatPrefillInputClass(tT, "w-24")}
                                     />
-                                    <input
-                                      type="text"
-                                      placeholder="Distance (mi)"
-                                      value={row.distance}
-                                      onChange={(e) => {
-                                        const v = e.target.value;
-                                        const next = [...addSetsRows];
-                                        (next[i] as { time: string; distance: string }).distance = v;
-                                        setAddSetsRows(next);
-                                        setAddSetsRepeatCardioTouched((prev) =>
-                                          prev == null
-                                            ? null
-                                            : prev.map((t, ti) => (ti === i ? { ...t, d: true } : t))
-                                        );
-                                      }}
-                                      className={repeatPrefillInputClass(dT, "w-24")}
-                                    />
+                                    {ex.type === "cardio" && (
+                                      <input
+                                        type="text"
+                                        placeholder="Distance (mi)"
+                                        value={row.distance}
+                                        onChange={(e) => {
+                                          const v = e.target.value;
+                                          const next = [...addSetsRows];
+                                          (next[i] as { time: string; distance: string }).distance = v;
+                                          setAddSetsRows(next);
+                                          setAddSetsRepeatCardioTouched((prev) =>
+                                            prev == null
+                                              ? null
+                                              : prev.map((t, ti) => (ti === i ? { ...t, d: true } : t))
+                                          );
+                                        }}
+                                        className={repeatPrefillInputClass(dT, "w-24")}
+                                      />
+                                    )}
                                   </div>
                                   {(addSetsRows as { time: string; distance: string }[]).length > 1 && (
                                     <button

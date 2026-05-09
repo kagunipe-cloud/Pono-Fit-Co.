@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { parseExerciseType } from "@/lib/exercise-types";
 import { getMemberIdFromSession } from "@/lib/session";
 import { ensureWorkoutTables } from "@/lib/workouts";
 
@@ -101,7 +102,7 @@ export async function POST(
       : "SELECT reps, weight_kg, time_seconds, distance_km, set_order FROM workout_sets WHERE workout_exercise_id = ? ORDER BY set_order, id";
 
     for (const ex of exercises) {
-      const type = ex.type === "cardio" ? "cardio" : "lift";
+      const type = parseExerciseType(ex.type);
       const rawExId = ex.exercise_id != null && ex.exercise_id > 0 ? ex.exercise_id : null;
       const exerciseId =
         rawExId != null && exerciseExists.get(rawExId) != null ? rawExId : null;

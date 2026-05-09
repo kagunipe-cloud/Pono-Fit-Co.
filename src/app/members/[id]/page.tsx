@@ -416,13 +416,35 @@ export default function MemberDetailPage() {
     ) {
       return;
     }
+    let restockRetail = false;
+    try {
+      const preview = await fetch(`/api/admin/sales/${encodeURIComponent(salesId)}/retail-lines`);
+      if (preview.ok) {
+        const data = (await preview.json()) as { lines?: { name?: string; sku?: string; quantity?: number }[] };
+        const lines = Array.isArray(data?.lines) ? data.lines : [];
+        if (lines.length > 0) {
+          const summary = lines
+            .map((l) => `${l.quantity ?? 0}× ${String(l.name ?? "")} (${String(l.sku ?? "")})`)
+            .join("\n");
+          restockRetail = confirm(
+            `Re-stock?\n\nThis refund includes physical items:\n${summary}\n\nOK adds units back to inventory. Cancel refunds without changing stock.`
+          );
+        }
+      }
+    } catch {
+      /* proceed without restock if preview fails */
+    }
     setAdminAction("refund");
     try {
       const run = async (recordRefundOnly: boolean) => {
         const res = await fetch("/api/admin/sales/refund", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sales_id: salesId, ...(recordRefundOnly ? { record_refund_only: true } : {}) }),
+          body: JSON.stringify({
+            sales_id: salesId,
+            ...(recordRefundOnly ? { record_refund_only: true } : {}),
+            ...(restockRetail ? { restock_retail: true } : {}),
+          }),
         });
         const json = await res.json();
         return { res, json };

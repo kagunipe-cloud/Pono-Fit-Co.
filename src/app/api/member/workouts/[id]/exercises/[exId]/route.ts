@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { parseExerciseType } from "@/lib/exercise-types";
 import { getMemberIdFromSession } from "@/lib/session";
 import { ensureWorkoutTables, estimate1RM } from "@/lib/workouts";
 
@@ -41,7 +42,7 @@ export async function PATCH(
       typeof body.exercise_name === "string" && body.exercise_name.trim()
         ? body.exercise_name.trim()
         : row.exercise_name;
-    const type = body.type === "cardio" ? "cardio" : body.type === "lift" ? "lift" : row.type;
+    const type = body.type == null ? parseExerciseType(row.type) : parseExerciseType(body.type, parseExerciseType(row.type));
     const exercise_id =
       body.exercise_id === null || body.exercise_id === undefined
         ? row.exercise_id

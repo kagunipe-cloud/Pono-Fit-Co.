@@ -7,6 +7,7 @@ import { ensureTrainerClientsTable } from "./trainer-clients";
 import { ensureBodyCompositionTable } from "./body-composition";
 import { ensureClientGoalsTable } from "./client-goals";
 import { ensureGymsTable } from "./gyms";
+import { MEMBER_RETAIL_SELF_CHECKOUT_KEY } from "./retail-products";
 
 const dbPath = path.join(process.cwd(), "data", "the-fox-says.db");
 const restorePendingPath = path.join(process.cwd(), "data", "restore-pending.db");
@@ -106,6 +107,10 @@ function ensureAppSettingsDefaults(db: Database.Database) {
   const openMax = db.prepare("SELECT 1 FROM app_settings WHERE key = ?").get("open_hour_max");
   if (!openMax) {
     db.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?)").run("open_hour_max", String(DEFAULT_OPEN_HOUR_MAX));
+  }
+  const retailGate = db.prepare("SELECT 1 FROM app_settings WHERE key = ?").get(MEMBER_RETAIL_SELF_CHECKOUT_KEY);
+  if (!retailGate) {
+    db.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?)").run(MEMBER_RETAIL_SELF_CHECKOUT_KEY, "0");
   }
 }
 

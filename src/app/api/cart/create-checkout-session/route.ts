@@ -4,6 +4,7 @@ import { ensureCartTables } from "../../../../lib/cart";
 import { getEffectiveUnitPriceString } from "../../../../lib/cart-line-prices";
 import { ensureRecurringClassesTables, ensureClassesRecurringColumns, ensureClassOccurrencesClassId } from "../../../../lib/recurring-classes";
 import { isOpenGroupSessionKind } from "../../../../lib/open-group-pt";
+import { ensureRetailProductsTable, assertRetailStockForCart } from "../../../../lib/retail-products";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureDiscountsTable } from "../../../../lib/discounts";
 import { getMemberIdFromSession } from "../../../../lib/session";
@@ -88,6 +89,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    try {
+      assertRetailStockForCart(db, cart.id);
+    } catch (stockErr) {
+      db.close();
+      return NextResponse.json(
+        { error: stockErr instanceof Error ? stockErr.message : "Insufficient stock" },
+        { status: 409 }
+      );
+    }
+
     let hasMonthlyMembershipInCart = false;
     // ACH allowed when: (a) cart has ONLY monthly membership plans, OR (b) member has active monthly membership (Option A)
     let achAllowed = rawItems.length > 0;
@@ -155,6 +166,12 @@ export async function POST(request: NextRequest) {
         ensurePTSlotTables(db);
         const row = db.prepare("SELECT name FROM pt_pack_products WHERE id = ?").get(it.product_id) as { name: string } | undefined;
         if (row) name = row.name ?? "PT pack";
+      } else if (it.product_type === "retail") {
+        ensureRetailProductsTable(db);
+        const row = db.prepare("SELECT name, sku FROM retail_products WHERE id = ? AND active = 1").get(it.product_id) as
+          | { name: string; sku: string }
+          | undefined;
+        if (row) name = `${row.name ?? "Retail"} (${row.sku})`;
       }
       const price = getEffectiveUnitPriceString(db, it);
       lineItems.push({ name, price, quantity: Math.max(1, it.quantity) });

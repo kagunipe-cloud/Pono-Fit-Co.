@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { EXERCISE_TYPE_OPTIONS, type ExerciseType } from "@/lib/exercise-types";
+import { MUSCLE_GROUP_LABELS } from "@/lib/muscle-groups";
 
 type ExerciseRow = {
   id: number;
@@ -16,11 +18,24 @@ type ExerciseRow = {
   image_path?: string | null;
 };
 
+const MUSCLE_GROUP_OPTIONS = MUSCLE_GROUP_LABELS.map((value) => ({
+  value,
+  label: value[0]!.toUpperCase() + value.slice(1),
+}));
+
+function normalizeExerciseName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
 export default function ExercisesPage() {
   const [list, setList] = useState<ExerciseRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | ExerciseType>("all");
+  const [groupFilter, setGroupFilter] = useState("all");
+  const [duplicateOnly, setDuplicateOnly] = useState(false);
   const [addName, setAddName] = useState("");
-  const [addType, setAddType] = useState<"lift" | "cardio">("lift");
+  const [addType, setAddType] = useState<ExerciseType>("lift");
   const [addMuscleGroup, setAddMuscleGroup] = useState("");
   const [addPrimaryMuscles, setAddPrimaryMuscles] = useState("");
   const [addEquipment, setAddEquipment] = useState("");
@@ -49,6 +64,31 @@ export default function ExercisesPage() {
   useEffect(() => {
     fetchList();
   }, []);
+
+  const duplicateKeys = new Set(
+    Array.from(
+      list.reduce((map, exercise) => {
+        const key = `${exercise.type}:${normalizeExerciseName(exercise.name)}`;
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(exercise.id);
+        return map;
+      }, new Map<string, number[]>())
+    )
+      .filter(([, ids]) => ids.length > 1)
+      .map(([key]) => key)
+  );
+  const filteredList = list.filter((exercise) => {
+    const text = [exercise.name, exercise.primary_muscles, exercise.secondary_muscles, exercise.equipment, exercise.muscle_group]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    const duplicateKey = `${exercise.type}:${normalizeExerciseName(exercise.name)}`;
+    if (search.trim() && !text.includes(search.trim().toLowerCase())) return false;
+    if (typeFilter !== "all" && exercise.type !== typeFilter) return false;
+    if (groupFilter !== "all" && exercise.muscle_group !== groupFilter) return false;
+    if (duplicateOnly && !duplicateKeys.has(duplicateKey)) return false;
+    return true;
+  });
 
   async function handleAdd() {
     const name = addName.trim();
@@ -200,22 +240,30 @@ export default function ExercisesPage() {
             <label className="block text-sm font-medium text-stone-600 mb-1">Type</label>
             <select
               value={addType}
-              onChange={(e) => setAddType(e.target.value as "lift" | "cardio")}
+              onChange={(e) => setAddType(e.target.value as ExerciseType)}
               className="w-full px-3 py-2 rounded-lg border border-stone-200"
             >
-              <option value="lift">Lift</option>
-              <option value="cardio">Cardio</option>
+              {EXERCISE_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
           <div className="flex-1 min-w-[120px]">
             <label className="block text-sm font-medium text-stone-600 mb-1">Muscle group</label>
-            <input
-              type="text"
+            <select
               value={addMuscleGroup}
               onChange={(e) => setAddMuscleGroup(e.target.value)}
-              placeholder="e.g. chest, legs"
               className="w-full px-3 py-2 rounded-lg border border-stone-200"
-            />
+            >
+              <option value="">Auto-detect</option>
+              {MUSCLE_GROUP_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="flex-1 min-w-[160px]">
             <label className="block text-sm font-medium text-stone-600 mb-1">Target muscle</label>
@@ -344,9 +392,13 @@ export default function ExercisesPage() {
       </div>
 
       <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50 space-y-3">
-        <h2 className="font-semibold text-stone-800">Import from CSV (e.g. Kaggle, cleaned in Google Sheets)</h2>
+        <h2 className="font-semibold text-stone-800">Import from CSV</h2>
         <p className="text-xs text-stone-500">
-          Paste CSV with a header row. Use these columns to match the table: <strong>TYPE</strong>, <strong>NAME</strong>, <strong>MUSCLE GROUP</strong>, <strong>TARGET MUSCLE</strong>, <strong>EQUIPMENT</strong>. (Synergist column optional.) Export from Google Sheets as CSV or copy and paste here.
+          Paste CSV with a header row: <strong>TYPE</strong>, <strong>NAME</strong>, <strong>MUSCLE GROUP</strong>,{" "}
+          <strong>TARGET MUSCLE</strong>, <strong>EQUIPMENT</strong> (synergist optional) — or paste the full{" "}
+          <strong>FitnessDB</strong> export (intro rows + columns like Exercise, Target Muscle Group, Prime Mover Muscle, Primary Equipment).
+          The importer detects FitnessDB automatically. You can use the copy in <code className="text-stone-700">FitnessDB/Exercises-Table 1.csv</code>{" "}
+          (save as <code className="text-stone-700">fitnessdb.csv</code> locally if you prefer). Export from Sheets as CSV or copy-paste here.
         </p>
         <textarea
           value={csvText}
@@ -386,7 +438,54 @@ export default function ExercisesPage() {
         )}
       </div>
 
-      <h2 className="text-sm font-medium text-stone-500 mb-2">All exercises ({list.length})</h2>
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-medium text-stone-500">All exercises ({filteredList.length} of {list.length})</h2>
+          <p className="text-xs text-stone-500">Use filters to find messy titles, duplicates, and nonstandard muscle groups.</p>
+        </div>
+        <label className="inline-flex items-center gap-2 text-sm text-stone-600">
+          <input
+            type="checkbox"
+            checked={duplicateOnly}
+            onChange={(e) => setDuplicateOnly(e.target.checked)}
+            className="rounded border-stone-300"
+          />
+          Possible duplicates only
+        </label>
+      </div>
+      <div className="mb-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_11rem]">
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search name, muscle, equipment..."
+          className="rounded-lg border border-stone-200 px-3 py-2 text-sm"
+        />
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value as "all" | ExerciseType)}
+          className="rounded-lg border border-stone-200 px-3 py-2 text-sm"
+        >
+          <option value="all">All types</option>
+          {EXERCISE_TYPE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <select
+          value={groupFilter}
+          onChange={(e) => setGroupFilter(e.target.value)}
+          className="rounded-lg border border-stone-200 px-3 py-2 text-sm"
+        >
+          <option value="all">All groups</option>
+          {MUSCLE_GROUP_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </div>
       {list.length === 0 ? (
         <p className="text-stone-500">No exercises yet. Add or import above.</p>
       ) : (
@@ -405,7 +504,7 @@ export default function ExercisesPage() {
               </tr>
             </thead>
             <tbody>
-              {list.map((ex) => {
+              {filteredList.map((ex) => {
                 let steps: string[] = [];
                 if (ex.instructions?.trim()) {
                   try {
@@ -418,6 +517,8 @@ export default function ExercisesPage() {
                 const preview = steps.length === 0 ? "—" : steps.length === 1
                   ? (steps[0].length > 100 ? steps[0].slice(0, 100) + "…" : steps[0])
                   : `${steps[0].length > 80 ? steps[0].slice(0, 80) + "…" : steps[0]} (+${steps.length - 1} more)`;
+                const duplicateKey = `${ex.type}:${normalizeExerciseName(ex.name)}`;
+                const isDuplicate = duplicateKeys.has(duplicateKey);
                 return (
                   <tr key={ex.id} className="border-t border-stone-200 text-stone-700">
                     <td className="px-3 py-2">
@@ -434,7 +535,14 @@ export default function ExercisesPage() {
                       )}
                     </td>
                     <td className="px-3 py-2 capitalize text-stone-500">{ex.type}</td>
-                    <td className="px-3 py-2">{ex.name}</td>
+                    <td className="px-3 py-2">
+                      <span>{ex.name}</span>
+                      {isDuplicate && (
+                        <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">
+                          duplicate
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 capitalize text-stone-600">{ex.muscle_group || "—"}</td>
                     <td className="px-3 py-2 text-stone-600">
                       {ex.primary_muscles || ex.secondary_muscles
@@ -453,6 +561,11 @@ export default function ExercisesPage() {
               })}
             </tbody>
           </table>
+          {filteredList.length === 0 && (
+            <p className="mt-3 rounded-lg border border-dashed border-stone-200 p-4 text-sm text-stone-500">
+              No exercises match those filters.
+            </p>
+          )}
         </div>
       )}
 

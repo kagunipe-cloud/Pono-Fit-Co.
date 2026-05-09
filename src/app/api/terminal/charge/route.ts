@@ -7,7 +7,9 @@ import { ensureDiscountsTable } from "@/lib/discounts";
 import { ensurePTSlotTables } from "@/lib/pt-slots";
 import { ensureRecurringClassesTables, ensureClassesRecurringColumns, ensureClassOccurrencesClassId } from "@/lib/recurring-classes";
 import { getAdminMemberId } from "@/lib/admin";
+import { getMemberIdFromSession } from "@/lib/session";
 import { computeCcFee } from "@/lib/cc-fees";
+import { ensureRetailProductsTable, assertRetailStockForCart } from "@/lib/retail-products";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
@@ -43,13 +45,14 @@ async function resolveStripeCustomerIdForTerminal(
 }
 
 /**
- * POST — Create PaymentIntent and process on reader (admin only).
+ * POST — Create PaymentIntent and process on reader (admin, or member paying their own cart).
  * Body: { member_id, reader_id, monthly_recurring?: boolean } — when cart has a monthly membership,
  * `monthly_recurring` matches Checkout (false = one period only, default true = auto-renew).
  */
 export async function POST(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
-  if (!adminId) {
+  const sessionMemberId = await getMemberIdFromSession();
+  if (!sessionMemberId && !adminId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -64,6 +67,9 @@ export async function POST(request: NextRequest) {
   if (!member_id || !reader_id) {
     return NextResponse.json({ error: "member_id and reader_id required" }, { status: 400 });
   }
+  if (!adminId && sessionMemberId !== member_id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const db = getDb();
   ensureCartTables(db);
@@ -71,6 +77,7 @@ export async function POST(request: NextRequest) {
   ensureClassesRecurringColumns(db);
   ensureClassOccurrencesClassId(db);
   ensurePTSlotTables(db);
+  ensureRetailProductsTable(db);
 
   const cart = db.prepare("SELECT * FROM cart WHERE member_id = ?").get(member_id) as { id: number; promo_code?: string | null } | undefined;
   if (!cart) {
@@ -84,6 +91,16 @@ export async function POST(request: NextRequest) {
     quantity: number;
     unit_price_override?: string | null;
   }[];
+
+  try {
+    assertRetailStockForCart(db, cart.id);
+  } catch (stockErr) {
+    db.close();
+    return NextResponse.json(
+      { error: stockErr instanceof Error ? stockErr.message : "Insufficient stock" },
+      { status: 409 }
+    );
+  }
 
   let hasMonthlyMembershipInCart = false;
   for (const it of rawItems) {

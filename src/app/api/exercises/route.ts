@@ -1,19 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAdminMemberId } from "@/lib/admin";
 import { getDb } from "@/lib/db";
+import { parseExerciseType } from "@/lib/exercise-types";
 import { blendRankedWithNeverTried, exerciseSearchScore, type ExerciseStat } from "@/lib/exercise-search-rank";
-import { getCanonicalPrimaryMuscles, getMuscleGroup } from "@/lib/muscle-groups";
+import { getCanonicalPrimaryMuscles, getMuscleGroup, MUSCLE_GROUP_LABELS } from "@/lib/muscle-groups";
 import { canAccessMemberExerciseStats } from "@/lib/member-exercise-access";
 import { getMemberIdFromSession } from "@/lib/session";
 import { ensureWorkoutTables } from "@/lib/workouts";
 
 export const dynamic = "force-dynamic";
 
-/** GET ?q=...&type=lift|cardio&boost_member=1&boost_for_member_id=... — search/autocomplete. boost_member=1 ranks by favorites, frequency, recency, and name match; blends in never-tried matches so results stay discoverable. boost_for_member_id lets trainers rank by a client's history (must be allowed). */
+/** GET ?q=...&type=lift|cardio|stretch&boost_member=1&boost_for_member_id=... — search/autocomplete. boost_member=1 ranks by favorites, frequency, recency, and name match; blends in never-tried matches so results stay discoverable. boost_for_member_id lets trainers rank by a client's history (must be allowed). */
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const q = (searchParams.get("q") ?? "").trim();
-    const type = searchParams.get("type"); // 'lift' | 'cardio' | omit for both
+    const rawType = searchParams.get("type");
+    const type = rawType ? parseExerciseType(rawType, "lift") : null;
     const boostMember = searchParams.get("boost_member") === "1";
     const boostForMemberIdParam = searchParams.get("boost_for_member_id")?.trim() || null;
 
@@ -22,7 +25,7 @@ export async function GET(request: NextRequest) {
 
     const sessionMemberId = await getMemberIdFromSession();
     let boostTargetId: string | null = null;
-    if (boostMember && q.length > 0 && (type === "lift" || type === "cardio") && sessionMemberId) {
+    if (boostMember && q.length > 0 && type && sessionMemberId) {
       if (boostForMemberIdParam && boostForMemberIdParam !== sessionMemberId) {
         if (canAccessMemberExerciseStats(db, sessionMemberId, boostForMemberIdParam)) {
           boostTargetId = boostForMemberIdParam;
@@ -34,7 +37,7 @@ export async function GET(request: NextRequest) {
 
     let sql = "SELECT id, name, type, primary_muscles, secondary_muscles, equipment, muscle_group, instructions, image_path FROM exercises WHERE 1=1";
     const params: (string | number)[] = [];
-    if (type === "lift" || type === "cardio") {
+    if (type) {
       sql += " AND type = ?";
       params.push(type);
     }
@@ -59,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     const statsMap = new Map<number, ExerciseStat>();
     const favoriteIds = new Set<number>();
-    if (boostTargetId && (type === "lift" || type === "cardio")) {
+    if (boostTargetId && type) {
       const freqRows = db
         .prepare(
           `SELECT we.exercise_id, COUNT(*) AS c, MAX(w.started_at) AS last_used
@@ -124,17 +127,23 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/** POST { name, type: 'lift'|'cardio', primary_muscles?, secondary_muscles?, equipment? } — add one exercise (admin/seed). */
+/** POST { name, type: 'lift'|'cardio'|'stretch', primary_muscles?, secondary_muscles?, equipment? } — add one exercise (admin/seed). */
 export async function POST(request: NextRequest) {
   try {
+    const adminId = await getAdminMemberId(request);
+    if (!adminId) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+
     const body = await request.json().catch(() => ({}));
     const name = String(body.name ?? "").trim();
-    const type = body.type === "cardio" ? "cardio" : "lift";
+    const type = parseExerciseType(body.type);
     if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
     const primary_muscles = body.primary_muscles != null ? String(body.primary_muscles) : "";
     const secondary_muscles = body.secondary_muscles != null ? String(body.secondary_muscles) : "";
     const equipment = body.equipment != null ? String(body.equipment) : "";
-    const muscle_group = body.muscle_group && String(body.muscle_group).trim() ? String(body.muscle_group).trim() : getMuscleGroup(primary_muscles);
+    const rawMuscleGroup = body.muscle_group && String(body.muscle_group).trim() ? String(body.muscle_group).trim().toLowerCase() : "";
+    const muscle_group = MUSCLE_GROUP_LABELS.includes(rawMuscleGroup as (typeof MUSCLE_GROUP_LABELS)[number])
+      ? rawMuscleGroup
+      : getMuscleGroup(primary_muscles, name);
     const instructionsArr = Array.isArray(body.instructions) ? body.instructions : body.instructions != null ? [String(body.instructions)] : [];
     const instructions = instructionsArr.length > 0 ? JSON.stringify(instructionsArr.map(String)) : "";
 

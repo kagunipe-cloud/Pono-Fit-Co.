@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAdminMemberId } from "@/lib/admin";
 import { getDb } from "@/lib/db";
+import { parseExerciseType } from "@/lib/exercise-types";
+import { getMuscleGroup, MUSCLE_GROUP_LABELS } from "@/lib/muscle-groups";
 import { ensureWorkoutTables } from "@/lib/workouts";
 
 export const dynamic = "force-dynamic";
@@ -55,18 +58,24 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const adminId = await getAdminMemberId(request);
+    if (!adminId) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+
     const id = parseInt((await params).id, 10);
     if (Number.isNaN(id) || id < 1) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
     const body = await request.json().catch(() => ({}));
     const name = (body.name ?? "").trim();
-    const type = body.type === "cardio" ? "cardio" : "lift";
+    const type = parseExerciseType(body.type);
     if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
 
     const primary_muscles = body.primary_muscles != null ? String(body.primary_muscles).trim() || null : null;
     const secondary_muscles = body.secondary_muscles != null ? String(body.secondary_muscles).trim() || null : null;
     const equipment = body.equipment != null ? String(body.equipment).trim() || null : null;
-    const muscle_group = body.muscle_group != null ? String(body.muscle_group).trim() || null : null;
+    const rawMuscleGroup = body.muscle_group != null ? String(body.muscle_group).trim().toLowerCase() : "";
+    const muscle_group = MUSCLE_GROUP_LABELS.includes(rawMuscleGroup as (typeof MUSCLE_GROUP_LABELS)[number])
+      ? rawMuscleGroup
+      : getMuscleGroup(primary_muscles, name);
     const image_path = body.image_path != null ? (String(body.image_path).trim() || null) : undefined;
     let instructions: string | null | undefined = undefined;
     if (body.instructions !== undefined) {

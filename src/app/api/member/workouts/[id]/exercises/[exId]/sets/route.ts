@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { isTimedExerciseType, parseExerciseType, type ExerciseType } from "@/lib/exercise-types";
 import { getMemberIdFromSession } from "@/lib/session";
 import { ensureWorkoutTables } from "@/lib/workouts";
 
@@ -11,7 +12,7 @@ type CardioPart = { time_seconds?: number | null; distance_km?: number | null };
 /** Normalize sets to grouped format: lift can be [ [part, part?, part?], ... ] (dropsets) or flat [ part, ... ]. Cardio stays flat. */
 function normalizeSetGroups(
   sets: unknown[],
-  type: "lift" | "cardio"
+  type: ExerciseType
 ): (LiftPart[] | CardioPart[])[] {
   if (sets.length === 0) return [];
   const isGrouped = type === "lift" && Array.isArray(sets[0]);
@@ -58,7 +59,7 @@ export async function POST(
       return NextResponse.json({ error: "Exercise not found" }, { status: 404 });
     }
 
-    const type = exercise.type === "cardio" ? "cardio" : "lift";
+    const type = parseExerciseType(exercise.type);
     const maxOrder = db.prepare(
       "SELECT COALESCE(MAX(set_order), -1) AS m FROM workout_sets WHERE workout_exercise_id = ?"
     ).get(exId) as { m: number };
@@ -80,7 +81,7 @@ export async function POST(
         const s = group[dropIndex] ?? {};
         const reps = type === "lift" ? (typeof (s as LiftPart).reps === "number" ? (s as LiftPart).reps : parseInt(String((s as LiftPart).reps ?? 0), 10) || null) : null;
         const weight_kg = type === "lift" ? (typeof (s as LiftPart).weight_kg === "number" ? (s as LiftPart).weight_kg : parseFloat(String((s as LiftPart).weight_kg ?? 0)) || null) : null;
-        const time_seconds = type === "cardio" ? (typeof (s as CardioPart).time_seconds === "number" ? (s as CardioPart).time_seconds : parseInt(String((s as CardioPart).time_seconds ?? 0), 10) || null) : null;
+        const time_seconds = isTimedExerciseType(type) ? (typeof (s as CardioPart).time_seconds === "number" ? (s as CardioPart).time_seconds : parseInt(String((s as CardioPart).time_seconds ?? 0), 10) || null) : null;
         const distance_km = type === "cardio" ? (typeof (s as CardioPart).distance_km === "number" ? (s as CardioPart).distance_km : parseFloat(String((s as CardioPart).distance_km ?? 0)) || null) : null;
         if (hasDropIndex) insertSet.run([exId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex]);
         else insertSet.run([exId, reps, weight_kg, time_seconds, distance_km, setOrder]);
@@ -134,7 +135,7 @@ export async function PUT(
       return NextResponse.json({ error: "Exercise not found" }, { status: 404 });
     }
 
-    const type = exercise.type === "cardio" ? "cardio" : "lift";
+    const type = parseExerciseType(exercise.type);
     db.prepare("DELETE FROM workout_sets WHERE workout_exercise_id = ?").run(exId);
 
     const tableCols = (db.prepare("PRAGMA table_info(workout_sets)").all() as { name: string }[]).map((c) => c.name);
@@ -154,7 +155,7 @@ export async function PUT(
         const s = group[dropIndex] ?? {};
         const reps = type === "lift" ? (typeof (s as LiftPart).reps === "number" ? (s as LiftPart).reps : parseInt(String((s as LiftPart).reps ?? 0), 10) || null) : null;
         const weight_kg = type === "lift" ? (typeof (s as LiftPart).weight_kg === "number" ? (s as LiftPart).weight_kg : parseFloat(String((s as LiftPart).weight_kg ?? 0)) || null) : null;
-        const time_seconds = type === "cardio" ? (typeof (s as CardioPart).time_seconds === "number" ? (s as CardioPart).time_seconds : parseInt(String((s as CardioPart).time_seconds ?? 0), 10) || null) : null;
+        const time_seconds = isTimedExerciseType(type) ? (typeof (s as CardioPart).time_seconds === "number" ? (s as CardioPart).time_seconds : parseInt(String((s as CardioPart).time_seconds ?? 0), 10) || null) : null;
         const distance_km = type === "cardio" ? (typeof (s as CardioPart).distance_km === "number" ? (s as CardioPart).distance_km : parseFloat(String((s as CardioPart).distance_km ?? 0)) || null) : null;
         if (hasDropIndex) insertSet.run([exId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex]);
         else insertSet.run([exId, reps, weight_kg, time_seconds, distance_km, setOrder]);

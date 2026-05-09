@@ -20,6 +20,7 @@ const MUSCLE_TO_GROUP: Record<string, MuscleGroup> = {
   "gluteus minimus": "legs",
   adductors: "legs",
   abductors: "legs",
+  "adductor magnus": "legs",
   soleus: "legs",
   "hip flexors": "legs",
   gastrocnemius: "legs",
@@ -150,7 +151,8 @@ export function getMuscleGroupFromCategory(categoryName: string | null | undefin
   if (["chest", "pectorals"].includes(cat)) return "chest";
   if (["back", "lats"].includes(cat)) return "back";
   if (["shoulders", "delts"].includes(cat)) return "shoulders";
-  if (["legs", "calves", "thighs", "quadriceps", "hamstrings", "glutes"].includes(cat)) return "legs";
+  if (["legs", "calves", "thighs", "quadriceps", "hamstrings", "glutes", "hip flexors", "adductors", "abductors"].includes(cat))
+    return "legs";
   if (["arms", "biceps", "triceps", "forearms"].includes(cat)) return "arms";
   if (["abs", "core", "abdominals", "waist"].includes(cat)) return "core";
   return null;

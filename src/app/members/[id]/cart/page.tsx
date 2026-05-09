@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, lazy, Suspense } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { formatPrice } from "@/lib/format";
@@ -8,6 +8,8 @@ import { computeCcFee } from "@/lib/cc-fees";
 import { todayInAppTz, weekStartInAppTz, addDaysToDateStr, formatDateForDisplay } from "@/lib/app-timezone";
 import { useAppTimezone, useOpenHours } from "@/lib/settings-context";
 import { EMAIL_POLICY_MESSAGE } from "@/lib/email-policy";
+
+const CameraBarcodeScanner = lazy(() => import("@/components/CameraBarcodeScanner"));
 
 type CartItem = {
   id: number;
@@ -28,6 +30,7 @@ type Plan = { id: number; plan_name: string; price: string; unit: string };
 type Session = { id: number; session_name: string; price: string };
 type ClassPack = { id: number; name: string; price: string; credits: number };
 type PTPack = { id: number; name: string; price: string; credits: number; duration_minutes: number };
+type RetailProduct = { id: number; sku: string; name: string; price: string; unit_cost?: string | null; stock_quantity?: number };
 
 type ClassOccurrence = {
   id: number;
@@ -85,6 +88,11 @@ export default function MemberCartPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [classPacks, setClassPacks] = useState<ClassPack[]>([]);
   const [ptPacks, setPtPacks] = useState<PTPack[]>([]);
+  const [retailProducts, setRetailProducts] = useState<RetailProduct[]>([]);
+  const [retailPickId, setRetailPickId] = useState("");
+  const [retailSkuInput, setRetailSkuInput] = useState("");
+  const [retailScanOpen, setRetailScanOpen] = useState(false);
+  const retailSkuFieldRef = useRef<HTMLInputElement | null>(null);
   const [addMode, setAddMode] = useState<"membership_plan" | "pt_session" | "class" | "class_pack" | "pt_pack" | null>(null);
   const [hasSavedCard, setHasSavedCard] = useState(false);
   /** Monthly membership: auto-renew vs one billing period only (member self + staff checkout). */
@@ -146,15 +154,18 @@ export default function MemberCartPage() {
   const [classScheduleLoading, setClassScheduleLoading] = useState(false);
   const cartDataUrl = `/api/members/${encodeURIComponent(id != null ? String(id).trim() : "")}/cart-data`;
 
+  const [sessionRole, setSessionRole] = useState<string | null>(null);
+
   useEffect(() => {
     fetch("/api/auth/member-me")
       .then((r) => (r.ok ? r.json() : null))
-      .then((me) => {
-        /** Stripe Terminal reader — only admins at the desk; members use Pay with Stripe. */
-        setCanUseTerminal(me?.role === "Admin");
-      })
-      .catch(() => setCanUseTerminal(false));
+      .then((me) => setSessionRole(typeof me?.role === "string" ? me.role : null))
+      .catch(() => setSessionRole(null));
   }, []);
+
+  useEffect(() => {
+    setCanUseTerminal(sessionRole === "Admin" || isOwnCart);
+  }, [sessionRole, isOwnCart]);
 
   useEffect(() => {
     if (terminalOpen && memberId && items.length > 0) {
@@ -201,6 +212,7 @@ export default function MemberCartPage() {
         setSessions(Array.isArray(data.sessions) ? (data.sessions as Session[]) : []);
         setClassPacks(Array.isArray(data.classPacks) ? (data.classPacks as ClassPack[]) : []);
         setPtPacks(Array.isArray(data.ptPackProducts) ? (data.ptPackProducts as PTPack[]) : []);
+        setRetailProducts(Array.isArray(data.retailProducts) ? (data.retailProducts as RetailProduct[]) : []);
         setHasSavedCard(Boolean(data.has_saved_card));
         setPromoCode(typeof data.promo_code === "string" ? data.promo_code : "");
         setDiscount(
@@ -290,7 +302,17 @@ export default function MemberCartPage() {
   }, [classOccurrences, openHourMin, openHourMax]);
 
 
-  async function addToCart(product_type: "membership_plan" | "pt_session" | "class" | "class_pack" | "class_occurrence" | "pt_pack", product_id: number) {
+  async function addToCart(
+    product_type:
+      | "membership_plan"
+      | "pt_session"
+      | "class"
+      | "class_pack"
+      | "class_occurrence"
+      | "pt_pack"
+      | "retail",
+    product_id: number
+  ) {
     if (!memberId) return;
     const res = await fetch("/api/cart/items", {
       method: "POST",
@@ -301,7 +323,40 @@ export default function MemberCartPage() {
       const r2 = await fetch(cartDataUrl);
       const data = r2.ok ? await r2.json().catch(() => ({})) : {};
       setItems((data as { items?: CartItem[] }).items ?? []);
+      if (Array.isArray((data as { retailProducts?: RetailProduct[] }).retailProducts)) {
+        setRetailProducts((data as { retailProducts: RetailProduct[] }).retailProducts);
+      }
       setAddMode(null);
+      return;
+    }
+    const errBody = (await res.json().catch(() => ({}))) as { error?: string };
+    const base = typeof errBody.error === "string" && errBody.error.trim() ? errBody.error : `Could not add to cart (${res.status}).`;
+    if (res.status === 403) {
+      alert(
+        `${base} Staff or the member must be signed in: you can add to this member’s cart only when you’re logged in as an admin or trainer, or as this member.`
+      );
+    } else {
+      alert(base);
+    }
+  }
+
+  async function addRetailBySku(skuRaw: string) {
+    const sku = skuRaw.trim();
+    if (!memberId || !sku) return;
+    const res = await fetch("/api/cart/items", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ member_id: memberId, product_type: "retail", sku, quantity: 1 }),
+    });
+    if (res.ok) {
+      setRetailSkuInput("");
+      const r2 = await fetch(cartDataUrl);
+      const data = r2.ok ? await r2.json().catch(() => ({})) : {};
+      setItems((data as { items?: CartItem[] }).items ?? []);
+      if (Array.isArray((data as { retailProducts?: RetailProduct[] }).retailProducts)) {
+        setRetailProducts((data as { retailProducts: RetailProduct[] }).retailProducts);
+      }
+      retailSkuFieldRef.current?.focus();
       return;
     }
     const errBody = (await res.json().catch(() => ({}))) as { error?: string };
@@ -450,10 +505,16 @@ export default function MemberCartPage() {
     }
   }
 
-  /** Staff: off-session charge of the member’s default/saved card (not Terminal, not checkout redirect). */
+  /** Off-session charge of the member’s default/saved card (staff on behalf of member, or member paying own cart). */
   async function chargeSavedCardOnFile() {
-    if (!memberId || items.length === 0 || !isStaff || !hasSavedCard) return;
-    if (!window.confirm("Charge this member’s card on file for the cart total? This uses their default payment method in Stripe (same as automatic renewals).")) {
+    if (!memberId || items.length === 0 || !hasSavedCard) return;
+    if (!isStaff && !isOwnCart) return;
+    const who = isOwnCart && !isStaff ? "your" : "this member’s";
+    if (
+      !window.confirm(
+        `Charge ${who} card on file for the cart total? This uses the default payment method in Stripe (same as automatic renewals).`
+      )
+    ) {
       return;
     }
     setSavedCardChargeLoading(true);
@@ -673,6 +734,106 @@ export default function MemberCartPage() {
           Add PT pack
         </button>
       </div>
+
+      {isStaff && retailProducts.length > 0 && (
+        <div className="mb-6 space-y-3 p-3 rounded-xl border border-emerald-200 bg-emerald-50/50">
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="block flex-1 min-w-[200px]">
+              <span className="text-xs font-medium text-stone-600">Add grab-and-go (retail)</span>
+              <select
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm bg-white"
+                value={retailPickId}
+                onChange={(e) => setRetailPickId(e.target.value)}
+              >
+                <option value="">Select product…</option>
+                {retailProducts.map((rp) => (
+                  <option key={rp.id} value={String(rp.id)}>
+                    {rp.name} ({rp.sku}) — {formatPrice(rp.price)}
+                    {typeof rp.stock_quantity === "number" ? ` — ${rp.stock_quantity} in stock` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={!retailPickId}
+              onClick={async () => {
+                const rid = parseInt(retailPickId, 10);
+                if (!memberId || !Number.isFinite(rid)) return;
+                await addToCart("retail", rid);
+                setRetailPickId("");
+              }}
+              className="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
+            >
+              Add to cart
+            </button>
+          </div>
+          <div className="flex flex-wrap items-end gap-2 border-t border-emerald-200/80 pt-3">
+            <label className="block flex-1 min-w-[180px]">
+              <span className="text-xs font-medium text-stone-600">Scan or type SKU</span>
+              <input
+                ref={retailSkuFieldRef}
+                type="text"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="Barcode or SKU — Enter to add"
+                className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm bg-white font-mono"
+                value={retailSkuInput}
+                onChange={(e) => setRetailSkuInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void addRetailBySku(retailSkuInput);
+                  }
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              disabled={!retailSkuInput.trim()}
+              onClick={() => void addRetailBySku(retailSkuInput)}
+              className="px-4 py-2 rounded-lg border border-emerald-300 bg-white text-emerald-800 text-sm font-medium hover:bg-emerald-50 disabled:opacity-50"
+            >
+              Add by SKU
+            </button>
+            <button
+              type="button"
+              onClick={() => setRetailScanOpen(true)}
+              className="px-4 py-2 rounded-lg bg-emerald-700 text-white text-sm font-medium hover:bg-emerald-800"
+            >
+              Scan with camera
+            </button>
+          </div>
+          <p className="text-[11px] text-stone-500 -mt-1">
+            USB barcode readers: click the SKU field, then scan — the reader types the code and sends Enter.
+          </p>
+        </div>
+      )}
+
+      {isStaff && retailScanOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-stone-900/70"
+          onClick={() => setRetailScanOpen(false)}
+        >
+          <div className="w-full sm:max-w-md bg-white sm:rounded-xl shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="p-3 border-b border-stone-100 flex justify-between items-center">
+              <h2 className="font-semibold text-stone-900">Scan retail barcode</h2>
+              <button type="button" className="text-sm text-stone-500 hover:text-stone-800" onClick={() => setRetailScanOpen(false)}>
+                Close
+              </button>
+            </div>
+            <Suspense fallback={<div className="p-8 text-center text-stone-500">Starting camera…</div>}>
+              <CameraBarcodeScanner
+                onScan={(code) => {
+                  void addRetailBySku(code);
+                  setRetailScanOpen(false);
+                }}
+                onClose={() => setRetailScanOpen(false)}
+              />
+            </Suspense>
+          </div>
+        </div>
+      )}
 
       {addMode === "membership_plan" && (
         <div className="mb-6 p-4 rounded-xl border border-stone-300 bg-stone-200">
@@ -1079,6 +1240,26 @@ export default function MemberCartPage() {
             </div>
           )}
           <div className="flex flex-wrap gap-3 items-center">
+            {hasSavedCard && items.length > 0 && (isStaff || isOwnCart) && (
+              <button
+                type="button"
+                onClick={chargeSavedCardOnFile}
+                disabled={savedCardChargeLoading || checkoutLoading}
+                className="px-6 py-3 rounded-lg border-2 border-stone-800 text-stone-900 font-medium hover:bg-stone-100 disabled:opacity-50"
+                title="Charge the default card in Stripe (off-session). May fail if the bank requires extra verification — use Pay with Stripe or the reader instead."
+              >
+                {savedCardChargeLoading ? "Charging card…" : "Pay with card on file"}
+              </button>
+            )}
+            {canUseTerminal && (
+              <button
+                type="button"
+                onClick={() => setTerminalOpen(true)}
+                className="px-6 py-3 rounded-lg border-2 border-emerald-600 text-emerald-700 font-medium hover:bg-emerald-50"
+              >
+                Pay at card reader
+              </button>
+            )}
             <button
               type="button"
               onClick={goToStripeCheckout}
@@ -1087,34 +1268,16 @@ export default function MemberCartPage() {
             >
               {checkoutLoading ? "Redirecting to Stripe…" : "Pay with Stripe"}
             </button>
-            {canUseTerminal && (
-              <button
-                type="button"
-                onClick={() => setTerminalOpen(true)}
-                className="px-6 py-3 rounded-lg border-2 border-emerald-600 text-emerald-700 font-medium hover:bg-emerald-50"
-              >
-                Pay at Front Desk
-              </button>
-            )}
-            {isStaff && hasSavedCard && items.length > 0 && (
-              <button
-                type="button"
-                onClick={chargeSavedCardOnFile}
-                disabled={savedCardChargeLoading || checkoutLoading}
-                className="px-6 py-3 rounded-lg border-2 border-stone-400 text-stone-800 font-medium hover:bg-stone-100 disabled:opacity-50"
-                title="Charge the member’s default card in Stripe (off-session), without checkout or a reader. May fail if the bank requires 3D Secure."
-              >
-                {savedCardChargeLoading ? "Charging card…" : "Charge card on file"}
-              </button>
-            )}
-            <p className="text-stone-500 text-sm self-center">
-              You will complete payment on Stripe; then we will activate the membership and notify Kisi for door access.
+            <p className="text-stone-500 text-sm self-center w-full sm:w-auto">
+              {isOwnCart && !isStaff
+                ? "Pick card on file for the fastest checkout, use the reader at the desk, or pay with Stripe if your bank needs a browser confirmation."
+                : "Complete payment, then we will activate the purchase (membership, bookings, or door access as applicable)."}
             </p>
           </div>
-          {isStaff && hasSavedCard && items.length > 0 ? (
+          {hasSavedCard && items.length > 0 && (isStaff || isOwnCart) ? (
             <p className="text-xs text-stone-500 max-w-2xl mt-3">
-              Does not update preferred payment method. Use <span className="whitespace-nowrap">“Update payment method”</span> on
-              the profile.
+              Card on file does not change your saved payment method. Use <span className="whitespace-nowrap">“Update payment method”</span>{" "}
+              on the profile.
             </p>
           ) : null}
 
@@ -1158,7 +1321,7 @@ export default function MemberCartPage() {
               }}
             >
               <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6" onClick={(e) => e.stopPropagation()}>
-                <h3 className="text-lg font-semibold text-stone-800 mb-4">Pay at Front Desk</h3>
+                <h3 className="text-lg font-semibold text-stone-800 mb-4">Pay at card reader</h3>
                 {terminalEstimate != null ? (
                   <div className="mb-4 space-y-1 text-sm">
                     <div className="flex justify-between text-stone-600">

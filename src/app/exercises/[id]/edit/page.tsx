@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { EXERCISE_TYPE_OPTIONS, type ExerciseType } from "@/lib/exercise-types";
+import { MUSCLE_GROUP_LABELS } from "@/lib/muscle-groups";
 
 type Exercise = {
   id: number;
@@ -13,9 +15,14 @@ type Exercise = {
   secondary_muscles: string | null;
   equipment: string | null;
   muscle_group: string | null;
-  instructions: string[];
+  instructions: string[] | string | null;
   image_path?: string | null;
 };
+
+const MUSCLE_GROUP_OPTIONS = MUSCLE_GROUP_LABELS.map((value) => ({
+  value,
+  label: value[0]!.toUpperCase() + value.slice(1),
+}));
 
 export default function EditExercisePage() {
   const params = useParams();
@@ -24,10 +31,13 @@ export default function EditExercisePage() {
   const [exercise, setExercise] = useState<Exercise | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [merging, setMerging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mergeTargetId, setMergeTargetId] = useState("");
+  const [allExercises, setAllExercises] = useState<Exercise[]>([]);
   const [form, setForm] = useState({
     name: "",
-    type: "lift" as "lift" | "cardio",
+    type: "lift" as ExerciseType,
     primary_muscles: "",
     secondary_muscles: "",
     equipment: "",
@@ -43,18 +53,25 @@ export default function EditExercisePage() {
           setExercise(data);
           setForm({
             name: data.name,
-            type: data.type === "cardio" ? "cardio" : "lift",
+            type: EXERCISE_TYPE_OPTIONS.some((option) => option.value === data.type) ? (data.type as ExerciseType) : "lift",
             primary_muscles: data.primary_muscles ?? "",
             secondary_muscles: data.secondary_muscles ?? "",
             equipment: data.equipment ?? "",
             muscle_group: data.muscle_group ?? "",
-            instructions: Array.isArray(data.instructions) ? data.instructions.join("\n") : "",
+            instructions: Array.isArray(data.instructions) ? data.instructions.join("\n") : data.instructions ?? "",
           });
         }
       })
       .catch(() => setExercise(null))
       .finally(() => setLoading(false));
   }, [id]);
+
+  useEffect(() => {
+    fetch("/api/exercises")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: Exercise[]) => setAllExercises(Array.isArray(data) ? data : []))
+      .catch(() => setAllExercises([]));
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -91,8 +108,42 @@ export default function EditExercisePage() {
     }
   }
 
+  async function handleMerge() {
+    if (!exercise || !mergeTargetId) return;
+    const target = allExercises.find((ex) => String(ex.id) === mergeTargetId);
+    if (!target) return;
+    const confirmed = window.confirm(
+      `Merge "${exercise.name}" into "${target.name}"?\n\nWorkout history, favorites, and 1RM records linked to "${exercise.name}" will move to "${target.name}", then "${exercise.name}" will be removed.`
+    );
+    if (!confirmed) return;
+
+    setError(null);
+    setMerging(true);
+    try {
+      const res = await fetch(`/api/exercises/${id}/merge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target_id: target.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? "Merge failed");
+        return;
+      }
+      router.push("/exercises");
+      router.refresh();
+    } catch {
+      setError("Something went wrong");
+    } finally {
+      setMerging(false);
+    }
+  }
+
   if (loading) return <div className="p-8 text-center text-stone-500">Loading…</div>;
   if (!exercise) return <div className="p-8 text-center text-stone-500">Exercise not found. <Link href="/exercises" className="text-brand-600 hover:underline">Back to exercises</Link></div>;
+  const mergeCandidates = allExercises
+    .filter((ex) => ex.id !== exercise.id && ex.type === form.type)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="max-w-xl mx-auto p-6">
@@ -128,23 +179,32 @@ export default function EditExercisePage() {
           <select
             id="type"
             value={form.type}
-            onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as "lift" | "cardio" }))}
+            onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as ExerciseType }))}
             className="w-full px-3 py-2 rounded-lg border border-stone-200"
           >
-            <option value="lift">Lift</option>
-            <option value="cardio">Cardio</option>
+            {EXERCISE_TYPE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         </div>
         <div>
           <label htmlFor="muscle_group" className="block text-sm font-medium text-stone-700 mb-1">Muscle group</label>
-          <input
+          <select
             id="muscle_group"
-            type="text"
             value={form.muscle_group}
             onChange={(e) => setForm((f) => ({ ...f, muscle_group: e.target.value }))}
-            placeholder="e.g. legs, back, chest"
             className="w-full px-3 py-2 rounded-lg border border-stone-200"
-          />
+          >
+            <option value="">Auto-detect from target muscle/name</option>
+            {MUSCLE_GROUP_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-stone-500">Use one standard group so search and muscle-map suggestions stay consistent.</p>
         </div>
         <div>
           <label htmlFor="primary_muscles" className="block text-sm font-medium text-stone-700 mb-1">Primary muscles (target)</label>
@@ -202,6 +262,35 @@ export default function EditExercisePage() {
           <Link href="/exercises" className="px-4 py-2.5 rounded-lg border border-stone-200 hover:bg-stone-50">Cancel</Link>
         </div>
       </form>
+
+      <section className="mt-8 rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <h2 className="font-semibold text-stone-800">Merge duplicate</h2>
+        <p className="mt-1 text-sm text-stone-600">
+          If this is the duplicate, merge it into the clean keeper. This preserves linked workout history, favorites, and 1RM records.
+        </p>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <select
+            value={mergeTargetId}
+            onChange={(e) => setMergeTargetId(e.target.value)}
+            className="min-w-0 flex-1 rounded-lg border border-amber-300 bg-white px-3 py-2"
+          >
+            <option value="">Choose exercise to keep...</option>
+            {mergeCandidates.map((candidate) => (
+              <option key={candidate.id} value={candidate.id}>
+                {candidate.name}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={handleMerge}
+            disabled={merging || !mergeTargetId}
+            className="rounded-lg border border-amber-300 bg-white px-4 py-2 font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+          >
+            {merging ? "Merging..." : "Merge"}
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

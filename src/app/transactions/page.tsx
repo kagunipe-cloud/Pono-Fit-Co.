@@ -168,14 +168,36 @@ export default function TransactionsPage() {
     ) {
       return;
     }
+    const headers = { "Content-Type": "application/json", ...(adminMemberId ? { "X-Admin-Member-Id": adminMemberId } : {}) };
+    let restockRetail = false;
+    try {
+      const preview = await fetch(`/api/admin/sales/${encodeURIComponent(salesId)}/retail-lines`, { headers });
+      if (preview.ok) {
+        const data = (await preview.json()) as { lines?: { name?: string; sku?: string; quantity?: number }[] };
+        const lines = Array.isArray(data?.lines) ? data.lines : [];
+        if (lines.length > 0) {
+          const summary = lines
+            .map((l) => `${l.quantity ?? 0}× ${String(l.name ?? "")} (${String(l.sku ?? "")})`)
+            .join("\n");
+          restockRetail = confirm(
+            `Re-stock?\n\nThis refund includes physical items:\n${summary}\n\nOK adds units back to inventory. Cancel refunds without changing stock.`
+          );
+        }
+      }
+    } catch {
+      /* proceed without restock if preview fails */
+    }
     setRefundingId(salesId);
     try {
-      const headers = { "Content-Type": "application/json", ...(adminMemberId ? { "X-Admin-Member-Id": adminMemberId } : {}) };
       const run = async (recordRefundOnly: boolean) => {
         const res = await fetch("/api/admin/sales/refund", {
           method: "POST",
           headers,
-          body: JSON.stringify({ sales_id: salesId, ...(recordRefundOnly ? { record_refund_only: true } : {}) }),
+          body: JSON.stringify({
+            sales_id: salesId,
+            ...(recordRefundOnly ? { record_refund_only: true } : {}),
+            ...(restockRetail ? { restock_retail: true } : {}),
+          }),
         });
         const json = await res.json();
         return { res, json };

@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getTrainerMemberId } from "@/lib/admin";
+import { isTimedExerciseType, parseExerciseType, type ExerciseType } from "@/lib/exercise-types";
 import { ensureWorkoutTables } from "@/lib/workouts";
 import { getMuscleGroup } from "@/lib/muscle-groups";
 
 export const dynamic = "force-dynamic";
 
 type ExercisePayload = {
-  type: "lift" | "cardio";
+  type: ExerciseType;
   exercise_id?: number;
   exercise_name: string;
   muscle_group?: string;
@@ -79,7 +80,7 @@ export async function POST(request: NextRequest) {
 
     for (let i = 0; i < exercises.length; i++) {
       const ex = exercises[i] as ExercisePayload;
-      const type = ex.type === "cardio" ? "cardio" : "lift";
+      const type = parseExerciseType(ex.type);
       const exercise_name = String(ex.exercise_name ?? "").trim() || "Exercise";
       const primary_muscles = (ex.primary_muscles ?? "").trim() || "";
       const equipment = (ex.equipment ?? "").trim() || "";
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest) {
         const s = sets[j] ?? {};
         const reps = type === "lift" ? (typeof (s as { reps?: number }).reps === "number" ? (s as { reps: number }).reps : parseInt(String((s as { reps?: number }).reps ?? 0), 10) || null) : null;
         const weight_kg = type === "lift" ? (typeof (s as { weight_kg?: number }).weight_kg === "number" ? (s as { weight_kg: number }).weight_kg : parseFloat(String((s as { weight_kg?: number }).weight_kg ?? 0)) || null) : null;
-        const time_seconds = type === "cardio" ? (typeof (s as { time_seconds?: number }).time_seconds === "number" ? (s as { time_seconds: number }).time_seconds : parseInt(String((s as { time_seconds?: number }).time_seconds ?? 0), 10) || null) : null;
+        const time_seconds = isTimedExerciseType(type) ? (typeof (s as { time_seconds?: number }).time_seconds === "number" ? (s as { time_seconds: number }).time_seconds : parseInt(String((s as { time_seconds?: number }).time_seconds ?? 0), 10) || null) : null;
         const distance_km = type === "cardio" ? (typeof (s as { distance_km?: number }).distance_km === "number" ? (s as { distance_km: number }).distance_km : parseFloat(String((s as { distance_km?: number }).distance_km ?? 0)) || null) : null;
         insertSet.run(workoutExerciseId, reps, weight_kg, time_seconds, distance_km, j);
       }

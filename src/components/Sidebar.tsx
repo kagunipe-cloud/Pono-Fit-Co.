@@ -286,6 +286,7 @@ function NavList({
         <li>{link("/admin/settings/onboarding", "Onboarding docs")}</li>
       )}
       {isAdmin && <li>{link("/admin/email-members", "Email members")}</li>}
+      {isAdmin && <li>{link("/admin/retail-products", "Pro shop inventory")}</li>}
       {mainSections.map((s) => (
         <React.Fragment key={s.slug}>
           <li>{link(`/${s.slug}`, s.title, pathname === `/${s.slug}`)}</li>

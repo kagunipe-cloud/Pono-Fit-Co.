@@ -1,5 +1,7 @@
+import { tryParseFitnessDbCsv } from "@/lib/fitness-db-csv";
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { parseExerciseType, type ExerciseType } from "@/lib/exercise-types";
 import { getCanonicalPrimaryMuscles, getMuscleGroup, getMuscleGroupFromCategory, MUSCLE_GROUP_LABELS } from "@/lib/muscle-groups";
 import { ensureWorkoutTables } from "@/lib/workouts";
 
@@ -57,7 +59,8 @@ function splitCsvLines(text: string): string[] {
 /**
  * POST — bulk import exercises.
  * Body: { exercises: [ ... ] } or array (free-exercise-db / wger), or { csv: "..." } for pasted CSV.
- * CSV should have a header row. Recognized columns: Exercise Name / Name / Title, Type, Target_Muscles / Target, Synergist_Muscles / Synergist, Equipment.
+ * Also accepts **FitnessDB**-style exports (preamble rows + header with columns Exercise, Target Muscle Group,
+ * Prime Mover Muscle, Primary Equipment). Paste the whole CSV including intro rows.
  * Duplicates (same name+type) are skipped.
  */
 export async function POST(request: NextRequest) {
@@ -66,11 +69,23 @@ export async function POST(request: NextRequest) {
     if (!contentType.includes("application/json")) {
       return NextResponse.json({ error: "Content-Type must be application/json" }, { status: 400 });
     }
-    type ExerciseItem = { name: string; type: "lift" | "cardio"; primary_muscles?: string; secondary_muscles?: string; equipment?: string; muscle_group?: string; instructions?: string; image_path?: string };
+    type ExerciseItem = { name: string; type: ExerciseType; primary_muscles?: string; secondary_muscles?: string; equipment?: string; muscle_group?: string; instructions?: string; image_path?: string };
     const body = await request.json().catch(() => ({}));
     let items: ExerciseItem[] = [];
 
     if (typeof body.csv === "string" && body.csv.trim()) {
+      const fitnessParsed = tryParseFitnessDbCsv(body.csv);
+      if (fitnessParsed.length > 0) {
+        items = fitnessParsed.map((row) => ({
+          name: row.name,
+          type: row.type,
+          primary_muscles: row.primary_muscles,
+          secondary_muscles: row.secondary_muscles,
+          equipment: row.equipment,
+          muscle_group: row.muscle_group,
+          instructions: row.instructions || undefined,
+        }));
+      } else {
       const lines = splitCsvLines(body.csv.trim());
       const headerLine = lines[0] ?? "";
       const headers = parseCsvLine(headerLine).map((h) => h.trim().toLowerCase().replace(/^"|"$/g, ""));
@@ -87,7 +102,7 @@ export async function POST(request: NextRequest) {
         const name = (parts[nameIdx ?? 0] ?? "").trim().replace(/^"|"$/g, "").replace(/\s*,\s*$/, "");
         if (!name) continue;
         const typeRaw = (parts[typeIdx ?? 1] ?? "lift").replace(/^"|"$/g, "").toLowerCase();
-        const type = typeRaw === "cardio" ? "cardio" : "lift";
+        const type = parseExerciseType(typeRaw);
         const key = `${name.toLowerCase()}|${type}`;
         if (seenKey.has(key)) continue;
         seenKey.add(key);
@@ -102,6 +117,7 @@ export async function POST(request: NextRequest) {
         const image_path = headers.includes("image_path") ? (parts[headers.indexOf("image_path")] ?? "").trim() : undefined;
         items.push({ name, type, primary_muscles, secondary_muscles, equipment, muscle_group, instructions: instructions || undefined, image_path: image_path || undefined });
       }
+      }
     } else {
       const list = Array.isArray(body.exercises) ? body.exercises : Array.isArray(body) ? body : [];
       if (list.length === 0 && !Array.isArray(body.exercises) && !Array.isArray(body)) {
@@ -110,11 +126,14 @@ export async function POST(request: NextRequest) {
       for (const row of list) {
         const name = String(row.name ?? row.title ?? "").trim();
         if (!name) continue;
-        let type: "lift" | "cardio" = "lift";
-        if (row.type === "cardio") type = "cardio";
-        else if (row.category) {
+        let type: ExerciseType = parseExerciseType(row.type);
+        const bodyPart = row.bodyPart != null ? String(row.bodyPart) : "";
+        if (bodyPart) {
+          const cat = bodyPart.toLowerCase();
+          type = cat === "cardio" ? "cardio" : type;
+        } else if (row.category) {
           const cat = String(row.category).toLowerCase();
-          type = cat === "cardio" ? "cardio" : "lift";
+          type = cat === "cardio" ? "cardio" : type;
         }
         let primary_muscles = Array.isArray(row.primaryMuscles) ? row.primaryMuscles.join(", ") : (row.primary_muscles != null ? String(row.primary_muscles) : row.target != null ? String(row.target) : "");
         const canonical = getCanonicalPrimaryMuscles(name);

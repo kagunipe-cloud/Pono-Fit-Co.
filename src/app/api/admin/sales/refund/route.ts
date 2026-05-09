@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, ensureSalesStripePaymentIntentColumn } from "../../../../../lib/db";
 import { getAdminMemberId } from "../../../../../lib/admin";
+import {
+  ensureRetailInventoryLedgerTable,
+  ensureRetailProductsTable,
+  ensureSaleRetailLinesTable,
+  recordRetailInventoryMovement,
+} from "../../../../../lib/retail-products";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +27,7 @@ function isAlreadyRefundedStripeError(e: unknown): boolean {
   );
 }
 
-/** POST { sales_id: string } — Admin only. Refunds the Stripe PaymentIntent (if stored), then marks sale refunded and cancels subscriptions linked to this sale. */
+/** POST { sales_id, record_refund_only?, restock_retail? } — Admin only. Refunds the Stripe PaymentIntent (if stored), then marks sale refunded and cancels subscriptions linked to this sale. Optional restock puts retail units back and clears sale_retail_lines. */
 export async function POST(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
   if (!adminId) {
@@ -37,9 +43,12 @@ export async function POST(request: NextRequest) {
       sales_id?: string;
       /** If true, only update the app DB (use when you already refunded in Stripe, e.g. sale has no payment intent on file). */
       record_refund_only?: boolean;
+      /** If true, increment retail stock from sale_retail_lines and log refund_restock (physical items). */
+      restock_retail?: boolean;
     };
     const sales_id = (body.sales_id ?? "").trim();
     const recordRefundOnly = body.record_refund_only === true;
+    const restockRetail = body.restock_retail === true;
     if (!sales_id) {
       return NextResponse.json({ error: "sales_id required" }, { status: 400 });
     }
@@ -111,8 +120,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    db.prepare("UPDATE sales SET status = ? WHERE sales_id = ?").run("Refunded", sales_id);
-    db.prepare("UPDATE subscriptions SET status = ? WHERE sales_id = ?").run("Cancelled", sales_id);
+    ensureSaleRetailLinesTable(db);
+    ensureRetailProductsTable(db);
+    ensureRetailInventoryLedgerTable(db);
+
+    const applyRefundInDb = db.transaction(() => {
+      if (restockRetail) {
+        const lines = db
+          .prepare("SELECT retail_product_id, quantity FROM sale_retail_lines WHERE sales_id = ?")
+          .all(sales_id) as { retail_product_id: number; quantity: number }[];
+        for (const line of lines) {
+          const qty = Math.max(0, Math.floor(Number(line.quantity) || 0));
+          if (qty <= 0) continue;
+          const row = db
+            .prepare("SELECT id FROM retail_products WHERE id = ?")
+            .get(line.retail_product_id) as { id: number } | undefined;
+          if (!row) continue;
+          db.prepare("UPDATE retail_products SET stock_quantity = COALESCE(stock_quantity, 0) + ? WHERE id = ?").run(qty, line.retail_product_id);
+          recordRetailInventoryMovement(db, {
+            retail_product_id: line.retail_product_id,
+            delta: qty,
+            reason: "refund_restock",
+            reference: sales_id,
+            created_by: adminId,
+          });
+        }
+      }
+      db.prepare("DELETE FROM sale_retail_lines WHERE sales_id = ?").run(sales_id);
+      db.prepare("UPDATE sales SET status = ? WHERE sales_id = ?").run("Refunded", sales_id);
+      db.prepare("UPDATE subscriptions SET status = ? WHERE sales_id = ?").run("Cancelled", sales_id);
+    });
+    applyRefundInDb();
     db.close();
     return NextResponse.json({ ok: true });
   } catch (err) {

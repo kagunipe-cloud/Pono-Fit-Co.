@@ -23,6 +23,7 @@ export default function MemberHomePage() {
   const [loading, setLoading] = useState(true);
   const [unlocking, setUnlocking] = useState(false);
   const [unlockMessage, setUnlockMessage] = useState<string | null>(null);
+  const [proShopSelfCheckout, setProShopSelfCheckout] = useState(false);
 
   useEffect(() => {
     fetch("/api/member/me")
@@ -37,6 +38,14 @@ export default function MemberHomePage() {
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, [router]);
+
+  useEffect(() => {
+    if (!data?.member) return;
+    fetch("/api/member/retail-access")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setProShopSelfCheckout(Boolean(j?.member_self_checkout_enabled)))
+      .catch(() => setProShopSelfCheckout(false));
+  }, [data]);
 
   async function handleUnlock() {
     if (!data?.member) return;
@@ -213,11 +222,19 @@ export default function MemberHomePage() {
           >
             Memberships
           </Link>
+          {proShopSelfCheckout ? (
+            <Link
+              href="/member/retail"
+              className="px-4 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-900 font-medium hover:bg-emerald-100"
+            >
+              Pro shop (scan & pay)
+            </Link>
+          ) : null}
           <Link
             href="/member/cart"
-            className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium"
-          >
-            Cart
+          className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium"
+        >
+          Cart
           </Link>
         </div>
       </div>

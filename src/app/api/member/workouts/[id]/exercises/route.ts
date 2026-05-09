@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../../../lib/db";
+import { isTimedExerciseType, parseExerciseType } from "../../../../../../lib/exercise-types";
 import { getMemberIdFromSession } from "../../../../../../lib/session";
 import { ensureWorkoutTables } from "../../../../../../lib/workouts";
 
@@ -18,7 +19,7 @@ export async function POST(
     if (Number.isNaN(workoutId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
     const body = await request.json().catch(() => ({}));
-    const type = body.type === "cardio" ? "cardio" : "lift";
+    const type = parseExerciseType(body.type);
     const exercise_name = String(body.exercise_name ?? "").trim() || "Exercise";
     const exercise_id = typeof body.exercise_id === "number" && body.exercise_id > 0 ? body.exercise_id : null;
     const use_for_my_1rm = !!body.use_for_my_1rm;
@@ -61,7 +62,7 @@ export async function POST(
           const s = group[dropIndex] ?? {};
           const reps = type === "lift" ? (typeof s.reps === "number" ? s.reps : parseInt(String(s.reps ?? 0), 10) || null) : null;
           const weight_kg = type === "lift" ? (typeof s.weight_kg === "number" ? s.weight_kg : parseFloat(String(s.weight_kg ?? 0)) || null) : null;
-          const time_seconds = type === "cardio" ? (typeof s.time_seconds === "number" ? s.time_seconds : parseInt(String(s.time_seconds ?? 0), 10) || null) : null;
+          const time_seconds = isTimedExerciseType(type) ? (typeof s.time_seconds === "number" ? s.time_seconds : parseInt(String(s.time_seconds ?? 0), 10) || null) : null;
           const distance_km = type === "cardio" ? (typeof s.distance_km === "number" ? s.distance_km : parseFloat(String(s.distance_km ?? 0)) || null) : null;
           if (hasDropIndex) insertSetStmt.run(exerciseId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex);
           else insertSetStmt.run(exerciseId, reps, weight_kg, time_seconds, distance_km, setOrder);
@@ -72,7 +73,7 @@ export async function POST(
         const s = (sets[i] ?? {}) as { reps?: number; weight_kg?: number; time_seconds?: number; distance_km?: number };
         const reps = type === "lift" ? (typeof s.reps === "number" ? s.reps : parseInt(String(s.reps ?? 0), 10) || null) : null;
         const weight_kg = type === "lift" ? (typeof s.weight_kg === "number" ? s.weight_kg : parseFloat(String(s.weight_kg ?? 0)) || null) : null;
-        const time_seconds = type === "cardio" ? (typeof s.time_seconds === "number" ? s.time_seconds : parseInt(String(s.time_seconds ?? 0), 10) || null) : null;
+        const time_seconds = isTimedExerciseType(type) ? (typeof s.time_seconds === "number" ? s.time_seconds : parseInt(String(s.time_seconds ?? 0), 10) || null) : null;
         const distance_km = type === "cardio" ? (typeof s.distance_km === "number" ? s.distance_km : parseFloat(String(s.distance_km ?? 0)) || null) : null;
         if (hasDropIndex) insertSetStmt.run(exerciseId, reps, weight_kg, time_seconds, distance_km, i, 0);
         else insertSetStmt.run(exerciseId, reps, weight_kg, time_seconds, distance_km, i);

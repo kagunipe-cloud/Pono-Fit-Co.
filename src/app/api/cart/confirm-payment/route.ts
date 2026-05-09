@@ -29,6 +29,7 @@ import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes"
 import { isOpenGroupSessionKind } from "../../../../lib/open-group-pt";
 import { ensureDiscountsTable, getRenewalDiscountPercentForPromo } from "../../../../lib/discounts";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
+import { ensureRetailProductsTable, assertRetailStockForCart, recordRetailInventoryMovement, ensureSaleRetailLinesTable } from "../../../../lib/retail-products";
 import { ensureTrainerClient, getTrainerMemberIdByDisplayName } from "../../../../lib/trainer-clients";
 import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz, formatDateForStorage, formatDateForDisplay } from "../../../../lib/app-timezone";
 import { formatPrice } from "../../../../lib/format";
@@ -273,6 +274,8 @@ export async function POST(request: NextRequest) {
     let purchasedDayPassPack = false;
     db.exec("BEGIN TRANSACTION");
     try {
+      assertRetailStockForCart(db, cart.id);
+
       for (const it of items) {
         if (it.product_type === "membership_plan") {
           const plan = db.prepare("SELECT * FROM membership_plans WHERE id = ?").get(it.product_id) as { plan_name: string; price: string; length: string; unit: string; product_id: string } | undefined;
@@ -507,6 +510,43 @@ export async function POST(request: NextRequest) {
               VALUES (?, ?, ?, 'purchase', 'sale', ?)
             `).run(member_id, pack.duration_minutes, totalCredits, sales_id);
           }
+        } else if (it.product_type === "retail") {
+          ensureRetailProductsTable(db);
+          const row = db.prepare("SELECT name, sku FROM retail_products WHERE id = ? AND active = 1").get(it.product_id) as
+            | { name: string; sku: string }
+            | undefined;
+          if (!row) {
+            throw new Error(`Retail item is no longer available (SKU / product removed). Remove it from the cart and try again.`);
+          }
+          const effUnit = getEffectiveUnitPriceString(db, it);
+          const qty = Math.max(1, Math.floor(Number(it.quantity) || 1));
+          const up = db
+            .prepare(
+              `UPDATE retail_products SET stock_quantity = stock_quantity - ? WHERE id = ? AND active = 1 AND stock_quantity >= ?`
+            )
+            .run(qty, it.product_id, qty);
+          if (up.changes === 0) {
+            throw new Error(`Not enough stock to complete the sale for ${row.name}. Remove it from the cart or reduce quantity.`);
+          }
+          recordRetailInventoryMovement(db, {
+            retail_product_id: it.product_id,
+            delta: -qty,
+            reason: "sale",
+            reference: sales_id,
+            note: `${row.sku}`,
+          });
+          ensureSaleRetailLinesTable(db);
+          db.prepare("INSERT INTO sale_retail_lines (sales_id, retail_product_id, quantity) VALUES (?, ?, ?)").run(
+            sales_id,
+            it.product_id,
+            qty
+          );
+          grand_total += parsePrice(effUnit) * it.quantity;
+          emailLineItems.push({
+            name: `${row.name} (${row.sku})`,
+            quantity: it.quantity,
+            price: formatPrice(effUnit),
+          });
         }
       }
 
