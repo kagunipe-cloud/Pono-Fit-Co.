@@ -9,7 +9,7 @@ import { getTrainerMemberId } from "../../../../../lib/admin";
 import { hasBillableStripeCustomer } from "../../../../../lib/stripe-customer";
 import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
 import { ensureDiscountsTable } from "../../../../../lib/discounts";
-import { ensureRetailProductsTable } from "../../../../../lib/retail-products";
+import { ensureRetailProductsTable, getRetailLineMeta } from "../../../../../lib/retail-products";
 
 export const dynamic = "force-dynamic";
 
@@ -117,10 +117,8 @@ export async function GET(
         if (row) name = `${row.name ?? "—"} (${row.credits}×${row.duration_minutes} min)`;
       } else if (it.product_type === "retail") {
         ensureRetailProductsTable(db);
-        const row = db.prepare("SELECT name, sku FROM retail_products WHERE id = ?").get(it.product_id) as
-          | { name: string; sku: string }
-          | undefined;
-        if (row) name = `${row.name ?? "—"} (SKU ${row.sku})`;
+        const meta = getRetailLineMeta(db, it.product_id);
+        if (meta) name = `${meta.shelf_name} (SKU ${meta.sku})`;
       }
       const catalog_price = getCatalogUnitPriceString(db, it);
       const price = getEffectiveUnitPriceString(db, it);
@@ -182,9 +180,27 @@ export async function GET(
       ensureRetailProductsTable(db);
       retailProducts = db
         .prepare(
-          `SELECT id, sku, name, price, unit_cost, stock_quantity FROM retail_products WHERE active = 1 ORDER BY name COLLATE NOCASE`
+          `SELECT p.id, p.sku,
+            CASE WHEN g.id IS NOT NULL THEN g.display_name || ' — ' || p.name ELSE p.name END AS name,
+            COALESCE(g.price, p.price) AS price,
+            COALESCE(g.unit_cost, p.unit_cost) AS unit_cost,
+            p.stock_quantity,
+            COALESCE(c.name, '') AS category_name
+           FROM retail_products p
+           LEFT JOIN retail_product_groups g ON g.id = p.group_id
+           LEFT JOIN retail_categories c ON c.id = g.category_id
+           WHERE p.active = 1 AND (p.group_id IS NULL OR g.active = 1)
+           ORDER BY COALESCE(c.sort_order, 999999), c.name COLLATE NOCASE, g.display_name COLLATE NOCASE, p.name COLLATE NOCASE`
         )
-        .all() as { id: number; sku: string; name: string; price: string; unit_cost: string | null; stock_quantity: number }[];
+        .all() as {
+          id: number;
+          sku: string;
+          name: string;
+          price: string;
+          unit_cost: string | null;
+          stock_quantity: number;
+          category_name: string;
+        }[];
     }
 
     db.close();

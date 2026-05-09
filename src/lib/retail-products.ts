@@ -10,7 +10,44 @@ export type RetailInventoryReason =
   | "sale"
   | "refund_restock";
 
+export type RetailLineMeta = {
+  id: number;
+  sku: string;
+  shelf_name: string;
+  catalog_price: string;
+  unit_cost: string;
+  stock_quantity: number;
+};
+
+export function ensureRetailCategoriesTable(db: ReturnType<typeof getDb>) {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS retail_categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+      sort_order INTEGER NOT NULL DEFAULT 0
+    );
+  `);
+}
+
+export function ensureRetailProductGroupsTable(db: ReturnType<typeof getDb>) {
+  ensureRetailCategoriesTable(db);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS retail_product_groups (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      category_id INTEGER,
+      display_name TEXT NOT NULL,
+      price TEXT NOT NULL,
+      unit_cost TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (category_id) REFERENCES retail_categories(id)
+    );
+  `);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_retail_groups_category ON retail_product_groups(category_id)");
+}
+
 export function ensureRetailProductsTable(db: ReturnType<typeof getDb>) {
+  ensureRetailProductGroupsTable(db);
   db.exec(`
     CREATE TABLE IF NOT EXISTS retail_products (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -31,6 +68,67 @@ export function ensureRetailProductsTable(db: ReturnType<typeof getDb>) {
   } catch {
     /* exists */
   }
+  try {
+    db.exec("ALTER TABLE retail_products ADD COLUMN group_id INTEGER REFERENCES retail_product_groups(id)");
+  } catch {
+    /* exists */
+  }
+}
+
+export function syncGroupPricesToVariants(db: ReturnType<typeof getDb>, groupId: number): void {
+  const g = db.prepare("SELECT price, unit_cost FROM retail_product_groups WHERE id = ?").get(groupId) as
+    | { price: string; unit_cost: string | null }
+    | undefined;
+  if (!g) return;
+  const uc = g.unit_cost?.trim() || "0.00";
+  db.prepare("UPDATE retail_products SET price = ?, unit_cost = ? WHERE group_id = ?").run(g.price, uc, groupId);
+}
+
+/** Sellable retail row: catalog price + display name for receipts, cart, stock errors. */
+export function getRetailLineMeta(db: ReturnType<typeof getDb>, productId: number): RetailLineMeta | undefined {
+  ensureRetailProductsTable(db);
+  const row = db
+    .prepare(
+      `SELECT p.id, p.sku, p.name AS variant_name, p.stock_quantity, p.active AS product_active,
+              p.group_id,
+              g.display_name AS group_name, g.price AS group_price, g.unit_cost AS group_unit_cost,
+              g.active AS group_active,
+              p.price AS row_price, p.unit_cost AS row_unit_cost
+       FROM retail_products p
+       LEFT JOIN retail_product_groups g ON g.id = p.group_id
+       WHERE p.id = ?`
+    )
+    .get(productId) as
+    | {
+        id: number;
+        sku: string;
+        variant_name: string;
+        stock_quantity: number;
+        product_active: number;
+        group_id: number | null;
+        group_name: string | null;
+        group_price: string | null;
+        group_unit_cost: string | null;
+        group_active: number | null;
+        row_price: string;
+        row_unit_cost: string | null;
+      }
+    | undefined;
+  if (!row || row.product_active !== 1) return undefined;
+  if (row.group_id != null && row.group_active !== 1) return undefined;
+  const grouped = row.group_id != null;
+  const shelf_name =
+    grouped && row.group_name ? `${row.group_name} — ${row.variant_name}` : row.variant_name;
+  const catalog_price = grouped ? row.group_price ?? row.row_price : row.row_price;
+  const unit_cost = (grouped ? row.group_unit_cost ?? row.row_unit_cost : row.row_unit_cost) ?? "0.00";
+  return {
+    id: row.id,
+    sku: row.sku,
+    shelf_name,
+    catalog_price,
+    unit_cost,
+    stock_quantity: row.stock_quantity,
+  };
 }
 
 export function ensureRetailInventoryLedgerTable(db: ReturnType<typeof getDb>) {
@@ -116,15 +214,13 @@ export function assertRetailStockForCart(db: ReturnType<typeof getDb>, cartId: n
   const want = getRetailLinesQtyByProduct(db, cartId);
   for (const [productId, need] of want) {
     if (need <= 0) continue;
-    const p = db
-      .prepare("SELECT name, stock_quantity FROM retail_products WHERE id = ? AND active = 1")
-      .get(productId) as { name: string; stock_quantity: number } | undefined;
-    if (!p) {
+    const meta = getRetailLineMeta(db, productId);
+    if (!meta) {
       throw new Error("A retail item in the cart is no longer available. Remove it and try again.");
     }
-    const have = Math.max(0, Math.floor(Number(p.stock_quantity) || 0));
+    const have = Math.max(0, Math.floor(Number(meta.stock_quantity) || 0));
     if (have < need) {
-      throw new Error(`Not enough stock for ${p.name} (have ${have}, need ${need} in cart).`);
+      throw new Error(`Not enough stock for ${meta.shelf_name} (have ${have}, need ${need} in cart).`);
     }
   }
 }

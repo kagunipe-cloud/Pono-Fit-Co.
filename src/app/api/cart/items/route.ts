@@ -10,6 +10,7 @@ import {
   normalizeRetailSku,
   getMemberRetailSelfCheckoutEnabled,
   getRetailInCartQty,
+  getRetailLineMeta,
 } from "../../../../lib/retail-products";
 
 export const dynamic = "force-dynamic";
@@ -82,9 +83,13 @@ export async function POST(request: NextRequest) {
       ensureRetailProductsTable(db);
       const sku = normalizeRetailSku(body.sku);
       if (sku) {
-        const row = db.prepare("SELECT id FROM retail_products WHERE sku = ? AND active = 1").get(sku) as
-          | { id: number }
-          | undefined;
+        const row = db
+          .prepare(
+            `SELECT p.id FROM retail_products p
+             LEFT JOIN retail_product_groups g ON g.id = p.group_id
+             WHERE p.sku = ? AND p.active = 1 AND (p.group_id IS NULL OR g.active = 1)`
+          )
+          .get(sku) as { id: number } | undefined;
         if (!row) {
           db.close();
           return NextResponse.json({ error: "Unknown SKU" }, { status: 404 });
@@ -94,9 +99,13 @@ export async function POST(request: NextRequest) {
         db.close();
         return NextResponse.json({ error: "retail requires product_id or sku" }, { status: 400 });
       } else {
-        const row = db.prepare("SELECT id FROM retail_products WHERE id = ? AND active = 1").get(product_id) as
-          | { id: number }
-          | undefined;
+        const row = db
+          .prepare(
+            `SELECT p.id FROM retail_products p
+             LEFT JOIN retail_product_groups g ON g.id = p.group_id
+             WHERE p.id = ? AND p.active = 1 AND (p.group_id IS NULL OR g.active = 1)`
+          )
+          .get(product_id) as { id: number } | undefined;
         if (!row) {
           db.close();
           return NextResponse.json({ error: "Retail product not found or inactive" }, { status: 404 });
@@ -151,19 +160,17 @@ export async function POST(request: NextRequest) {
     if (product_type === "retail") {
       ensureRetailProductsTable(db);
       const already = getRetailInCartQty(db, cart.id, resolvedProductId);
-      const stockRow = db
-        .prepare("SELECT name, stock_quantity FROM retail_products WHERE id = ? AND active = 1")
-        .get(resolvedProductId) as { name: string; stock_quantity: number } | undefined;
-      if (!stockRow) {
+      const meta = getRetailLineMeta(db, resolvedProductId);
+      if (!meta) {
         db.close();
         return NextResponse.json({ error: "Retail product not found or inactive" }, { status: 404 });
       }
-      const have = Math.max(0, Math.floor(Number(stockRow.stock_quantity) || 0));
+      const have = Math.max(0, Math.floor(Number(meta.stock_quantity) || 0));
       if (have < already + quantity) {
         db.close();
         return NextResponse.json(
           {
-            error: `Not enough stock for ${stockRow.name} (${have} on hand; ${already} already in this cart).`,
+            error: `Not enough stock for ${meta.shelf_name} (${have} on hand; ${already} already in this cart).`,
           },
           { status: 409 }
         );

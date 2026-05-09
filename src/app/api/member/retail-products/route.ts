@@ -5,6 +5,17 @@ import { ensureRetailProductsTable, normalizeRetailSku, getMemberRetailSelfCheck
 
 export const dynamic = "force-dynamic";
 
+const rowSelect = `
+  SELECT p.id, p.sku,
+    CASE WHEN g.id IS NOT NULL THEN g.display_name || ' — ' || p.name ELSE p.name END AS name,
+    COALESCE(g.price, p.price) AS price,
+    COALESCE(c.name, '') AS category
+  FROM retail_products p
+  LEFT JOIN retail_product_groups g ON g.id = p.group_id
+  LEFT JOIN retail_categories c ON c.id = g.category_id
+  WHERE p.active = 1 AND (p.group_id IS NULL OR g.active = 1)
+`;
+
 /**
  * GET — Active retail catalog for grab-and-go (member session required).
  * ?sku=... — resolve one product by barcode/SKU (scan flow).
@@ -31,9 +42,9 @@ export async function GET(request: NextRequest) {
   const sku = normalizeRetailSku(request.nextUrl.searchParams.get("sku"));
   try {
     if (sku) {
-      const row = db
-        .prepare("SELECT id, sku, name, price FROM retail_products WHERE sku = ? AND active = 1")
-        .get(sku) as { id: number; sku: string; name: string; price: string } | undefined;
+      const row = db.prepare(`${rowSelect} AND p.sku = ?`).get(sku) as
+        | { id: number; sku: string; name: string; price: string; category: string }
+        | undefined;
       db.close();
       if (!row) {
         return NextResponse.json({ error: "Product not found" }, { status: 404 });
@@ -41,8 +52,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(row);
     }
     const rows = db
-      .prepare("SELECT id, sku, name, price FROM retail_products WHERE active = 1 ORDER BY name COLLATE NOCASE")
-      .all() as { id: number; sku: string; name: string; price: string }[];
+      .prepare(
+        `${rowSelect}
+         ORDER BY COALESCE(c.sort_order, 999999), c.name COLLATE NOCASE, g.display_name COLLATE NOCASE, p.name COLLATE NOCASE`
+      )
+      .all() as { id: number; sku: string; name: string; price: string; category: string }[];
     db.close();
     return NextResponse.json({ products: rows });
   } catch (e) {

@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState, lazy, Suspense } from "react";
+import { useCallback, useEffect, useState, lazy, Suspense, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatPrice } from "@/lib/format";
 
 const CameraBarcodeScanner = lazy(() => import("@/components/CameraBarcodeScanner"));
 
-type Product = { id: number; sku: string; name: string; price: string };
+type Product = { id: number; sku: string; name: string; price: string; category?: string };
 
 export default function MemberRetailPage() {
   const router = useRouter();
@@ -74,6 +74,16 @@ export default function MemberRetailPage() {
     setToast(msg);
     setTimeout(() => setToast(null), 3200);
   }, []);
+
+  const productsByCategory = useMemo(() => {
+    const m = new Map<string, Product[]>();
+    for (const p of products) {
+      const key = (p.category ?? "").trim() || "Other";
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(p);
+    }
+    return Array.from(m.entries());
+  }, [products]);
 
   const addBySku = useCallback(
     async (sku: string) => {
@@ -187,27 +197,34 @@ export default function MemberRetailPage() {
           Nothing in the catalog yet. Ask the front desk once items are added in admin.
         </p>
       ) : (
-        <ul className="space-y-2 border rounded-xl border-stone-200 divide-y divide-stone-100">
-          {products.map((p) => (
-            <li key={p.id} className="flex items-center justify-between gap-3 p-3">
-              <div>
-                <p className="font-medium text-stone-900">{p.name}</p>
-                <p className="text-xs text-stone-500">SKU {p.sku}</p>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-stone-700 font-medium">{formatPrice(p.price)}</span>
-                <button
-                  type="button"
-                  disabled={addBusy}
-                  onClick={() => addById(p.id)}
-                  className="px-3 py-1.5 rounded-lg bg-stone-100 text-sm font-medium hover:bg-stone-200 disabled:opacity-50"
-                >
-                  Add
-                </button>
-              </div>
-            </li>
+        <div className="space-y-6">
+          {productsByCategory.map(([cat, items]) => (
+            <div key={cat}>
+              <h2 className="text-sm font-semibold text-stone-500 uppercase tracking-wide mb-2 px-0.5">{cat}</h2>
+              <ul className="space-y-2 border rounded-xl border-stone-200 divide-y divide-stone-100 bg-white">
+                {items.map((p) => (
+                  <li key={p.id} className="flex items-center justify-between gap-3 p-3">
+                    <div>
+                      <p className="font-medium text-stone-900">{p.name}</p>
+                      <p className="text-xs text-stone-500">SKU {p.sku}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-stone-700 font-medium">{formatPrice(p.price)}</span>
+                      <button
+                        type="button"
+                        disabled={addBusy}
+                        onClick={() => addById(p.id)}
+                        className="px-3 py-1.5 rounded-lg bg-stone-100 text-sm font-medium hover:bg-stone-200 disabled:opacity-50"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
 
       {shopUrl ? (

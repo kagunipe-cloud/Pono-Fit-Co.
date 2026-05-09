@@ -23,11 +23,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sal
     ensureSaleRetailLinesTable(db);
     const rows = db
       .prepare(
-        `SELECT l.retail_product_id, l.quantity, p.sku, p.name
+        `SELECT l.retail_product_id, l.quantity, p.sku,
+            CASE WHEN g.id IS NOT NULL THEN g.display_name || ' — ' || p.name ELSE p.name END AS name
          FROM sale_retail_lines l
          JOIN retail_products p ON p.id = l.retail_product_id
+         LEFT JOIN retail_product_groups g ON g.id = p.group_id
          WHERE l.sales_id = ?
-         ORDER BY p.name COLLATE NOCASE, p.sku COLLATE NOCASE`
+         ORDER BY name COLLATE NOCASE, p.sku COLLATE NOCASE`
       )
       .all(sales_id) as { retail_product_id: number; quantity: number; sku: string; name: string }[];
     db.close();

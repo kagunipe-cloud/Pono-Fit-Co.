@@ -26,10 +26,20 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const body = await request.json().catch(() => ({}));
   const db = getDb();
   ensureRetailProductsTable(db);
-  const existing = db.prepare("SELECT id FROM retail_products WHERE id = ?").get(id) as { id: number } | undefined;
+  const existing = db
+    .prepare("SELECT id, group_id FROM retail_products WHERE id = ?")
+    .get(id) as { id: number; group_id: number | null } | undefined;
   if (!existing) {
     db.close();
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (existing.group_id != null && (body.price != null || body.unit_cost != null)) {
+    db.close();
+    return NextResponse.json(
+      { error: "This SKU is a variant: change price and unit cost on the product group, not the variant row." },
+      { status: 400 }
+    );
   }
 
   const updates: string[] = [];
@@ -86,7 +96,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     vals.push(id);
     db.prepare(`UPDATE retail_products SET ${updates.join(", ")} WHERE id = ?`).run(...vals);
     const row = db
-      .prepare("SELECT id, sku, name, price, unit_cost, stock_quantity, active FROM retail_products WHERE id = ?")
+      .prepare("SELECT id, sku, name, price, unit_cost, stock_quantity, active, group_id FROM retail_products WHERE id = ?")
       .get(id) as {
         id: number;
         sku: string;
@@ -95,6 +105,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         unit_cost: string | null;
         stock_quantity: number;
         active: number;
+        group_id: number | null;
       };
     db.close();
     return NextResponse.json(row);

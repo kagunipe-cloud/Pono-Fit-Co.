@@ -1,5 +1,5 @@
 import type { getDb } from "./db";
-import { ensureRetailProductsTable } from "./retail-products";
+import { ensureRetailProductsTable, getRetailLineMeta } from "./retail-products";
 
 /** Cart row from DB including optional staff overrides. */
 export type CartItemForPricing = {
@@ -20,10 +20,8 @@ export function getCatalogUnitPriceString(db: ReturnType<typeof getDb>, it: Cart
   let price = "0";
   if (it.product_type === "retail") {
     ensureRetailProductsTable(db);
-    const row = db.prepare("SELECT price FROM retail_products WHERE id = ? AND active = 1").get(it.product_id) as
-      | { price: string }
-      | undefined;
-    price = row?.price ?? "0";
+    const meta = getRetailLineMeta(db, it.product_id);
+    price = meta?.catalog_price ?? "0";
   } else if (it.product_type === "membership_plan") {
     const row = db.prepare("SELECT price FROM membership_plans WHERE id = ?").get(it.product_id) as { price: string } | undefined;
     price = row?.price ?? "0";
