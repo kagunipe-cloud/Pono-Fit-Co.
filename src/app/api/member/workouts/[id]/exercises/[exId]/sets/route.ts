@@ -83,8 +83,8 @@ export async function POST(
         const weight_kg = type === "lift" ? (typeof (s as LiftPart).weight_kg === "number" ? (s as LiftPart).weight_kg : parseFloat(String((s as LiftPart).weight_kg ?? 0)) || null) : null;
         const time_seconds = isTimedExerciseType(type) ? (typeof (s as CardioPart).time_seconds === "number" ? (s as CardioPart).time_seconds : parseInt(String((s as CardioPart).time_seconds ?? 0), 10) || null) : null;
         const distance_km = type === "cardio" ? (typeof (s as CardioPart).distance_km === "number" ? (s as CardioPart).distance_km : parseFloat(String((s as CardioPart).distance_km ?? 0)) || null) : null;
-        if (hasDropIndex) insertSet.run([exId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex]);
-        else insertSet.run([exId, reps, weight_kg, time_seconds, distance_km, setOrder]);
+        if (hasDropIndex) insertSet.run(exId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex);
+        else insertSet.run(exId, reps, weight_kg, time_seconds, distance_km, setOrder);
       }
       setOrder++;
     }
@@ -157,8 +157,8 @@ export async function PUT(
         const weight_kg = type === "lift" ? (typeof (s as LiftPart).weight_kg === "number" ? (s as LiftPart).weight_kg : parseFloat(String((s as LiftPart).weight_kg ?? 0)) || null) : null;
         const time_seconds = isTimedExerciseType(type) ? (typeof (s as CardioPart).time_seconds === "number" ? (s as CardioPart).time_seconds : parseInt(String((s as CardioPart).time_seconds ?? 0), 10) || null) : null;
         const distance_km = type === "cardio" ? (typeof (s as CardioPart).distance_km === "number" ? (s as CardioPart).distance_km : parseFloat(String((s as CardioPart).distance_km ?? 0)) || null) : null;
-        if (hasDropIndex) insertSet.run([exId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex]);
-        else insertSet.run([exId, reps, weight_kg, time_seconds, distance_km, setOrder]);
+        if (hasDropIndex) insertSet.run(exId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex);
+        else insertSet.run(exId, reps, weight_kg, time_seconds, distance_km, setOrder);
       }
     }
 

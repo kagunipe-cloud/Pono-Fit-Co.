@@ -62,7 +62,16 @@ export async function POST(request: NextRequest) {
     if (!memberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
 
     const body = await request.json().catch(() => ({}));
-    const fromWorkoutId = typeof body.fromWorkoutId === "number" ? body.fromWorkoutId : undefined;
+    const rawFrom = body.fromWorkoutId;
+    const fromWorkoutId =
+      typeof rawFrom === "number" && Number.isFinite(rawFrom) && rawFrom >= 1
+        ? Math.floor(rawFrom)
+        : typeof rawFrom === "string" && rawFrom.trim()
+          ? (() => {
+              const n = parseInt(rawFrom.trim(), 10);
+              return Number.isFinite(n) && n >= 1 ? n : undefined;
+            })()
+          : undefined;
 
     const db = getDb();
     ensureWorkoutTables(db);

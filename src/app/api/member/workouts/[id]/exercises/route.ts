@@ -6,6 +6,15 @@ import { ensureWorkoutTables } from "../../../../../../lib/workouts";
 
 export const dynamic = "force-dynamic";
 
+function parseOptionalExerciseCatalogId(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 1) return Math.floor(value);
+  if (typeof value === "string" && value.trim()) {
+    const n = parseInt(value.trim(), 10);
+    if (Number.isFinite(n) && n >= 1) return n;
+  }
+  return null;
+}
+
 /** POST body: { type, exercise_name, exercise_id?, use_for_my_1rm? (optional; when true, designates this exercise for My 1RM tracking), sets } */
 export async function POST(
   request: NextRequest,
@@ -21,12 +30,16 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const type = parseExerciseType(body.type);
     const exercise_name = String(body.exercise_name ?? "").trim() || "Exercise";
-    const exercise_id = typeof body.exercise_id === "number" && body.exercise_id > 0 ? body.exercise_id : null;
+    let exercise_id = parseOptionalExerciseCatalogId(body.exercise_id);
     const use_for_my_1rm = !!body.use_for_my_1rm;
     const sets = Array.isArray(body.sets) ? body.sets : [];
 
     const db = getDb();
     ensureWorkoutTables(db);
+    if (exercise_id != null) {
+      const exRow = db.prepare("SELECT id FROM exercises WHERE id = ?").get(exercise_id) as { id: number } | undefined;
+      if (!exRow) exercise_id = null;
+    }
     const workout = db.prepare("SELECT id FROM workouts WHERE id = ? AND member_id = ?").get(workoutId, memberId);
     if (!workout) {
       db.close();
@@ -42,7 +55,7 @@ export async function POST(
           .run(workoutId, type, exercise_name, sort_order, exercise_id, use_for_my_1rm ? 1 : 0)
       : db.prepare("INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id) VALUES (?, ?, ?, ?, ?)")
           .run(workoutId, type, exercise_name, sort_order, exercise_id);
-    const exerciseId = exResult.lastInsertRowid as number;
+    const exerciseId = Number(exResult.lastInsertRowid);
 
     const tableCols = (db.prepare("PRAGMA table_info(workout_sets)").all() as { name: string }[]).map((c) => c.name);
     const hasDropIndex = tableCols.includes("drop_index");
