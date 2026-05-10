@@ -6,16 +6,63 @@ import { getDb } from "./db";
 
 type AppDb = ReturnType<typeof getDb>;
 
+const EXERCISE_TYPE_BACKUP_SUFFIX = "_old_type_constraint";
+
+/**
+ * If a previous stretch-type migration crashed mid-flight, we can have only the backup table, or both an
+ * empty shell and the backup. Fix before touching schema so nothing references a missing `*_old_type_constraint`.
+ */
+function repairOrphanExerciseTypeBackupTable(db: AppDb, table: "exercises" | "workout_exercises"): void {
+  const tempTable = `${table}${EXERCISE_TYPE_BACKUP_SUFFIX}`;
+  const temp = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(tempTable) as { name: string } | undefined;
+  if (!temp) return;
+
+  const main = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) as { name: string } | undefined;
+
+  db.exec("PRAGMA foreign_keys = OFF");
+  try {
+    if (!main) {
+      db.prepare(`ALTER TABLE "${tempTable}" RENAME TO "${table}"`).run();
+      return;
+    }
+    const mainCount = db.prepare(`SELECT COUNT(*) AS n FROM "${table}"`).get() as { n: number };
+    if (!mainCount.n) {
+      db.prepare(`DROP TABLE "${table}"`).run();
+      db.prepare(`ALTER TABLE "${tempTable}" RENAME TO "${table}"`).run();
+      return;
+    }
+    const tempCount = db.prepare(`SELECT COUNT(*) AS n FROM "${tempTable}"`).get() as { n: number };
+    if (tempCount.n === 0) {
+      db.prepare(`DROP TABLE "${tempTable}"`).run();
+    } else {
+      console.warn(
+        `[workouts] Both "${table}" and "${tempTable}" have rows; dropping backup (${tempCount.n} rows). If data looks wrong, restore from backup DB.`
+      );
+      db.prepare(`DROP TABLE "${tempTable}"`).run();
+    }
+  } catch (err) {
+    console.error(`[workouts] repairOrphanExerciseTypeBackupTable(${table})`, err);
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+}
+
 function migrateExerciseTypeConstraint(db: AppDb, table: "exercises" | "workout_exercises"): void {
   const row = db
     .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?")
     .get(table) as { sql?: string } | undefined;
   if (!row?.sql || row.sql.includes("'stretch'")) return;
 
-  const tempTable = `${table}_old_type_constraint`;
-  try {
-    db.exec("PRAGMA foreign_keys = OFF");
-    db.prepare(`ALTER TABLE ${table} RENAME TO ${tempTable}`).run();
+  const tempTable = `${table}${EXERCISE_TYPE_BACKUP_SUFFIX}`;
+
+  const job = db.transaction(() => {
+    db.prepare(`ALTER TABLE "${table}" RENAME TO "${tempTable}"`).run();
+
+    const tempCols = db.prepare(`PRAGMA table_info("${tempTable}")`).all() as { name: string }[];
+    const has = (n: string) => tempCols.some((c) => c.name === n);
+
     if (table === "exercises") {
       db.exec(`
         CREATE TABLE exercises (
@@ -30,10 +77,27 @@ function migrateExerciseTypeConstraint(db: AppDb, table: "exercises" | "workout_
           instructions TEXT,
           image_path TEXT
         );
-        INSERT INTO exercises (id, name, type, primary_muscles, secondary_muscles, equipment, muscle_group, created_at, instructions, image_path)
-        SELECT id, name, type, primary_muscles, secondary_muscles, equipment, muscle_group, created_at, instructions, image_path
-        FROM ${tempTable};
       `);
+      const dest = [
+        "id",
+        "name",
+        "type",
+        "primary_muscles",
+        "secondary_muscles",
+        "equipment",
+        "muscle_group",
+        "created_at",
+        "instructions",
+        "image_path",
+      ] as const;
+      const selectSql = dest
+        .map((c) => {
+          if (has(c)) return c;
+          if (c === "created_at") return `datetime('now')`;
+          return "NULL";
+        })
+        .join(", ");
+      db.exec(`INSERT INTO exercises (${dest.join(", ")}) SELECT ${selectSql} FROM "${tempTable}"`);
     } else {
       db.exec(`
         CREATE TABLE workout_exercises (
@@ -46,17 +110,48 @@ function migrateExerciseTypeConstraint(db: AppDb, table: "exercises" | "workout_
           use_for_my_1rm INTEGER NOT NULL DEFAULT 0,
           FOREIGN KEY (workout_id) REFERENCES workouts(id) ON DELETE CASCADE
         );
-        INSERT INTO workout_exercises (id, workout_id, type, exercise_name, sort_order, exercise_id, use_for_my_1rm)
-        SELECT id, workout_id, type, exercise_name, sort_order, exercise_id, coalesce(use_for_my_1rm, 0)
-        FROM ${tempTable};
       `);
+      const dest = [
+        "id",
+        "workout_id",
+        "type",
+        "exercise_name",
+        "sort_order",
+        "exercise_id",
+        "use_for_my_1rm",
+      ] as const;
+      const selectSql = dest
+        .map((c) => {
+          if (!has(c)) {
+            if (c === "exercise_id") return "NULL";
+            if (c === "use_for_my_1rm") return "0";
+            throw new Error(`migrateExerciseTypeConstraint: "${tempTable}" missing required column ${c}`);
+          }
+          if (c === "use_for_my_1rm") return "coalesce(use_for_my_1rm, 0)";
+          return c;
+        })
+        .join(", ");
+      db.exec(`INSERT INTO workout_exercises (${dest.join(", ")}) SELECT ${selectSql} FROM "${tempTable}"`);
     }
-    db.prepare(`DROP TABLE ${tempTable}`).run();
-  } catch {
+
+    db.prepare(`DROP TABLE "${tempTable}"`).run();
+  });
+
+  db.exec("PRAGMA foreign_keys = OFF");
+  try {
+    job();
+  } catch (err) {
+    console.error(`[workouts] migrateExerciseTypeConstraint(${table})`, err);
     try {
-      db.prepare(`ALTER TABLE ${tempTable} RENAME TO ${table}`).run();
-    } catch {
-      /* ignore rollback failure */
+      const stillTemp =
+        (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(tempTable) as { name?: string } | undefined) != null;
+      const stillMain =
+        (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) as { name?: string } | undefined) != null;
+      if (stillTemp && !stillMain) {
+        db.prepare(`ALTER TABLE "${tempTable}" RENAME TO "${table}"`).run();
+      }
+    } catch (rollbackErr) {
+      console.error(`[workouts] migrateExerciseTypeConstraint rollback (${table})`, rollbackErr);
     }
   } finally {
     db.exec("PRAGMA foreign_keys = ON");
@@ -85,6 +180,9 @@ export function ensureWorkoutTables(db: AppDb) {
   } catch {
     /* ignore */
   }
+
+  repairOrphanExerciseTypeBackupTable(db, "exercises");
+  repairOrphanExerciseTypeBackupTable(db, "workout_exercises");
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS workouts (
