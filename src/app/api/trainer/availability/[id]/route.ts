@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
 import { getTrainerMemberId, getAdminMemberId } from "../../../../../lib/admin";
+import { mergeTouchingTrainerAvailability, resolveAvailabilityIdAfterMerge } from "../../../../../lib/trainer-availability-merge";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +31,9 @@ export async function PATCH(
 
     const db = getDb();
     ensurePTSlotTables(db);
-    const block = db.prepare("SELECT id, trainer_member_id FROM trainer_availability WHERE id = ?").get(numericId) as { id: number; trainer_member_id: string | null } | undefined;
+    const block = db.prepare("SELECT id, trainer_member_id, trainer FROM trainer_availability WHERE id = ?").get(numericId) as
+      | { id: number; trainer_member_id: string | null; trainer: string }
+      | undefined;
     if (!block) {
       db.close();
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -54,7 +57,14 @@ export async function PATCH(
     }
     values.push(numericId);
     db.prepare(`UPDATE trainer_availability SET ${updates.join(", ")} WHERE id = ?`).run(...values);
-    const row = db.prepare("SELECT * FROM trainer_availability WHERE id = ?").get(numericId);
+    const absorbed = mergeTouchingTrainerAvailability(
+      db,
+      block.trainer_member_id?.trim()
+        ? { trainerMemberId: block.trainer_member_id }
+        : { legacyTrainerName: block.trainer }
+    );
+    const finalId = resolveAvailabilityIdAfterMerge(numericId, absorbed);
+    const row = db.prepare("SELECT * FROM trainer_availability WHERE id = ?").get(finalId);
     db.close();
     return NextResponse.json(row);
   } catch (err) {

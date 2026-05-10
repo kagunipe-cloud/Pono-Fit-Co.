@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getBlocksInRange } from "../../../../lib/pt-availability";
+import { getBlocksInRange, filterBlocksForTrainerMember, selectWidestBlockContaining } from "../../../../lib/pt-availability";
 import { timeToMinutes } from "../../../../lib/pt-slots";
-import { getDb } from "../../../../lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -22,41 +21,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "date, time, trainer_member_id required" }, { status: 400 });
   }
 
-  let blocks = getBlocksInRange(date, date);
-  let matching = blocks.filter((b) => (b.trainer_member_id ?? "").trim() === trainer_member_id.trim());
-
-  if (matching.length === 0) {
-    const db = getDb();
-    const member = db.prepare("SELECT first_name, last_name FROM members WHERE member_id = ?").get(trainer_member_id) as
-      | { first_name: string | null; last_name: string | null }
-      | undefined;
-    db.close();
-    const displayName = member ? [member.first_name, member.last_name].filter(Boolean).join(" ").trim() : null;
-    if (displayName) {
-      matching = blocks.filter(
-        (b) =>
-          (b.trainer_member_id == null || String(b.trainer_member_id).trim() === "") &&
-          b.trainer.trim().toLowerCase() === displayName.toLowerCase()
-      );
-    }
-  }
-
+  const blocks = getBlocksInRange(date, date);
+  const matching = filterBlocksForTrainerMember(blocks, trainer_member_id);
   const startMin = timeToMinutes(time);
-  const candidates = matching.filter((b) => {
-    const blockStart = timeToMinutes(b.start_time);
-    const blockEnd = timeToMinutes(b.end_time);
-    return startMin >= blockStart && startMin < blockEnd;
-  });
+  const best = selectWidestBlockContaining(matching, startMin);
 
-  if (candidates.length === 0) {
+  if (!best) {
     return NextResponse.json({ block_id: null });
   }
-
-  const best = candidates.reduce((a, b) => {
-    const spanA = timeToMinutes(a.end_time) - timeToMinutes(a.start_time);
-    const spanB = timeToMinutes(b.end_time) - timeToMinutes(b.start_time);
-    return spanB > spanA ? b : a;
-  });
 
   return NextResponse.json({ block_id: best.id });
 }

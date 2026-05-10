@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
+import { mergeTouchingTrainerAvailability, resolveAvailabilityIdAfterMerge } from "../../../../../lib/trainer-availability-merge";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +59,21 @@ export async function PATCH(
     }
     values.push(numericId);
     db.prepare(`UPDATE trainer_availability SET ${updates.join(", ")} WHERE id = ?`).run(...values);
-    const row = db.prepare("SELECT * FROM trainer_availability WHERE id = ?").get(numericId);
+    const scopeRow = db.prepare("SELECT trainer_member_id, trainer FROM trainer_availability WHERE id = ?").get(numericId) as
+      | { trainer_member_id: string | null; trainer: string }
+      | undefined;
+    if (!scopeRow) {
+      db.close();
+      return NextResponse.json({ error: "Availability block not found" }, { status: 404 });
+    }
+    const absorbed = mergeTouchingTrainerAvailability(
+      db,
+      scopeRow.trainer_member_id?.trim()
+        ? { trainerMemberId: scopeRow.trainer_member_id }
+        : { legacyTrainerName: scopeRow.trainer }
+    );
+    const finalId = resolveAvailabilityIdAfterMerge(numericId, absorbed);
+    const row = db.prepare("SELECT * FROM trainer_availability WHERE id = ?").get(finalId);
     db.close();
     return NextResponse.json(row);
   } catch (err) {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { getTrainerMemberId } from "../../../../lib/admin";
+import { mergeTouchingTrainerAvailability, resolveAvailabilityIdAfterMerge } from "../../../../lib/trainer-availability-merge";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,10 @@ export async function POST(request: NextRequest) {
     const result = db.prepare(
       "INSERT INTO trainer_availability (trainer, trainer_member_id, day_of_week, start_time, end_time, description, days_of_week) VALUES (?, ?, ?, ?, ?, ?, ?)"
     ).run(trainerName, memberId, day_of_week, start_time, end_time, description, days_of_week_str);
-    const row = db.prepare("SELECT * FROM trainer_availability WHERE id = ?").get(result.lastInsertRowid);
+    const insertId = Number(result.lastInsertRowid);
+    const absorbed = mergeTouchingTrainerAvailability(db, { trainerMemberId: memberId });
+    const finalId = resolveAvailabilityIdAfterMerge(insertId, absorbed);
+    const row = db.prepare("SELECT * FROM trainer_availability WHERE id = ?").get(finalId);
     db.close();
     return NextResponse.json(row);
   } catch (err) {

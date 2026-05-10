@@ -3,8 +3,17 @@ import { getDb, getAppTimezone } from "../../../../lib/db";
 import { getAdminMemberId } from "../../../../lib/admin";
 import { ensurePTSlotTables, normalizePtDurationMinutes, reservedMinutes } from "../../../../lib/pt-slots";
 import { ensureTrainerClient } from "../../../../lib/trainer-clients";
-import { getBlocksInRange, getBookingsForBlock, getFreeIntervals } from "../../../../lib/pt-availability";
-import { timeToMinutes } from "../../../../lib/pt-slots";
+import {
+  getBlocksInRange,
+  filterBlocksForTrainerMember,
+  selectWidestBlockContaining,
+  getContiguousAvailabilityChain,
+  getBookingsForBlocks,
+  getFreeIntervals,
+  getUnavailableInRange,
+  getUnavailableRangesForBlock,
+} from "../../../../lib/pt-availability";
+import { timeToMinutes, minutesToTime } from "../../../../lib/pt-slots";
 import {
   sendMemberEmail,
   sendMemberBookingConfirmationEmail,
@@ -57,20 +66,27 @@ export async function POST(request: NextRequest) {
 
     const blocks = getBlocksInRange(open.occurrence_date, open.occurrence_date);
     const startMin = timeToMinutes(open.start_time);
-    const block = blocks.find((b) => {
-      if ((b.trainer_member_id ?? "").trim() !== trainer_member_id) return false;
-      const blockStart = timeToMinutes(b.start_time);
-      const blockEnd = timeToMinutes(b.end_time);
-      return startMin >= blockStart && startMin < blockEnd;
-    });
+    const matching = filterBlocksForTrainerMember(blocks, trainer_member_id);
+    const block = selectWidestBlockContaining(matching, startMin);
 
     if (!block) {
       db.close();
       return NextResponse.json({ error: "Trainer has no availability block at this date/time" }, { status: 404 });
     }
 
-    const bookings = getBookingsForBlock(db, block.id, open.occurrence_date);
-    const free = getFreeIntervals(timeToMinutes(block.start_time), timeToMinutes(block.end_time), bookings);
+    const chain = getContiguousAvailabilityChain(blocks, block.id);
+    const mergedStartMin = chain?.mergedStartMin ?? timeToMinutes(block.start_time);
+    const mergedEndMin = chain?.mergedEndMin ?? timeToMinutes(block.end_time);
+    const chainBlockIds = chain?.blockIds ?? [block.id];
+
+    const bookings = getBookingsForBlocks(db, chainBlockIds, open.occurrence_date);
+    const unavailOccurrences = getUnavailableInRange(open.occurrence_date, open.occurrence_date);
+    const unavailRanges = getUnavailableRangesForBlock(
+      { trainer: block.trainer, start_time: minutesToTime(mergedStartMin), end_time: minutesToTime(mergedEndMin) },
+      open.occurrence_date,
+      unavailOccurrences
+    );
+    const free = getFreeIntervals(mergedStartMin, mergedEndMin, bookings, unavailRanges);
     const interval = free.find((iv) => startMin >= iv.startMin && startMin < iv.endMin);
     if (!interval) {
       db.close();

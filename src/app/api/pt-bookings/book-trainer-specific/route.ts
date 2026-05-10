@@ -6,11 +6,13 @@ import { ensurePTSlotTables, getPTCreditBalance, normalizePtDurationMinutes, res
 import { ensureTrainerClient } from "../../../../lib/trainer-clients";
 import {
   getFreeIntervals,
-  getBookingsForBlock,
+  getBlocksInRange,
+  getContiguousAvailabilityChain,
+  getBookingsForBlocks,
   getUnavailableInRange,
   getUnavailableRangesForBlock,
 } from "../../../../lib/pt-availability";
-import { timeToMinutes } from "../../../../lib/pt-slots";
+import { timeToMinutes, minutesToTime } from "../../../../lib/pt-slots";
 import {
   sendStaffEmail,
   sendMemberEmail,
@@ -84,14 +86,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Start time is outside this trainer availability block" }, { status: 400 });
     }
 
-    const bookings = getBookingsForBlock(db, trainer_availability_id, occurrence_date);
+    const dayBlocks = getBlocksInRange(occurrence_date, occurrence_date);
+    const chain = getContiguousAvailabilityChain(dayBlocks, trainer_availability_id);
+    const mergedStartMin = chain?.mergedStartMin ?? blockStart;
+    const mergedEndMin = chain?.mergedEndMin ?? blockEnd;
+    const chainBlockIds = chain?.blockIds ?? [trainer_availability_id];
+
+    const bookings = getBookingsForBlocks(db, chainBlockIds, occurrence_date);
     const unavailOccurrences = getUnavailableInRange(occurrence_date, occurrence_date);
     const unavailRanges = getUnavailableRangesForBlock(
-      { trainer: block.trainer, start_time: block.start_time, end_time: block.end_time },
+      { trainer: block.trainer, start_time: minutesToTime(mergedStartMin), end_time: minutesToTime(mergedEndMin) },
       occurrence_date,
       unavailOccurrences
     );
-    const free = getFreeIntervals(blockStart, blockEnd, bookings, unavailRanges);
+    const free = getFreeIntervals(mergedStartMin, mergedEndMin, bookings, unavailRanges);
     const interval = free.find((iv) => startMin >= iv.startMin && startMin < iv.endMin);
     if (!interval) {
       db.close();

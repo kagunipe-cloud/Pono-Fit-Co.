@@ -18,6 +18,16 @@ type AvailabilityBlock = {
   description: string | null;
 };
 
+function formatBlockDays(b: AvailabilityBlock): string {
+  if (b.days_of_week?.trim()) {
+    return b.days_of_week
+      .split(",")
+      .map((d) => DAY_NAMES[parseInt(d.trim(), 10)] ?? "?")
+      .join(", ");
+  }
+  return DAY_NAMES[b.day_of_week] ?? "?";
+}
+
 export default function TrainerSchedulePage() {
   const router = useRouter();
   const [member, setMember] = useState<MemberMe>(null);
@@ -31,6 +41,14 @@ export default function TrainerSchedulePage() {
   const [addDesc, setAddDesc] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editDay, setEditDay] = useState(1);
+  const [editStart, setEditStart] = useState("09:00");
+  const [editEnd, setEditEnd] = useState("17:00");
+  const [editDesc, setEditDesc] = useState("");
+  const [savingEditId, setSavingEditId] = useState<number | null>(null);
+  /** When true, PATCH omits `day_of_week` so multi-day `days_of_week` is preserved. */
+  const [editPreserveMultiDay, setEditPreserveMultiDay] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/member-me")
@@ -77,6 +95,58 @@ export default function TrainerSchedulePage() {
     }
   }
 
+  function timeInputValue(t: string): string {
+    const m = String(t).trim().match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return "09:00";
+    const h = Math.min(23, parseInt(m[1], 10));
+    const min = Math.min(59, parseInt(m[2], 10));
+    return `${h.toString().padStart(2, "0")}:${min.toString().padStart(2, "0")}`;
+  }
+
+  function startEdit(b: AvailabilityBlock) {
+    setEditingId(b.id);
+    setEditPreserveMultiDay(!!(b.days_of_week?.trim()));
+    setEditDay(b.day_of_week);
+    setEditStart(timeInputValue(b.start_time));
+    setEditEnd(timeInputValue(b.end_time));
+    setEditDesc((b.description ?? "").trim());
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setSavingEditId(null);
+    setEditPreserveMultiDay(false);
+  }
+
+  async function handleSaveEdit(blockId: number) {
+    setSavingEditId(blockId);
+    try {
+      const body: Record<string, unknown> = {
+        start_time: editStart,
+        end_time: editEnd,
+        description: editDesc.trim() || null,
+      };
+      if (!editPreserveMultiDay) body.day_of_week = editDay;
+      const res = await fetch(`/api/trainer/availability/${blockId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        cancelEdit();
+        const listRes = await fetch("/api/trainer/availability");
+        const list = listRes.ok ? await listRes.json() : [];
+        setBlocks(Array.isArray(list) ? list : []);
+        setScheduleRefreshKey((k) => k + 1);
+      } else {
+        alert(data.error ?? "Failed to save");
+      }
+    } finally {
+      setSavingEditId(null);
+    }
+  }
+
   async function handleDelete(id: number) {
     if (!confirm("Remove this availability block? Existing bookings will be removed.")) return;
     setDeletingId(id);
@@ -85,6 +155,7 @@ export default function TrainerSchedulePage() {
       if (res.ok) {
         setBlocks((prev) => prev.filter((b) => b.id !== id));
         setScheduleRefreshKey((k) => k + 1);
+        if (editingId === id) cancelEdit();
       } else {
         const data = await res.json();
         alert(data.error ?? "Failed to delete");
@@ -138,19 +209,99 @@ export default function TrainerSchedulePage() {
         )}
         <ul className="space-y-2 mb-4">
           {blocks.map((b) => (
-            <li key={b.id} className="flex items-center justify-between gap-4 py-2 px-3 rounded-lg bg-white border border-stone-200">
-              <span className="text-sm text-stone-700">
-                {DAY_NAMES[b.day_of_week]} {b.start_time}–{b.end_time}
-                {b.description ? ` · ${b.description}` : ""}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleDelete(b.id)}
-                disabled={deletingId === b.id}
-                className="text-xs text-red-600 hover:underline disabled:opacity-50"
-              >
-                {deletingId === b.id ? "Removing…" : "Remove"}
-              </button>
+            <li key={b.id} className="py-2 px-3 rounded-lg bg-white border border-stone-200">
+              {editingId === b.id ? (
+                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+                  <div>
+                    <span className="block text-xs font-medium text-stone-500 mb-1">Day(s)</span>
+                    {editPreserveMultiDay ? (
+                      <p className="text-sm text-stone-700 px-0 py-2">{formatBlockDays(b)}</p>
+                    ) : (
+                      <select
+                        value={editDay}
+                        onChange={(e) => setEditDay(parseInt(e.target.value, 10))}
+                        className="px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                      >
+                        {DAY_NAMES.map((name, i) => (
+                          <option key={i} value={i}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Start</label>
+                    <input
+                      type="time"
+                      value={editStart}
+                      onChange={(e) => setEditStart(e.target.value)}
+                      className="px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">End</label>
+                    <input
+                      type="time"
+                      value={editEnd}
+                      onChange={(e) => setEditEnd(e.target.value)}
+                      className="px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                    />
+                  </div>
+                  <div className="min-w-[140px] flex-1">
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Description (optional)</label>
+                    <input
+                      type="text"
+                      value={editDesc}
+                      onChange={(e) => setEditDesc(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSaveEdit(b.id)}
+                      disabled={savingEditId === b.id}
+                      className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+                    >
+                      {savingEditId === b.id ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelEdit}
+                      disabled={savingEditId === b.id}
+                      className="px-4 py-2 rounded-lg border border-stone-200 text-sm text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-sm text-stone-700">
+                    {formatBlockDays(b)} {b.start_time}–{b.end_time}
+                    {b.description ? ` · ${b.description}` : ""}
+                  </span>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => startEdit(b)}
+                      disabled={deletingId === b.id}
+                      className="text-xs text-brand-700 hover:underline disabled:opacity-50"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(b.id)}
+                      disabled={deletingId === b.id}
+                      className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                    >
+                      {deletingId === b.id ? "Removing…" : "Remove"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </li>
           ))}
         </ul>

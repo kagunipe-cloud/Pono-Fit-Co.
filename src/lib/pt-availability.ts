@@ -7,6 +7,97 @@ import { ensurePTSlotTables, timeToMinutes, minutesToTime, reservedMinutes, RESE
 
 export type FreeInterval = { startMin: number; endMin: number };
 
+export type ExpandedAvailabilityBlock = {
+  id: number;
+  trainer: string;
+  trainer_member_id?: string | null;
+  date: string;
+  start_time: string;
+  end_time: string;
+  description?: string | null;
+};
+
+/** Same trainer for chaining / filtering (strict id match, or both legacy name-only rows). */
+export function blocksSameTrainer(
+  a: Pick<ExpandedAvailabilityBlock, "trainer" | "trainer_member_id">,
+  b: Pick<ExpandedAvailabilityBlock, "trainer" | "trainer_member_id">
+): boolean {
+  const idA = (a.trainer_member_id ?? "").trim();
+  const idB = (b.trainer_member_id ?? "").trim();
+  if (idA !== "" && idB !== "") return idA === idB;
+  if (idA === "" && idB === "") return a.trainer.trim().toLowerCase() === b.trainer.trim().toLowerCase();
+  return false;
+}
+
+/** Match `find-block` / PT grid: by trainer_member_id, or legacy rows with empty id and matching display name. */
+export function filterBlocksForTrainerMember(allBlocks: ExpandedAvailabilityBlock[], trainer_member_id: string): ExpandedAvailabilityBlock[] {
+  let matching = allBlocks.filter((b) => (b.trainer_member_id ?? "").trim() === trainer_member_id.trim());
+  if (matching.length === 0) {
+    const db = getDb();
+    const member = db.prepare("SELECT first_name, last_name FROM members WHERE member_id = ?").get(trainer_member_id) as
+      | { first_name: string | null; last_name: string | null }
+      | undefined;
+    db.close();
+    const displayName = member ? [member.first_name, member.last_name].filter(Boolean).join(" ").trim() : null;
+    if (displayName) {
+      matching = allBlocks.filter(
+        (b) =>
+          (b.trainer_member_id == null || String(b.trainer_member_id).trim() === "") &&
+          b.trainer.trim().toLowerCase() === displayName.toLowerCase()
+      );
+    }
+  }
+  return matching;
+}
+
+/** Among blocks that contain `startMin`, return the widest span (break ties by larger end time). */
+export function selectWidestBlockContaining(blocks: ExpandedAvailabilityBlock[], startMin: number): ExpandedAvailabilityBlock | null {
+  const candidates = blocks.filter((b) => {
+    const bs = timeToMinutes(b.start_time);
+    const be = timeToMinutes(b.end_time);
+    return startMin >= bs && startMin < be;
+  });
+  if (candidates.length === 0) return null;
+  return candidates.reduce((a, b) => {
+    const spanA = timeToMinutes(a.end_time) - timeToMinutes(a.start_time);
+    const spanB = timeToMinutes(b.end_time) - timeToMinutes(b.start_time);
+    if (spanB !== spanA) return spanB > spanA ? b : a;
+    const endA = timeToMinutes(a.end_time);
+    const endB = timeToMinutes(b.end_time);
+    return endB > endA ? b : a;
+  });
+}
+
+/**
+ * Blocks that are the same calendar row as `anchor` and share its trainer, sorted by start time.
+ * Expands `anchor` into a chain where each row's end time equals the next row's start time (e.g. 7–9 and 9–21 → one 7–21 window for booking math).
+ */
+export function getContiguousAvailabilityChain(
+  blocksOnDate: ExpandedAvailabilityBlock[],
+  anchorBlockId: number
+): { blockIds: number[]; mergedStartMin: number; mergedEndMin: number } | null {
+  const anchor = blocksOnDate.find((b) => b.id === anchorBlockId);
+  if (!anchor) return null;
+  const peers = blocksOnDate.filter((b) => b.date === anchor.date && blocksSameTrainer(b, anchor));
+  const sorted = [...peers]
+    .map((b) => ({
+      id: b.id,
+      startMin: timeToMinutes(b.start_time),
+      endMin: timeToMinutes(b.end_time),
+    }))
+    .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin || a.id - b.id);
+  const anchorIdx = sorted.findIndex((b) => b.id === anchorBlockId);
+  if (anchorIdx < 0) return null;
+  let lo = anchorIdx;
+  while (lo > 0 && sorted[lo - 1].endMin === sorted[lo].startMin) lo--;
+  let hi = anchorIdx;
+  while (hi + 1 < sorted.length && sorted[hi].endMin === sorted[hi + 1].startMin) hi++;
+  const mergedStartMin = sorted[lo].startMin;
+  const mergedEndMin = sorted[hi].endMin;
+  const blockIds = sorted.slice(lo, hi + 1).map((b) => b.id);
+  return { blockIds, mergedStartMin, mergedEndMin };
+}
+
 export function getBlocksInRange(from: string, to: string): { id: number; trainer: string; trainer_member_id?: string | null; date: string; start_time: string; end_time: string; description?: string | null }[] {
   const db = getDb();
   ensurePTSlotTables(db);
@@ -125,6 +216,23 @@ export function getBookingsForBlock(db: ReturnType<typeof getDb>, trainer_availa
     "SELECT start_time, reserved_minutes FROM pt_trainer_specific_bookings WHERE trainer_availability_id = ? AND occurrence_date = ? ORDER BY start_time"
   ).all(trainer_availability_id, occurrence_date) as { start_time: string; reserved_minutes: number }[];
   return rows;
+}
+
+/** Bookings for any of the given availability rows (e.g. a contiguous chain). */
+export function getBookingsForBlocks(
+  db: ReturnType<typeof getDb>,
+  trainer_availability_ids: number[],
+  occurrence_date: string
+): { start_time: string; reserved_minutes: number }[] {
+  const ids = [...new Set(trainer_availability_ids)].filter((id) => id > 0);
+  if (ids.length === 0) return [];
+  if (ids.length === 1) return getBookingsForBlock(db, ids[0], occurrence_date);
+  const placeholders = ids.map(() => "?").join(",");
+  return db
+    .prepare(
+      `SELECT start_time, reserved_minutes FROM pt_trainer_specific_bookings WHERE trainer_availability_id IN (${placeholders}) AND occurrence_date = ? ORDER BY start_time`
+    )
+    .all(...ids, occurrence_date) as { start_time: string; reserved_minutes: number }[];
 }
 
 /** Get free intervals in a block (in minutes from midnight). Optionally merge in unavailable ranges (e.g. { startMin, endMin }[]). */
