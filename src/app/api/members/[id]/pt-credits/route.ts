@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../../lib/db";
-import { ensurePTSlotTables, getPTCreditBalances, normalizePtDurationMinutes } from "../../../../../lib/pt-slots";
+import { ensurePTSlotTables, getPTCreditBalance, getPTCreditBalances, normalizePtDurationMinutes } from "../../../../../lib/pt-slots";
 import { getAdminMemberId } from "../../../../../lib/admin";
 
 export const dynamic = "force-dynamic";
@@ -44,8 +44,9 @@ export async function GET(
 }
 
 /**
- * POST: grant PT credits manually. Body: { duration_minutes: number, amount: number, note?: string }
- * Admin only. Adds positive amount to pt_credit_ledger for that duration bucket.
+ * POST: grant or remove PT credits. Body:
+ * { action?: 'grant' | 'remove', duration_minutes: number, amount: number, note?: string }
+ * Admin only. Grant adds positive rows; remove inserts negative amount up to balance for that duration.
  */
 export async function POST(
   request: NextRequest,
@@ -57,12 +58,15 @@ export async function POST(
   }
 
   const id = (await params).id;
-  let body: { duration_minutes?: unknown; amount?: unknown; note?: unknown };
+  let body: { action?: unknown; duration_minutes?: unknown; amount?: unknown; note?: unknown };
   try {
-    body = (await request.json()) as { duration_minutes?: unknown; amount?: unknown; note?: unknown };
+    body = (await request.json()) as { action?: unknown; duration_minutes?: unknown; amount?: unknown; note?: unknown };
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
+
+  const actionRaw = typeof body.action === "string" ? body.action.trim().toLowerCase() : "";
+  const action = actionRaw === "remove" ? "remove" : "grant";
 
   const duration_minutes = normalizePtDurationMinutes(body.duration_minutes, 0);
   if (duration_minutes <= 0) {
@@ -85,21 +89,42 @@ export async function POST(
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
     }
 
-    ensurePTSlotTables(db);
-    const reason = noteRaw
-      ? `Admin grant (${noteRaw})`
-      : "Admin grant";
     const reference_id = `admin:${adminId}:${Date.now()}`;
-    db.prepare(
-      `INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id)
-       VALUES (?, ?, ?, ?, 'admin_grant', ?)`
-    ).run(memberId, duration_minutes, amount, reason, reference_id);
+    let removedInfo: { duration_minutes: number; amount: number } | undefined;
+    let grantedInfo: { duration_minutes: number; amount: number } | undefined;
+
+    if (action === "remove") {
+      const balance = getPTCreditBalance(db, memberId, duration_minutes);
+      if (balance <= 0) {
+        db.close();
+        return NextResponse.json({ error: `No ${duration_minutes}-minute PT credits to remove.` }, { status: 400 });
+      }
+      const take = Math.min(amount, balance);
+      const reason = noteRaw ? `Admin remove (${noteRaw})` : "Admin remove";
+      db.prepare(
+        `INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id)
+         VALUES (?, ?, ?, ?, 'admin_remove', ?)`
+      ).run(memberId, duration_minutes, -take, reason, reference_id);
+      removedInfo = { duration_minutes, amount: take };
+    } else {
+      const reason = noteRaw ? `Admin grant (${noteRaw})` : "Admin grant";
+      db.prepare(
+        `INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id)
+         VALUES (?, ?, ?, ?, 'admin_grant', ?)`
+      ).run(memberId, duration_minutes, amount, reason, reference_id);
+      grantedInfo = { duration_minutes, amount };
+    }
 
     const balances = getPTCreditBalances(db, memberId);
     db.close();
-    return NextResponse.json({ ok: true, balances, granted: { duration_minutes, amount } });
+    return NextResponse.json({
+      ok: true,
+      balances,
+      ...(removedInfo ? { removed: removedInfo } : {}),
+      ...(grantedInfo ? { granted: grantedInfo } : {}),
+    });
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "Failed to grant PT credits" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to update PT credits" }, { status: 500 });
   }
 }

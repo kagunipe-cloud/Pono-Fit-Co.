@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { formatInAppTz, todayInAppTz, weekStartInAppTz, addDaysToDateStr } from "@/lib/app-timezone";
@@ -52,6 +52,19 @@ function parseTimeToMinutes(t: string): number {
   const h = parts[0] ?? 0;
   const m = parts[1] ?? 0;
   return (h % 24) * 60 + m;
+}
+
+/** Schedule tile + modal: show member name when we have it (API may send "First Last"). */
+function ptBookedMemberLabel(opts: {
+  memberName?: string | null;
+  memberId?: string | null;
+  paymentType?: string | null;
+  fallback?: string | null;
+}): string {
+  const name = (opts.memberName ?? "").trim();
+  const who = name || (opts.memberId ?? "").trim() || (opts.fallback ?? "").trim() || "Member";
+  if (opts.paymentType === "pay_on_arrival") return `Booked: ${who} · Pay on arrival`;
+  return `Booked: ${who}`;
 }
 
 function formatTime(minutes: number): string {
@@ -130,6 +143,8 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
   const [trainerBookSubmitting, setTrainerBookSubmitting] = useState(false);
   const [trainerBlockSubmitting, setTrainerBlockSubmitting] = useState(false);
   const [trainerHoldDescription, setTrainerHoldDescription] = useState("");
+  const trainerMemberSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const trainerMembersFetchAbortRef = useRef<AbortController | null>(null);
 
   // Recompute initial week when gym timezone loads/updates (SettingsContext fetches async)
   useEffect(() => {
@@ -493,21 +508,6 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
     }
   }
 
-  const trainerFilteredPickMembers = useMemo(() => {
-    const q = trainerBookMemberQuery.trim().toLowerCase();
-    if (!trainerPickMembers.length) return [];
-    if (!q) return trainerPickMembers.slice(0, 40);
-    return trainerPickMembers
-      .filter(
-        (m) =>
-          (m.first_name ?? "").toLowerCase().includes(q) ||
-          (m.last_name ?? "").toLowerCase().includes(q) ||
-          (m.email ?? "").toLowerCase().includes(q) ||
-          (m.member_id ?? "").toLowerCase().includes(q)
-      )
-      .slice(0, 40);
-  }, [trainerPickMembers, trainerBookMemberQuery]);
-
   useEffect(() => {
     if (!selectedSlot) {
       setTrainerBookMemberId("");
@@ -517,22 +517,64 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
       setTrainerBookDuration(60);
       setTrainerBookUseCredit(false);
       setTrainerHoldDescription("");
+      trainerMemberSearchTimerRef.current && clearTimeout(trainerMemberSearchTimerRef.current);
+      trainerMembersFetchAbortRef.current?.abort();
       return;
     }
-    if (!isTrainer) return;
+    if (!isTrainer || allowAdminEdit) return;
     const it = selectedSlot.item;
     if (it.type !== "pt_segment" || it.booked || it.unavailable) return;
     setTrainerBookMemberId("");
     setTrainerBookMemberQuery("");
+    setTrainerPickMembers([]);
     setTrainerBookDuration(60);
     setTrainerBookUseCredit(false);
-    setTrainerPickLoading(true);
-    fetch("/api/members")
-      .then((r) => r.json())
-      .then((list) => setTrainerPickMembers(Array.isArray(list) ? list.slice(0, 250) : []))
-      .catch(() => setTrainerPickMembers([]))
-      .finally(() => setTrainerPickLoading(false));
-  }, [selectedSlot, isTrainer]);
+  }, [selectedSlot, isTrainer, allowAdminEdit]);
+
+  useEffect(() => {
+    if (!selectedSlot || !isTrainer || allowAdminEdit) return;
+    const it = selectedSlot.item;
+    if (it.type !== "pt_segment" || it.booked || it.unavailable) return;
+
+    const q = trainerBookMemberQuery.trim();
+    if (q.length < 2) {
+      setTrainerPickMembers([]);
+      setTrainerPickLoading(false);
+      return;
+    }
+
+    if (trainerMemberSearchTimerRef.current) clearTimeout(trainerMemberSearchTimerRef.current);
+    trainerMemberSearchTimerRef.current = setTimeout(() => {
+      trainerMembersFetchAbortRef.current?.abort();
+      const ac = new AbortController();
+      trainerMembersFetchAbortRef.current = ac;
+      setTrainerPickLoading(true);
+      fetch(`/api/members?q=${encodeURIComponent(q)}`, { signal: ac.signal })
+        .then((r) => r.json())
+        .then((list) =>
+          setTrainerPickMembers(
+            Array.isArray(list)
+              ? list.map((m: { member_id: string; first_name: string | null; last_name: string | null; email: string | null }) => ({
+                  member_id: String(m.member_id),
+                  first_name: m.first_name,
+                  last_name: m.last_name,
+                  email: m.email,
+                }))
+              : []
+          )
+        )
+        .catch((e: Error & { name?: string }) => {
+          if (e.name !== "AbortError") setTrainerPickMembers([]);
+        })
+        .finally(() => {
+          if (!ac.signal.aborted) setTrainerPickLoading(false);
+        });
+    }, 320);
+
+    return () => {
+      if (trainerMemberSearchTimerRef.current) clearTimeout(trainerMemberSearchTimerRef.current);
+    };
+  }, [selectedSlot, isTrainer, allowAdminEdit, trainerBookMemberQuery]);
 
   async function handleTrainerQuickBlock() {
     if (!selectedSlot) return;
@@ -795,10 +837,21 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                               title={isMaster || isTrainer || allowAdminEdit ? (item.payment_type === "pay_on_arrival" ? `${item.member_name ?? "PT"} (pay on arrival)` : `${item.member_name ?? "PT"} (open — assign trainer)`) : "Unavailable"}
                             >
                               {(isMaster || isTrainer || allowAdminEdit) ? (
-                                <span className="text-xs truncate block w-full" title={item.member_name ?? "Booked"}>
-                                  {item.payment_type === "pay_on_arrival"
-                                    ? `Booked: ${item.trainer_name ?? "Open"} · Pay on arrival`
-                                    : `Booked: ${item.trainer_name ?? "Open"}`}
+                                <span
+                                  className="text-xs truncate block w-full"
+                                  title={ptBookedMemberLabel({
+                                    memberName: item.member_name,
+                                    memberId: item.member_id,
+                                    paymentType: item.payment_type,
+                                    fallback: item.trainer_name,
+                                  })}
+                                >
+                                  {ptBookedMemberLabel({
+                                    memberName: item.member_name,
+                                    memberId: item.member_id,
+                                    paymentType: item.payment_type,
+                                    fallback: item.trainer_name,
+                                  })}
                                 </span>
                               ) : null}
                             </div>
@@ -819,8 +872,21 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                                     {(item.description ?? "").trim() || "Blocked hold"}
                                   </span>
                                 ) : (isMaster || isTrainer || allowAdminEdit) ? (
-                                  <span className={`text-xs block truncate ${item.payment_type === "pay_on_arrival" ? "text-red-100" : "text-violet-100"}`} title={item.payment_type === "pay_on_arrival" ? `${item.member_name ?? "Booked"} (pay on arrival)` : `Booked: ${item.trainer}`}>
-                                    {item.payment_type === "pay_on_arrival" ? `${item.member_name ?? "Booked"} · Pay on arrival` : `Booked: ${item.trainer}`}
+                                  <span
+                                    className={`text-xs block truncate ${item.payment_type === "pay_on_arrival" ? "text-red-100" : "text-violet-100"}`}
+                                    title={ptBookedMemberLabel({
+                                      memberName: item.member_name,
+                                      memberId: item.member_id,
+                                      paymentType: item.payment_type,
+                                      fallback: item.trainer,
+                                    })}
+                                  >
+                                    {ptBookedMemberLabel({
+                                      memberName: item.member_name,
+                                      memberId: item.member_id,
+                                      paymentType: item.payment_type,
+                                      fallback: item.trainer,
+                                    })}
                                   </span>
                                 ) : null
                               ) : (
@@ -900,16 +966,17 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                 </li>
               )}
               {(isMaster || allowAdminEdit) && (
-                <li>
+                <li className="rounded-lg border border-stone-200 bg-stone-50/90 p-3 space-y-2">
+                  <span className="font-medium text-stone-800 block text-sm">Block time / holds</span>
                   <Link
                     href={
                       isTrainer && trainerDisplayName
                         ? `/admin/block-time?trainer=${encodeURIComponent(trainerDisplayName)}&day=${getDayOfWeek(selectedSlot.date)}&start=${selectedSlot.timeStr}&end=${timeMinutesToTimeString(parseTimeToMinutes(selectedSlot.timeStr) + SLOT_MINUTES)}`
                         : `/admin/block-time?day=${getDayOfWeek(selectedSlot.date)}&start=${selectedSlot.timeStr}&end=${timeMinutesToTimeString(parseTimeToMinutes(selectedSlot.timeStr) + SLOT_MINUTES)}`
                     }
-                    className="text-brand-600 hover:underline block"
+                    className="inline-flex items-center justify-center w-full py-2 rounded-lg bg-white border border-stone-300 text-stone-800 text-sm font-medium hover:bg-stone-100"
                   >
-                    Add blocked-off time (full editor)
+                    Block time (full editor)
                   </Link>
                 </li>
               )}
@@ -990,30 +1057,20 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                 </>
               )}
               {selectedSlot.item.type === "pt_segment" && !selectedSlot.item.booked && (isMaster || allowAdminEdit) && (
-                <li>
-                  <Link href={`/admin/book-pt-for-member?block=${selectedSlot.item.blockId}&date=${selectedSlot.date}&time=${selectedSlot.item.start_time}`} className="text-brand-600 hover:underline block">
-                    Assign PT (book for member)
+                <li className="rounded-lg border border-stone-200 bg-stone-50 p-3 space-y-2">
+                  <span className="font-medium text-stone-800 block">Book PT for a member</span>
+                  <p className="text-xs text-stone-600 leading-snug">
+                    Opens the full admin booking page — search any member, use credits, pay on arrival, or add to cart (same as Master schedule).
+                  </p>
+                  <Link
+                    href={`/admin/book-pt-for-member?block=${selectedSlot.item.blockId}&date=${selectedSlot.date}&time=${selectedSlot.item.start_time}`}
+                    className="block w-full py-2.5 rounded-lg bg-brand-600 text-white text-sm font-medium text-center hover:bg-brand-700"
+                  >
+                    Open booking page
                   </Link>
                 </li>
               )}
-              {selectedSlot.item.type === "pt_segment" && selectedSlot.item.unavailable && selectedSlot.item.unavailable_block_id != null && (isTrainer || allowAdminEdit) && (
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const id = selectedSlot.item.type === "pt_segment" ? selectedSlot.item.unavailable_block_id : undefined;
-                      if (id != null) {
-                        handleRemoveUnavailable(id);
-                        setSelectedSlot(null);
-                      }
-                    }}
-                    className="text-red-600 hover:underline"
-                  >
-                    Clear one-off hold (this blocked window)
-                  </button>
-                </li>
-              )}
-              {selectedSlot.item.type === "pt_segment" && !selectedSlot.item.booked && !selectedSlot.item.unavailable && isTrainer && (
+              {selectedSlot.item.type === "pt_segment" && !selectedSlot.item.booked && !selectedSlot.item.unavailable && isTrainer && !allowAdminEdit && (
                 <li className="rounded-lg border border-stone-200 bg-stone-50 p-3 space-y-2">
                   <span className="font-medium text-stone-800 block">Book PT for a member</span>
                   <span className="text-xs text-stone-600 block">
@@ -1024,17 +1081,26 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                     type="search"
                     value={trainerBookMemberQuery}
                     onChange={(e) => setTrainerBookMemberQuery(e.target.value)}
-                    placeholder="Name, email, or member ID"
+                    placeholder="Name, email, or member ID (type 2+ characters)"
                     className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
                   />
+                  <p className="text-[11px] text-stone-500">Searches the full member list (same as admin). Results appear after a short pause.</p>
                   <select
                     value={trainerBookMemberId}
                     onChange={(e) => setTrainerBookMemberId(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
                     disabled={trainerPickLoading}
                   >
-                    <option value="">{trainerPickLoading ? "Loading members…" : "— Select member —"}</option>
-                    {trainerFilteredPickMembers.map((m) => (
+                    <option value="">
+                      {trainerPickLoading
+                        ? "Searching…"
+                        : trainerBookMemberQuery.trim().length < 2
+                          ? "— Type 2+ letters to search —"
+                          : trainerPickMembers.length === 0
+                            ? "— No matches —"
+                            : "— Select member —"}
+                    </option>
+                    {trainerPickMembers.map((m) => (
                       <option key={m.member_id} value={m.member_id}>
                         {[m.first_name, m.last_name].filter(Boolean).join(" ").trim() || m.member_id}
                         {m.email ? ` · ${m.email}` : ""}
@@ -1075,10 +1141,35 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                   </button>
                 </li>
               )}
+              {selectedSlot.item.type === "pt_segment" && selectedSlot.item.unavailable && selectedSlot.item.unavailable_block_id != null && (isTrainer || allowAdminEdit) && (
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const id = selectedSlot.item.type === "pt_segment" ? selectedSlot.item.unavailable_block_id : undefined;
+                      if (id != null) {
+                        handleRemoveUnavailable(id);
+                        setSelectedSlot(null);
+                      }
+                    }}
+                    className="text-red-600 hover:underline text-sm"
+                  >
+                    Clear one-off hold (this blocked window)
+                  </button>
+                </li>
+              )}
               {selectedSlot.item.type === "pt_segment" && selectedSlot.item.booked && selectedSlot.item.booking_id != null && !selectedSlot.item.unavailable && (isMaster || allowAdminEdit || isTrainer) && (
                 <>
                   <li className="pt-2 mt-1 border-t border-stone-200 text-xs font-semibold uppercase tracking-wide text-stone-500">
                     Booked PT session
+                  </li>
+                  <li className="text-sm text-stone-800 font-medium">
+                    {ptBookedMemberLabel({
+                      memberName: selectedSlot.item.member_name,
+                      memberId: selectedSlot.item.member_id,
+                      paymentType: selectedSlot.item.payment_type,
+                      fallback: selectedSlot.item.trainer,
+                    })}
                   </li>
                   {selectedSlot.item.member_id ? (
                     <li>
@@ -1139,6 +1230,14 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                 <>
                   <li className="pt-2 mt-1 border-t border-stone-200 text-xs font-semibold uppercase tracking-wide text-stone-500">
                     Booked PT session
+                  </li>
+                  <li className="text-sm text-stone-800 font-medium">
+                    {ptBookedMemberLabel({
+                      memberName: selectedSlot.item.member_name,
+                      memberId: selectedSlot.item.member_id,
+                      paymentType: selectedSlot.item.payment_type,
+                      fallback: selectedSlot.item.trainer_name,
+                    })}
                   </li>
                   {selectedSlot.item.member_id ? (
                     <li>
@@ -1233,9 +1332,13 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                 </>
               )}
               {selectedSlot.item.type === "available" && (isMaster || allowAdminEdit) && (
-                <li>
-                  <Link href={`/admin/book-pt-for-member?date=${selectedSlot.date}&time=${selectedSlot.timeStr}`} className="text-brand-600 hover:underline block">
-                    Book PT (no preference)
+                <li className="rounded-lg border border-stone-200 bg-stone-50 p-3 space-y-2">
+                  <span className="font-medium text-stone-800 block text-sm">Book PT (no trainer preference)</span>
+                  <Link
+                    href={`/admin/book-pt-for-member?date=${selectedSlot.date}&time=${selectedSlot.timeStr}`}
+                    className="block w-full py-2.5 rounded-lg bg-brand-600 text-white text-sm font-medium text-center hover:bg-brand-700"
+                  >
+                    Open booking page
                   </Link>
                 </li>
               )}

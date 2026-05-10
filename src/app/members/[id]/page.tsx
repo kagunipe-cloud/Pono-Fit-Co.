@@ -95,6 +95,10 @@ export default function MemberDetailPage() {
   const [ptGrantNote, setPtGrantNote] = useState("");
   const [ptGrantSubmitting, setPtGrantSubmitting] = useState(false);
   const [ptGrantMessage, setPtGrantMessage] = useState<string | null>(null);
+  const [ptRemoveDuration, setPtRemoveDuration] = useState("");
+  const [ptRemoveAmount, setPtRemoveAmount] = useState(1);
+  const [ptRemoveNote, setPtRemoveNote] = useState("");
+  const [ptRemoveSubmitting, setPtRemoveSubmitting] = useState(false);
   const [dayPassGrantAmount, setDayPassGrantAmount] = useState(1);
   const [dayPassGrantNote, setDayPassGrantNote] = useState("");
   const [dayPassRemoveAmount, setDayPassRemoveAmount] = useState(1);
@@ -482,6 +486,7 @@ export default function MemberDetailPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          action: "grant",
           duration_minutes: dm,
           amount: amt,
           ...(ptGrantNote.trim() ? { note: ptGrantNote.trim() } : {}),
@@ -501,6 +506,49 @@ export default function MemberDetailPage() {
       setPtGrantMessage("Request failed.");
     } finally {
       setPtGrantSubmitting(false);
+    }
+  }
+
+  async function removePtCredits() {
+    const dm = parseInt(ptRemoveDuration, 10);
+    if (Number.isNaN(dm) || dm < 1 || dm > 24 * 60) {
+      setPtGrantMessage("Enter session length in minutes (1–1440) for credits to remove.");
+      return;
+    }
+    const bal = ptCreditBalances?.[dm] ?? 0;
+    if (bal <= 0) {
+      setPtGrantMessage(`No ${dm}-minute PT credits on file to remove.`);
+      return;
+    }
+    const amt = Math.max(1, Math.min(99, Math.min(Math.floor(ptRemoveAmount), bal)));
+    setPtGrantMessage(null);
+    setPtRemoveSubmitting(true);
+    try {
+      const res = await fetch(`/api/members/${id}/pt-credits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "remove",
+          duration_minutes: dm,
+          amount: amt,
+          ...(ptRemoveNote.trim() ? { note: ptRemoveNote.trim() } : {}),
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.balances) {
+        setPtCreditBalances(json.balances as Record<number, number>);
+        const took = (json.removed as { amount?: number } | undefined)?.amount ?? amt;
+        setPtGrantMessage(`Removed ${took}×${dm}-min credit(s).`);
+        setPtRemoveDuration("");
+        setPtRemoveAmount(1);
+        setPtRemoveNote("");
+      } else {
+        setPtGrantMessage(json.error ?? "Could not remove credits.");
+      }
+    } catch {
+      setPtGrantMessage("Request failed.");
+    } finally {
+      setPtRemoveSubmitting(false);
     }
   }
 
@@ -859,7 +907,7 @@ export default function MemberDetailPage() {
           <div className="pt-4 border-t border-stone-200/80">
             <h2 className="text-base font-semibold text-stone-800 mb-2">PT credits</h2>
             <p className="text-xs text-stone-600 mb-3">
-              Balances used when booking PT by session length. Grant one-off credits here (e.g. after a purchase that didn&apos;t record correctly).
+              Balances used when booking PT by session length. Grant or remove one-off credits here (e.g. purchase didn&apos;t record correctly, or a correction is needed).
             </p>
             {ptCreditBalances === null ? (
               <p className="text-sm text-stone-500">Loading balances…</p>
@@ -925,10 +973,64 @@ export default function MemberDetailPage() {
                   </button>
                 </div>
                 {ptGrantMessage && (
-                  <p className={`mt-3 text-sm ${ptGrantMessage.startsWith("Granted") ? "text-emerald-700" : "text-amber-700"}`}>
+                  <p
+                    className={`mt-3 text-sm ${
+                      ptGrantMessage.startsWith("Granted") || ptGrantMessage.startsWith("Removed")
+                        ? "text-emerald-700"
+                        : "text-amber-700"
+                    }`}
+                  >
                     {ptGrantMessage}
                   </p>
                 )}
+                <div className="mt-4 pt-4 border-t border-stone-200/80 flex flex-wrap items-end gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Session length to remove (minutes)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={1440}
+                      value={ptRemoveDuration}
+                      onChange={(e) => setPtRemoveDuration(e.target.value)}
+                      placeholder="e.g. 60"
+                      className="w-28 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Credits to remove</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={99}
+                      value={ptRemoveAmount}
+                      onChange={(e) => setPtRemoveAmount(Math.max(1, Math.min(99, parseInt(e.target.value, 10) || 1)))}
+                      className="w-20 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                    />
+                  </div>
+                  <div className="flex-1 min-w-[180px]">
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Note (optional)</label>
+                    <input
+                      type="text"
+                      value={ptRemoveNote}
+                      onChange={(e) => setPtRemoveNote(e.target.value)}
+                      placeholder="e.g. Entered in error"
+                      className="w-full px-2 py-1.5 rounded border border-stone-200 text-sm"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={removePtCredits}
+                    disabled={
+                      ptRemoveSubmitting ||
+                      ptGrantSubmitting ||
+                      ptCreditBalances === null ||
+                      Object.entries(ptCreditBalances).filter(([, n]) => n > 0).length === 0
+                    }
+                    className="px-4 py-2 rounded-lg border border-stone-300 bg-white text-stone-800 font-medium hover:bg-stone-50 disabled:opacity-50"
+                  >
+                    {ptRemoveSubmitting ? "Saving…" : "Remove credits"}
+                  </button>
+                </div>
               </>
             )}
           </div>

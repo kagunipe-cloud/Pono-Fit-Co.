@@ -4,7 +4,12 @@ import { getMemberIdFromSession } from "../../../../lib/session";
 import { getAdminMemberId, getTrainerMemberId } from "../../../../lib/admin";
 import { ensurePTSlotTables, getPTCreditBalance, normalizePtDurationMinutes, reservedMinutes } from "../../../../lib/pt-slots";
 import { ensureTrainerClient } from "../../../../lib/trainer-clients";
-import { getBlocksInRange, getFreeIntervals, getBookingsForBlock } from "../../../../lib/pt-availability";
+import {
+  getFreeIntervals,
+  getBookingsForBlock,
+  getUnavailableInRange,
+  getUnavailableRangesForBlock,
+} from "../../../../lib/pt-availability";
 import { timeToMinutes } from "../../../../lib/pt-slots";
 import {
   sendStaffEmail,
@@ -80,7 +85,13 @@ export async function POST(request: NextRequest) {
     }
 
     const bookings = getBookingsForBlock(db, trainer_availability_id, occurrence_date);
-    const free = getFreeIntervals(blockStart, blockEnd, bookings);
+    const unavailOccurrences = getUnavailableInRange(occurrence_date, occurrence_date);
+    const unavailRanges = getUnavailableRangesForBlock(
+      { trainer: block.trainer, start_time: block.start_time, end_time: block.end_time },
+      occurrence_date,
+      unavailOccurrences
+    );
+    const free = getFreeIntervals(blockStart, blockEnd, bookings, unavailRanges);
     const interval = free.find((iv) => startMin >= iv.startMin && startMin < iv.endMin);
     if (!interval) {
       db.close();
@@ -88,12 +99,17 @@ export async function POST(request: NextRequest) {
     }
 
     const remainingMinutes = interval.endMin - startMin;
-    if (remainingMinutes < session_duration_minutes) {
-      db.close();
-      return NextResponse.json({ error: "Not enough time left in this trainer availability block for the chosen duration" }, { status: 400 });
-    }
-
+    /** Must match INSERT below: 30→45, 60→75, 90→120 unless the free tail exactly equals session length. */
     const reserved_minutes = reservedMinutes(session_duration_minutes, remainingMinutes);
+    if (remainingMinutes < reserved_minutes) {
+      db.close();
+      return NextResponse.json(
+        {
+          error: `This slot does not have enough contiguous time for a ${session_duration_minutes}-min session. The schedule reserves ${reserved_minutes} minutes (including turnover), but only ${remainingMinutes} minutes are free here before the next booking, end of this trainer window, or a hold. Try an earlier time, a shorter session type, or use "Add to cart" to create an open booking (confirmed at payment) instead of locking this trainer block.`,
+        },
+        { status: 400 }
+      );
+    }
 
     if (use_credit && !pay_on_arrival) {
       const balance = getPTCreditBalance(db, member_id, session_duration_minutes);
