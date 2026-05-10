@@ -183,6 +183,124 @@ function dropStaleOldTypeConstraintSchemaArtifacts(db: AppDb): void {
   }
 }
 
+/**
+ * After a failed type migration, sqlite_master can still list FOREIGN KEY parents as
+ * workout_exercises_old_type_constraint / exercises_old_type_constraint. Runtime then throws
+ * "no such table" on INSERT even though app source no longer mentions those names.
+ */
+function rebuildWorkoutExercisesIfFkNamesOldBackup(db: AppDb): void {
+  const BAD = "exercises_old_type_constraint";
+  const meta = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='workout_exercises'`).get() as { sql?: string } | undefined;
+  if (!meta?.sql?.includes(BAD)) return;
+
+  console.warn("[workouts] Rebuilding workout_exercises (FK metadata still referenced exercises_old_type_constraint)");
+
+  const tmp = "workout_exercises__fk_parent_fix";
+  const srcCols = db.prepare(`PRAGMA table_info(workout_exercises)`).all() as { name: string }[];
+  const has = (n: string) => srcCols.some((c) => c.name === n);
+
+  const job = db.transaction(() => {
+    db.exec(`DROP TABLE IF EXISTS "${tmp}"`);
+    db.exec(`
+      CREATE TABLE "${tmp}" (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workout_id INTEGER NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('lift', 'cardio', 'stretch')),
+        exercise_name TEXT NOT NULL,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        exercise_id INTEGER REFERENCES exercises(id),
+        use_for_my_1rm INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (workout_id) REFERENCES workouts(id) ON DELETE CASCADE
+      );
+    `);
+    const dest = ["id", "workout_id", "type", "exercise_name", "sort_order", "exercise_id", "use_for_my_1rm"] as const;
+    const selectSql = dest
+      .map((c) => {
+        if (!has(c)) {
+          if (c === "exercise_id") return "NULL";
+          if (c === "use_for_my_1rm") return "0";
+          throw new Error(`rebuildWorkoutExercisesIfFkNamesOldBackup: missing column ${c}`);
+        }
+        if (c === "use_for_my_1rm") return "coalesce(use_for_my_1rm, 0)";
+        return c;
+      })
+      .join(", ");
+    db.exec(`INSERT INTO "${tmp}" (${dest.join(", ")}) SELECT ${selectSql} FROM workout_exercises`);
+    db.exec(`DROP TABLE workout_exercises`);
+    db.exec(`ALTER TABLE "${tmp}" RENAME TO workout_exercises`);
+  });
+
+  db.exec("PRAGMA foreign_keys = OFF");
+  try {
+    job.exclusive();
+  } catch (err) {
+    console.error("[workouts] rebuildWorkoutExercisesIfFkNamesOldBackup failed", err);
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+}
+
+function rebuildWorkoutSetsIfFkNamesOldBackup(db: AppDb): void {
+  const BAD = "workout_exercises_old_type_constraint";
+  const meta = db.prepare(`SELECT sql FROM sqlite_master WHERE type='table' AND name='workout_sets'`).get() as { sql?: string } | undefined;
+  if (!meta?.sql?.includes(BAD)) return;
+
+  console.warn("[workouts] Rebuilding workout_sets (FK metadata still referenced workout_exercises_old_type_constraint)");
+
+  const tmp = "workout_sets__fk_parent_fix";
+  const cols = db.prepare(`PRAGMA table_info(workout_sets)`).all() as { name: string }[];
+  const has = (n: string) => cols.some((c) => c.name === n);
+  if (!has("workout_exercise_id")) {
+    console.error("[workouts] rebuildWorkoutSetsIfFkNamesOldBackup: workout_sets missing workout_exercise_id");
+    return;
+  }
+
+  const job = db.transaction(() => {
+    db.exec(`DROP TABLE IF EXISTS "${tmp}"`);
+    db.exec(`
+      CREATE TABLE "${tmp}" (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        workout_exercise_id INTEGER NOT NULL,
+        reps INTEGER,
+        weight_kg REAL,
+        time_seconds INTEGER,
+        distance_km REAL,
+        set_order INTEGER NOT NULL DEFAULT 0,
+        drop_index INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (workout_exercise_id) REFERENCES workout_exercises(id) ON DELETE CASCADE
+      );
+    `);
+    const idSel = has("id") ? "id" : "NULL";
+    const repsSel = has("reps") ? "reps" : "NULL";
+    const wSel = has("weight_kg") ? "weight_kg" : "NULL";
+    const tSel = has("time_seconds") ? "time_seconds" : "NULL";
+    const dSel = has("distance_km") ? "distance_km" : "NULL";
+    const orderSel = has("set_order") ? "coalesce(set_order, 0)" : "0";
+    const dropSel = has("drop_index") ? "coalesce(drop_index, 0)" : "0";
+    db.exec(`
+      INSERT INTO "${tmp}" (id, workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index)
+      SELECT ${idSel}, workout_exercise_id, ${repsSel}, ${wSel}, ${tSel}, ${dSel}, ${orderSel}, ${dropSel}
+      FROM workout_sets
+    `);
+    db.exec(`DROP TABLE workout_sets`);
+    db.exec(`ALTER TABLE "${tmp}" RENAME TO workout_sets`);
+  });
+
+  db.exec("PRAGMA foreign_keys = OFF");
+  try {
+    job.exclusive();
+  } catch (err) {
+    console.error("[workouts] rebuildWorkoutSetsIfFkNamesOldBackup failed", err);
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
+  }
+}
+
+function repairFksPointingAtOldTypeConstraintBackups(db: AppDb): void {
+  rebuildWorkoutExercisesIfFkNamesOldBackup(db);
+  rebuildWorkoutSetsIfFkNamesOldBackup(db);
+}
+
 function migrateExerciseTypeConstraint(db: AppDb, table: "exercises" | "workout_exercises"): void {
   withExclusiveWorkoutTypeMigrateLock(() => {
     repairOrphanExerciseTypeBackupTable(db, table);
@@ -457,6 +575,7 @@ export function ensureWorkoutTables(db: AppDb) {
     CREATE INDEX IF NOT EXISTS idx_workout_sets_exercise ON workout_sets(workout_exercise_id);
   `);
   migrateExerciseTypeConstraint(db, "workout_exercises");
+  repairFksPointingAtOldTypeConstraintBackups(db);
   db.prepare("CREATE INDEX IF NOT EXISTS idx_workout_exercises_workout ON workout_exercises(workout_id)").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_workout_sets_exercise ON workout_sets(workout_exercise_id)").run();
 
