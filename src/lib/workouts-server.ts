@@ -7,6 +7,8 @@ import { DATABASE_FILE_PATH } from "./database-path";
 type AppDb = Database;
 
 const EXERCISE_TYPE_BACKUP_SUFFIX = "_old_type_constraint";
+/** Intermediate name for copy-out CHECK migration (avoids rename-to-backup races). */
+const STRETCH_REBUILD_SUFFIX = "__stretch_rebuild_tmp";
 
 const WORKOUT_TYPE_MIGRATE_LOCK = `${DATABASE_FILE_PATH}.workout-type-migrate.lock`;
 const LOCK_STALE_MS = 15 * 60 * 1000;
@@ -101,6 +103,14 @@ function repairOrphanExerciseTypeBackupTable(db: AppDb, table: "exercises" | "wo
   }
 }
 
+function dropOrphanStretchRebuildTable(db: AppDb, table: "exercises" | "workout_exercises"): void {
+  try {
+    db.prepare(`DROP TABLE IF EXISTS "${table}${STRETCH_REBUILD_SUFFIX}"`).run();
+  } catch {
+    /* ignore */
+  }
+}
+
 function migrateExerciseTypeConstraint(db: AppDb, table: "exercises" | "workout_exercises"): void {
   withExclusiveWorkoutTypeMigrateLock(() => {
     repairOrphanExerciseTypeBackupTable(db, table);
@@ -109,21 +119,24 @@ function migrateExerciseTypeConstraint(db: AppDb, table: "exercises" | "workout_
       .get(table) as { sql?: string } | undefined;
     if (!row?.sql || row.sql.includes("'stretch'")) {
       repairOrphanExerciseTypeBackupTable(db, table);
+      dropOrphanStretchRebuildTable(db, table);
       return;
     }
 
-    const tempTable = `${table}${EXERCISE_TYPE_BACKUP_SUFFIX}`;
+    const legacyBackup = `${table}${EXERCISE_TYPE_BACKUP_SUFFIX}`;
+    const rebuild = `${table}${STRETCH_REBUILD_SUFFIX}`;
 
-    // BEGIN EXCLUSIVE keeps other connections from racing this rename/copy/drop sequence.
+    // Copy live table → new schema → swap. Source keeps its real name until DROP, so nothing
+    // references *_old_type_constraint during the migration (eliminates that failure mode).
     const job = db.transaction(() => {
-      db.prepare(`ALTER TABLE "${table}" RENAME TO "${tempTable}"`).run();
+      db.prepare(`DROP TABLE IF EXISTS "${rebuild}"`).run();
 
-      const tempCols = db.prepare(`PRAGMA table_info("${tempTable}")`).all() as { name: string }[];
-      const has = (n: string) => tempCols.some((c) => c.name === n);
+      const srcCols = db.prepare(`PRAGMA table_info("${table}")`).all() as { name: string }[];
+      const has = (n: string) => srcCols.some((c) => c.name === n);
 
       if (table === "exercises") {
         db.exec(`
-          CREATE TABLE exercises (
+          CREATE TABLE "${rebuild}" (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             type TEXT NOT NULL CHECK (type IN ('lift', 'cardio', 'stretch')),
@@ -155,10 +168,10 @@ function migrateExerciseTypeConstraint(db: AppDb, table: "exercises" | "workout_
             return "NULL";
           })
           .join(", ");
-        db.exec(`INSERT INTO exercises (${dest.join(", ")}) SELECT ${selectSql} FROM "${tempTable}"`);
+        db.exec(`INSERT INTO "${rebuild}" (${dest.join(", ")}) SELECT ${selectSql} FROM "${table}"`);
       } else {
         db.exec(`
-          CREATE TABLE workout_exercises (
+          CREATE TABLE "${rebuild}" (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             workout_id INTEGER NOT NULL,
             type TEXT NOT NULL CHECK (type IN ('lift', 'cardio', 'stretch')),
@@ -183,16 +196,17 @@ function migrateExerciseTypeConstraint(db: AppDb, table: "exercises" | "workout_
             if (!has(c)) {
               if (c === "exercise_id") return "NULL";
               if (c === "use_for_my_1rm") return "0";
-              throw new Error(`migrateExerciseTypeConstraint: "${tempTable}" missing required column ${c}`);
+              throw new Error(`migrateExerciseTypeConstraint: "${table}" missing required column ${c}`);
             }
             if (c === "use_for_my_1rm") return "coalesce(use_for_my_1rm, 0)";
             return c;
           })
           .join(", ");
-        db.exec(`INSERT INTO workout_exercises (${dest.join(", ")}) SELECT ${selectSql} FROM "${tempTable}"`);
+        db.exec(`INSERT INTO "${rebuild}" (${dest.join(", ")}) SELECT ${selectSql} FROM "${table}"`);
       }
 
-      db.prepare(`DROP TABLE "${tempTable}"`).run();
+      db.prepare(`DROP TABLE "${table}"`).run();
+      db.prepare(`ALTER TABLE "${rebuild}" RENAME TO "${table}"`).run();
     });
 
     db.exec("PRAGMA foreign_keys = OFF");
@@ -202,12 +216,18 @@ function migrateExerciseTypeConstraint(db: AppDb, table: "exercises" | "workout_
       console.error(`[workouts] migrateExerciseTypeConstraint(${table})`, err);
       try {
         repairOrphanExerciseTypeBackupTable(db, table);
-        const stillTemp =
-          (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(tempTable) as { name?: string } | undefined) != null;
-        const stillMain =
-          (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) as { name?: string } | undefined) != null;
-        if (stillTemp && !stillMain) {
-          db.prepare(`ALTER TABLE "${tempTable}" RENAME TO "${table}"`).run();
+        db.exec("PRAGMA foreign_keys = OFF");
+        try {
+          db.prepare(`DROP TABLE IF EXISTS "${rebuild}"`).run();
+          const stillLegacy =
+            (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(legacyBackup) as { name?: string } | undefined) != null;
+          const stillMain =
+            (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) as { name?: string } | undefined) != null;
+          if (stillLegacy && !stillMain) {
+            db.prepare(`ALTER TABLE "${legacyBackup}" RENAME TO "${table}"`).run();
+          }
+        } finally {
+          db.exec("PRAGMA foreign_keys = ON");
         }
       } catch (rollbackErr) {
         console.error(`[workouts] migrateExerciseTypeConstraint rollback (${table})`, rollbackErr);
@@ -242,6 +262,8 @@ export function ensureWorkoutTables(db: AppDb) {
 
   repairOrphanExerciseTypeBackupTable(db, "exercises");
   repairOrphanExerciseTypeBackupTable(db, "workout_exercises");
+  dropOrphanStretchRebuildTable(db, "exercises");
+  dropOrphanStretchRebuildTable(db, "workout_exercises");
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS workouts (
