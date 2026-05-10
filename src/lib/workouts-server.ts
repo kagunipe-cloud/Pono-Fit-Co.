@@ -107,10 +107,14 @@ function migrateExerciseTypeConstraint(db: AppDb, table: "exercises" | "workout_
     const row = db
       .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?")
       .get(table) as { sql?: string } | undefined;
-    if (!row?.sql || row.sql.includes("'stretch'")) return;
+    if (!row?.sql || row.sql.includes("'stretch'")) {
+      repairOrphanExerciseTypeBackupTable(db, table);
+      return;
+    }
 
     const tempTable = `${table}${EXERCISE_TYPE_BACKUP_SUFFIX}`;
 
+    // BEGIN EXCLUSIVE keeps other connections from racing this rename/copy/drop sequence.
     const job = db.transaction(() => {
       db.prepare(`ALTER TABLE "${table}" RENAME TO "${tempTable}"`).run();
 
@@ -193,7 +197,7 @@ function migrateExerciseTypeConstraint(db: AppDb, table: "exercises" | "workout_
 
     db.exec("PRAGMA foreign_keys = OFF");
     try {
-      job();
+      job.exclusive();
     } catch (err) {
       console.error(`[workouts] migrateExerciseTypeConstraint(${table})`, err);
       try {

@@ -155,6 +155,11 @@ export function getDb() {
     }
   }
   const db = new Database(dbPath);
+  try {
+    db.pragma("busy_timeout = 10000");
+  } catch {
+    /* ignore */
+  }
   ensureGymsTable(db);
   ensureBaseSchema(db);
   ensureSalesSaleDateColumn(db);
