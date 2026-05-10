@@ -78,21 +78,59 @@ function repairOrphanExerciseTypeBackupTable(db: AppDb, table: "exercises" | "wo
   db.exec("PRAGMA foreign_keys = OFF");
   try {
     if (!main) {
-      db.prepare(`ALTER TABLE "${tempTable}" RENAME TO "${table}"`).run();
+      try {
+        db.prepare(`ALTER TABLE "${tempTable}" RENAME TO "${table}"`).run();
+      } catch (err) {
+        console.error(`[workouts] repairOrphanExerciseTypeBackupTable: rename ${tempTable} → ${table}`, err);
+        try {
+          db.prepare(`DROP TABLE IF EXISTS "${tempTable}"`).run();
+        } catch {
+          /* ignore */
+        }
+      }
       return;
     }
-    const mainCount = db.prepare(`SELECT COUNT(*) AS n FROM "${table}"`).get() as { n: number };
-    if (!mainCount.n) {
-      db.prepare(`DROP TABLE "${table}"`).run();
-      db.prepare(`ALTER TABLE "${tempTable}" RENAME TO "${table}"`).run();
+    let mainCount: number;
+    try {
+      mainCount = (db.prepare(`SELECT COUNT(*) AS n FROM "${table}"`).get() as { n: number }).n;
+    } catch (err) {
+      console.error(`[workouts] repairOrphanExerciseTypeBackupTable: count "${table}"`, err);
       return;
     }
-    const tempCount = db.prepare(`SELECT COUNT(*) AS n FROM "${tempTable}"`).get() as { n: number };
-    if (tempCount.n === 0) {
+    if (!mainCount) {
+      try {
+        db.prepare(`DROP TABLE "${table}"`).run();
+        db.prepare(`ALTER TABLE "${tempTable}" RENAME TO "${table}"`).run();
+      } catch (err) {
+        console.error(`[workouts] repairOrphanExerciseTypeBackupTable: replace empty "${table}"`, err);
+        try {
+          db.prepare(`DROP TABLE IF EXISTS "${tempTable}"`).run();
+        } catch {
+          /* ignore */
+        }
+      }
+      return;
+    }
+    let tempCount: number;
+    try {
+      tempCount = (db.prepare(`SELECT COUNT(*) AS n FROM "${tempTable}"`).get() as { n: number }).n;
+    } catch (err) {
+      console.error(
+        `[workouts] repairOrphanExerciseTypeBackupTable: orphan sqlite_master row for "${tempTable}" (table missing); cleaning up`,
+        err
+      );
+      try {
+        db.prepare(`DROP TABLE IF EXISTS "${tempTable}"`).run();
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    if (tempCount === 0) {
       db.prepare(`DROP TABLE "${tempTable}"`).run();
     } else {
       console.warn(
-        `[workouts] Both "${table}" and "${tempTable}" have rows; dropping backup (${tempCount.n} rows). If data looks wrong, restore from backup DB.`
+        `[workouts] Both "${table}" and "${tempTable}" have rows; dropping backup (${tempCount} rows). If data looks wrong, restore from backup DB.`
       );
       db.prepare(`DROP TABLE "${tempTable}"`).run();
     }
@@ -108,6 +146,40 @@ function dropOrphanStretchRebuildTable(db: AppDb, table: "exercises" | "workout_
     db.prepare(`DROP TABLE IF EXISTS "${table}${STRETCH_REBUILD_SUFFIX}"`).run();
   } catch {
     /* ignore */
+  }
+}
+
+/** Remove triggers/views/indexes whose SQL still references legacy backup table names (can cause SQLITE_ERROR after a failed migration). */
+function dropStaleOldTypeConstraintSchemaArtifacts(db: AppDb): void {
+  const n1 = "workout_exercises_old_type_constraint";
+  const n2 = "exercises_old_type_constraint";
+  const rows = db
+    .prepare(
+      `SELECT type, name FROM sqlite_master
+       WHERE sql IS NOT NULL AND (instr(sql, ?) > 0 OR instr(sql, ?) > 0)`
+    )
+    .all(n1, n2) as { type: string; name: string }[];
+  if (!rows.length) return;
+
+  db.exec("PRAGMA foreign_keys = OFF");
+  try {
+    for (const { type, name } of rows) {
+      try {
+        if (type === "trigger") {
+          db.exec(`DROP TRIGGER IF EXISTS "${name}"`);
+        } else if (type === "view") {
+          db.exec(`DROP VIEW IF EXISTS "${name}"`);
+        } else if (type === "index") {
+          db.exec(`DROP INDEX IF EXISTS "${name}"`);
+        } else if (type === "table" && (name === n1 || name === n2)) {
+          db.exec(`DROP TABLE IF EXISTS "${name}"`);
+        }
+      } catch (err) {
+        console.error(`[workouts] dropStaleOldTypeConstraintSchemaArtifacts ${type} "${name}"`, err);
+      }
+    }
+  } finally {
+    db.exec("PRAGMA foreign_keys = ON");
   }
 }
 
@@ -239,6 +311,8 @@ function migrateExerciseTypeConstraint(db: AppDb, table: "exercises" | "workout_
 }
 
 export function ensureWorkoutTables(db: AppDb) {
+  dropStaleOldTypeConstraintSchemaArtifacts(db);
+
   try {
     const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='workouts'").get() as { sql: string } | undefined;
     if (tableInfo?.sql?.includes("REFERENCES members")) {
