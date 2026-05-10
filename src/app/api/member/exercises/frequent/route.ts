@@ -5,7 +5,7 @@ import { exerciseSearchScore, type ExerciseStat } from "@/lib/exercise-search-ra
 import { getMemberIdFromSession } from "@/lib/session";
 import { getCanonicalPrimaryMuscles, getMuscleGroup } from "@/lib/muscle-groups";
 import { canAccessMemberExerciseStats } from "@/lib/member-exercise-access";
-import { ensureWorkoutTables } from "@/lib/workouts";
+import { ensureWorkoutTables } from "@/lib/workouts-server";
 
 export const dynamic = "force-dynamic";
 

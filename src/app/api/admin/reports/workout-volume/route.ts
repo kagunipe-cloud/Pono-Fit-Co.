@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
 import { startOfDayInTz, endOfDayInTz } from "@/lib/app-timezone";
-import { ensureWorkoutTables } from "@/lib/workouts";
+import { ensureWorkoutTables } from "@/lib/workouts-server";
 
 export const dynamic = "force-dynamic";
 

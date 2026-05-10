@@ -3,7 +3,7 @@ import path from "path";
 import fs from "fs";
 import { getDb } from "@/lib/db";
 import { getCanonicalPrimaryMuscles, getMuscleGroup } from "@/lib/muscle-groups";
-import { ensureWorkoutTables } from "@/lib/workouts";
+import { ensureWorkoutTables } from "@/lib/workouts-server";
 import { normalizeForMatch } from "@/lib/exercise-name-normalize";
 
 export const dynamic = "force-dynamic";

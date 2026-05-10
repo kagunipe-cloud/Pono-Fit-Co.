@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getTrainerMemberId } from "@/lib/admin";
 import { isTimedExerciseType, parseExerciseType, type ExerciseType } from "@/lib/exercise-types";
-import { ensureWorkoutTables } from "@/lib/workouts";
+import { ensureWorkoutTables } from "@/lib/workouts-server";
 import { getMuscleGroup } from "@/lib/muscle-groups";
 
 export const dynamic = "force-dynamic";

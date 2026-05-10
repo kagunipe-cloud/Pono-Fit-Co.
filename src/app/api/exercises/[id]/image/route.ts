@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import fs from "fs";
 import { getDb } from "@/lib/db";
-import { ensureWorkoutTables } from "@/lib/workouts";
+import { ensureWorkoutTables } from "@/lib/workouts-server";
 
 export const dynamic = "force-dynamic";
 

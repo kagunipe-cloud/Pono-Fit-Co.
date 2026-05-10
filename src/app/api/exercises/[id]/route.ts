@@ -3,7 +3,7 @@ import { getAdminMemberId } from "@/lib/admin";
 import { getDb } from "@/lib/db";
 import { parseExerciseType } from "@/lib/exercise-types";
 import { getMuscleGroup, MUSCLE_GROUP_LABELS } from "@/lib/muscle-groups";
-import { ensureWorkoutTables } from "@/lib/workouts";
+import { ensureWorkoutTables } from "@/lib/workouts-server";
 
 export const dynamic = "force-dynamic";
 

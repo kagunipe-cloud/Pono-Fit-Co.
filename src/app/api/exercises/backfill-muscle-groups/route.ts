@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { BULGARIAN_SPLIT_SQUAT_MUSCLES, getCanonicalPrimaryMuscles, getMuscleGroup } from "@/lib/muscle-groups";
-import { ensureWorkoutTables } from "@/lib/workouts";
+import { ensureWorkoutTables } from "@/lib/workouts-server";
 
 export const dynamic = "force-dynamic";
 

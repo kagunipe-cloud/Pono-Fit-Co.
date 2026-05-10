@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getMemberIdFromSession } from "@/lib/session";
-import { ensureWorkoutTables, estimate1RM } from "@/lib/workouts";
+import { ensureWorkoutTables } from "@/lib/workouts-server";
+import { estimate1RM } from "@/lib/workout-units";
 
 export const dynamic = "force-dynamic";
 

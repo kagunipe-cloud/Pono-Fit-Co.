@@ -6,7 +6,7 @@ import { blendRankedWithNeverTried, exerciseSearchScore, type ExerciseStat } fro
 import { getCanonicalPrimaryMuscles, getMuscleGroup, MUSCLE_GROUP_LABELS } from "@/lib/muscle-groups";
 import { canAccessMemberExerciseStats } from "@/lib/member-exercise-access";
 import { getMemberIdFromSession } from "@/lib/session";
-import { ensureWorkoutTables } from "@/lib/workouts";
+import { ensureWorkoutTables } from "@/lib/workouts-server";
 
 export const dynamic = "force-dynamic";
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../../../lib/db";
 import { getTrainerMemberId, getAdminMemberId } from "../../../../../../lib/admin";
-import { ensureWorkoutTables } from "../../../../../../lib/workouts";
+import { ensureWorkoutTables } from "@/lib/workouts-server";
 import { ensureTrainerClientsTable } from "../../../../../../lib/trainer-clients";
 
 export const dynamic = "force-dynamic";

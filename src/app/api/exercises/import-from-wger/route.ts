@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getCanonicalPrimaryMuscles, getMuscleGroup, getMuscleGroupFromCategory } from "@/lib/muscle-groups";
-import { ensureWorkoutTables } from "@/lib/workouts";
+import { ensureWorkoutTables } from "@/lib/workouts-server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;

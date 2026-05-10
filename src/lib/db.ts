@@ -1,6 +1,9 @@
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
+import { DATABASE_FILE_PATH } from "./database-path";
+
+export { DATABASE_FILE_PATH };
 import { normalizeDateToYMD } from "./app-timezone";
 import { ensureTrainersTable } from "./trainers";
 import { ensureTrainerClientsTable } from "./trainer-clients";
@@ -9,8 +12,6 @@ import { ensureClientGoalsTable } from "./client-goals";
 import { ensureGymsTable } from "./gyms";
 import { MEMBER_RETAIL_SELF_CHECKOUT_KEY } from "./retail-products";
 
-/** Absolute path to the main SQLite DB (used for cross-process locks in migrations). */
-export const DATABASE_FILE_PATH = path.join(process.cwd(), "data", "the-fox-says.db");
 const dbPath = DATABASE_FILE_PATH;
 const restorePendingPath = path.join(process.cwd(), "data", "restore-pending.db");
 
