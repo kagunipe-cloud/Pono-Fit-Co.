@@ -260,6 +260,7 @@ export async function POST(request: NextRequest) {
     const ptBookingEvents: {
       member_id: string;
       trainerName: string | null;
+      trainer_member_id?: string | null;
       session_name: string;
       date: string;
       time: string;
@@ -397,6 +398,7 @@ export async function POST(request: NextRequest) {
                 date: slot.date,
                 time: slot.start_time,
                 trainerName: trainerDisplayForMember,
+                trainer_member_id: trainerMemberId,
               });
               if (trainerMemberId) {
                 ensureTrainerClient(db, trainerMemberId, member_id);
@@ -717,24 +719,34 @@ export async function POST(request: NextRequest) {
             const staffSubject = `PT booking: ${memberName} → ${ev.session_name}`;
             const staffBody = `${memberName} booked ${ev.session_name} on ${whenStr || ev.date}.`;
             await sendStaffEmail(staffSubject, staffBody);
-            const trainerName = (ev.trainerName ?? "").trim();
-            if (trainerName) {
+            const tid = (ev.trainer_member_id ?? "").trim();
+            let trainerEmail: string | undefined;
+            if (tid) {
               const dbt = getDb();
-              const trainerRow = dbt
-                .prepare(
-                  `SELECT m.email
-                   FROM trainers t
-                   JOIN members m ON m.member_id = t.member_id
-                   WHERE TRIM(COALESCE(m.first_name, '') || ' ' || COALESCE(m.last_name, '')) = ?`
-                )
-                .get(trainerName) as { email: string | null } | undefined;
+              const row = dbt.prepare("SELECT email FROM members WHERE member_id = ?").get(tid) as { email: string | null } | undefined;
               dbt.close();
-              const trainerEmail = trainerRow?.email?.trim();
-              if (trainerEmail) {
-                const trainerSubject = `New PT booking with ${memberName}`;
-                const trainerBody = `${memberName} booked ${ev.session_name} with you on ${whenStr || ev.date}.`;
-                await sendMemberEmail(trainerEmail, trainerSubject, trainerBody);
+              trainerEmail = row?.email?.trim();
+            }
+            if (!trainerEmail) {
+              const trainerName = (ev.trainerName ?? "").trim();
+              if (trainerName) {
+                const dbt = getDb();
+                const trainerRow = dbt
+                  .prepare(
+                    `SELECT m.email
+                     FROM trainers t
+                     JOIN members m ON m.member_id = t.member_id
+                     WHERE TRIM(COALESCE(m.first_name, '') || ' ' || COALESCE(m.last_name, '')) = ?`
+                  )
+                  .get(trainerName) as { email: string | null } | undefined;
+                dbt.close();
+                trainerEmail = trainerRow?.email?.trim();
               }
+            }
+            if (trainerEmail) {
+              const trainerSubject = `New PT booking with ${memberName}`;
+              const trainerBody = `${memberName} booked ${ev.session_name} with you on ${whenStr || ev.date}.`;
+              await sendMemberEmail(trainerEmail, trainerSubject, trainerBody);
             }
           }
         } catch (err) {

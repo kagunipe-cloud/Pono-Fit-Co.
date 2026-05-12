@@ -119,22 +119,34 @@ export async function POST(request: NextRequest) {
       const staffBody = `${memberName} booked ${displaySessionName} on ${whenStr}.`;
       sendStaffEmail(staffSubject, staffBody).catch(() => {});
 
-      const trainerName = (session.trainer ?? "").trim();
-      if (trainerName) {
-        const trainerRow = db
-          .prepare(
-            `SELECT m.email, m.first_name, m.last_name
-             FROM trainers t
-             JOIN members m ON m.member_id = t.member_id
-             WHERE TRIM(COALESCE(m.first_name, '') || ' ' || COALESCE(m.last_name, '')) = ?`
-          )
-          .get(trainerName) as { email: string | null; first_name: string | null; last_name: string | null } | undefined;
-        const trainerEmail = trainerRow?.email?.trim();
-        if (trainerEmail) {
-          const trainerSubject = `New PT booking with ${memberName}`;
-          const trainerBody = `${memberName} booked ${displaySessionName} with you on ${whenStr}.`;
-          sendMemberEmail(trainerEmail, trainerSubject, trainerBody).catch(() => {});
+      let trainerRow =
+        trainerMemberId != null
+          ? (db
+              .prepare(
+                `SELECT m.email, m.first_name, m.last_name
+                 FROM members m
+                 WHERE m.member_id = ?`
+              )
+              .get(trainerMemberId) as { email: string | null; first_name: string | null; last_name: string | null } | undefined)
+          : undefined;
+      if (!trainerRow?.email?.trim()) {
+        const trainerName = (session.trainer ?? "").trim();
+        if (trainerName) {
+          trainerRow = db
+            .prepare(
+              `SELECT m.email, m.first_name, m.last_name
+               FROM trainers t
+               JOIN members m ON m.member_id = t.member_id
+               WHERE TRIM(COALESCE(m.first_name, '') || ' ' || COALESCE(m.last_name, '')) = ?`
+            )
+            .get(trainerName) as { email: string | null; first_name: string | null; last_name: string | null } | undefined;
         }
+      }
+      const trainerEmail = trainerRow?.email?.trim();
+      if (trainerEmail) {
+        const trainerSubject = `New PT booking with ${memberName}`;
+        const trainerBody = `${memberName} booked ${displaySessionName} on ${whenStr}.`;
+        sendMemberEmail(trainerEmail, trainerSubject, trainerBody).catch(() => {});
       }
 
       const memberEmail = memberRow?.email?.trim();

@@ -260,9 +260,17 @@ function getTransporter(): nodemailer.Transporter | null {
   return transporter;
 }
 
-/** Send an email to staff (STAFF_EMAIL). Uses Gmail API if configured, else SMTP. */
+/** Inbox for staff alerts (bookings, cron, etc.). `STAFF_EMAIL` is preferred; `ADMIN_EMAIL` matches DEPLOY.md for a single admin address. */
+function getStaffInboxEmail(): string | null {
+  const staff = process.env.STAFF_EMAIL?.trim();
+  if (staff) return staff;
+  const admin = process.env.ADMIN_EMAIL?.trim();
+  return admin || null;
+}
+
+/** Send an email to staff (`STAFF_EMAIL`, or `ADMIN_EMAIL` if unset). Uses Gmail API if configured, else SMTP. */
 export async function sendStaffEmail(subject: string, text: string): Promise<boolean> {
-  const staffEmail = process.env.STAFF_EMAIL;
+  const staffEmail = getStaffInboxEmail();
   if (!staffEmail) return false;
   if (isGmailApiConfigured()) {
     const result = await sendViaGmailApi(staffEmail, subject, text);

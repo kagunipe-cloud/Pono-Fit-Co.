@@ -44,7 +44,8 @@ In Railway → your service → **Variables**, add every variable from `.env.loc
 - `EMAIL_FROM`
   - If your host blocks SMTP (port 587), use **Gmail API** env vars instead — see **`docs/EMAIL_GMAIL_API_SETUP.md`** (`GMAIL_OAUTH_*`, `GMAIL_FROM_EMAIL`).
 - `BRAND_NAME`
-- `ADMIN_EMAIL`
+- `STAFF_EMAIL` — address that receives booking alerts (`sendStaffEmail`: class/PT checkout, credit bookings, etc.). If unset, falls back to **`ADMIN_EMAIL`**.
+- `ADMIN_EMAIL` — used as fallback staff inbox when `STAFF_EMAIL` is not set (you can set both to the same address or only `ADMIN_EMAIL`).
 - `FDC_API_KEY`
 - `GEMINI_API_KEY` (for AI macro calculation)
 - `SERPER_API_KEY` (optional; for grounded web search — better accuracy for branded products like Musashi bars; get free key at [serper.dev](https://serper.dev))
