@@ -58,6 +58,23 @@ async function getGmailAccessToken(): Promise<string | null> {
   return data.access_token;
 }
 
+/**
+ * Encode a Subject line for raw MIME (Gmail API `messages.send`). Unencoded UTF-8 in headers
+ * is invalid per RFC 5322 and many clients show mojibake (e.g. em dash "—" → "Ã¢Â€Â"").
+ */
+function encodeSubjectForRawMime(subject: string): string {
+  const s = subject.replace(/\r?\n/g, " ");
+  if (/^[\x20-\x7E]*$/.test(s)) return s;
+  const b64 = Buffer.from(s, "utf8").toString("base64");
+  const parts: string[] = [];
+  /** RFC 2047: each encoded-word ≤ 75 chars; =?UTF-8?B? ... ?= uses 12 + base64len */
+  const maxB64PerWord = 45;
+  for (let i = 0; i < b64.length; i += maxB64PerWord) {
+    parts.push(`=?UTF-8?B?${b64.slice(i, i + maxB64PerWord)}?=`);
+  }
+  return parts.join("\r\n ");
+}
+
 /** Send one email via Gmail API (HTTPS). Uses port 443 so it works when SMTP is blocked. */
 async function sendViaGmailApi(to: string, subject: string, text: string): Promise<{ ok: boolean; error?: string }> {
   const from = process.env.GMAIL_FROM_EMAIL?.trim();
@@ -69,7 +86,7 @@ async function sendViaGmailApi(to: string, subject: string, text: string): Promi
   const lines = [
     `From: ${from}`,
     `To: ${to}`,
-    `Subject: ${subject.replace(/\r?\n/g, " ")}`,
+    `Subject: ${encodeSubjectForRawMime(subject)}`,
     "MIME-Version: 1.0",
     "Content-Type: text/plain; charset=utf-8",
     "",
@@ -133,7 +150,7 @@ async function sendViaGmailApiBcc(
     `From: ${from}`,
     `To: ${from}`,
     bccHeaderLine,
-    `Subject: ${subject.replace(/\r?\n/g, " ")}`,
+    `Subject: ${encodeSubjectForRawMime(subject)}`,
     "MIME-Version: 1.0",
     "Content-Type: text/plain; charset=utf-8",
     "",
