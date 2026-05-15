@@ -29,7 +29,7 @@ import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes"
 import { isOpenGroupSessionKind } from "../../../../lib/open-group-pt";
 import { ensureDiscountsTable, getRenewalDiscountPercentForPromo } from "../../../../lib/discounts";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
-import { ensureRetailProductsTable, assertRetailStockForCart, recordRetailInventoryMovement, ensureSaleRetailLinesTable, getRetailLineMeta } from "../../../../lib/retail-products";
+import { ensureRetailProductsTable, assertRetailStockForCart, recordRetailInventoryMovement, ensureSaleRetailLinesTable, getRetailLineMeta, getMemberRetailAllowPurchaseWhenOutOfStock } from "../../../../lib/retail-products";
 import { ensureTrainerClient, getTrainerMemberIdByDisplayName } from "../../../../lib/trainer-clients";
 import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz, formatDateForStorage, formatDateForDisplay } from "../../../../lib/app-timezone";
 import { formatPrice } from "../../../../lib/format";
@@ -272,10 +272,14 @@ export async function POST(request: NextRequest) {
     const cartPromoForRenewal = cart.promo_code?.trim() || null;
     const cartRenewalDiscountPercent = getRenewalDiscountPercentForPromo(db, cartPromoForRenewal);
 
+    ensureRetailProductsTable(db);
+    const allowMemberRetailOversell =
+      sessionMemberId === member_id && !isStaff && getMemberRetailAllowPurchaseWhenOutOfStock(db);
+
     let purchasedDayPassPack = false;
     db.exec("BEGIN TRANSACTION");
     try {
-      assertRetailStockForCart(db, cart.id);
+      assertRetailStockForCart(db, cart.id, { skipRetailStock: allowMemberRetailOversell });
 
       for (const it of items) {
         if (it.product_type === "membership_plan") {
@@ -520,12 +524,16 @@ export async function POST(request: NextRequest) {
           }
           const effUnit = getEffectiveUnitPriceString(db, it);
           const qty = Math.max(1, Math.floor(Number(it.quantity) || 1));
-          const up = db
-            .prepare(
-              `UPDATE retail_products SET stock_quantity = stock_quantity - ? WHERE id = ? AND active = 1 AND stock_quantity >= ?`
-            )
-            .run(qty, it.product_id, qty);
-          if (up.changes === 0) {
+          const stockUpdate = allowMemberRetailOversell
+            ? db
+                .prepare(`UPDATE retail_products SET stock_quantity = stock_quantity - ? WHERE id = ? AND active = 1`)
+                .run(qty, it.product_id)
+            : db
+                .prepare(
+                  `UPDATE retail_products SET stock_quantity = stock_quantity - ? WHERE id = ? AND active = 1 AND stock_quantity >= ?`
+                )
+                .run(qty, it.product_id, qty);
+          if (stockUpdate.changes === 0) {
             throw new Error(`Not enough stock to complete the sale for ${meta.shelf_name}. Remove it from the cart or reduce quantity.`);
           }
           recordRetailInventoryMovement(db, {

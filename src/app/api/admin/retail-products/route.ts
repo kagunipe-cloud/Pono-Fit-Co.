@@ -4,6 +4,7 @@ import { getAdminMemberId } from "@/lib/admin";
 import {
   ensureRetailProductsTable,
   normalizeRetailSku,
+  getMemberRetailAllowPurchaseWhenOutOfStock,
   getMemberRetailSelfCheckoutEnabled,
   ensureRetailInventoryLedgerTable,
   recordRetailInventoryMovement,
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
   ensureRetailProductsTable(db);
   ensureRetailCategoriesTable(db);
   const member_self_checkout_enabled = getMemberRetailSelfCheckoutEnabled(db);
+  const member_allow_purchase_when_out_of_stock = getMemberRetailAllowPurchaseWhenOutOfStock(db);
 
   const categories = db
     .prepare(`SELECT id, name, sort_order FROM retail_categories ORDER BY sort_order ASC, name COLLATE NOCASE`)
@@ -98,6 +100,7 @@ export async function GET(request: NextRequest) {
     standalone_products,
     products: standalone_products,
     member_self_checkout_enabled,
+    member_allow_purchase_when_out_of_stock,
   });
 }
 

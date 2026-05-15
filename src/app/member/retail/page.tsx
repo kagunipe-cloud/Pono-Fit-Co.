@@ -3,11 +3,18 @@
 import { useCallback, useEffect, useState, lazy, Suspense, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { QRCodeSVG } from "qrcode.react";
 import { formatPrice } from "@/lib/format";
 
 const CameraBarcodeScanner = lazy(() => import("@/components/CameraBarcodeScanner"));
 
-type Product = { id: number; sku: string; name: string; price: string; category?: string };
+type Product = {
+  id: number;
+  name: string;
+  price: string;
+  category?: string;
+  can_purchase: boolean;
+};
 
 export default function MemberRetailPage() {
   const router = useRouter();
@@ -75,14 +82,19 @@ export default function MemberRetailPage() {
     setTimeout(() => setToast(null), 3200);
   }, []);
 
+  /** Preserve catalog order (by category sort, then names) — first-seen category defines section order */
   const productsByCategory = useMemo(() => {
-    const m = new Map<string, Product[]>();
+    const map = new Map<string, Product[]>();
+    const order: string[] = [];
     for (const p of products) {
       const key = (p.category ?? "").trim() || "Other";
-      if (!m.has(key)) m.set(key, []);
-      m.get(key)!.push(p);
+      if (!map.has(key)) {
+        map.set(key, []);
+        order.push(key);
+      }
+      map.get(key)!.push(p);
     }
-    return Array.from(m.entries());
+    return order.map((category) => [category, map.get(category)!] as const);
   }, [products]);
 
   const addBySku = useCallback(
@@ -100,7 +112,7 @@ export default function MemberRetailPage() {
         if (!res.ok) {
           throw new Error(typeof data.error === "string" ? data.error : "Could not add to cart");
         }
-        showToast("Added to cart — tap Checkout when ready.");
+        showToast("Added to your cart — open Cart to complete payment.");
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not add item");
       } finally {
@@ -125,7 +137,7 @@ export default function MemberRetailPage() {
         if (!res.ok) {
           throw new Error(typeof data.error === "string" ? data.error : "Could not add to cart");
         }
-        showToast("Added to cart.");
+        showToast("Added to your cart — open Cart to complete payment.");
       } catch (e) {
         setError(e instanceof Error ? e.message : "Could not add item");
       } finally {
@@ -144,7 +156,7 @@ export default function MemberRetailPage() {
         <h1 className="text-2xl font-bold text-stone-900 mb-2">Pro Shop</h1>
         <p className="text-stone-600 mb-4">
           Self-checkout for drinks, shakes, and bars is run by the front desk for now. Staff can add items to your cart from
-          their screen. When your gym turns on member scanning, you&apos;ll see the barcode flow here.
+          their screen.
         </p>
         <Link
           href="/member/cart"
@@ -165,7 +177,8 @@ export default function MemberRetailPage() {
     <div className="max-w-lg mx-auto p-4 pb-24">
       <h1 className="text-2xl font-bold text-stone-900 mb-1">Pro Shop</h1>
       <p className="text-sm text-stone-600 mb-6">
-        Scan a barcode on drinks, shakes, or bars — then check out with your card on file, the front-desk reader, or Stripe.
+        Browse by category below, tap <strong>Purchase</strong> to add to your cart, then pay with your card on file or Stripe —
+        same as checkout everywhere else.
       </p>
 
       {toast && (
@@ -188,7 +201,7 @@ export default function MemberRetailPage() {
           href="/member/cart"
           className="inline-flex items-center px-5 py-3 rounded-xl border-2 border-stone-300 font-semibold text-stone-800 hover:bg-stone-50"
         >
-          Checkout
+          Cart &amp; pay
         </Link>
       </div>
 
@@ -197,48 +210,69 @@ export default function MemberRetailPage() {
           Nothing in the catalog yet. Ask the front desk once items are added in admin.
         </p>
       ) : (
-        <div className="space-y-6">
+        <div className="space-y-2">
           {productsByCategory.map(([cat, items]) => (
-            <div key={cat}>
-              <h2 className="text-sm font-semibold text-stone-500 uppercase tracking-wide mb-2 px-0.5">{cat}</h2>
-              <ul className="space-y-2 border rounded-xl border-stone-200 divide-y divide-stone-100 bg-white">
+            <details
+              key={cat}
+              className="group rounded-xl border border-stone-200 bg-white shadow-sm overflow-hidden [&_summary::-webkit-details-marker]:hidden"
+            >
+              <summary className="cursor-pointer select-none flex items-center justify-between gap-3 px-4 py-3 font-semibold text-stone-900 hover:bg-stone-50 border-b border-transparent group-open:border-stone-100 list-none">
+                <span>
+                  <span>{cat}</span>
+                  <span className="ml-2 text-sm font-normal text-stone-500">({items.length})</span>
+                </span>
+                <span className="text-stone-400 text-xs shrink-0 transition-transform group-open:rotate-180" aria-hidden>
+                  ▼
+                </span>
+              </summary>
+              <ul className="divide-y divide-stone-100">
                 {items.map((p) => (
                   <li key={p.id} className="flex items-center justify-between gap-3 p-3">
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-medium text-stone-900">{p.name}</p>
-                      <p className="text-xs text-stone-500">SKU {p.sku}</p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex flex-col items-end gap-1 shrink-0">
                       <span className="text-stone-700 font-medium">{formatPrice(p.price)}</span>
                       <button
                         type="button"
-                        disabled={addBusy}
-                        onClick={() => addById(p.id)}
-                        className="px-3 py-1.5 rounded-lg bg-stone-100 text-sm font-medium hover:bg-stone-200 disabled:opacity-50"
+                        disabled={addBusy || !p.can_purchase}
+                        onClick={() => void addById(p.id)}
+                        className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-45 disabled:pointer-events-none"
                       >
-                        Add
+                        Purchase
                       </button>
+                      {!p.can_purchase ? <span className="text-xs text-stone-500">Unavailable</span> : null}
                     </div>
                   </li>
                 ))}
               </ul>
-            </div>
+            </details>
           ))}
         </div>
       )}
 
       {shopUrl ? (
         <details className="mt-8 rounded-xl border border-stone-200 bg-stone-50 p-4">
-          <summary className="cursor-pointer font-medium text-stone-800">QR code for the cooler</summary>
-          <p className="mt-3 text-sm text-stone-600">
-            Point a QR code at this URL so members land straight here. Use your favorite QR generator and print the label.
-          </p>
-          <input
-            readOnly
-            className="mt-2 w-full text-sm px-3 py-2 rounded-lg border border-stone-200 bg-white font-mono"
-            value={shopUrl}
-            onFocus={(e) => e.target.select()}
-          />
+          <summary className="cursor-pointer font-medium text-stone-800 [&::-webkit-details-marker]:hidden">
+            Shop QR — print one code for posters or the cooler
+          </summary>
+          <div className="mt-4 space-y-3 text-sm text-stone-600">
+            <p>
+              Printing <strong className="text-stone-800">one QR</strong> pointing to this page lets members browse and checkout
+              after they&apos;re logged in on their phone.
+            </p>
+            <div className="flex flex-col items-center gap-3 p-4 bg-white rounded-lg border border-stone-200">
+              <QRCodeSVG value={shopUrl} size={200} level="M" includeMargin aria-label="QR code linking to Pro Shop" />
+              <p className="text-xs text-stone-500 text-center">Screenshot or export from DevTools · or copy URL below.</p>
+            </div>
+            <label className="block text-xs font-medium text-stone-600 uppercase tracking-wide">URL</label>
+            <input
+              readOnly
+              className="w-full text-sm px-3 py-2 rounded-lg border border-stone-200 bg-white font-mono"
+              value={shopUrl}
+              onFocus={(e) => e.target.select()}
+            />
+          </div>
         </details>
       ) : null}
 

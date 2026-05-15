@@ -9,6 +9,7 @@ import {
   ensureRetailProductsTable,
   normalizeRetailSku,
   getMemberRetailSelfCheckoutEnabled,
+  getMemberRetailAllowPurchaseWhenOutOfStock,
   getRetailInCartQty,
   getRetailLineMeta,
 } from "../../../../lib/retail-products";
@@ -165,15 +166,22 @@ export async function POST(request: NextRequest) {
         db.close();
         return NextResponse.json({ error: "Retail product not found or inactive" }, { status: 404 });
       }
-      const have = Math.max(0, Math.floor(Number(meta.stock_quantity) || 0));
-      if (have < already + quantity) {
-        db.close();
-        return NextResponse.json(
-          {
-            error: `Not enough stock for ${meta.shelf_name} (${have} on hand; ${already} already in this cart).`,
-          },
-          { status: 409 }
-        );
+      const allowOosMember =
+        !isStaff &&
+        sessionMemberId === member_id &&
+        getMemberRetailSelfCheckoutEnabled(db) &&
+        getMemberRetailAllowPurchaseWhenOutOfStock(db);
+      if (!allowOosMember) {
+        const have = Math.max(0, Math.floor(Number(meta.stock_quantity) || 0));
+        if (have < already + quantity) {
+          db.close();
+          return NextResponse.json(
+            {
+              error: `Not enough stock for ${meta.shelf_name} (${have} on hand; ${already} already in this cart).`,
+            },
+            { status: 409 }
+          );
+        }
       }
     }
 

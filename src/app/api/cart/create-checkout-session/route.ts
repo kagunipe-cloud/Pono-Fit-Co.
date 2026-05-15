@@ -4,7 +4,7 @@ import { ensureCartTables } from "../../../../lib/cart";
 import { getEffectiveUnitPriceString } from "../../../../lib/cart-line-prices";
 import { ensureRecurringClassesTables, ensureClassesRecurringColumns, ensureClassOccurrencesClassId } from "../../../../lib/recurring-classes";
 import { isOpenGroupSessionKind } from "../../../../lib/open-group-pt";
-import { ensureRetailProductsTable, assertRetailStockForCart, getRetailLineMeta } from "../../../../lib/retail-products";
+import { ensureRetailProductsTable, assertRetailStockForCart, getRetailLineMeta, getMemberRetailAllowPurchaseWhenOutOfStock } from "../../../../lib/retail-products";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureDiscountsTable } from "../../../../lib/discounts";
 import { getMemberIdFromSession } from "../../../../lib/session";
@@ -90,7 +90,12 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      assertRetailStockForCart(db, cart.id);
+      ensureRetailProductsTable(db);
+      const skipRetailStockAssert =
+        sessionMemberId === member_id &&
+        !isStaff &&
+        getMemberRetailAllowPurchaseWhenOutOfStock(db);
+      assertRetailStockForCart(db, cart.id, { skipRetailStock: skipRetailStockAssert });
     } catch (stockErr) {
       db.close();
       return NextResponse.json(

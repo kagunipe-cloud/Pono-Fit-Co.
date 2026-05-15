@@ -10,7 +10,7 @@ import { ensureTrainerClientsTable } from "./trainer-clients";
 import { ensureBodyCompositionTable } from "./body-composition";
 import { ensureClientGoalsTable } from "./client-goals";
 import { ensureGymsTable } from "./gyms";
-import { MEMBER_RETAIL_SELF_CHECKOUT_KEY } from "./retail-products";
+import { MEMBER_RETAIL_ALLOW_PURCHASE_WHEN_OUT_OF_STOCK_KEY, MEMBER_RETAIL_SELF_CHECKOUT_KEY } from "./retail-products";
 
 const dbPath = DATABASE_FILE_PATH;
 const restorePendingPath = path.join(process.cwd(), "data", "restore-pending.db");
@@ -114,6 +114,10 @@ function ensureAppSettingsDefaults(db: Database.Database) {
   const retailGate = db.prepare("SELECT 1 FROM app_settings WHERE key = ?").get(MEMBER_RETAIL_SELF_CHECKOUT_KEY);
   if (!retailGate) {
     db.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?)").run(MEMBER_RETAIL_SELF_CHECKOUT_KEY, "0");
+  }
+  const retailAllowOos = db.prepare("SELECT 1 FROM app_settings WHERE key = ?").get(MEMBER_RETAIL_ALLOW_PURCHASE_WHEN_OUT_OF_STOCK_KEY);
+  if (!retailAllowOos) {
+    db.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?)").run(MEMBER_RETAIL_ALLOW_PURCHASE_WHEN_OUT_OF_STOCK_KEY, "0");
   }
 }
 

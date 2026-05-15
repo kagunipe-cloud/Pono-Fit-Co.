@@ -1,6 +1,8 @@
 import type { getDb } from "./db";
 
 export const MEMBER_RETAIL_SELF_CHECKOUT_KEY = "member_retail_self_checkout";
+/** When "1", members may add/pay for retail when on-hand stock is zero or below (trusts restocking). Default "0" = block. */
+export const MEMBER_RETAIL_ALLOW_PURCHASE_WHEN_OUT_OF_STOCK_KEY = "member_retail_allow_purchase_when_out_of_stock";
 
 export type RetailInventoryReason =
   | "receive"
@@ -187,6 +189,29 @@ export function setMemberRetailSelfCheckoutEnabled(db: ReturnType<typeof getDb>,
   );
 }
 
+/** When true, member self-checkout may sell retail without positive on-hand quantity. */
+export function getMemberRetailAllowPurchaseWhenOutOfStock(db: ReturnType<typeof getDb>): boolean {
+  const row = db.prepare("SELECT value FROM app_settings WHERE key = ?").get(MEMBER_RETAIL_ALLOW_PURCHASE_WHEN_OUT_OF_STOCK_KEY) as
+    | { value: string }
+    | undefined;
+  const v = row?.value?.trim();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+export function setMemberRetailAllowPurchaseWhenOutOfStock(db: ReturnType<typeof getDb>, allowed: boolean): void {
+  db.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(
+    MEMBER_RETAIL_ALLOW_PURCHASE_WHEN_OUT_OF_STOCK_KEY,
+    allowed ? "1" : "0"
+  );
+}
+
+/** Whether a SKU can be sold from the member Pro Shop catalog (never exposes qty to clients). */
+export function retailProductCanPurchaseForMemberCatalog(haveQty: unknown, allowWhenOutOfStock: boolean): boolean {
+  const have = Math.max(0, Math.floor(Number(haveQty) || 0));
+  if (allowWhenOutOfStock) return true;
+  return have > 0;
+}
+
 function getRetailLinesQtyByProduct(db: ReturnType<typeof getDb>, cartId: number): Map<number, number> {
   const rows = db
     .prepare(
@@ -214,7 +239,8 @@ export function getRetailInCartQty(db: ReturnType<typeof getDb>, cartId: number,
  * Ensure every retail line in the cart can be fulfilled from stock.
  * @throws Error with message if any SKU is short.
  */
-export function assertRetailStockForCart(db: ReturnType<typeof getDb>, cartId: number): void {
+export function assertRetailStockForCart(db: ReturnType<typeof getDb>, cartId: number, options?: { skipRetailStock?: boolean }): void {
+  if (options?.skipRetailStock) return;
   ensureRetailProductsTable(db);
   const want = getRetailLinesQtyByProduct(db, cartId);
   for (const [productId, need] of want) {

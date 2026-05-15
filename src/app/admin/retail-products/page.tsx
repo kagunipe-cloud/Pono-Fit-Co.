@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef, lazy, Suspense } from "react";
 import Link from "next/link";
+import { QRCodeSVG } from "qrcode.react";
 import { formatPrice } from "@/lib/format";
 
 const CameraBarcodeScanner = lazy(() => import("@/components/CameraBarcodeScanner"));
@@ -54,6 +55,7 @@ export default function AdminRetailProductsPage() {
   const [standalone, setStandalone] = useState<StandaloneRow[]>([]);
   const [groupEdits, setGroupEdits] = useState<Record<number, GroupEdit>>({});
   const [memberSelfCheckout, setMemberSelfCheckout] = useState(false);
+  const [allowPurchaseWhenOutOfStock, setAllowPurchaseWhenOutOfStock] = useState(false);
   const [toggleSaving, setToggleSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,6 +106,7 @@ export default function AdminRetailProductsPage() {
     setGroups(Array.isArray(data.groups) ? data.groups : []);
     setStandalone(Array.isArray(data.standalone_products) ? data.standalone_products : []);
     setMemberSelfCheckout(Boolean(data.member_self_checkout_enabled));
+    setAllowPurchaseWhenOutOfStock(Boolean(data.member_allow_purchase_when_out_of_stock));
   }
 
   useEffect(() => {
@@ -130,18 +133,22 @@ export default function AdminRetailProductsPage() {
     return () => window.clearTimeout(id);
   }, [loading]);
 
-  async function saveMemberSelfCheckout(enabled: boolean) {
+  async function patchProShopSettings(partial: {
+    member_self_checkout_enabled?: boolean;
+    member_allow_purchase_when_out_of_stock?: boolean;
+  }) {
     setToggleSaving(true);
     setError(null);
     try {
       const res = await fetch("/api/admin/retail-self-checkout", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ member_self_checkout_enabled: enabled }),
+        body: JSON.stringify(partial),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Update failed");
       setMemberSelfCheckout(Boolean(data.member_self_checkout_enabled));
+      setAllowPurchaseWhenOutOfStock(Boolean(data.member_allow_purchase_when_out_of_stock));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Update failed");
     } finally {
@@ -478,25 +485,59 @@ export default function AdminRetailProductsPage() {
         share the same price and cost (e.g. flavors). Pick a <strong>category</strong> so items group nicely in the member Pro Shop.
       </p>
 
-      <div className="mb-6 p-4 rounded-xl border border-amber-200 bg-amber-50/80 flex flex-wrap items-center justify-between gap-4">
+      <div className="mb-6 p-4 rounded-xl border border-amber-200 bg-amber-50/80 space-y-5">
         <div>
-          <p className="font-semibold text-stone-900">Member self-checkout (scan &amp; pay)</p>
-          <p className="text-sm text-stone-600 mt-1">
-            {memberSelfCheckout
-              ? "Members see Pro Shop on their home screen and can scan items themselves."
-              : "Off by default — members will not see Pro Shop; only staff add items from the member cart."}
-          </p>
+          <h2 className="text-sm font-bold text-amber-950 uppercase tracking-wide">Pro Shop settings</h2>
+          <p className="text-xs text-amber-900/80 mt-1">Controls how members use the self-serve shop and catalog.</p>
         </div>
-        <button
-          type="button"
-          disabled={toggleSaving}
-          onClick={() => saveMemberSelfCheckout(!memberSelfCheckout)}
-          className={`px-4 py-2 rounded-lg text-sm font-medium shrink-0 ${
-            memberSelfCheckout ? "bg-stone-200 text-stone-800 hover:bg-stone-300" : "bg-emerald-600 text-white hover:bg-emerald-700"
-          } disabled:opacity-50`}
-        >
-          {toggleSaving ? "Saving…" : memberSelfCheckout ? "Turn off" : "Turn on"}
-        </button>
+
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-amber-200/70 pt-4">
+          <div>
+            <p className="font-semibold text-stone-900">Member self-checkout</p>
+            <p className="text-sm text-stone-600 mt-1">
+              {memberSelfCheckout
+                ? "Members see Pro Shop on their home screen and can browse, scan, or purchase from the catalog."
+                : "Off by default — members will not see Pro Shop; only staff add items from the member cart."}
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={toggleSaving}
+            onClick={() => void patchProShopSettings({ member_self_checkout_enabled: !memberSelfCheckout })}
+            className={`px-4 py-2 rounded-lg text-sm font-medium shrink-0 ${
+              memberSelfCheckout ? "bg-stone-200 text-stone-800 hover:bg-stone-300" : "bg-emerald-600 text-white hover:bg-emerald-700"
+            } disabled:opacity-50`}
+          >
+            {toggleSaving ? "Saving…" : memberSelfCheckout ? "Turn off" : "Turn on"}
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-4 border-t border-amber-200/70 pt-4">
+          <div>
+            <p className="font-semibold text-stone-900">Purchases when inventory is zero or below</p>
+            <p className="text-sm text-stone-600 mt-1">
+              {allowPurchaseWhenOutOfStock
+                ? "Members can still add items and pay while stock is at or below zero (for example if the cooler is restocked shortly after). Staff adding from the cart always checks real stock."
+                : `Members cannot purchase a product from the Pro Shop until inventory is above zero. They will see "Unavailable" instead of a SKU or count.`}
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={toggleSaving}
+            onClick={() =>
+              void patchProShopSettings({
+                member_allow_purchase_when_out_of_stock: !allowPurchaseWhenOutOfStock,
+              })
+            }
+            className={`px-4 py-2 rounded-lg text-sm font-medium shrink-0 ${
+              allowPurchaseWhenOutOfStock
+                ? "bg-amber-700 text-white hover:bg-amber-800"
+                : "bg-white border-2 border-stone-300 text-stone-800 hover:bg-stone-50"
+            } disabled:opacity-50`}
+          >
+            {toggleSaving ? "Saving…" : allowPurchaseWhenOutOfStock ? "Disallow when out of stock" : "Allow when out of stock"}
+          </button>
+        </div>
       </div>
 
       {error && <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">{error}</div>}
@@ -918,9 +959,18 @@ export default function AdminRetailProductsPage() {
       )}
 
       {memberSelfCheckout && coolerQrUrl ? (
-        <p className="mt-8 text-sm text-stone-500">
-          Cooler QR URL for members: <span className="font-mono text-stone-700">{coolerQrUrl}</span>
-        </p>
+        <div className="mt-8 rounded-xl border border-emerald-200 bg-emerald-50/50 p-5 max-w-md">
+          <p className="text-sm font-semibold text-emerald-900 mb-3">Printable Pro Shop QR (member shop URL)</p>
+          <div className="flex flex-col sm:flex-row gap-5 items-start">
+            <div className="shrink-0 rounded-lg bg-white p-3 border border-stone-200">
+              <QRCodeSVG value={coolerQrUrl} size={176} level="M" includeMargin aria-label="QR code for member Pro Shop" />
+            </div>
+            <div className="min-w-0 flex-1 text-sm text-stone-600 space-y-2">
+              <p>Members open this page (signed in) to browse by category and add items to their cart.</p>
+              <p className="font-mono text-xs text-stone-800 break-all">{coolerQrUrl}</p>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {skuScanOpen && (
