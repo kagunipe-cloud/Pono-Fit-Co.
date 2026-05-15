@@ -105,7 +105,6 @@ export default function MemberCartPage() {
     description?: string | null;
     applies_to_renewals?: boolean;
   } | null>(null);
-  const [canUseTerminal, setCanUseTerminal] = useState(false);
   const [classCredits, setClassCredits] = useState(0);
   const [isOwnCart, setIsOwnCart] = useState(false);
   const [isStaff, setIsStaff] = useState(false);
@@ -154,18 +153,7 @@ export default function MemberCartPage() {
   const [classScheduleLoading, setClassScheduleLoading] = useState(false);
   const cartDataUrl = `/api/members/${encodeURIComponent(id != null ? String(id).trim() : "")}/cart-data`;
 
-  const [sessionRole, setSessionRole] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/auth/member-me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((me) => setSessionRole(typeof me?.role === "string" ? me.role : null))
-      .catch(() => setSessionRole(null));
-  }, []);
-
-  useEffect(() => {
-    setCanUseTerminal(sessionRole === "Admin" || isOwnCart);
-  }, [sessionRole, isOwnCart]);
+  const canUseTerminal = isStaff;
 
   useEffect(() => {
     if (terminalOpen && memberId && items.length > 0) {
@@ -1246,7 +1234,7 @@ export default function MemberCartPage() {
                 onClick={chargeSavedCardOnFile}
                 disabled={savedCardChargeLoading || checkoutLoading}
                 className="px-6 py-3 rounded-lg border-2 border-stone-800 text-stone-900 font-medium hover:bg-stone-100 disabled:opacity-50"
-                title="Charge the default card in Stripe (off-session). May fail if the bank requires extra verification — use Pay with Stripe or the reader instead."
+                title="Charge the default card in Stripe (off-session). May fail if the bank requires extra verification — use Pay with Stripe instead."
               >
                 {savedCardChargeLoading ? "Charging card…" : "Pay with card on file"}
               </button>
@@ -1270,7 +1258,7 @@ export default function MemberCartPage() {
             </button>
             <p className="text-stone-500 text-sm self-center w-full sm:w-auto">
               {isOwnCart && !isStaff
-                ? "Pick card on file for the fastest checkout, use the reader at the desk, or pay with Stripe if your bank needs a browser confirmation."
+                ? "Pick card on file for the fastest checkout, or pay with Stripe if your bank needs a browser confirmation."
                 : "Complete payment, then we will activate the purchase (membership, bookings, or door access as applicable)."}
             </p>
           </div>

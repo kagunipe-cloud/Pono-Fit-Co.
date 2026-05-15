@@ -6,8 +6,7 @@ import { getEffectiveUnitPriceString } from "@/lib/cart-line-prices";
 import { ensureDiscountsTable } from "@/lib/discounts";
 import { ensurePTSlotTables } from "@/lib/pt-slots";
 import { ensureRecurringClassesTables, ensureClassesRecurringColumns, ensureClassOccurrencesClassId } from "@/lib/recurring-classes";
-import { getAdminMemberId } from "@/lib/admin";
-import { getMemberIdFromSession } from "@/lib/session";
+import { getTrainerMemberId } from "@/lib/admin";
 import { computeCcFee } from "@/lib/cc-fees";
 import { ensureRetailProductsTable, assertRetailStockForCart } from "@/lib/retail-products";
 import Stripe from "stripe";
@@ -45,14 +44,13 @@ async function resolveStripeCustomerIdForTerminal(
 }
 
 /**
- * POST — Create PaymentIntent and process on reader (admin, or member paying their own cart).
+ * POST — Create PaymentIntent and process on reader (staff only).
  * Body: { member_id, reader_id, monthly_recurring?: boolean } — when cart has a monthly membership,
  * `monthly_recurring` matches Checkout (false = one period only, default true = auto-renew).
  */
 export async function POST(request: NextRequest) {
-  const adminId = await getAdminMemberId(request);
-  const sessionMemberId = await getMemberIdFromSession();
-  if (!sessionMemberId && !adminId) {
+  const staffId = await getTrainerMemberId(request);
+  if (!staffId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -67,10 +65,6 @@ export async function POST(request: NextRequest) {
   if (!member_id || !reader_id) {
     return NextResponse.json({ error: "member_id and reader_id required" }, { status: 400 });
   }
-  if (!adminId && sessionMemberId !== member_id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const db = getDb();
   ensureCartTables(db);
   ensureRecurringClassesTables(db);

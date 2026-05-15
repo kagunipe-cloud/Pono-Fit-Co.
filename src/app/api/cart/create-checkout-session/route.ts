@@ -100,37 +100,13 @@ export async function POST(request: NextRequest) {
     }
 
     let hasMonthlyMembershipInCart = false;
-    // ACH allowed when: (a) cart has ONLY monthly membership plans, OR (b) member has active monthly membership (Option A)
-    let achAllowed = rawItems.length > 0;
-    let cartOnlyMonthly = rawItems.length > 0;
     for (const it of rawItems) {
       if (it.product_type !== "membership_plan") {
-        cartOnlyMonthly = false;
         continue;
       }
       const plan = db.prepare("SELECT unit FROM membership_plans WHERE id = ?").get(it.product_id) as { unit: string } | undefined;
       if (plan?.unit === "Month") hasMonthlyMembershipInCart = true;
-      else cartOnlyMonthly = false;
     }
-    for (const it of rawItems) {
-      if (it.product_type !== "membership_plan") {
-        cartOnlyMonthly = false;
-        break;
-      }
-    }
-    if (cartOnlyMonthly) {
-      achAllowed = true;
-    } else {
-      // Option A: active monthly member can use ACH for any cart (classes, PT, etc.)
-      const hasActiveMonthly = db.prepare(`
-        SELECT 1 FROM subscriptions s
-        JOIN membership_plans p ON p.product_id = s.product_id
-        WHERE s.member_id = ? AND s.status = 'Active' AND p.unit = 'Month'
-        LIMIT 1
-      `).get(member_id);
-      achAllowed = !!hasActiveMonthly;
-    }
-
     const lineItems: { name: string; price: string; quantity: number }[] = [];
     for (const it of rawItems) {
       let name = "Item";
@@ -235,9 +211,10 @@ export async function POST(request: NextRequest) {
     }
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
-      payment_method_types: achAllowed ? ["card", "us_bank_account"] : ["card"],
       mode: "payment",
       billing_address_collection: "required",
+      // Fulfillment runs immediately on the success page, so exclude delayed bank payments.
+      excluded_payment_method_types: ["us_bank_account"],
       line_items: lineItems.map((item) => {
         const unitAmount = parsePriceToCents(item.price);
         if (unitAmount <= 0) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminMemberId } from "@/lib/admin";
+import { getAdminMemberId, getTrainerMemberId } from "@/lib/admin";
 import { getMemberIdFromSession } from "@/lib/session";
 import Stripe from "stripe";
 
@@ -8,8 +8,9 @@ export const dynamic = "force-dynamic";
 /** GET ?payment_intent_id=pi_xxx — Poll PaymentIntent status (admin or cart owner). */
 export async function GET(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
+  const staffId = await getTrainerMemberId(request);
   const sessionMemberId = await getMemberIdFromSession();
-  if (!sessionMemberId && !adminId) {
+  if (!sessionMemberId && !staffId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest) {
   try {
     const stripe = new Stripe(stripeSecret);
     const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
-    if (!adminId && sessionMemberId && pi.metadata?.member_id !== sessionMemberId) {
+    if (!adminId && !staffId && sessionMemberId && pi.metadata?.member_id !== sessionMemberId) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     // requires_payment_method = waiting for customer to tap (or declined, can retry) — keep polling

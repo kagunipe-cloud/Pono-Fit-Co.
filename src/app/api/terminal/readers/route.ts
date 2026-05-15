@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminMemberId } from "@/lib/admin";
-import { getMemberIdFromSession } from "@/lib/session";
+import { getTrainerMemberId } from "@/lib/admin";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
 
-/** GET — List Stripe Terminal readers (signed-in member or admin). */
+/** GET — List Stripe Terminal readers (staff only). */
 export async function GET(request: NextRequest) {
-  const adminId = await getAdminMemberId(request);
-  const memberId = await getMemberIdFromSession();
-  if (!adminId && !memberId) {
+  const staffId = await getTrainerMemberId(request);
+  if (!staffId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

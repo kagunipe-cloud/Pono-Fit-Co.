@@ -5,8 +5,7 @@ import { getEffectiveUnitPriceString } from "@/lib/cart-line-prices";
 import { ensureDiscountsTable } from "@/lib/discounts";
 import { ensureRecurringClassesTables, ensureClassesRecurringColumns, ensureClassOccurrencesClassId } from "@/lib/recurring-classes";
 import { ensurePTSlotTables } from "@/lib/pt-slots";
-import { getAdminMemberId } from "@/lib/admin";
-import { getMemberIdFromSession } from "@/lib/session";
+import { getTrainerMemberId } from "@/lib/admin";
 import { ensureRetailProductsTable } from "@/lib/retail-products";
 import { computeCcFee } from "@/lib/cc-fees";
 import Stripe from "stripe";
@@ -19,11 +18,10 @@ function parsePrice(p: string | null): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
-/** GET ?member_id= — Terminal charge breakdown (admin, or member viewing their own cart). */
+/** GET ?member_id= — Terminal charge breakdown (staff only). */
 export async function GET(request: NextRequest) {
-  const adminId = await getAdminMemberId(request);
-  const sessionMemberId = await getMemberIdFromSession();
-  if (!sessionMemberId && !adminId) {
+  const staffId = await getTrainerMemberId(request);
+  if (!staffId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -31,10 +29,6 @@ export async function GET(request: NextRequest) {
   if (!member_id) {
     return NextResponse.json({ error: "member_id required" }, { status: 400 });
   }
-  if (!adminId && sessionMemberId !== member_id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
   const db = getDb();
   ensureCartTables(db);
   ensureRecurringClassesTables(db);
