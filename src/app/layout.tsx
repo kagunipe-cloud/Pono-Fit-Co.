@@ -3,6 +3,7 @@ import { SettingsProvider } from "@/lib/settings-context";
 import { WaiverGate } from "@/components/WaiverGate";
 import AppShell from "@/components/AppShell";
 import PwaRegister from "@/components/PwaRegister";
+import NativeDeepLink from "@/components/NativeDeepLink";
 import WebSplash from "@/components/WebSplash";
 import "./globals.css";
 
@@ -35,6 +36,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen bg-gradient-to-r from-white to-brand-200 text-stone-900 antialiased">
         <PwaRegister />
+        <NativeDeepLink />
         <SettingsProvider>
         <WaiverGate>
           <AppShell>{children}</AppShell>

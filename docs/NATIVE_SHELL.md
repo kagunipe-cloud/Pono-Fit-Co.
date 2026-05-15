@@ -53,6 +53,19 @@ npm run cap:sync
 
 **Local dev against your Mac:** use your LAN IP, e.g. `CAPACITOR_SERVER_URL=http://192.168.1.10:3000` and `npm run dev` with host `0.0.0.0` if needed; `cleartext` is enabled for `http:`.
 
+### Universal Links & App Links (QR / https URLs → open native app)
+
+Production serves:
+
+- `/.well-known/apple-app-site-association` — iOS Universal Links (`APPLE_TEAM_ID`, optional `IOS_BUNDLE_ID`; defaults match this repo / Xcode).
+- `/.well-known/assetlinks.json` — Android verification (`ANDROID_SHA256_CERT_FINGERPRINTS`, comma-separated SHA-256 from Play App Signing or your upload key; optional `ANDROID_APP_LINK_PACKAGE`).
+
+**Keep one hostname everywhere:** `NEXT_PUBLIC_APP_URL`, the `applinks:` entry in `ios/App/App/App.entitlements`, and Android’s app-link host (default `app.beponofitco.com`; override with Gradle/env **`APP_LINK_HOST`**). If you change domains, update all three and ship new store builds.
+
+On the Apple Developer portal, the App ID for `co.ponofit.app` must have the **Associated Domains** capability enabled (matches entitlements).
+
+After changing native files, run **`npm run cap:sync`**, rebuild in Xcode / Android Studio, and test on a real device (simulators don’t fully exercise universal links).
+
 ---
 
 ## Commands

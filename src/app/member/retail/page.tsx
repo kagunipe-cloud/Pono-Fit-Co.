@@ -38,12 +38,12 @@ export default function MemberRetailPage() {
     (async () => {
       const meRes = await fetch("/api/auth/member-me");
       if (!meRes.ok) {
-        router.replace("/login");
+        router.replace("/login?next=" + encodeURIComponent("/member/retail"));
         return;
       }
       const me = await meRes.json().catch(() => null);
       if (!me?.member_id) {
-        router.replace("/login");
+        router.replace("/login?next=" + encodeURIComponent("/member/retail"));
         return;
       }
       if (cancelled) return;
@@ -177,7 +177,7 @@ export default function MemberRetailPage() {
     <div className="max-w-lg mx-auto p-4 pb-24">
       <h1 className="text-2xl font-bold text-stone-900 mb-1">Pro Shop</h1>
       <p className="text-sm text-stone-600 mb-6">
-        Browse by category below, tap <strong>Purchase</strong> to add to your cart, then pay with your card on file or Stripe —
+        Browse by category below, tap <strong>Add to cart</strong>, then pay with your card on file or Stripe —
         same as checkout everywhere else.
       </p>
 
@@ -239,7 +239,7 @@ export default function MemberRetailPage() {
                         onClick={() => void addById(p.id)}
                         className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 disabled:opacity-45 disabled:pointer-events-none"
                       >
-                        Purchase
+                        Add to cart
                       </button>
                       {!p.can_purchase ? <span className="text-xs text-stone-500">Unavailable</span> : null}
                     </div>
@@ -258,8 +258,13 @@ export default function MemberRetailPage() {
           </summary>
           <div className="mt-4 space-y-3 text-sm text-stone-600">
             <p>
-              Printing <strong className="text-stone-800">one QR</strong> pointing to this page lets members browse and checkout
-              after they&apos;re logged in on their phone.
+              Printing <strong className="text-stone-800">one QR</strong> pointing to this page lets members open the shop in a browser on
+              their phone.
+            </p>
+            <p className="text-stone-600">
+              <strong className="text-stone-800">Why “sign in” when I’m already in the app?</strong> The camera usually opens{" "}
+              <em>Safari</em> or <em>Chrome</em>, not the Pono Fit app—those are separate from the app’s login. Members can sign in once
+              in that browser and continue to the shop (or open Pro Shop from the app menu to stay in the app).
             </p>
             <div className="flex flex-col items-center gap-3 p-4 bg-white rounded-lg border border-stone-200">
               <QRCodeSVG value={shopUrl} size={200} level="M" includeMargin aria-label="QR code linking to Pro Shop" />

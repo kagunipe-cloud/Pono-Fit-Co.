@@ -1745,12 +1745,23 @@ export default function MemberDetailPage() {
             <p className="p-6 text-stone-500 text-sm">No sales yet.</p>
           ) : (
             <table className="w-full text-left text-sm">
-              <thead><tr className="bg-stone-50 text-stone-500"><th className="py-2 px-4">Sales ID</th><th className="py-2 px-4">Date</th><th className="py-2 px-4">Status</th><th className="py-2 px-4">Total</th><th className="py-2 px-4">Admin</th></tr></thead>
+              <thead><tr className="bg-stone-50 text-stone-500"><th className="py-2 px-4">Sales ID</th><th className="py-2 px-4">Date</th><th className="py-2 px-4">Items</th><th className="py-2 px-4">Status</th><th className="py-2 px-4">Total</th><th className="py-2 px-4">Admin</th></tr></thead>
               <tbody>
                 {data.sales.map((s, i) => (
                   <tr key={i} className="border-t border-stone-100">
                     <td className="py-2 px-4 font-mono">{String(s.sales_id ?? "—")}</td>
                     <td className="py-2 px-4">{String(s.date_time ?? "—")}</td>
+                    <td className="py-2 px-4 max-w-xs align-top">
+                      {Array.isArray(s.purchase_lines) && (s.purchase_lines as { label: string }[]).length > 0 ? (
+                        <ul className="list-disc list-inside space-y-0.5 text-stone-700">
+                          {(s.purchase_lines as { label: string }[]).map((line, li) => (
+                            <li key={li}>{line.label}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <span className="text-stone-400">—</span>
+                      )}
+                    </td>
                     <td className="py-2 px-4">{String(s.status ?? "—")}</td>
                     <td className="py-2 px-4">{String(s.grand_total ?? s.price ?? "—")}</td>
                     <td className="py-2 px-4">

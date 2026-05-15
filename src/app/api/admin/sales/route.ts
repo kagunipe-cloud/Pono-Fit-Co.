@@ -5,7 +5,16 @@ import { todayInAppTz } from "../../../../lib/app-timezone";
 
 export const dynamic = "force-dynamic";
 
-const VALID_CATEGORIES = ["Membership", "Class", "PT", "Other"] as const;
+const VALID_CATEGORIES = ["Membership", "Class", "PT", "Pro Shop", "Other"] as const;
+
+function hasRetailLines(db: ReturnType<typeof getDb>, salesId: string): boolean {
+  try {
+    const row = db.prepare("SELECT 1 FROM sale_retail_lines WHERE sales_id = ? LIMIT 1").get(salesId) as unknown;
+    return row != null;
+  } catch {
+    return false;
+  }
+}
 
 function getSalesIdsForCategory(db: ReturnType<typeof getDb>, category: string): Set<string> {
   const ids = new Set<string>();
@@ -39,7 +48,7 @@ function getSalesIdsForCategory(db: ReturnType<typeof getDb>, category: string):
       } catch {
         /* ignore */
       }
-      if (!hasSub && !hasClass && !hasPt) ids.add(s.sales_id);
+      if (!hasSub && !hasClass && !hasPt && !hasRetailLines(db, s.sales_id)) ids.add(s.sales_id);
     }
   } else if (category === "Class") {
     try {
@@ -54,6 +63,18 @@ function getSalesIdsForCategory(db: ReturnType<typeof getDb>, category: string):
       rows.forEach((r) => ids.add(r.sales_id));
     } catch {
       /* pt_bookings may not exist */
+    }
+  } else if (category === "Pro Shop") {
+    try {
+      const rows = db
+        .prepare(
+          `SELECT DISTINCT l.sales_id FROM sale_retail_lines l
+           INNER JOIN sales s ON s.sales_id = l.sales_id AND s.status != 'Refunded'`
+        )
+        .all() as { sales_id: string }[];
+      rows.forEach((r) => ids.add(r.sales_id));
+    } catch {
+      /* sale_retail_lines may not exist */
     }
   } else if (category === "Other") {
     const sales = db.prepare("SELECT sales_id FROM sales WHERE status != 'Refunded' AND (sale_type IS NULL OR sale_type != 'renewal')").all() as { sales_id: string }[];
@@ -76,14 +97,14 @@ function getSalesIdsForCategory(db: ReturnType<typeof getDb>, category: string):
       } catch {
         /* ignore */
       }
-      if (!hasSub && !hasClass && !hasPt) ids.add(s.sales_id);
+      if (!hasSub && !hasClass && !hasPt && !hasRetailLines(db, s.sales_id)) ids.add(s.sales_id);
     }
   }
   return ids;
 }
 
 /** GET: Sales list with member names (admin only).
- *  Query: date=YYYY-MM-DD (single day), from=YYYY-MM-DD&to=YYYY-MM-DD (range), or date=all. category=Membership|Class|PT|Other (optional).
+ *  Query: date=YYYY-MM-DD (single day), from=YYYY-MM-DD&to=YYYY-MM-DD (range), or date=all. category=Membership|Class|PT|Pro Shop|Other (optional).
  *  Sorted newest first. */
 export async function GET(request: NextRequest) {
   const adminId = await getAdminMemberId(request);

@@ -23,6 +23,7 @@ import {
   getMemberDayPassLedgerBalance,
   migrateLegacyPassPackSubscriptionsToLedger,
 } from "../../../../lib/day-pass-credits";
+import { getSalePurchaseLinesBySalesId } from "../../../../lib/sale-purchase-lines";
 
 export const dynamic = "force-dynamic";
 
@@ -153,6 +154,18 @@ export async function GET(
       SELECT * FROM sales WHERE member_id = ? ORDER BY date_time DESC
     `).all(mid) as Record<string, unknown>[];
 
+    const saleIdsForLines = sales.map((row) => String(row.sales_id ?? "").trim()).filter(Boolean);
+    const linesBySale = getSalePurchaseLinesBySalesId(db, mid, saleIdsForLines);
+    const salesWithLines = sales.map((row) => {
+      const sid = String(row.sales_id ?? "").trim();
+      const purchase_lines = [...(linesBySale.get(sid) ?? [])];
+      const saleType = String(row.sale_type ?? "").trim().toLowerCase();
+      if (purchase_lines.length === 0 && saleType === "renewal") {
+        purchase_lines.push({ label: "Membership renewal" });
+      }
+      return { ...row, purchase_lines };
+    });
+
     const memberPassDay = String(member.pass_activation_day ?? "").trim();
     const has_door_access = memberHasDoorAccessToday(subscriptions, today_ymd, memberPassDay);
 
@@ -170,7 +183,7 @@ export async function GET(
       ptSlotBookings,
       ptTrainerSpecificBookings,
       ptOpenBookings,
-      sales,
+      sales: salesWithLines,
     });
   } catch (err) {
     console.error(err);
