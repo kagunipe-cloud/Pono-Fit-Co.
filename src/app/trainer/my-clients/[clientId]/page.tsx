@@ -512,12 +512,22 @@ export default function ClientPTDashboardPage() {
           <ul className="space-y-4">
             {workouts.map((w) => (
               <li key={w.id} className="p-4 rounded-xl border border-stone-200 bg-white">
-                <div className="flex items-center gap-2 flex-wrap mb-2">
-                  <span className="font-medium text-stone-800">{formatWorkoutStamp(w.started_at)}</span>
-                  {w.finished_at ? (
-                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Completed — results below</span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">Not started</span>
+                <div className="flex items-center gap-2 flex-wrap mb-2 justify-between">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium text-stone-800">{formatWorkoutStamp(w.started_at)}</span>
+                    {w.finished_at ? (
+                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Completed — results below</span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">Not started</span>
+                    )}
+                  </div>
+                  {!w.finished_at && (
+                    <Link
+                      href={`/trainer/my-clients/${clientId}/create-workout?edit=${w.id}`}
+                      className="text-sm font-medium text-brand-600 hover:underline shrink-0"
+                    >
+                      Edit workout
+                    </Link>
                   )}
                 </div>
                 <ul className="space-y-2 text-sm">
@@ -531,7 +541,7 @@ export default function ClientPTDashboardPage() {
                             <li key={si}>
                               Set {si + 1}:{" "}
                               {ex.type === "lift"
-                                ? `${s.reps ?? "—"} reps × ${s.weight_kg != null ? `${s.weight_kg} kg` : "—"}`
+                                ? `${s.reps ?? "—"} reps × ${s.weight_kg != null ? `${s.weight_kg} lbs` : "—"}`
                                 : `${s.time_seconds != null ? `${Math.round(s.time_seconds / 60)} min` : "—"}${s.distance_km != null ? ` · ${kmToMiles(s.distance_km).toFixed(1)} mi` : ""}`}
                             </li>
                           ))}
