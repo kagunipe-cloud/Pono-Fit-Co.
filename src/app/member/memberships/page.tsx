@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { formatPrice, toTitleCase } from "@/lib/format";
 
-type PlanRow = { id: number; plan_name: string; price?: string; length?: string; unit?: string };
+type PlanRow = { id: number; plan_name: string; price?: string; length?: string; unit?: string; description?: string | null };
 
 function MemberMembershipsContent() {
   const router = useRouter();
@@ -96,6 +96,9 @@ function MemberMembershipsContent() {
               <p className="text-sm text-stone-500">
                 {formatPrice(p.price)} · {p.length} {p.unit}
               </p>
+              {String(p.description ?? "").trim() ? (
+                <p className="text-sm text-stone-600 mt-2 max-w-xl whitespace-pre-wrap">{String(p.description).trim()}</p>
+              ) : null}
             </div>
             <button
               type="button"

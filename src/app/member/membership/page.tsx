@@ -13,6 +13,7 @@ type Sub = {
   plan_price?: string;
   plan_unit?: string | null;
   plan_category?: string | null;
+  plan_description?: string | null;
 };
 
 function MemberMembershipContent() {
@@ -246,6 +247,9 @@ function MemberMembershipContent() {
               <p className="text-sm text-stone-500">
                 {s.status} — {s.start_date} to {s.expiry_date} {s.plan_price ? `· ${s.plan_price}` : ""}
               </p>
+              {String(s.plan_description ?? "").trim() ? (
+                <p className="text-sm text-stone-600 mt-2 whitespace-pre-wrap">{String(s.plan_description).trim()}</p>
+              ) : null}
             </li>
           ))}
         </ul>

@@ -60,7 +60,8 @@ export async function GET() {
     let occurrenceBookings: Record<string, unknown>[] = [];
     try {
       const rawSubs = db.prepare(`
-        SELECT s.*, p.plan_name, p.price as plan_price, p.unit as plan_unit, p.category as plan_category
+        SELECT s.*, p.plan_name, p.price as plan_price, p.unit as plan_unit, p.category as plan_category,
+               p.description as plan_description
         FROM subscriptions s
         LEFT JOIN membership_plans p ON p.product_id = s.product_id
         WHERE s.member_id = ?
