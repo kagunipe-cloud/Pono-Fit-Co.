@@ -4,10 +4,11 @@ import { parseExerciseType } from "@/lib/exercise-types";
 import { getMemberIdFromSession } from "@/lib/session";
 import { ensureWorkoutTables } from "@/lib/workouts-server";
 import { estimate1RM } from "@/lib/workout-units";
+import { normalizeWorkoutNote } from "@/lib/workout-notes";
 
 export const dynamic = "force-dynamic";
 
-/** PATCH body: { exercise_name?, type?, exercise_id?, use_for_my_1rm? }. Allowed for open or finished workouts. */
+/** PATCH body: { exercise_name?, type?, exercise_id?, use_for_my_1rm?, notes?: string|null }. Allowed for open or finished workouts. */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string; exId: string }> }
@@ -92,16 +93,25 @@ export async function PATCH(
         db.prepare("DELETE FROM member_1rm_settings WHERE member_id = ? AND exercise_id = ?").run(memberId, effectiveExId);
       }
     }
-    const updated = db
-      .prepare("SELECT id, workout_id, type, exercise_name, sort_order, exercise_id FROM workout_exercises WHERE id = ?")
-      .get(exId) as Record<string, unknown>;
-    const setCols = (db.prepare("PRAGMA table_info(workout_sets)").all() as { name: string }[]).map((c) => c.name);
-    const hasDropIndex = setCols.includes("drop_index");
+    const hasExerciseNotesCol = (db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[]).some((c) => c.name === "notes");
+    if (hasExerciseNotesCol && ("notes" in body || "exercise_notes" in body)) {
+      const raw = "notes" in body ? body.notes : (body as { exercise_notes?: unknown }).exercise_notes;
+      const n = typeof raw === "string" ? normalizeWorkoutNote(raw) : raw === null ? null : normalizeWorkoutNote(String(raw ?? ""));
+      db.prepare("UPDATE workout_exercises SET notes = ? WHERE id = ? AND workout_id = ?").run(n, exId, workoutId);
+    }
+
+    const updatedCols = ["id", "workout_id", "type", "exercise_name", "sort_order", "exercise_id"];
+    if (hasUseForMy1rm) updatedCols.push("use_for_my_1rm");
+    if (hasExerciseNotesCol) updatedCols.push("notes");
+    const updated = db.prepare(`SELECT ${updatedCols.join(", ")} FROM workout_exercises WHERE id = ?`).get(exId) as Record<string, unknown>;
+    const setColNames = (db.prepare("PRAGMA table_info(workout_sets)").all() as { name: string }[]).map((c) => c.name);
+    const hasDropIndex = setColNames.includes("drop_index");
+    const hasSetNotes = setColNames.includes("notes");
+    let setSelect = "id, reps, weight_kg, time_seconds, distance_km, set_order";
+    if (hasDropIndex) setSelect += ", drop_index";
     const sets = db
       .prepare(
-        hasDropIndex
-          ? "SELECT id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index FROM workout_sets WHERE workout_exercise_id = ? ORDER BY set_order, drop_index, id"
-          : "SELECT id, reps, weight_kg, time_seconds, distance_km, set_order FROM workout_sets WHERE workout_exercise_id = ? ORDER BY set_order, id"
+        `SELECT ${setSelect} FROM workout_sets WHERE workout_exercise_id = ? ORDER BY ${hasDropIndex ? "set_order, drop_index, id" : "set_order, id"}`
       )
       .all(exId) as Record<string, unknown>[];
     db.close();

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import Database from "better-sqlite3";
 import { getDb } from "../../../../../../lib/db";
 import { isTimedExerciseType, parseExerciseType } from "../../../../../../lib/exercise-types";
 import { getMemberIdFromSession } from "../../../../../../lib/session";
 import { ensureWorkoutTables } from "@/lib/workouts-server";
+import { normalizeWorkoutNote } from "@/lib/workout-notes";
 
 export const dynamic = "force-dynamic";
 
@@ -57,38 +59,65 @@ export async function POST(
           .run(workoutId, type, exercise_name, sort_order, exercise_id);
     const exerciseId = Number(exResult.lastInsertRowid);
 
+    const hasExerciseNotes = (db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[]).some((c) => c.name === "notes");
+    if (hasExerciseNotes) {
+      const exNote =
+        typeof body.notes === "string" ? normalizeWorkoutNote(body.notes) : typeof body.exercise_notes === "string" ? normalizeWorkoutNote(body.exercise_notes) : null;
+      if ("notes" in body || "exercise_notes" in body) {
+        db.prepare("UPDATE workout_exercises SET notes = ? WHERE id = ?").run(exNote, exerciseId);
+      }
+    }
+
     const tableCols = (db.prepare("PRAGMA table_info(workout_sets)").all() as { name: string }[]).map((c) => c.name);
     const hasDropIndex = tableCols.includes("drop_index");
-    const insertSetStmt = hasDropIndex
-      ? db.prepare(
-          "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index) VALUES (?, ?, ?, ?, ?, ?, ?)"
-        )
-      : db.prepare(
-          "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order) VALUES (?, ?, ?, ?, ?, ?)"
-        );
+    const hasSetNotes = tableCols.includes("notes");
+    let insertSetStmt: Database.Statement<unknown[]>;
+    if (hasDropIndex && hasSetNotes) {
+      insertSetStmt = db.prepare(
+        "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+      );
+    } else if (hasDropIndex) {
+      insertSetStmt = db.prepare(
+        "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      );
+    } else if (hasSetNotes) {
+      insertSetStmt = db.prepare(
+        "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, notes) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      );
+    } else {
+      insertSetStmt = db.prepare(
+        "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order) VALUES (?, ?, ?, ?, ?, ?)"
+      );
+    }
 
     const isGrouped = sets.length > 0 && Array.isArray(sets[0]);
     if (isGrouped) {
       for (let setOrder = 0; setOrder < sets.length; setOrder++) {
-        const group = (sets[setOrder] ?? []) as { reps?: number; weight_kg?: number; time_seconds?: number; distance_km?: number }[];
+        const group = (sets[setOrder] ?? []) as { reps?: number; weight_kg?: number; time_seconds?: number; distance_km?: number; notes?: unknown }[];
         for (let dropIndex = 0; dropIndex < group.length; dropIndex++) {
           const s = group[dropIndex] ?? {};
           const reps = type === "lift" ? (typeof s.reps === "number" ? s.reps : parseInt(String(s.reps ?? 0), 10) || null) : null;
           const weight_kg = type === "lift" ? (typeof s.weight_kg === "number" ? s.weight_kg : parseFloat(String(s.weight_kg ?? 0)) || null) : null;
           const time_seconds = isTimedExerciseType(type) ? (typeof s.time_seconds === "number" ? s.time_seconds : parseInt(String(s.time_seconds ?? 0), 10) || null) : null;
           const distance_km = type === "cardio" ? (typeof s.distance_km === "number" ? s.distance_km : parseFloat(String(s.distance_km ?? 0)) || null) : null;
-          if (hasDropIndex) insertSetStmt.run(exerciseId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex);
+          const rowNotes = normalizeWorkoutNote(s.notes);
+          if (hasDropIndex && hasSetNotes) insertSetStmt.run(exerciseId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex, rowNotes);
+          else if (hasDropIndex) insertSetStmt.run(exerciseId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex);
+          else if (hasSetNotes) insertSetStmt.run(exerciseId, reps, weight_kg, time_seconds, distance_km, setOrder, rowNotes);
           else insertSetStmt.run(exerciseId, reps, weight_kg, time_seconds, distance_km, setOrder);
         }
       }
     } else {
       for (let i = 0; i < sets.length; i++) {
-        const s = (sets[i] ?? {}) as { reps?: number; weight_kg?: number; time_seconds?: number; distance_km?: number };
+        const s = (sets[i] ?? {}) as { reps?: number; weight_kg?: number; time_seconds?: number; distance_km?: number; notes?: unknown };
         const reps = type === "lift" ? (typeof s.reps === "number" ? s.reps : parseInt(String(s.reps ?? 0), 10) || null) : null;
         const weight_kg = type === "lift" ? (typeof s.weight_kg === "number" ? s.weight_kg : parseFloat(String(s.weight_kg ?? 0)) || null) : null;
         const time_seconds = isTimedExerciseType(type) ? (typeof s.time_seconds === "number" ? s.time_seconds : parseInt(String(s.time_seconds ?? 0), 10) || null) : null;
         const distance_km = type === "cardio" ? (typeof s.distance_km === "number" ? s.distance_km : parseFloat(String(s.distance_km ?? 0)) || null) : null;
-        if (hasDropIndex) insertSetStmt.run(exerciseId, reps, weight_kg, time_seconds, distance_km, i, 0);
+        const rowNotes = normalizeWorkoutNote(s.notes);
+        if (hasDropIndex && hasSetNotes) insertSetStmt.run(exerciseId, reps, weight_kg, time_seconds, distance_km, i, 0, rowNotes);
+        else if (hasDropIndex) insertSetStmt.run(exerciseId, reps, weight_kg, time_seconds, distance_km, i, 0);
+        else if (hasSetNotes) insertSetStmt.run(exerciseId, reps, weight_kg, time_seconds, distance_km, i, rowNotes);
         else insertSetStmt.run(exerciseId, reps, weight_kg, time_seconds, distance_km, i);
       }
     }

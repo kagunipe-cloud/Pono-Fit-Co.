@@ -1,6 +1,7 @@
-import type { Database } from "better-sqlite3";
+import DatabaseType from "better-sqlite3";
 import { isTimedExerciseType, parseExerciseType, type ExerciseType } from "@/lib/exercise-types";
 import { getMuscleGroup } from "@/lib/muscle-groups";
+import { normalizeWorkoutNote } from "@/lib/workout-notes";
 
 /**
  * Payload for trainer-assigned workouts (create / replace).
@@ -16,12 +17,16 @@ export type TrainerAssignedExercisePayload = {
   equipment?: string;
   instructions?: string[];
   use_for_my_1rm?: boolean;
-  sets: { reps?: number; weight_kg?: number }[] | { time_seconds?: number; distance_km?: number }[];
+  /** Member-visible note for this exercise in this workout only. */
+  notes?: string;
+  sets:
+    | { reps?: number; weight_kg?: number; notes?: string }[]
+    | { time_seconds?: number; distance_km?: number; notes?: string }[];
 };
 
 /** Inserts workout_exercises + workout_sets for a trainer-assigned workout (caller must create the workouts row first). */
 export function populateTrainerAssignedWorkoutContent(
-  db: Database,
+  db: DatabaseType.Database,
   workoutId: number,
   clientMemberId: string,
   exercises: TrainerAssignedExercisePayload[]
@@ -31,13 +36,39 @@ export function populateTrainerAssignedWorkoutContent(
   const insertExercise = db.prepare(
     "INSERT INTO exercises (name, type, primary_muscles, secondary_muscles, equipment, muscle_group, instructions) VALUES (?, ?, ?, ?, ?, ?, ?)"
   );
-  const hasUseForMy1rm = (db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[]).some((c) => c.name === "use_for_my_1rm");
+  const weCols = db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[];
+  const hasUseForMy1rm = weCols.some((c) => c.name === "use_for_my_1rm");
+  const hasExerciseNotes = weCols.some((c) => c.name === "notes");
+  const setColNames = (db.prepare("PRAGMA table_info(workout_sets)").all() as { name: string }[]).map((c) => c.name);
+  const hasDropIndex = setColNames.includes("drop_index");
+  const hasSetNotes = setColNames.includes("notes");
+
   const insertEx = hasUseForMy1rm
     ? db.prepare("INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id, use_for_my_1rm) VALUES (?, ?, ?, ?, ?, ?)")
     : db.prepare("INSERT INTO workout_exercises (workout_id, type, exercise_name, sort_order, exercise_id) VALUES (?, ?, ?, ?, ?)");
-  const insertSet = db.prepare(
-    "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order) VALUES (?, ?, ?, ?, ?, ?)"
-  );
+
+  let insertSet: DatabaseType.Statement<unknown[]>;
+  if (hasDropIndex && hasSetNotes) {
+    insertSet = db.prepare(
+      "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    );
+  } else if (hasDropIndex) {
+    insertSet = db.prepare(
+      "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    );
+  } else if (hasSetNotes) {
+    insertSet = db.prepare(
+      "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, notes) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    );
+  } else {
+    insertSet = db.prepare(
+      "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order) VALUES (?, ?, ?, ?, ?, ?)"
+    );
+  }
+
+  const updateExNotes = hasExerciseNotes
+    ? db.prepare("UPDATE workout_exercises SET notes = ? WHERE id = ?")
+    : null;
 
   for (let i = 0; i < exercises.length; i++) {
     const ex = exercises[i] as TrainerAssignedExercisePayload;
@@ -65,11 +96,18 @@ export function populateTrainerAssignedWorkoutContent(
       }
     }
 
-    const useForMy1rm = !!(ex as TrainerAssignedExercisePayload).use_for_my_1rm && type === "lift" && exerciseId != null;
+    const useForMy1rm = !!ex.use_for_my_1rm && type === "lift" && exerciseId != null;
     const exResult = hasUseForMy1rm
       ? insertEx.run(workoutId, type, exercise_name, i, exerciseId, useForMy1rm ? 1 : 0)
       : insertEx.run(workoutId, type, exercise_name, i, exerciseId);
     const workoutExerciseId = Number(exResult.lastInsertRowid);
+
+    if (updateExNotes != null && "notes" in ex) {
+      const n =
+        typeof ex.notes === "string" ? (ex.notes.trim() === "" ? null : normalizeWorkoutNote(ex.notes)) : null;
+      updateExNotes.run(n, workoutExerciseId);
+    }
+
     if (useForMy1rm) {
       db.prepare("INSERT OR REPLACE INTO member_1rm_settings (member_id, exercise_id) VALUES (?, ?)").run(clientMemberId, exerciseId);
     }
@@ -95,13 +133,17 @@ export function populateTrainerAssignedWorkoutContent(
               ? (s as { distance_km: number }).distance_km
               : parseFloat(String((s as { distance_km?: number }).distance_km ?? 0)) || null)
           : null;
-      insertSet.run(workoutExerciseId, reps, weight_kg, time_seconds, distance_km, j);
+      const rowNotes = normalizeWorkoutNote((s as { notes?: unknown }).notes);
+      if (hasDropIndex && hasSetNotes) insertSet.run(workoutExerciseId, reps, weight_kg, time_seconds, distance_km, j, 0, rowNotes);
+      else if (hasDropIndex) insertSet.run(workoutExerciseId, reps, weight_kg, time_seconds, distance_km, j, 0);
+      else if (hasSetNotes) insertSet.run(workoutExerciseId, reps, weight_kg, time_seconds, distance_km, j, rowNotes);
+      else insertSet.run(workoutExerciseId, reps, weight_kg, time_seconds, distance_km, j);
     }
   }
 }
 
 /** Remove all exercises/sets from a workout (before replace). */
-export function clearWorkoutExerciseContent(db: Database, workoutId: number): void {
+export function clearWorkoutExerciseContent(db: DatabaseType.Database, workoutId: number): void {
   db.prepare("DELETE FROM workout_sets WHERE workout_exercise_id IN (SELECT id FROM workout_exercises WHERE workout_id = ?)").run(workoutId);
   db.prepare("DELETE FROM workout_exercises WHERE workout_id = ?").run(workoutId);
 }

@@ -99,11 +99,13 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
   }
 
   const hasUseCol = (db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[]).some((c) => c.name === "use_for_my_1rm");
+  const hasExerciseNotesCol = (db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[]).some((c) => c.name === "notes");
 
   const rows = db
     .prepare(
       `SELECT we.id AS workout_exercise_id, we.type, we.exercise_name, we.exercise_id,
               ${hasUseCol ? "we.use_for_my_1rm" : "0 AS use_for_my_1rm"},
+              ${hasExerciseNotesCol ? "we.notes" : "NULL"} AS occurrence_notes,
               e.primary_muscles, e.equipment, e.muscle_group, e.instructions AS exercise_instructions
        FROM workout_exercises we
        LEFT JOIN exercises e ON e.id = we.exercise_id
@@ -116,6 +118,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       exercise_name: string;
       exercise_id: number | null;
       use_for_my_1rm?: number | null;
+      occurrence_notes: string | null;
       primary_muscles: string | null;
       equipment: string | null;
       muscle_group: string | null;
@@ -124,14 +127,24 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
   const exercises: Record<string, unknown>[] = [];
 
+  const setWsPragma = db.prepare("PRAGMA table_info(workout_sets)").all() as { name: string }[];
+  const hasSetNotes = setWsPragma.some((c) => c.name === "notes");
+  let setSel = "SELECT reps, weight_kg, time_seconds, distance_km";
+  if (hasSetNotes) setSel += ", notes";
+  setSel += " FROM workout_sets WHERE workout_exercise_id = ? ORDER BY set_order, id";
+
   for (const ex of rows) {
-    const sets = db
-      .prepare("SELECT reps, weight_kg, time_seconds, distance_km FROM workout_sets WHERE workout_exercise_id = ? ORDER BY set_order, id")
-      .all(ex.workout_exercise_id) as { reps: number | null; weight_kg: number | null; time_seconds: number | null; distance_km: number | null }[];
+    const sets = db.prepare(setSel).all(ex.workout_exercise_id) as {
+      reps: number | null;
+      weight_kg: number | null;
+      time_seconds: number | null;
+      distance_km: number | null;
+      notes?: string | null;
+    }[];
 
     const instructionsCombined = parseInstructionsJson(ex.exercise_instructions) || "";
 
-    const base = {
+    const base: Record<string, unknown> = {
       type: ex.type === "cardio" ? "cardio" : "lift",
       exercise_name: ex.exercise_name,
       exercise_id: ex.exercise_id && ex.exercise_id > 0 ? ex.exercise_id : undefined,
@@ -141,6 +154,8 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
       instructions: instructionsCombined || undefined,
       use_for_my_1rm: !!(ex.use_for_my_1rm && ex.type === "lift"),
     };
+    const on = (ex.occurrence_notes ?? "").trim();
+    if (on) base.notes = on;
 
     if (ex.type === "cardio") {
       exercises.push({
@@ -148,6 +163,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         sets: sets.map((s) => ({
           time: s.time_seconds != null ? String(Math.round(s.time_seconds / 60)) : "",
           distance: s.distance_km != null ? String(Math.round(kmToMiles(s.distance_km) * 100) / 100) : "",
+          ...((s.notes ?? "").trim() ? { notes: (s.notes ?? "").trim() } : {}),
         })),
       });
     } else {
@@ -156,6 +172,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         sets: sets.map((s) => ({
           reps: s.reps != null ? String(s.reps) : "",
           weight: s.weight_kg != null ? String(s.weight_kg) : "",
+          ...((s.notes ?? "").trim() ? { notes: (s.notes ?? "").trim() } : {}),
         })),
       });
     }

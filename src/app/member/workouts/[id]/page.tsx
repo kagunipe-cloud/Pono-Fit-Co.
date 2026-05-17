@@ -7,12 +7,14 @@ import { useParams, useRouter } from "next/navigation";
 import { EXERCISE_TYPE_OPTIONS, isTimedExerciseType, type ExerciseType } from "@/lib/exercise-types";
 import { getWeightComparisonWithArticle } from "@/lib/workout-congrats";
 import { milesToKm, kmToMiles } from "@/lib/workouts";
+import { MAX_WORKOUT_NOTE_LEN } from "@/lib/workout-notes";
 import { MuscleMapPicker } from "@/components/MuscleMapPicker";
 import { PRBadge } from "@/components/PRBadge";
 import { LiftSetPrPercent } from "@/components/LiftSetPrPercent";
 
-type LiftSetRow = { reps: string; weight: string; drops?: { reps: string; weight: string }[] };
-type CardioSetRow = { time: string; distance: string };
+type LiftDropRow = { reps: string; weight: string; note?: string };
+type LiftSetRow = { reps: string; weight: string; drops?: LiftDropRow[]; note?: string };
+type CardioSetRow = { time: string; distance: string; note?: string };
 type SetRow = LiftSetRow | CardioSetRow;
 
 function exerciseTypeLabel(type: string | null | undefined): string {
@@ -44,7 +46,17 @@ type Exercise = {
   sort_order?: number;
   exercise_id?: number | null;
   use_for_my_1rm?: number;
-  sets: { id: number; reps: number | null; weight_kg: number | null; time_seconds: number | null; distance_km: number | null; set_order: number; drop_index?: number }[];
+  notes?: string | null;
+  sets: {
+    id: number;
+    reps: number | null;
+    weight_kg: number | null;
+    time_seconds: number | null;
+    distance_km: number | null;
+    set_order: number;
+    drop_index?: number;
+    notes?: string | null;
+  }[];
 };
 type OfficialExercise = { id: number; name: string; type: string };
 
@@ -214,6 +226,9 @@ export default function MemberWorkoutDetailPage() {
   const [useForMy1rm, setUseForMy1rm] = useState(false);
   const [useForMy1rmEdit, setUseForMy1rmEdit] = useState(false);
   const [my1rmList, setMy1rmList] = useState<{ exercise_name: string; current_1rm_lbs: number }[]>([]);
+  /** Note for the whole exercise (this workout occurrence), not tied to one set */
+  const [exerciseNotes, setExerciseNotes] = useState("");
+  const [editExerciseNotes, setEditExerciseNotes] = useState("");
   const [prBadgesByEx, setPrBadgesByEx] = useState<Record<number, ("Reps" | "Auto 1RM" | "My 1RM")[]>>({});
   /** Finished-workout PR lines keyed by workout_exercise id → set_order → lines (from pr-badges API). */
   const [prSetNotesByEx, setPrSetNotesByEx] = useState<Record<number, Record<number, string[]>>>({});
@@ -322,6 +337,7 @@ export default function MemberWorkoutDetailPage() {
     setExerciseSuggestions([]);
     setSets([{ reps: "", weight: "", drops: [] }]);
     setUseForMy1rm(false);
+    setExerciseNotes("");
   }
 
   function startAddCardio() {
@@ -331,6 +347,7 @@ export default function MemberWorkoutDetailPage() {
     setShowCustomNameReminder(false);
     setExerciseSuggestions([]);
     setSets([{ time: "", distance: "" }]);
+    setExerciseNotes("");
   }
 
   function startAddStretch() {
@@ -341,6 +358,7 @@ export default function MemberWorkoutDetailPage() {
     setExerciseSuggestions([]);
     setSets([{ time: "", distance: "" }]);
     setUseForMy1rm(false);
+    setExerciseNotes("");
   }
 
   useEffect(() => {
@@ -475,24 +493,34 @@ export default function MemberWorkoutDetailPage() {
         exercise_name: exerciseName.trim(),
         ...(selectedOfficialId != null && { exercise_id: selectedOfficialId }),
         ...(mode === "lift" && useForMy1rm && selectedOfficialId != null && { use_for_my_1rm: true }),
+        notes: exerciseNotes.trim() || null,
       };
       const body =
         mode === "lift"
           ? {
               ...base,
               sets: (sets as LiftSetRow[]).map((row) => {
-                const main = { reps: parseInt(row.reps, 10) || null, weight_kg: parseFloat(row.weight) || null };
-                const dropParts = (row.drops ?? []).map((d) => ({ reps: parseInt(d.reps, 10) || null, weight_kg: parseFloat(d.weight) || null }));
+                const main = {
+                  reps: parseInt(row.reps, 10) || null,
+                  weight_kg: parseFloat(row.weight) || null,
+                  ...(row.note?.trim() ? { notes: row.note.trim() } : {}),
+                };
+                const dropParts = (row.drops ?? []).map((d) => ({
+                  reps: parseInt(d.reps, 10) || null,
+                  weight_kg: parseFloat(d.weight) || null,
+                  ...(d.note?.trim() ? { notes: d.note.trim() } : {}),
+                }));
                 return [main, ...dropParts];
               }),
             }
           : {
               ...base,
               sets: sets.map((s) => {
-                const row = s as { time: string; distance: string };
+                const row = s as CardioSetRow;
                 return {
                   time_seconds: parseInt(row.time, 10) ? parseInt(row.time, 10) * 60 : parseInt(row.time, 10) || null,
                   distance_km: mode === "cardio" && parseFloat(row.distance) ? milesToKm(parseFloat(row.distance)) : null,
+                  ...(row.note?.trim() ? { notes: row.note.trim() } : {}),
                 };
               }),
             };
@@ -589,8 +617,19 @@ export default function MemberWorkoutDetailPage() {
       const rows: LiftSetRow[] = groups.map((group) => {
         const first = group[0];
         const drops =
-          group.length > 1 ? group.slice(1).map((p) => ({ reps: String(p.reps ?? ""), weight: String(p.weight_kg ?? "") })) : [];
-        return { reps: String(first?.reps ?? ""), weight: String(first?.weight_kg ?? ""), drops };
+          group.length > 1
+            ? group.slice(1).map((p) => ({
+                reps: String(p.reps ?? ""),
+                weight: String(p.weight_kg ?? ""),
+                ...((p.notes ?? "").trim() ? { note: String(p.notes).trim() } : {}),
+              }))
+            : [];
+        return {
+          reps: String(first?.reps ?? ""),
+          weight: String(first?.weight_kg ?? ""),
+          ...((first?.notes ?? "").trim() ? { note: String(first.notes).trim() } : {}),
+          drops,
+        };
       });
       setAddSetsRows(rows);
       setAddSetsRepeatLiftTouched(
@@ -611,6 +650,7 @@ export default function MemberWorkoutDetailPage() {
         (lastTimeSets as Exercise["sets"]).map((s) => ({
           time: s.time_seconds != null ? String(Math.round(s.time_seconds / 60)) : "",
           distance: s.distance_km != null ? String(kmToMiles(s.distance_km)) : "",
+          ...((s.notes ?? "").trim() ? { note: String(s.notes).trim() } : {}),
         }))
       );
       setAddSetsRepeatCardioTouched((lastTimeSets as Exercise["sets"]).map(() => ({ t: false, d: false })));
@@ -642,15 +682,24 @@ export default function MemberWorkoutDetailPage() {
         ex.type === "lift"
           ? {
               sets: (addSetsRows as LiftSetRow[]).map((row) => {
-                const main = { reps: parseInt(row.reps, 10) || null, weight_kg: parseFloat(row.weight) || null };
-                const dropParts = (row.drops ?? []).map((d) => ({ reps: parseInt(d.reps, 10) || null, weight_kg: parseFloat(d.weight) || null }));
+                const main = {
+                  reps: parseInt(row.reps, 10) || null,
+                  weight_kg: parseFloat(row.weight) || null,
+                  ...(row.note?.trim() ? { notes: row.note.trim() } : {}),
+                };
+                const dropParts = (row.drops ?? []).map((d) => ({
+                  reps: parseInt(d.reps, 10) || null,
+                  weight_kg: parseFloat(d.weight) || null,
+                  ...(d.note?.trim() ? { notes: d.note.trim() } : {}),
+                }));
                 return [main, ...dropParts];
               }),
             }
           : {
-              sets: (addSetsRows as { time: string; distance: string }[]).map((r) => ({
+              sets: (addSetsRows as CardioSetRow[]).map((r) => ({
                 time_seconds: parseInt(r.time, 10) ? parseInt(r.time, 10) * 60 : null,
                 distance_km: ex.type === "cardio" && parseFloat(r.distance) ? milesToKm(parseFloat(r.distance)) : null,
+                ...(r.note?.trim() ? { notes: r.note.trim() } : {}),
               })),
             };
       const res = await fetch(`/api/member/workouts/${id}/exercises/${addSetsForExId}/sets`, {
@@ -678,17 +727,31 @@ export default function MemberWorkoutDetailPage() {
     setEditExerciseSuggestions([]);
     setEditShowCustomNameReminder(false);
     setUseForMy1rmEdit((ex.use_for_my_1rm ?? 0) === 1);
+    setEditExerciseNotes((ex.notes ?? "").trim());
     if (ex.sets.length > 0) {
       setEditSets(
         type === "lift"
           ? groupLiftSets(ex.sets).map((group) => {
               const first = group[0];
-              const drops = group.length > 1 ? group.slice(1).map((p) => ({ reps: String(p.reps ?? ""), weight: String(p.weight_kg ?? "") })) : [];
-              return { reps: String(first?.reps ?? ""), weight: String(first?.weight_kg ?? ""), drops };
+              const drops =
+                group.length > 1
+                  ? group.slice(1).map((p) => ({
+                      reps: String(p.reps ?? ""),
+                      weight: String(p.weight_kg ?? ""),
+                      ...((p.notes ?? "").trim() ? { note: String(p.notes).trim() } : {}),
+                    }))
+                  : [];
+              return {
+                reps: String(first?.reps ?? ""),
+                weight: String(first?.weight_kg ?? ""),
+                ...((first?.notes ?? "").trim() ? { note: String(first.notes).trim() } : {}),
+                drops,
+              };
             })
           : ex.sets.map((s) => ({
               time: s.time_seconds != null ? String(Math.round(s.time_seconds / 60)) : "",
               distance: s.distance_km != null ? String(kmToMiles(s.distance_km)) : "",
+              ...((s.notes ?? "").trim() ? { note: String(s.notes).trim() } : {}),
             }))
       );
     } else {
@@ -697,7 +760,10 @@ export default function MemberWorkoutDetailPage() {
   }
 
   function addEditSet() {
-    setEditSets((prev) => [...prev, editType === "lift" ? { reps: "", weight: "", drops: [] } : { time: "", distance: "" }]);
+    setEditSets((prev) => [
+      ...prev,
+      editType === "lift" ? { reps: "", weight: "", drops: [] } : { time: "", distance: "" },
+    ]);
   }
 
   async function saveEdit() {
@@ -718,6 +784,7 @@ export default function MemberWorkoutDetailPage() {
           type: editType,
           ...(resolvedExerciseId != null ? { exercise_id: resolvedExerciseId } : {}),
           ...(editType === "lift" && { use_for_my_1rm: useForMy1rmEdit && resolvedExerciseId != null }),
+          notes: editExerciseNotes.trim() || null,
         }),
       });
       if (!res.ok) {
@@ -728,15 +795,24 @@ export default function MemberWorkoutDetailPage() {
         editType === "lift"
           ? {
               sets: (editSets as LiftSetRow[]).map((row) => {
-                const main = { reps: parseInt(row.reps, 10) || null, weight_kg: parseFloat(row.weight) || null };
-                const dropParts = (row.drops ?? []).map((d) => ({ reps: parseInt(d.reps, 10) || null, weight_kg: parseFloat(d.weight) || null }));
+                const main = {
+                  reps: parseInt(row.reps, 10) || null,
+                  weight_kg: parseFloat(row.weight) || null,
+                  ...(row.note?.trim() ? { notes: row.note.trim() } : {}),
+                };
+                const dropParts = (row.drops ?? []).map((d) => ({
+                  reps: parseInt(d.reps, 10) || null,
+                  weight_kg: parseFloat(d.weight) || null,
+                  ...(d.note?.trim() ? { notes: d.note.trim() } : {}),
+                }));
                 return [main, ...dropParts];
               }),
             }
           : {
-              sets: (editSets as { time: string; distance: string }[]).map((r) => ({
+              sets: (editSets as CardioSetRow[]).map((r) => ({
                 time_seconds: parseInt(r.time, 10) ? parseInt(r.time, 10) * 60 : null,
                 distance_km: editType === "cardio" && parseFloat(r.distance) ? milesToKm(parseFloat(r.distance)) : null,
+                ...(r.note?.trim() ? { notes: r.note.trim() } : {}),
               })),
             };
       const setsRes = await fetch(`/api/member/workouts/${id}/exercises/${editingExId}/sets`, {
@@ -1194,6 +1270,17 @@ export default function MemberWorkoutDetailPage() {
                   {loadingInstructions ? "Loading…" : "Need Instructions?"}
                 </button>
               </div>
+              <label className="block mt-4">
+                <span className="text-xs font-medium text-stone-600">Exercise note (optional)</span>
+                <textarea
+                  value={exerciseNotes}
+                  onChange={(e) => setExerciseNotes(e.target.value.slice(0, MAX_WORKOUT_NOTE_LEN))}
+                  rows={2}
+                  maxLength={MAX_WORKOUT_NOTE_LEN}
+                  placeholder="Tempos, cues, equipment substitutions…"
+                  className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm text-stone-800 placeholder:text-stone-400"
+                />
+              </label>
               <div className="mt-4 space-y-2">
                 {mode === "lift" ? (
                   (sets as LiftSetRow[]).map((row, i) => (
@@ -1240,6 +1327,20 @@ export default function MemberWorkoutDetailPage() {
                           invalidateKey={prInvalidateKey}
                         />
                       </div>
+                      <input
+                        type="text"
+                        placeholder="Set note (optional)"
+                        value={row.note ?? ""}
+                        onChange={(e) =>
+                          setSets((s) =>
+                            s.map((rr, ri) =>
+                              ri === i ? { ...(rr as LiftSetRow), note: e.target.value.slice(0, MAX_WORKOUT_NOTE_LEN) } : rr
+                            )
+                          )
+                        }
+                        maxLength={MAX_WORKOUT_NOTE_LEN}
+                        className="w-full min-w-0 sm:max-w-md sm:ml-12 px-2 py-1 rounded border border-stone-200 text-xs text-stone-700 placeholder:text-stone-400"
+                      />
                       {(row.drops ?? []).map((drop, di) => (
                         <div key={di} className="space-y-2 pl-10 w-full min-w-0">
                           <div className="flex flex-wrap items-center gap-2 min-w-0">
@@ -1290,6 +1391,24 @@ export default function MemberWorkoutDetailPage() {
                               invalidateKey={prInvalidateKey}
                             />
                           </div>
+                          <input
+                            type="text"
+                            placeholder="Dropset note (optional)"
+                            value={drop.note ?? ""}
+                            onChange={(e) =>
+                              setSets((s) =>
+                                s.map((row, ri) => {
+                                  if (ri !== i) return row;
+                                  const r = row as LiftSetRow;
+                                  const drops = [...(r.drops ?? [])];
+                                  drops[di] = { ...drops[di]!, note: e.target.value.slice(0, MAX_WORKOUT_NOTE_LEN) };
+                                  return { ...r, drops };
+                                })
+                              )
+                            }
+                            maxLength={MAX_WORKOUT_NOTE_LEN}
+                            className="w-full min-w-0 sm:max-w-md pl-6 px-2 py-1 rounded border border-stone-200 text-xs text-stone-700 placeholder:text-stone-400"
+                          />
                         </div>
                       ))}
                       {(row.drops?.length ?? 0) < 2 && (
@@ -1314,37 +1433,53 @@ export default function MemberWorkoutDetailPage() {
                     </div>
                   ))
                 ) : (
-                  (sets as { time: string; distance: string }[]).map((row, i) => (
-                    <div key={i} className="flex gap-2 flex-wrap items-center">
-                      <span className="text-sm text-stone-500 w-10">Set {i + 1}</span>
-                      <input
-                        type="text"
-                        placeholder={mode === "stretch" ? "Duration (min)" : "Time (min)"}
-                        value={row.time}
-                        onChange={(e) =>
-                          setSets((s) => {
-                            const next = [...s];
-                            (next[i] as { time: string; distance: string }).time = e.target.value;
-                            return next;
-                          })
-                        }
-                        className="w-24 px-2 py-1.5 rounded border border-stone-200"
-                      />
-                      {mode === "cardio" && (
+                  (sets as CardioSetRow[]).map((row, i) => (
+                    <div key={i} className="flex flex-col gap-1 min-w-0 w-full">
+                      <div className="flex gap-2 flex-wrap items-center">
+                        <span className="text-sm text-stone-500 w-10">Set {i + 1}</span>
                         <input
                           type="text"
-                          placeholder="Distance (mi)"
-                          value={row.distance}
+                          placeholder={mode === "stretch" ? "Duration (min)" : "Time (min)"}
+                          value={row.time}
                           onChange={(e) =>
-                            setSets((s) => {
-                              const next = [...s];
-                              (next[i] as { time: string; distance: string }).distance = e.target.value;
-                              return next;
-                            })
+                            setSets((s) =>
+                              s.map((rr, ri) =>
+                                ri === i ? { ...(rr as CardioSetRow), time: e.target.value } : rr
+                              )
+                            )
                           }
                           className="w-24 px-2 py-1.5 rounded border border-stone-200"
                         />
-                      )}
+                        {mode === "cardio" && (
+                          <input
+                            type="text"
+                            placeholder="Distance (mi)"
+                            value={row.distance}
+                            onChange={(e) =>
+                              setSets((s) =>
+                                s.map((rr, ri) =>
+                                  ri === i ? { ...(rr as CardioSetRow), distance: e.target.value } : rr
+                                )
+                              )
+                            }
+                            className="w-24 px-2 py-1.5 rounded border border-stone-200"
+                          />
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Set note (optional)"
+                        value={row.note ?? ""}
+                        onChange={(e) =>
+                          setSets((s) =>
+                            s.map((rr, ri) =>
+                              ri === i ? { ...(rr as CardioSetRow), note: e.target.value.slice(0, MAX_WORKOUT_NOTE_LEN) } : rr
+                            )
+                          )
+                        }
+                        maxLength={MAX_WORKOUT_NOTE_LEN}
+                        className="w-full min-w-0 sm:max-w-md sm:ml-12 px-2 py-1 rounded border border-stone-200 text-xs text-stone-700 placeholder:text-stone-400"
+                      />
                     </div>
                   ))
                 )}
@@ -1524,6 +1659,17 @@ export default function MemberWorkoutDetailPage() {
                           <span className="text-sm text-stone-700">Use for My 1RM Calculation</span>
                         </label>
                       )}
+                      <label className="block">
+                        <span className="text-xs font-medium text-stone-600">Exercise note (optional)</span>
+                        <textarea
+                          value={editExerciseNotes}
+                          onChange={(e) => setEditExerciseNotes(e.target.value.slice(0, MAX_WORKOUT_NOTE_LEN))}
+                          rows={2}
+                          maxLength={MAX_WORKOUT_NOTE_LEN}
+                          placeholder="Tempos, cues, equipment substitutions…"
+                          className="mt-1 w-full px-3 py-2 rounded-lg border border-stone-200 text-sm text-stone-800 placeholder:text-stone-400"
+                        />
+                      </label>
                       <div className="space-y-2">
                         <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Sets</p>
                         {editType === "lift"
@@ -1578,6 +1724,22 @@ export default function MemberWorkoutDetailPage() {
                                     Remove
                                   </button>
                                 </div>
+                                <input
+                                  type="text"
+                                  placeholder="Set note (optional)"
+                                  value={row.note ?? ""}
+                                  onChange={(e) =>
+                                    setEditSets((s) =>
+                                      s.map((r, ri) =>
+                                        ri === i
+                                          ? { ...(r as LiftSetRow), note: e.target.value.slice(0, MAX_WORKOUT_NOTE_LEN) }
+                                          : r
+                                      )
+                                    )
+                                  }
+                                  maxLength={MAX_WORKOUT_NOTE_LEN}
+                                  className="w-full min-w-0 sm:max-w-md sm:ml-12 px-2 py-1 rounded border border-stone-200 text-xs text-stone-700 placeholder:text-stone-400"
+                                />
                                 {(row.drops ?? []).map((drop, di) => (
                                   <div key={di} className="space-y-2 pl-10 w-full min-w-0">
                                     <div className="flex flex-wrap items-center gap-2 min-w-0">
@@ -1628,6 +1790,24 @@ export default function MemberWorkoutDetailPage() {
                                         invalidateKey={prInvalidateKey}
                                       />
                                     </div>
+                                    <input
+                                      type="text"
+                                      placeholder="Dropset note (optional)"
+                                      value={drop.note ?? ""}
+                                      onChange={(e) =>
+                                        setEditSets((s) =>
+                                          s.map((r, ri) => {
+                                            if (ri !== i) return r;
+                                            const row = r as LiftSetRow;
+                                            const drops = [...(row.drops ?? [])];
+                                            drops[di] = { ...drops[di]!, note: e.target.value.slice(0, MAX_WORKOUT_NOTE_LEN) };
+                                            return { ...row, drops };
+                                          })
+                                        )
+                                      }
+                                      maxLength={MAX_WORKOUT_NOTE_LEN}
+                                      className="w-full min-w-0 sm:max-w-md pl-6 px-2 py-1 rounded border border-stone-200 text-xs text-stone-700 placeholder:text-stone-400"
+                                    />
                                   </div>
                                 ))}
                                 {(row.drops?.length ?? 0) < 2 && (
@@ -1649,46 +1829,64 @@ export default function MemberWorkoutDetailPage() {
                                 )}
                               </div>
                             ))
-                          : (editSets as { time: string; distance: string }[]).map((row, i) => (
-                              <div key={i} className="flex gap-2 flex-wrap items-center justify-between">
-                                <div className="flex gap-2 flex-wrap items-center">
-                                  <span className="text-sm text-stone-500 w-10">Set {i + 1}</span>
-                                  <input
-                                    type="text"
-                                    placeholder={editType === "stretch" ? "Duration (min)" : "Time (min)"}
-                                    value={row.time}
-                                    onChange={(e) =>
-                                      setEditSets((s) => {
-                                        const next = [...s];
-                                        (next[i] as { time: string; distance: string }).time = e.target.value;
-                                        return next;
-                                      })
-                                    }
-                                    className="w-24 px-2 py-1.5 rounded border border-stone-200"
-                                  />
-                                  {editType === "cardio" && (
+                          : (editSets as CardioSetRow[]).map((row, i) => (
+                              <div key={i} className="flex flex-col gap-1 min-w-0 w-full justify-between border-b border-stone-100 pb-2 last:border-0">
+                                <div className="flex gap-2 flex-wrap items-center justify-between">
+                                  <div className="flex gap-2 flex-wrap items-center">
+                                    <span className="text-sm text-stone-500 w-10">Set {i + 1}</span>
                                     <input
                                       type="text"
-                                      placeholder="Distance (mi)"
-                                      value={row.distance}
+                                      placeholder={editType === "stretch" ? "Duration (min)" : "Time (min)"}
+                                      value={row.time}
                                       onChange={(e) =>
-                                        setEditSets((s) => {
-                                          const next = [...s];
-                                          (next[i] as { time: string; distance: string }).distance = e.target.value;
-                                          return next;
-                                        })
+                                        setEditSets((s) =>
+                                          s.map((r, ri) =>
+                                            ri === i ? { ...(r as CardioSetRow), time: e.target.value } : r
+                                          )
+                                        )
                                       }
                                       className="w-24 px-2 py-1.5 rounded border border-stone-200"
                                     />
-                                  )}
+                                    {editType === "cardio" && (
+                                      <input
+                                        type="text"
+                                        placeholder="Distance (mi)"
+                                        value={row.distance}
+                                        onChange={(e) =>
+                                          setEditSets((s) =>
+                                            s.map((r, ri) =>
+                                              ri === i ? { ...(r as CardioSetRow), distance: e.target.value } : r
+                                            )
+                                          )
+                                        }
+                                        className="w-24 px-2 py-1.5 rounded border border-stone-200"
+                                      />
+                                    )}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeEditSetRow(i)}
+                                    className="text-xs text-red-600 hover:underline shrink-0"
+                                  >
+                                    Remove
+                                  </button>
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() => removeEditSetRow(i)}
-                                  className="text-xs text-red-600 hover:underline shrink-0"
-                                >
-                                  Remove
-                                </button>
+                                <input
+                                  type="text"
+                                  placeholder="Set note (optional)"
+                                  value={row.note ?? ""}
+                                  onChange={(e) =>
+                                    setEditSets((s) =>
+                                      s.map((r, ri) =>
+                                        ri === i
+                                          ? { ...(r as CardioSetRow), note: e.target.value.slice(0, MAX_WORKOUT_NOTE_LEN) }
+                                          : r
+                                      )
+                                    )
+                                  }
+                                  maxLength={MAX_WORKOUT_NOTE_LEN}
+                                  className="w-full min-w-0 sm:max-w-md sm:ml-12 px-2 py-1 rounded border border-stone-200 text-xs text-stone-700 placeholder:text-stone-400"
+                                />
                               </div>
                             ))}
                         <button
@@ -1715,6 +1913,7 @@ export default function MemberWorkoutDetailPage() {
                             setEditSelectedOfficialId(null);
                             setEditExerciseSuggestions([]);
                             setEditShowCustomNameReminder(false);
+                            setEditExerciseNotes("");
                           }}
                           className="px-3 py-1.5 rounded-lg border border-stone-200 text-stone-600 text-sm hover:bg-stone-50"
                         >
@@ -1743,6 +1942,11 @@ export default function MemberWorkoutDetailPage() {
                           </span>
                         )}
                       </div>
+                      {(ex.notes ?? "").trim() ? (
+                        <p className="mt-1 text-sm text-stone-600 whitespace-pre-wrap border-l-2 border-stone-200 pl-2">
+                          {(ex.notes ?? "").trim()}
+                        </p>
+                      ) : null}
                       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2">
                         {canReorderExercises && (
                           <span className="inline-flex flex-wrap items-center gap-1.5 mr-1">
@@ -1865,10 +2069,8 @@ export default function MemberWorkoutDetailPage() {
                                 return (
                                 <li key={i} className="space-y-1 min-w-0">
                                   {group.map((s, j) => (
-                                    <div
-                                      key={s.id ?? j}
-                                      className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between text-sm text-stone-600 w-full min-w-0"
-                                    >
+                                    <div key={s.id ?? j} className="flex flex-col gap-0.5 w-full min-w-0">
+                                      <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-baseline sm:justify-between text-sm text-stone-600 w-full min-w-0">
                                       <span className="min-w-0 break-words">
                                         {j === 0 ? `Set ${i + 1}: ` : "↓ "}
                                         {s.weight_kg != null ? s.weight_kg + " lbs" : "—"} × {s.reps ?? "—"} reps
@@ -1899,6 +2101,10 @@ export default function MemberWorkoutDetailPage() {
                                           </button>
                                         )}
                                       </span>
+                                      </div>
+                                      {(s.notes ?? "").trim() ? (
+                                        <p className="text-xs text-stone-500 italic whitespace-pre-wrap pl-0">{String(s.notes).trim()}</p>
+                                      ) : null}
                                     </div>
                                   ))}
                                 </li>
@@ -1907,7 +2113,8 @@ export default function MemberWorkoutDetailPage() {
                             : ex.sets.map((s, i) => {
                                 const cardioSetOrder = s.set_order ?? i;
                                 return (
-                                <li key={s.id} className="flex flex-wrap items-center justify-between gap-2">
+                                <li key={s.id} className="flex flex-col gap-0.5">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
                                   <span>
                                     Set {i + 1}: {s.time_seconds != null ? Math.round(s.time_seconds / 60) + " min" : "—"}
                                     {s.distance_km != null ? ", " + kmToMiles(s.distance_km).toFixed(1) + " mi" : ""}
@@ -1920,6 +2127,10 @@ export default function MemberWorkoutDetailPage() {
                                   >
                                     {deletingSetKey === `${ex.id}-${cardioSetOrder}` ? "…" : "Remove set"}
                                   </button>
+                                  </div>
+                                  {(s.notes ?? "").trim() ? (
+                                    <p className="text-xs text-stone-500 italic whitespace-pre-wrap pl-0">{String(s.notes).trim()}</p>
+                                  ) : null}
                                 </li>
                               );
                               })}
@@ -2017,6 +2228,22 @@ export default function MemberWorkoutDetailPage() {
                                       </button>
                                     )}
                                   </div>
+                                  <input
+                                    type="text"
+                                    placeholder="Set note (optional)"
+                                    value={row.note ?? ""}
+                                    onChange={(e) =>
+                                      setAddSetsRows((s) =>
+                                        s.map((r, ri) =>
+                                          ri === i
+                                            ? { ...(r as LiftSetRow), note: e.target.value.slice(0, MAX_WORKOUT_NOTE_LEN) }
+                                            : r
+                                        )
+                                      )
+                                    }
+                                    maxLength={MAX_WORKOUT_NOTE_LEN}
+                                    className="w-full min-w-0 sm:max-w-md sm:ml-10 px-2 py-1 rounded border border-stone-200 text-xs text-stone-700 placeholder:text-stone-400"
+                                  />
                                   {(row.drops ?? []).map((drop, di) => {
                                     const dwT = lt?.drops[di]?.w ?? true;
                                     const drT = lt?.drops[di]?.r ?? true;
@@ -2095,6 +2322,24 @@ export default function MemberWorkoutDetailPage() {
                                           ) : null;
                                         })()}
                                       </div>
+                                      <input
+                                        type="text"
+                                        placeholder="Dropset note (optional)"
+                                        value={drop.note ?? ""}
+                                        onChange={(e) =>
+                                          setAddSetsRows((s) =>
+                                            s.map((r, ri) => {
+                                              if (ri !== i) return r;
+                                              const row = r as LiftSetRow;
+                                              const drops = [...(row.drops ?? [])];
+                                              drops[di] = { ...drops[di]!, note: e.target.value.slice(0, MAX_WORKOUT_NOTE_LEN) };
+                                              return { ...row, drops };
+                                            })
+                                          )
+                                        }
+                                        maxLength={MAX_WORKOUT_NOTE_LEN}
+                                        className="w-full min-w-0 sm:max-w-md pl-6 px-2 py-1 rounded border border-stone-200 text-xs text-stone-700 placeholder:text-stone-400"
+                                      />
                                     </div>
                                     );
                                   })}
@@ -2124,12 +2369,13 @@ export default function MemberWorkoutDetailPage() {
                                 </div>
                               );
                               })
-                            : (addSetsRows as { time: string; distance: string }[]).map((row, i) => {
+                            : (addSetsRows as CardioSetRow[]).map((row, i) => {
                                 const ct = addSetsRepeatCardioTouched?.[i];
                                 const tT = ct?.t ?? true;
                                 const dT = ct?.d ?? true;
                                 return (
-                                <div key={i} className="flex gap-2 flex-wrap items-center justify-between">
+                                <div key={i} className="flex flex-col gap-1 min-w-0 w-full">
+                                  <div className="flex gap-2 flex-wrap items-center justify-between">
                                   <div className="flex gap-2 flex-wrap items-center">
                                     <span className="text-sm text-stone-500 w-8">Set {i + 1}</span>
                                     <input
@@ -2139,7 +2385,7 @@ export default function MemberWorkoutDetailPage() {
                                       onChange={(e) => {
                                         const v = e.target.value;
                                         const next = [...addSetsRows];
-                                        (next[i] as { time: string; distance: string }).time = v;
+                                        (next[i] as CardioSetRow).time = v;
                                         setAddSetsRows(next);
                                         setAddSetsRepeatCardioTouched((prev) =>
                                           prev == null
@@ -2157,7 +2403,7 @@ export default function MemberWorkoutDetailPage() {
                                         onChange={(e) => {
                                           const v = e.target.value;
                                           const next = [...addSetsRows];
-                                          (next[i] as { time: string; distance: string }).distance = v;
+                                          (next[i] as CardioSetRow).distance = v;
                                           setAddSetsRows(next);
                                           setAddSetsRepeatCardioTouched((prev) =>
                                             prev == null
@@ -2169,7 +2415,7 @@ export default function MemberWorkoutDetailPage() {
                                       />
                                     )}
                                   </div>
-                                  {(addSetsRows as { time: string; distance: string }[]).length > 1 && (
+                                  {(addSetsRows as CardioSetRow[]).length > 1 && (
                                     <button
                                       type="button"
                                       onClick={() => removeAddSetRow(i)}
@@ -2178,6 +2424,20 @@ export default function MemberWorkoutDetailPage() {
                                       Remove
                                     </button>
                                   )}
+                                  </div>
+                                  <input
+                                    type="text"
+                                    placeholder="Set note (optional)"
+                                    value={row.note ?? ""}
+                                    onChange={(e) => {
+                                      const v = e.target.value.slice(0, MAX_WORKOUT_NOTE_LEN);
+                                      const next = [...addSetsRows];
+                                      (next[i] as CardioSetRow).note = v;
+                                      setAddSetsRows(next);
+                                    }}
+                                    maxLength={MAX_WORKOUT_NOTE_LEN}
+                                    className="w-full min-w-0 sm:max-w-md sm:ml-10 px-2 py-1 rounded border border-stone-200 text-xs text-stone-700 placeholder:text-stone-400"
+                                  />
                                 </div>
                               );
                               })}

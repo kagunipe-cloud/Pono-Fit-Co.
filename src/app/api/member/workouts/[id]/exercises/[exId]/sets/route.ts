@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import Database from "better-sqlite3";
 import { getDb } from "@/lib/db";
 import { isTimedExerciseType, parseExerciseType, type ExerciseType } from "@/lib/exercise-types";
 import { getMemberIdFromSession } from "@/lib/session";
 import { ensureWorkoutTables } from "@/lib/workouts-server";
+import { normalizeWorkoutNote } from "@/lib/workout-notes";
 
 export const dynamic = "force-dynamic";
 
-type LiftPart = { reps?: number | null; weight_kg?: number | null };
-type CardioPart = { time_seconds?: number | null; distance_km?: number | null };
+type LiftPart = { reps?: number | null; weight_kg?: number | null; notes?: unknown };
+type CardioPart = { time_seconds?: number | null; distance_km?: number | null; notes?: unknown };
 
 /** Normalize sets to grouped format: lift can be [ [part, part?, part?], ... ] (dropsets) or flat [ part, ... ]. Cardio stays flat. */
 function normalizeSetGroups(
@@ -22,8 +24,14 @@ function normalizeSetGroups(
   return (sets as (LiftPart | CardioPart)[]).map((s) => [s]) as (LiftPart[] | CardioPart[])[];
 }
 
-const setSelectCols = "id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index";
 const setOrderBy = "ORDER BY set_order, drop_index, id";
+
+function setSelectColsForTable(hasDropIndex: boolean, hasSetNotes: boolean): string {
+  let c = "id, reps, weight_kg, time_seconds, distance_km, set_order";
+  if (hasDropIndex) c += ", drop_index";
+  if (hasSetNotes) c += ", notes";
+  return c;
+}
 
 /** POST body: { sets: [ { reps?, weight_kg? } ] or grouped [ [part, part?, part?], ... ] for lift; same for cardio (no drops). Appends sets. */
 export async function POST(
@@ -67,13 +75,25 @@ export async function POST(
 
     const tableCols = (db.prepare("PRAGMA table_info(workout_sets)").all() as { name: string }[]).map((c) => c.name);
     const hasDropIndex = tableCols.includes("drop_index");
-    const insertSet = hasDropIndex
-      ? db.prepare(
-          "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index) VALUES (?, ?, ?, ?, ?, ?, ?)"
-        )
-      : db.prepare(
-          "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order) VALUES (?, ?, ?, ?, ?, ?)"
-        );
+    const hasSetNotes = tableCols.includes("notes");
+    let insertSet: Database.Statement<unknown[]>;
+    if (hasDropIndex && hasSetNotes) {
+      insertSet = db.prepare(
+        "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+      );
+    } else if (hasDropIndex) {
+      insertSet = db.prepare(
+        "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      );
+    } else if (hasSetNotes) {
+      insertSet = db.prepare(
+        "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, notes) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      );
+    } else {
+      insertSet = db.prepare(
+        "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order) VALUES (?, ?, ?, ?, ?, ?)"
+      );
+    }
 
     const groups = normalizeSetGroups(sets, type);
     for (const group of groups) {
@@ -83,15 +103,19 @@ export async function POST(
         const weight_kg = type === "lift" ? (typeof (s as LiftPart).weight_kg === "number" ? (s as LiftPart).weight_kg : parseFloat(String((s as LiftPart).weight_kg ?? 0)) || null) : null;
         const time_seconds = isTimedExerciseType(type) ? (typeof (s as CardioPart).time_seconds === "number" ? (s as CardioPart).time_seconds : parseInt(String((s as CardioPart).time_seconds ?? 0), 10) || null) : null;
         const distance_km = type === "cardio" ? (typeof (s as CardioPart).distance_km === "number" ? (s as CardioPart).distance_km : parseFloat(String((s as CardioPart).distance_km ?? 0)) || null) : null;
-        if (hasDropIndex) insertSet.run(exId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex);
+        const notes = normalizeWorkoutNote((s as LiftPart & CardioPart).notes);
+        if (hasDropIndex && hasSetNotes) insertSet.run(exId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex, notes);
+        else if (hasDropIndex) insertSet.run(exId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex);
+        else if (hasSetNotes) insertSet.run(exId, reps, weight_kg, time_seconds, distance_km, setOrder, notes);
         else insertSet.run(exId, reps, weight_kg, time_seconds, distance_km, setOrder);
       }
       setOrder++;
     }
 
+    const selCols = setSelectColsForTable(hasDropIndex, hasSetNotes);
     const setRows = db
-      .prepare(`SELECT ${hasDropIndex ? setSelectCols : "id, reps, weight_kg, time_seconds, distance_km, set_order"} FROM workout_sets WHERE workout_exercise_id = ? ${hasDropIndex ? setOrderBy : "ORDER BY set_order, id"}`)
-      .all(exId) as { id: number; reps: number | null; weight_kg: number | null; time_seconds: number | null; distance_km: number | null; set_order: number; drop_index?: number }[];
+      .prepare(`SELECT ${selCols} FROM workout_sets WHERE workout_exercise_id = ? ${hasDropIndex ? setOrderBy : "ORDER BY set_order, id"}`)
+      .all(exId) as { id: number; reps: number | null; weight_kg: number | null; time_seconds: number | null; distance_km: number | null; set_order: number; drop_index?: number; notes?: string | null }[];
     db.close();
 
     return NextResponse.json({ sets: setRows });
@@ -140,13 +164,25 @@ export async function PUT(
 
     const tableCols = (db.prepare("PRAGMA table_info(workout_sets)").all() as { name: string }[]).map((c) => c.name);
     const hasDropIndex = tableCols.includes("drop_index");
-    const insertSet = hasDropIndex
-      ? db.prepare(
-          "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index) VALUES (?, ?, ?, ?, ?, ?, ?)"
-        )
-      : db.prepare(
-          "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order) VALUES (?, ?, ?, ?, ?, ?)"
-        );
+    const hasSetNotes = tableCols.includes("notes");
+    let insertSet: Database.Statement<unknown[]>;
+    if (hasDropIndex && hasSetNotes) {
+      insertSet = db.prepare(
+        "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+      );
+    } else if (hasDropIndex) {
+      insertSet = db.prepare(
+        "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      );
+    } else if (hasSetNotes) {
+      insertSet = db.prepare(
+        "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, notes) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      );
+    } else {
+      insertSet = db.prepare(
+        "INSERT INTO workout_sets (workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order) VALUES (?, ?, ?, ?, ?, ?)"
+      );
+    }
 
     const groups = normalizeSetGroups(sets, type);
     for (let setOrder = 0; setOrder < groups.length; setOrder++) {
@@ -157,14 +193,18 @@ export async function PUT(
         const weight_kg = type === "lift" ? (typeof (s as LiftPart).weight_kg === "number" ? (s as LiftPart).weight_kg : parseFloat(String((s as LiftPart).weight_kg ?? 0)) || null) : null;
         const time_seconds = isTimedExerciseType(type) ? (typeof (s as CardioPart).time_seconds === "number" ? (s as CardioPart).time_seconds : parseInt(String((s as CardioPart).time_seconds ?? 0), 10) || null) : null;
         const distance_km = type === "cardio" ? (typeof (s as CardioPart).distance_km === "number" ? (s as CardioPart).distance_km : parseFloat(String((s as CardioPart).distance_km ?? 0)) || null) : null;
-        if (hasDropIndex) insertSet.run(exId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex);
+        const notes = normalizeWorkoutNote((s as LiftPart & CardioPart).notes);
+        if (hasDropIndex && hasSetNotes) insertSet.run(exId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex, notes);
+        else if (hasDropIndex) insertSet.run(exId, reps, weight_kg, time_seconds, distance_km, setOrder, dropIndex);
+        else if (hasSetNotes) insertSet.run(exId, reps, weight_kg, time_seconds, distance_km, setOrder, notes);
         else insertSet.run(exId, reps, weight_kg, time_seconds, distance_km, setOrder);
       }
     }
 
+    const selColsPut = setSelectColsForTable(hasDropIndex, hasSetNotes);
     const setRows = db
-      .prepare(`SELECT ${hasDropIndex ? setSelectCols : "id, reps, weight_kg, time_seconds, distance_km, set_order"} FROM workout_sets WHERE workout_exercise_id = ? ${hasDropIndex ? setOrderBy : "ORDER BY set_order, id"}`)
-      .all(exId) as { id: number; reps: number | null; weight_kg: number | null; time_seconds: number | null; distance_km: number | null; set_order: number; drop_index?: number }[];
+      .prepare(`SELECT ${selColsPut} FROM workout_sets WHERE workout_exercise_id = ? ${hasDropIndex ? setOrderBy : "ORDER BY set_order, id"}`)
+      .all(exId) as { id: number; reps: number | null; weight_kg: number | null; time_seconds: number | null; distance_km: number | null; set_order: number; drop_index?: number; notes?: string | null }[];
     db.close();
 
     return NextResponse.json({ sets: setRows });
@@ -215,6 +255,7 @@ export async function DELETE(
 
     const tableCols = (db.prepare("PRAGMA table_info(workout_sets)").all() as { name: string }[]).map((c) => c.name);
     const hasDropIndex = tableCols.includes("drop_index");
+    const hasSetNotes = tableCols.includes("notes");
 
     const before = db
       .prepare(`SELECT id, set_order FROM workout_sets WHERE workout_exercise_id = ? AND set_order = ?`)
@@ -248,9 +289,10 @@ export async function DELETE(
       }
     }
 
+    const selColsDel = setSelectColsForTable(hasDropIndex, hasSetNotes);
     const setRows = db
-      .prepare(`SELECT ${hasDropIndex ? setSelectCols : "id, reps, weight_kg, time_seconds, distance_km, set_order"} FROM workout_sets WHERE workout_exercise_id = ? ${hasDropIndex ? setOrderBy : "ORDER BY set_order, id"}`)
-      .all(exId) as { id: number; reps: number | null; weight_kg: number | null; time_seconds: number | null; distance_km: number | null; set_order: number; drop_index?: number }[];
+      .prepare(`SELECT ${selColsDel} FROM workout_sets WHERE workout_exercise_id = ? ${hasDropIndex ? setOrderBy : "ORDER BY set_order, id"}`)
+      .all(exId) as { id: number; reps: number | null; weight_kg: number | null; time_seconds: number | null; distance_km: number | null; set_order: number; drop_index?: number; notes?: string | null }[];
     db.close();
 
     return NextResponse.json({ sets: setRows });

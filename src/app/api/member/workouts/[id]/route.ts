@@ -44,24 +44,47 @@ async function getWorkoutWithExercises(db: ReturnType<typeof getDb>, workoutId: 
     shared_by_first_name = sharer?.first_name ?? null;
     shared_by_last_name = sharer?.last_name ?? null;
   }
-  const hasUseForMy1rm = (db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[]).some((c) => c.name === "use_for_my_1rm");
+  const exerciseTableCols = db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[];
+  const hasUseForMy1rm = exerciseTableCols.some((c) => c.name === "use_for_my_1rm");
+  const hasExerciseNotes = exerciseTableCols.some((c) => c.name === "notes");
   const exerciseCols = ["id", "workout_id", "type", "exercise_name", "sort_order", "exercise_id"];
   if (hasUseForMy1rm) exerciseCols.push("use_for_my_1rm");
+  if (hasExerciseNotes) exerciseCols.push("notes");
   const exercises = db
     .prepare(
       `SELECT ${exerciseCols.join(", ")} FROM workout_exercises WHERE workout_id = ? ORDER BY sort_order, id`
     )
-    .all(workoutId) as { id: number; workout_id: number; type: string; exercise_name: string; sort_order: number; exercise_id: number | null; use_for_my_1rm?: number }[];
-  const setCols = (db.prepare("PRAGMA table_info(workout_sets)").all() as { name: string }[]).map((c) => c.name);
-  const hasDropIndex = setCols.includes("drop_index");
-  const setSelect = hasDropIndex
-    ? "SELECT id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index FROM workout_sets WHERE workout_exercise_id = ? ORDER BY set_order, drop_index, id"
-    : "SELECT id, reps, weight_kg, time_seconds, distance_km, set_order FROM workout_sets WHERE workout_exercise_id = ? ORDER BY set_order, id";
-  const setsByExercise: Record<number, { id: number; reps: number | null; weight_kg: number | null; time_seconds: number | null; distance_km: number | null; set_order: number; drop_index?: number }[]> = {};
+    .all(workoutId) as {
+    id: number;
+    workout_id: number;
+    type: string;
+    exercise_name: string;
+    sort_order: number;
+    exercise_id: number | null;
+    use_for_my_1rm?: number;
+    notes?: string | null;
+  }[];
+  const setColNames = (db.prepare("PRAGMA table_info(workout_sets)").all() as { name: string }[]).map((c) => c.name);
+  const hasDropIndex = setColNames.includes("drop_index");
+  const hasSetNotes = setColNames.includes("notes");
+  let setSelect = "id, reps, weight_kg, time_seconds, distance_km, set_order";
+  if (hasDropIndex) setSelect += ", drop_index";
+  if (hasSetNotes) setSelect += ", notes";
+  const setsByExercise: Record<
+    number,
+    { id: number; reps: number | null; weight_kg: number | null; time_seconds: number | null; distance_km: number | null; set_order: number; drop_index?: number; notes?: string | null }[]
+  > = {};
   for (const ex of exercises) {
-    const sets = db
-      .prepare(setSelect)
-      .all(ex.id) as { id: number; reps: number | null; weight_kg: number | null; time_seconds: number | null; distance_km: number | null; set_order: number; drop_index?: number }[];
+    const sets = db.prepare(`SELECT ${setSelect} FROM workout_sets WHERE workout_exercise_id = ? ORDER BY ${hasDropIndex ? "set_order, drop_index, id" : "set_order, id"}`).all(ex.id) as {
+      id: number;
+      reps: number | null;
+      weight_kg: number | null;
+      time_seconds: number | null;
+      distance_km: number | null;
+      set_order: number;
+      drop_index?: number;
+      notes?: string | null;
+    }[];
     setsByExercise[ex.id] = sets;
   }
   return {

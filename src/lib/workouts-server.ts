@@ -257,6 +257,7 @@ function rebuildWorkoutSetsIfFkNamesOldBackup(db: AppDb): void {
 
   const job = db.transaction(() => {
     db.exec(`DROP TABLE IF EXISTS "${tmp}"`);
+    const hasNotesCol = has("notes");
     db.exec(`
       CREATE TABLE "${tmp}" (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -266,7 +267,7 @@ function rebuildWorkoutSetsIfFkNamesOldBackup(db: AppDb): void {
         time_seconds INTEGER,
         distance_km REAL,
         set_order INTEGER NOT NULL DEFAULT 0,
-        drop_index INTEGER NOT NULL DEFAULT 0,
+        drop_index INTEGER NOT NULL DEFAULT 0${hasNotesCol ? ",\n        notes TEXT" : ""},
         FOREIGN KEY (workout_exercise_id) REFERENCES workout_exercises(id) ON DELETE CASCADE
       );
     `);
@@ -277,11 +278,19 @@ function rebuildWorkoutSetsIfFkNamesOldBackup(db: AppDb): void {
     const dSel = has("distance_km") ? "distance_km" : "NULL";
     const orderSel = has("set_order") ? "coalesce(set_order, 0)" : "0";
     const dropSel = has("drop_index") ? "coalesce(drop_index, 0)" : "0";
-    db.exec(`
+    if (hasNotesCol) {
+      db.exec(`
+      INSERT INTO "${tmp}" (id, workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index, notes)
+      SELECT ${idSel}, workout_exercise_id, ${repsSel}, ${wSel}, ${tSel}, ${dSel}, ${orderSel}, ${dropSel}, notes
+      FROM workout_sets
+    `);
+    } else {
+      db.exec(`
       INSERT INTO "${tmp}" (id, workout_exercise_id, reps, weight_kg, time_seconds, distance_km, set_order, drop_index)
       SELECT ${idSel}, workout_exercise_id, ${repsSel}, ${wSel}, ${tSel}, ${dSel}, ${orderSel}, ${dropSel}
       FROM workout_sets
     `);
+    }
     db.exec(`DROP TABLE workout_sets`);
     db.exec(`ALTER TABLE "${tmp}" RENAME TO workout_sets`);
   });
@@ -606,6 +615,24 @@ export function ensureWorkoutTables(db: AppDb) {
   if (weCols.every((c) => c.name !== "use_for_my_1rm")) {
     try {
       db.prepare("ALTER TABLE workout_exercises ADD COLUMN use_for_my_1rm INTEGER NOT NULL DEFAULT 0").run();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const weColsNotes = db.prepare("PRAGMA table_info(workout_exercises)").all() as { name: string }[];
+  if (weColsNotes.every((c) => c.name !== "notes")) {
+    try {
+      db.prepare("ALTER TABLE workout_exercises ADD COLUMN notes TEXT").run();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const setColsNotes = db.prepare("PRAGMA table_info(workout_sets)").all() as { name: string }[];
+  if (setColsNotes.every((c) => c.name !== "notes")) {
+    try {
+      db.prepare("ALTER TABLE workout_sets ADD COLUMN notes TEXT").run();
     } catch {
       /* ignore */
     }
