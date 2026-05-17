@@ -201,7 +201,7 @@ function MemberMembershipContent() {
                 the door. This is separate from checkout.
               </p>
               <Link
-                href="/sign-waiver"
+                href="/sign-waiver-required?redirect=/member/membership"
                 className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-amber-800 text-white text-sm font-medium hover:bg-amber-900"
               >
                 Sign waiver now

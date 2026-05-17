@@ -113,7 +113,7 @@ export default function CartSuccessPage() {
               Sign the waiver once, then go to <strong>My Membership</strong> to activate a day when you visit.
             </p>
             <Link
-              href="/sign-waiver"
+              href="/sign-waiver-required?redirect=/member/membership"
               className="inline-block px-4 py-2 rounded-lg bg-amber-800 text-white text-sm font-medium hover:bg-amber-900"
             >
               Sign waiver

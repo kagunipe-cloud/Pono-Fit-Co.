@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, Suspense } from "react";
 
 function SignWaiverContent() {
@@ -19,7 +20,9 @@ function SignWaiverContent() {
     setToken(t);
     if (!t) {
       setLoading(false);
-      setError("Missing link. Use the link from your waiver email.");
+      setError(
+        "This page needs the personalized link from your waiver email (it includes token=… in the address). If you are already logged into the member app, sign in there instead."
+      );
       return;
     }
     Promise.all([
@@ -71,7 +74,26 @@ function SignWaiverContent() {
   if (error && !token) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 bg-stone-50">
-        <p className="text-red-600 text-center">{error}</p>
+        <div className="max-w-md w-full rounded-xl border border-stone-200 bg-white p-6 shadow-sm space-y-4 text-center">
+          <p className="text-stone-800 font-medium">Missing waiver link</p>
+          <p className="text-stone-600 text-sm text-left">{error}</p>
+          <Link
+            href="/sign-waiver-required"
+            className="inline-flex w-full justify-center py-2.5 px-4 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700"
+          >
+            Sign waiver while logged in
+          </Link>
+          <p className="text-stone-500 text-xs">
+            Not logged in?{" "}
+            <Link href="/login" className="text-brand-600 hover:underline font-medium">
+              Log in
+            </Link>
+            {" "}first, or open the link from your waiver email.
+          </p>
+          <p className="text-stone-500 text-xs">
+            Tip for staff: resend the waiver from the member profile so they get an email with the correct link.
+          </p>
+        </div>
       </div>
     );
   }

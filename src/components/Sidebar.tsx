@@ -24,6 +24,8 @@ type MemberMe = {
   role?: string | null;
   /** Admin: false when Settings → hide onboarding. Omitted/true = show link. */
   show_onboarding_nav?: boolean;
+  /** From /api/auth/member-me: purchased membership/passes/bookings etc. but no signed waiver yet */
+  needs_waiver?: boolean;
 } | null;
 
 function NavList({
@@ -33,6 +35,7 @@ function NavList({
   isAdmin,
   isTrainer,
   showMemberNav,
+  needsWaiver,
   onLogout,
 }: {
   pathname: string | null;
@@ -41,6 +44,7 @@ function NavList({
   isAdmin: boolean;
   isTrainer: boolean;
   showMemberNav: boolean;
+  needsWaiver: boolean;
   onLogout: () => void;
 }) {
   const [reportsOpen, setReportsOpen] = useState(false);
@@ -159,9 +163,21 @@ function NavList({
   const isOnServicesPage = pathname != null && (pathname.startsWith("/rec-leagues") || pathname.startsWith("/class-packs") || pathname.startsWith("/pt-packs") || SERVICES_SUB_SLUGS.some((slug) => pathname === `/${slug}` || pathname.startsWith(`/${slug}/`)));
 
   if (showMemberNav) {
+    const waiverRedirect =
+      pathname && pathname.startsWith("/") ? `?redirect=${encodeURIComponent(pathname)}` : "?redirect=/member";
     return (
       <ul className="space-y-0.5">
         <li>{link("/member", "Home", pathname === "/member")}</li>
+        {needsWaiver && (
+          <li>
+            <Link
+              href={`/sign-waiver-required${waiverRedirect}`}
+              className="block px-3 py-2 rounded-lg text-sm font-bold bg-amber-300 text-amber-950 hover:bg-amber-200 shadow-sm border border-amber-400/50"
+            >
+              Sign waiver
+            </Link>
+          </li>
+        )}
         <li>{link("/member/profile", "Profile", pathname === "/member/profile")}</li>
         <li>{link("/member/membership", "My Membership")}</li>
         <li>
@@ -575,7 +591,16 @@ export default function Sidebar() {
     (isMember && !isStaff);
 
   const logoHref = isMember ? (showMemberNav ? "/member" : inTrainerArea ? "/trainer" : "/") : "/";
-  const navProps = { pathname, member: member ?? null, isMember, isAdmin, isTrainer, showMemberNav, onLogout: handleLogout };
+  const navProps = {
+    pathname,
+    member: member ?? null,
+    isMember,
+    isAdmin,
+    isTrainer,
+    showMemberNav,
+    needsWaiver: Boolean(member?.needs_waiver),
+    onLogout: handleLogout,
+  };
 
   return (
     <>

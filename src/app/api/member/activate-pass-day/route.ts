@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error:
-          "Sign the liability waiver in the app before activating a day pass. My Account → waivers, or ask staff for help.",
+          "Sign the liability waiver before activating a day pass: Member Home shows a Sign waiver button, or use Sign waiver in the side menu.",
       },
       { status: 403 }
     );

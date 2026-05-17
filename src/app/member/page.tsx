@@ -15,6 +15,8 @@ type MemberData = {
   ptBookings: Record<string, unknown>[];
   hasAccess: boolean;
   show_activate_pass_hint?: boolean;
+  /** Signed waiver or admin waiver bypass — required for reliable door / day-pass flow */
+  waiver_complete_for_door?: boolean;
 } | null;
 
 export default function MemberHomePage() {
@@ -79,11 +81,29 @@ export default function MemberHomePage() {
   const ptBookings = Array.isArray(data.ptBookings) ? data.ptBookings : [];
   const hasAccess = Boolean(data.hasAccess);
   const showActivatePassHint = Boolean(data.show_activate_pass_hint);
+  const waiverCompleteForDoor = data.waiver_complete_for_door !== false;
   const activeSub = subscriptions.find((s) => s.status === "Active") as { plan_name?: string; expiry_date?: string } | undefined;
+  const signWaiverHref = `/sign-waiver-required?redirect=${encodeURIComponent("/member")}`;
 
   return (
     <div className="max-w-2xl mx-auto p-6">
       <h1 className="text-2xl font-bold text-stone-800 mb-6">Welcome, {data.member.name}</h1>
+
+      {!waiverCompleteForDoor && (
+        <div className="mb-6 p-4 rounded-xl border border-amber-400 bg-amber-50 text-amber-950">
+          <p className="font-semibold text-sm mb-1">Sign your liability waiver</p>
+          <p className="text-sm text-amber-900/95 mb-3">
+            One quick step activates door access once your membership or day pass is active. Tap below — no email link
+            required if you&apos;re logged in here.
+          </p>
+          <Link
+            href={signWaiverHref}
+            className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg bg-amber-800 text-white text-sm font-medium hover:bg-amber-900"
+          >
+            Sign waiver now
+          </Link>
+        </div>
+      )}
 
       <div className="mb-8 flex flex-col sm:flex-row sm:items-start gap-6">
         <div className="flex-1">
@@ -93,14 +113,20 @@ export default function MemberHomePage() {
             data-button-icon="app"
             type="button"
             onClick={handleUnlock}
-          disabled={unlocking || !hasAccess}
+          disabled={unlocking || !hasAccess || !waiverCompleteForDoor}
           className={`w-full sm:w-auto px-6 py-3 rounded-lg font-medium ${
-            hasAccess
-              ? "font-medium disabled:opacity-50"
+            hasAccess && waiverCompleteForDoor
+              ? "bg-brand-600 text-white hover:bg-brand-700 shadow-sm disabled:opacity-50"
               : "bg-stone-200 text-stone-500 cursor-not-allowed"
           }`}
         >
-          {unlocking ? "Unlocking…" : hasAccess ? "Unlock Door" : "No Active Membership"}
+          {unlocking
+            ? "Unlocking…"
+            : !waiverCompleteForDoor
+              ? "Sign waiver to unlock door"
+              : hasAccess
+                ? "Unlock Door"
+                : "No Active Membership"}
         </button>
         {showActivatePassHint && (
           <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
@@ -113,6 +139,15 @@ export default function MemberHomePage() {
         )}
         {!hasAccess && !showActivatePassHint && (
           <p className="text-sm text-stone-500 mt-2">Purchase a Membership to Unlock the Door.</p>
+        )}
+        {hasAccess && !waiverCompleteForDoor && (
+          <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+            Waiver required before the door unlocks — use{" "}
+            <Link href={signWaiverHref} className="font-semibold text-amber-950 underline underline-offset-2 hover:no-underline">
+              Sign waiver now
+            </Link>
+            .
+          </p>
         )}
         {unlockMessage && (
           <p className="text-sm text-stone-600 mt-2">{unlockMessage}</p>

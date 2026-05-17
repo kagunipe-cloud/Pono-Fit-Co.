@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 function hasPurchase(db: ReturnType<typeof getDb>, memberId: string): boolean {
   const checks = [
     "SELECT 1 FROM subscriptions WHERE member_id = ? LIMIT 1",
+    "SELECT 1 FROM day_pass_credit_ledger WHERE member_id = ? LIMIT 1",
     "SELECT 1 FROM class_bookings WHERE member_id = ? LIMIT 1",
     "SELECT 1 FROM occurrence_bookings WHERE member_id = ? LIMIT 1",
     "SELECT 1 FROM pt_trainer_specific_bookings WHERE member_id = ? LIMIT 1",
