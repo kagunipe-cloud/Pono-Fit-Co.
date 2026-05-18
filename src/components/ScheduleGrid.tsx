@@ -894,7 +894,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                                   <span className="text-xs font-medium text-stone-800">Available</span>
                                   {!isTrainer && <span className="text-xs text-stone-500 block truncate">{item.trainer}</span>}
                                   {!isTrainer && (
-                                    <Link href={variant === "master" ? `/admin/book-pt-for-member?block=${item.blockId}&date=${date}&time=${item.start_time}` : `/member/book-pt?block=${item.blockId}&date=${date}&time=${item.start_time}${bookPtQuery || ""}${trainerQuery || ""}`} className="text-xs text-brand-600 hover:underline mt-0.5 inline-block" onClick={(e) => e.stopPropagation()}>Book</Link>
+                                    <Link href={variant === "master" ? `/admin/book-pt-for-member?block=${item.blockId}&date=${date}&time=${encodeURIComponent(timeStr)}` : `/member/book-pt?block=${item.blockId}&date=${date}&time=${encodeURIComponent(timeStr)}${bookPtQuery || ""}${trainerQuery || ""}`} className="text-xs text-brand-600 hover:underline mt-0.5 inline-block" onClick={(e) => e.stopPropagation()}>Book</Link>
                                   )}
                                 </>
                               )}
@@ -1063,7 +1063,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                     Opens the full admin booking page — search any member, use credits, pay on arrival, or add to cart (same as Master schedule).
                   </p>
                   <Link
-                    href={`/admin/book-pt-for-member?block=${selectedSlot.item.blockId}&date=${selectedSlot.date}&time=${selectedSlot.item.start_time}`}
+                    href={`/admin/book-pt-for-member?block=${selectedSlot.item.blockId}&date=${selectedSlot.date}&time=${encodeURIComponent(selectedSlot.timeStr)}`}
                     className="block w-full py-2.5 rounded-lg bg-brand-600 text-white text-sm font-medium text-center hover:bg-brand-700"
                   >
                     Open booking page
