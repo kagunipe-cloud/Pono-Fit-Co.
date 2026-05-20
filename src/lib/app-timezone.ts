@@ -119,6 +119,94 @@ export function formatDateForStorage(date: Date, timeZone: string = APP_TIMEZONE
   return date.toLocaleDateString("en-CA", { timeZone });
 }
 
+/** `Intl` formatter shared by gym-local comparisons (24h padded fields). */
+function wallClockComparableFormatter(timeZone: string): Intl.DateTimeFormat {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+}
+
+/**
+ * Padded `YYYY-MM-DDTHH:mm:ss` for `when` interpreted in `timeZone`.
+ * Lexicographic order matches chronological order for sane wall times.
+ * Use to compare booking `YYYY-MM-DD` + `HH:mm(:ss)` strings stored as gym-local.
+ */
+export function comparableDateTimeKeyInTz(when: Date, timeZone: string): string {
+  const dtf = wallClockComparableFormatter(timeZone);
+  const p = dtf.formatToParts(when);
+  const num = (t: Intl.DateTimeFormatPartTypes) => parseInt(p.find((z) => z.type === t)?.value ?? "", 10) || 0;
+  const y = num("year");
+  const mo = num("month");
+  const d = num("day");
+  const h = num("hour");
+  const mi = num("minute");
+  const s = num("second");
+  return `${String(y).padStart(4, "0")}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}T${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
+/**
+ * Interpret `dateYmd` + `wallTimeRaw` (HH:mm or HH:mm:ss) as gym wall clock in `timeZone`, return UTC ms.
+ * Spring-forward DST gaps may return NaN when no matching instant exists.
+ */
+export function utcMillisFromWallClockInTz(dateYmd: string, wallTimeRaw: string, timeZone: string): number {
+  const parts = dateYmd.split("-").map((s) => s.trim());
+  const yT = parseInt(parts[0] ?? "", 10);
+  const moT = parseInt(parts[1] ?? "", 10);
+  const dT = parseInt(parts[2] ?? "", 10);
+  if (!Number.isFinite(yT) || !Number.isFinite(moT) || !Number.isFinite(dT)) return NaN;
+  const tp = wallTimeRaw.trim().split(":");
+  const hT = parseInt(tp[0] ?? "", 10);
+  const miT = parseInt(tp[1] ?? "0", 10);
+  const sT = parseInt(tp[2] ?? "0", 10);
+  if (!Number.isFinite(hT) || !Number.isFinite(miT) || !Number.isFinite(sT)) return NaN;
+
+  const want = `${String(yT).padStart(4, "0")}-${String(moT).padStart(2, "0")}-${String(dT).padStart(2, "0")}T${String(hT).padStart(2, "0")}:${String(miT).padStart(2, "0")}:${String(sT).padStart(2, "0")}`;
+  const dtf = wallClockComparableFormatter(timeZone);
+
+  function readKey(ms: number): string {
+    const p = dtf.formatToParts(new Date(ms));
+    const num = (t: Intl.DateTimeFormatPartTypes) => parseInt(p.find((z) => z.type === t)?.value ?? "", 10) || 0;
+    const y = num("year");
+    const mo = num("month");
+    const d = num("day");
+    const h = num("hour");
+    const mi = num("minute");
+    const s = num("second");
+    return `${String(y).padStart(4, "0")}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}T${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+
+  let lo = Date.UTC(yT, moT - 1, dT, 12, 0, 0, 0) - 10 * 86400000;
+  let hi = Date.UTC(yT, moT - 1, dT, 12, 0, 0, 0) + 10 * 86400000;
+
+  let guard = 256;
+  while (readKey(lo) > want && guard-- > 0) lo -= 3600000;
+  guard = 256;
+  while (readKey(hi) < want && guard-- > 0) hi += 3600000;
+
+  if (readKey(lo) > want || readKey(hi) < want) return NaN;
+
+  while (hi - lo > 1) {
+    const mid = Math.floor((lo + hi) / 2);
+    const k = readKey(mid);
+    if (k >= want) hi = mid;
+    else lo = mid;
+  }
+
+  for (let ms = lo; ms <= hi; ms++) {
+    if (readKey(ms) === want) return ms;
+  }
+
+  return NaN;
+}
+
 /** Parse any app date string to YYYY-MM-DD. Returns null if invalid. Use for migration/normalization. */
 export function normalizeDateToYMD(dateStr: string | null | undefined): string | null {
   if (!dateStr || typeof dateStr !== "string") return null;

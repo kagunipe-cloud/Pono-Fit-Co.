@@ -1,24 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "../../../../lib/db";
+import { getAppTimezone, getDb } from "../../../../lib/db";
+import { utcMillisFromWallClockInTz } from "../../../../lib/app-timezone";
 import { ensurePTSlotTables, getPTCreditBalance } from "../../../../lib/pt-slots";
 import { sendStaffEmail } from "../../../../lib/email";
 
 export const dynamic = "force-dynamic";
 
-function parseTimeToMinutes(t: string): number {
-  const parts = String(t).trim().split(/[:\s]/).map((x) => parseInt(x, 10));
-  const h = parts[0] ?? 0;
-  const m = parts[1] ?? 0;
-  return (h % 24) * 60 + m;
-}
-
-/** Session end (date + start_time + duration_minutes) is before now? */
-function sessionEnded(date: string, startTime: string, durationMinutes: number): boolean {
-  const [y, mo, d] = date.split("-").map((x) => parseInt(x, 10));
-  const startMin = parseTimeToMinutes(startTime);
-  const endMin = startMin + durationMinutes;
-  const endDate = new Date(y, mo - 1, d, Math.floor(endMin / 60), endMin % 60, 0);
-  return endDate.getTime() < Date.now();
+/** Session end (gym-local date + start_time + duration) is strictly before wall-clock now (gym TZ). */
+function sessionEnded(date: string, startTime: string, durationMinutes: number, tz: string): boolean {
+  const startMs = utcMillisFromWallClockInTz(date, startTime, tz);
+  if (!Number.isFinite(startMs)) return false;
+  const endMs = startMs + durationMinutes * 60 * 1000;
+  return endMs < Date.now();
 }
 
 /**
@@ -36,6 +29,7 @@ export async function GET(request: NextRequest) {
 
   const db = getDb();
   ensurePTSlotTables(db);
+  const tz = getAppTimezone(db);
 
   const rows = db.prepare(`
     SELECT ob.id, ob.member_id, ob.occurrence_date, ob.start_time, ob.duration_minutes, ob.credit_docked
@@ -43,7 +37,7 @@ export async function GET(request: NextRequest) {
     WHERE ob.member_id != '' AND ob.member_id IS NOT NULL AND (ob.credit_docked IS NULL OR ob.credit_docked = 0)
   `).all() as { id: number; member_id: string; occurrence_date: string; start_time: string; duration_minutes: number; credit_docked: number | null }[];
 
-  const toProcess = rows.filter((r) => sessionEnded(r.occurrence_date, r.start_time, r.duration_minutes));
+  const toProcess = rows.filter((r) => sessionEnded(r.occurrence_date, r.start_time, r.duration_minutes, tz));
   const memberNames = new Map<string, string>();
   const members = db.prepare("SELECT member_id, first_name, last_name FROM members").all() as { member_id: string; first_name: string | null; last_name: string | null }[];
   for (const m of members) {

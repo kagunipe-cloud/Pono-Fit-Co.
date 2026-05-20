@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "../../../../lib/db";
+import { getAppTimezone, getDb } from "../../../../lib/db";
+import { comparableDateTimeKeyInTz } from "../../../../lib/app-timezone";
 import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
 
 export const dynamic = "force-dynamic";
@@ -22,12 +23,11 @@ type BookingRow = {
 
 export async function GET(request: NextRequest) {
   const q = (request.nextUrl.searchParams.get("q") ?? "").trim();
-  const now = new Date();
-  const nowKey = `${now.toISOString().slice(0, 10)}T${now.toTimeString().slice(0, 8)}`;
 
   try {
     const db = getDb();
     ensureRecurringClassesTables(db);
+    const nowKey = comparableDateTimeKeyInTz(new Date(), getAppTimezone(db));
 
     const rows: BookingRow[] = [];
 

@@ -2,8 +2,9 @@
  * Expand trainer availability to dates and compute free intervals / bookable start times.
  */
 
+import { addDaysToDateStr } from "./app-timezone";
 import { getDb } from "./db";
-import { ensurePTSlotTables, timeToMinutes, minutesToTime, reservedMinutes, RESERVE_MINUTES } from "./pt-slots";
+import { ensurePTSlotTables, timeToMinutes, minutesToTime, RESERVE_MINUTES } from "./pt-slots";
 
 export type FreeInterval = { startMin: number; endMin: number };
 
@@ -113,13 +114,11 @@ export function getBlocksInRange(from: string, to: string): { id: number; traine
   }[];
   db.close();
 
-  const fromDate = new Date(from + "T12:00:00");
-  const toDate = new Date(to + "T12:00:00");
+  /** Walk `from` … `to` as calendar YYYY-MM-DD using UTC noon anchors so labels match occurrence_date everywhere (fixes PT grid when server TZ is not UTC). */
   const blocks: { id: number; trainer: string; trainer_member_id?: string | null; date: string; start_time: string; end_time: string; description?: string | null }[] = [];
-  const cur = new Date(fromDate);
-  while (cur <= toDate) {
-    const dateStr = cur.toISOString().slice(0, 10);
-    const day = cur.getDay();
+  let dateStr = from;
+  while (dateStr <= to) {
+    const day = new Date(dateStr + "T12:00:00Z").getUTCDay();
     for (const r of rows) {
       const daysMatch = (() => {
         const dow = (r as { days_of_week?: string | null }).days_of_week;
@@ -141,7 +140,7 @@ export function getBlocksInRange(from: string, to: string): { id: number; traine
         });
       }
     }
-    cur.setDate(cur.getDate() + 1);
+    dateStr = addDaysToDateStr(dateStr, 1);
   }
   return blocks;
 }
@@ -166,13 +165,11 @@ export function getUnavailableInRange(from: string, to: string): UnavailableOccu
     weeks_count?: number | null;
   }[];
   db.close();
-  const fromDate = new Date(from + "T12:00:00");
-  const toDate = new Date(to + "T12:00:00");
   const out: UnavailableOccurrence[] = [];
-  const cur = new Date(fromDate);
-  while (cur <= toDate) {
-    const dateStr = cur.toISOString().slice(0, 10);
-    const day = cur.getDay();
+  let dateStr = from;
+  while (dateStr <= to) {
+    const curMidUtc = new Date(dateStr + "T12:00:00Z");
+    const day = curMidUtc.getUTCDay();
     for (const r of rows) {
       const recurrenceType = (r.recurrence_type ?? "recurring").toLowerCase();
       if (recurrenceType === "one_time") {
@@ -188,13 +185,13 @@ export function getUnavailableInRange(from: string, to: string): UnavailableOccu
         }
       } else {
         if (r.day_of_week !== day) continue;
-        const startDate = r.occurrence_date ? new Date(r.occurrence_date + "T12:00:00") : new Date(0);
-        if (cur < startDate) continue;
+        const startDate = r.occurrence_date ? new Date(r.occurrence_date + "T12:00:00Z") : new Date(0);
+        if (curMidUtc < startDate) continue;
         const weeksCount = r.weeks_count;
         if (weeksCount != null && weeksCount > 0) {
-          const endDate = new Date(startDate);
-          endDate.setDate(endDate.getDate() + (weeksCount - 1) * 7);
-          if (cur > endDate) continue;
+          const endDate = new Date(startDate.getTime());
+          endDate.setUTCDate(endDate.getUTCDate() + (weeksCount - 1) * 7);
+          if (curMidUtc > endDate) continue;
         }
         out.push({
           id: r.id,
@@ -206,7 +203,7 @@ export function getUnavailableInRange(from: string, to: string): UnavailableOccu
         });
       }
     }
-    cur.setDate(cur.getDate() + 1);
+    dateStr = addDaysToDateStr(dateStr, 1);
   }
   return out;
 }
