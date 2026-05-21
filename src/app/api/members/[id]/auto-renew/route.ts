@@ -18,9 +18,10 @@ export async function PATCH(
 
   const db = getDb();
   ensureMembersAutoRenewColumn(db);
+  /** Match GET /api/members/[id]: numeric segment may be SQLite row id OR member_id (e.g. member_id "12345", id 67). */
   const isPurelyNumeric = /^\d+$/.test(id);
   const member = (isPurelyNumeric
-    ? db.prepare("SELECT member_id FROM members WHERE id = ?").get(parseInt(id, 10))
+    ? db.prepare("SELECT member_id FROM members WHERE id = ? OR member_id = ?").get(parseInt(id, 10), id)
     : db.prepare("SELECT member_id FROM members WHERE member_id = ?").get(id)) as { member_id: string } | undefined;
   if (!member) {
     db.close();
