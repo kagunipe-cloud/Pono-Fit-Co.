@@ -61,16 +61,35 @@ async function getGmailAccessToken(): Promise<string | null> {
 /**
  * Encode a Subject line for raw MIME (Gmail API `messages.send`). Unencoded UTF-8 in headers
  * is invalid per RFC 5322 and many clients show mojibake (e.g. em dash "—" → "Ã¢Â€Â"").
+ *
+ * Important: RFC 2047 encoded-words MUST be contiguous Base64 chunks of UTF-8 **octets**.
+ * Splitting the Base64 **string** at fixed lengths corrupts decoding (looks like Ann ˜X… gibberish).
  */
 function encodeSubjectForRawMime(subject: string): string {
   const s = subject.replace(/\r?\n/g, " ");
   if (/^[\x20-\x7E]*$/.test(s)) return s;
-  const b64 = Buffer.from(s, "utf8").toString("base64");
+
+  /** Max UTF-8 bytes per encoded-word so `=?UTF-8?B?<b64>?=` stays ≤ 75 chars (overhead ≈ 12). */
+  const maxOctetsPerWord = 45;
+
+  const utf8 = Buffer.from(s, "utf8");
   const parts: string[] = [];
-  /** RFC 2047: each encoded-word ≤ 75 chars; =?UTF-8?B? ... ?= uses 12 + base64len */
-  const maxB64PerWord = 45;
-  for (let i = 0; i < b64.length; i += maxB64PerWord) {
-    parts.push(`=?UTF-8?B?${b64.slice(i, i + maxB64PerWord)}?=`);
+  let offset = 0;
+  while (offset < utf8.length) {
+    let end = Math.min(offset + maxOctetsPerWord, utf8.length);
+    // Never split mid–code-point (UTF-8 continuation bytes 10xxxxxx)
+    while (end > offset && end < utf8.length && (utf8[end]! & 0xc0) === 0x80) {
+      end--;
+    }
+    if (end <= offset) {
+      end = offset + 1;
+      while (end < utf8.length && (utf8[end]! & 0xc0) === 0x80) {
+        end++;
+      }
+    }
+    const b64 = utf8.subarray(offset, end).toString("base64");
+    parts.push(`=?UTF-8?B?${b64}?=`);
+    offset = end;
   }
   return parts.join("\r\n ");
 }
