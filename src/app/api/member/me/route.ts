@@ -5,6 +5,7 @@ import {
   ensureMembersAutoRenewColumn,
   ensureMembersProfileColumns,
   ensureMembersDoorAccessWaiverExemptColumn,
+  ensureSubscriptionPauseStartedColumn,
 } from "../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../lib/recurring-classes";
@@ -35,6 +36,7 @@ export async function GET() {
     ensureDayPassCreditLedger(db);
     ensureMembersPassActivationDayColumn(db);
     migrateLegacyPassPackSubscriptionsToLedger(db);
+    ensureSubscriptionPauseStartedColumn(db);
 
     const member = db.prepare(
       "SELECT member_id, first_name, last_name, preferred_name, email, stripe_customer_id, auto_renew, pass_activation_day, waiver_signed_at, door_access_waiver_exempt FROM members WHERE member_id = ?"

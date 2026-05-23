@@ -19,6 +19,7 @@ export function memberHasDoorAccessToday(
     if (pc != null && Number(pc) >= 0) {
       return String(s.pass_activation_day ?? "").trim() === todayYmd;
     }
+    if (String(s.subscription_pause_started ?? "").trim() !== "") return false;
     return String(s.expiry_date ?? "") >= todayYmd;
   });
 }
@@ -39,6 +40,7 @@ export function listMemberIdsWithDoorAccessToday(db: ReturnType<typeof getDb>, t
               (s.pass_credits_remaining IS NOT NULL AND TRIM(COALESCE(s.pass_activation_day, '')) = ?)
               OR (
                 s.pass_credits_remaining IS NULL
+                AND TRIM(COALESCE(s.subscription_pause_started, '')) = ''
                 AND TRIM(COALESCE(s.expiry_date, '')) != ''
                 AND s.expiry_date >= ?
               )
@@ -100,7 +102,9 @@ export function getSubscriptionDoorAccessValidUntil(
   const other = db
     .prepare(
       `SELECT expiry_date FROM subscriptions
-       WHERE member_id = ? AND status = 'Active' AND pass_credits_remaining IS NULL AND expiry_date >= ?
+       WHERE member_id = ? AND status = 'Active' AND pass_credits_remaining IS NULL
+         AND TRIM(COALESCE(subscription_pause_started, '')) = ''
+         AND expiry_date >= ?
        ORDER BY ${expiryDateSortableSql("expiry_date")} DESC LIMIT 1`
     )
     .get(memberId, today) as { expiry_date: string } | undefined;
@@ -131,6 +135,7 @@ export function kisiDayPassValidUntilIfUnlockShouldSync(
       `SELECT 1 FROM subscriptions
        WHERE member_id = ? AND status = 'Active'
          AND pass_credits_remaining IS NULL
+         AND trim(COALESCE(subscription_pause_started, '')) = ''
          AND trim(COALESCE(expiry_date, '')) != ''
          AND expiry_date >= ?
        LIMIT 1`

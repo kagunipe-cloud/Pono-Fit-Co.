@@ -114,6 +114,21 @@ export function calendarDaysUntilExpiryYmd(
   return Math.round((exp - tod) / 86400000);
 }
 
+/**
+ * Count whole calendar pause days credited when unpausing membership (freeze through day before resume).
+ * Pause start Jun 10, resume Jun 12 → freeze Jun 10–Jun 11 ⇒ 2 calendar days ⇒ extend expiry by +2.
+ * Same‑day pause+resume ⇒ 0.
+ */
+export function pausedCalendarDaysCreditedTowardExpiry(pauseStartYmd: string, resumeYmd: string): number {
+  const startNorm = normalizeDateToYMD(pauseStartYmd);
+  const resumeNorm = normalizeDateToYMD(resumeYmd);
+  if (!startNorm || !resumeNorm) return 0;
+  const lastFrozenDay = addDaysToDateStr(resumeNorm, -1);
+  if (lastFrozenDay < startNorm) return 0;
+  const d = calendarDaysUntilExpiryYmd(lastFrozenDay, startNorm);
+  return d !== null ? d + 1 : 0;
+}
+
 /** Format a Date as YYYY-MM-DD for storage. Use this for all date-only DB columns. */
 export function formatDateForStorage(date: Date, timeZone: string = APP_TIMEZONE): string {
   return date.toLocaleDateString("en-CA", { timeZone });

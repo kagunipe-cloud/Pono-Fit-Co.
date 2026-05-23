@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensureMembersStripeColumn, ensureMembersAutoRenewColumn } from "../../../../lib/db";
+import {
+  getDb,
+  getAppTimezone,
+  ensureMembersStripeColumn,
+  ensureMembersAutoRenewColumn,
+  ensureSubscriptionPauseStartedColumn,
+} from "../../../../lib/db";
 import { formatDateForStorage, todayInAppTz } from "../../../../lib/app-timezone";
 import { sendMembershipExpiryReminder } from "../../../../lib/email";
 import { hasBillableStripeCustomer } from "../../../../lib/stripe-customer";
@@ -16,6 +22,7 @@ export async function GET(request: NextRequest) {
   const db = getDb();
   ensureMembersStripeColumn(db);
   ensureMembersAutoRenewColumn(db);
+  ensureSubscriptionPauseStartedColumn(db);
   const tz = getAppTimezone(db);
 
   const cronEnabled = db
@@ -50,6 +57,7 @@ export async function GET(request: NextRequest) {
     SELECT s.subscription_id, s.member_id, s.expiry_date
     FROM subscriptions s
     WHERE s.status = 'Active' AND s.expiry_date = ?
+      AND TRIM(COALESCE(s.subscription_pause_started, '')) = ''
   `).all(expiryTarget) as { subscription_id: string; member_id: string; expiry_date: string }[];
 
   const results: { member_id: string; email: string; sent: boolean; skipped?: boolean; error?: string }[] = [];

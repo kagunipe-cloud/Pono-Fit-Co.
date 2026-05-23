@@ -111,6 +111,7 @@ export default function MemberDetailPage() {
   const [reactivateMembershipSubmitting, setReactivateMembershipSubmitting] = useState(false);
   const [adjustSubId, setAdjustSubId] = useState<string | null>(null);
   const [adjustDateStr, setAdjustDateStr] = useState("");
+  const [membershipPauseLoadingSid, setMembershipPauseLoadingSid] = useState<string | null>(null);
   const [waiverResult, setWaiverResult] = useState<{ message: string; url?: string } | null>(null);
   const [waiverExemptSaving, setWaiverExemptSaving] = useState(false);
   const [passwordResetMessage, setPasswordResetMessage] = useState<string | null>(null);
@@ -361,6 +362,42 @@ export default function MemberDetailPage() {
       else alert(json.error ?? "Failed");
     } finally {
       setAdminAction(null);
+    }
+  }
+
+  /** Admin: pause / resume calendar membership (extends period by freeze days on resume). */
+  async function setMembershipPaused(subscriptionId: string, paused: boolean) {
+    const msg = paused
+      ? "Pause this membership?\n\nThey lose door access from this subscription until you resume. Auto-renew will not charge while paused. When they return, Resume adds the paused days back onto their period end."
+      : "Resume this membership?\n\nTheir expiry will move forward by the number of full calendar freeze days before today.";
+    if (!window.confirm(msg)) return;
+    setMembershipPauseLoadingSid(subscriptionId);
+    try {
+      const res = await fetch(`/api/members/${encodeURIComponent(id)}/subscription-pause`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscription_id: subscriptionId, paused }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        kisi_warning?: string;
+        extended_by_calendar_days?: number;
+        new_expiry_date?: string;
+      };
+      if (!res.ok) {
+        window.alert(json.error ?? "Could not update membership pause.");
+        return;
+      }
+      const bits: string[] = [];
+      if (typeof json.kisi_warning === "string" && json.kisi_warning.trim()) bits.push(json.kisi_warning.trim());
+      if (!paused && typeof json.extended_by_calendar_days === "number" && json.extended_by_calendar_days > 0) {
+        bits.push(`Extended expiry by ${json.extended_by_calendar_days} freeze day(s). New end: ${String(json.new_expiry_date ?? "—")}.`);
+      }
+      if (bits.length) window.alert(bits.join("\n\n"));
+      await fetchMember();
+    } finally {
+      setMembershipPauseLoadingSid(null);
     }
   }
 
@@ -1553,6 +1590,12 @@ export default function MemberDetailPage() {
             </label>
           )}
         </div>
+        {isAdmin && (
+          <p className="text-xs text-stone-600 mb-2 max-w-3xl">
+            <strong className="font-medium text-stone-700">Travel / freeze:</strong> Pause removes door access from that membership row and skips auto‑renew billing until they return. Resume adds{" "}
+            <span className="whitespace-nowrap">full calendar freeze days</span> back onto their expiry.
+          </p>
+        )}
         <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
           {data.subscriptions.length === 0 ? (
             <p className="p-6 text-stone-500 text-sm">No subscriptions.</p>
@@ -1563,10 +1606,30 @@ export default function MemberDetailPage() {
                 {data.subscriptions.map((s, i) => {
                   const isBankedPassPack =
                     s.pass_credits_remaining != null && String(s.pass_credits_remaining).trim() !== "";
+                  const cat = String(s.plan_category ?? "").trim().toLowerCase();
+                  const unit = String(s.plan_unit ?? "").trim().toLowerCase();
+                  const freezeEligible =
+                    !isBankedPassPack &&
+                    !(cat === "passes" && unit === "day") &&
+                    String(s.status ?? "") !== "Cancelled";
+                  const pausedYmd = String(s.subscription_pause_started ?? "").trim();
+                  const pauseBusy =
+                    !!adminAction ||
+                    membershipPauseLoadingSid === String(s.subscription_id) ||
+                    togglingAutoRenew;
                   return (
                   <tr key={i} className="border-t border-stone-100">
                     <td className="py-2 px-4">{String(s.plan_name ?? s.product_id ?? "—")}</td>
-                    <td className="py-2 px-4">{String(s.status ?? "—")}</td>
+                    <td className="py-2 px-4">
+                      <div className="flex flex-col gap-0.5">
+                        <span>{String(s.status ?? "—")}</span>
+                        {pausedYmd ? (
+                          <span className="text-xs font-medium text-amber-700" title="No door access or auto-renew from this row until Resume">
+                            Paused · since {pausedYmd}
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
                     <td className="py-2 px-4">{String(s.start_date ?? "—")}</td>
                     <td className="py-2 px-4">
                       {isBankedPassPack ? (
@@ -1594,13 +1657,13 @@ export default function MemberDetailPage() {
                               value={adjustDateStr}
                               onChange={(e) => setAdjustDateStr(e.target.value)}
                               className="text-xs border border-stone-300 rounded px-2 py-1 text-stone-800"
-                              disabled={!!adminAction}
+                              disabled={pauseBusy}
                             />
                             <div className="flex flex-wrap gap-2">
                               <button
                                 type="button"
                                 onClick={() => void submitAdjustExpiry()}
-                                disabled={!!adminAction || !adjustDateStr}
+                                disabled={pauseBusy || !adjustDateStr}
                                 className="text-brand-700 hover:underline text-xs font-medium disabled:opacity-50"
                               >
                                 {adminAction === "adjust-expiry" ? "…" : "Save"}
@@ -1611,7 +1674,7 @@ export default function MemberDetailPage() {
                                   setAdjustSubId(null);
                                   setAdjustDateStr("");
                                 }}
-                                disabled={!!adminAction}
+                                disabled={pauseBusy}
                                 className="text-stone-600 hover:underline text-xs disabled:opacity-50"
                               >
                                 Close
@@ -1620,10 +1683,33 @@ export default function MemberDetailPage() {
                           </div>
                         ) : (
                           <div className="flex flex-col gap-1 items-start">
+                            {freezeEligible && adjustSubId !== String(s.subscription_id) ? (
+                              <div className="mb-1 pb-1 border-b border-stone-100 w-full">
+                                {pausedYmd ? (
+                                  <button
+                                    type="button"
+                                    disabled={pauseBusy}
+                                    onClick={() => void setMembershipPaused(String(s.subscription_id), false)}
+                                    className="text-emerald-700 hover:underline text-xs font-semibold disabled:opacity-50"
+                                  >
+                                    {membershipPauseLoadingSid === String(s.subscription_id) ? "Resuming…" : "Resume membership"}
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    disabled={pauseBusy}
+                                    onClick={() => void setMembershipPaused(String(s.subscription_id), true)}
+                                    className="text-amber-800 hover:underline text-xs font-semibold disabled:opacity-50"
+                                  >
+                                    {membershipPauseLoadingSid === String(s.subscription_id) ? "Pausing…" : "Pause membership"}
+                                  </button>
+                                )}
+                              </div>
+                            ) : null}
                             <button
                               type="button"
                               onClick={() => openAdjustExpiry(String(s.subscription_id), s.expiry_date)}
-                              disabled={!!adminAction}
+                              disabled={pauseBusy}
                               className="text-brand-700 hover:underline text-xs font-medium disabled:opacity-50"
                             >
                               Adjust expiry
@@ -1631,7 +1717,7 @@ export default function MemberDetailPage() {
                             <button
                               type="button"
                               onClick={() => cancelSubscription(String(s.subscription_id))}
-                              disabled={!!adminAction}
+                              disabled={pauseBusy}
                               className="text-red-600 hover:underline text-xs font-medium disabled:opacity-50"
                             >
                               {adminAction === "sub" ? "…" : "Cancel"}

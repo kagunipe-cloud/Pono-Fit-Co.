@@ -8,6 +8,7 @@ import {
   ensureMembersProfileColumns,
   ensureMembersInsuranceProgramColumn,
   ensureSubscriptionPassPackColumns,
+  ensureSubscriptionPauseStartedColumn,
 } from "../../../../lib/db";
 import { getAdminMemberId } from "../../../../lib/admin";
 import { normalizeInsuranceProgram } from "../../../../lib/insurance-program";
@@ -68,6 +69,7 @@ export async function GET(
     const mid = member.member_id as string;
 
     ensureSubscriptionPassPackColumns(db);
+    ensureSubscriptionPauseStartedColumn(db);
     ensureRecurringClassesTables(db);
     let class_credits = 0;
     try {

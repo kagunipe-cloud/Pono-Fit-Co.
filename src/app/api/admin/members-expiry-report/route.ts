@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensureMembersAutoRenewColumn } from "@/lib/db";
+import { getDb, getAppTimezone, ensureMembersAutoRenewColumn, ensureSubscriptionPauseStartedColumn } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
 import { addDaysToDateStr, todayInAppTz, weekStartInAppTz } from "@/lib/app-timezone";
 
@@ -28,7 +28,7 @@ export type MembersExpiryRange =
 
 /**
  * GET ?range=...&month=YYYY-MM (required when range=calendar_month)
- * Active memberships (non–pass-pack) with subscription expiry in the selected window.
+ * Active memberships (non–pass-pack, not admin-paused) with subscription expiry in the selected window.
  */
 export async function GET(request: NextRequest) {
   const adminId = await getAdminMemberId(request);
@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
   try {
     const db = getDb();
     ensureMembersAutoRenewColumn(db);
+    ensureSubscriptionPauseStartedColumn(db);
     const tz = getAppTimezone(db);
     const today = todayInAppTz(tz);
     const tomorrow = addDaysToDateStr(today, 1);
@@ -128,7 +129,7 @@ export async function GET(request: NextRequest) {
         activeOnly = true;
     }
 
-    const passPackExclusion = `(s.pass_credits_remaining IS NULL)`;
+    const nonPassNonPausedMembership = `(s.pass_credits_remaining IS NULL AND TRIM(COALESCE(s.subscription_pause_started, '')) = '')`;
 
     let statusClause: string;
     if (activeOnly) {
@@ -144,7 +145,7 @@ export async function GET(request: NextRequest) {
       FROM subscriptions s
       JOIN members m ON m.member_id = s.member_id
       LEFT JOIN membership_plans p ON p.product_id = s.product_id
-      WHERE ${passPackExclusion}
+      WHERE ${nonPassNonPausedMembership}
         AND ${statusClause}
         AND s.expiry_date IS NOT NULL
         AND TRIM(s.expiry_date) != ''

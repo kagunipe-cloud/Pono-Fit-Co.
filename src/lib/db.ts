@@ -378,6 +378,15 @@ export function ensureSubscriptionPassPackColumns(db: ReturnType<typeof getDb>) 
   }
 }
 
+/** Admin pause: gym calendar date (YYYY-MM-DD) freeze started; NULL/empty when not paused. */
+export function ensureSubscriptionPauseStartedColumn(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN subscription_pause_started TEXT");
+  } catch {
+    /* already exists */
+  }
+}
+
 /** Add waiver columns to members if missing (liability waiver before Kisi access). */
 export function ensureMembersWaiverColumns(db: ReturnType<typeof getDb>) {
   try {

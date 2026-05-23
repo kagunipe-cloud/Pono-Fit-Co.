@@ -9,6 +9,7 @@ import {
   ensureSubscriptionComplimentaryColumns,
   ensureSubscriptionRenewalDiscountPercentColumn,
   ensureSubscriptionPassPackColumns,
+  ensureSubscriptionPauseStartedColumn,
 } from "../../../../lib/db";
 import { computeRenewalChargePrice } from "../../../../lib/renewal-pricing";
 import { revokeAccess } from "../../../../lib/kisi";
@@ -61,6 +62,7 @@ export async function GET(request: NextRequest) {
   ensureSubscriptionComplimentaryColumns(db);
   ensureSubscriptionRenewalDiscountPercentColumn(db);
   ensureSubscriptionPassPackColumns(db);
+  ensureSubscriptionPauseStartedColumn(db);
 
   const tz = getAppTimezone(db);
   const today = todayString(tz);
@@ -74,8 +76,9 @@ export async function GET(request: NextRequest) {
        FROM subscriptions s
        JOIN members m ON m.member_id = s.member_id
        JOIN membership_plans p ON p.product_id = s.product_id
-       WHERE s.status = 'Active' AND s.expiry_date < ?
+         WHERE s.status = 'Active' AND s.expiry_date < ?
          AND s.pass_credits_remaining IS NULL
+         AND TRIM(COALESCE(s.subscription_pause_started, '')) = ''
          AND (
            LOWER(TRIM(COALESCE(p.unit, ''))) != 'month'
            OR (m.auto_renew = 0 OR m.auto_renew IS NULL)
@@ -124,6 +127,7 @@ export async function GET(request: NextRequest) {
     JOIN members m ON m.member_id = s.member_id
     WHERE s.status = 'Active' AND p.unit = 'Month'
       AND s.expiry_date <= ?
+      AND TRIM(COALESCE(s.subscription_pause_started, '')) = ''
       AND (m.auto_renew = 1)
   `).all(today) as {
     subscription_id: string;

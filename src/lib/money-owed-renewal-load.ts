@@ -1,4 +1,4 @@
-import type { getDb } from "./db";
+import { ensureSubscriptionPauseStartedColumn, type getDb } from "./db";
 import type { RenewalSubRow } from "./renewal-extension";
 
 type AppDb = ReturnType<typeof getDb>;
@@ -32,6 +32,7 @@ export function loadActiveMonthlySubscription(
   memberId: string,
   subscriptionId: string | null | undefined
 ): RenewalSubRow | null {
+  ensureSubscriptionPauseStartedColumn(db);
   const base = `
     SELECT s.subscription_id, s.member_id, s.expiry_date, s.price as sub_price, s.quantity,
            s.promo_renewals_remaining, s.renewal_price_indefinite,
@@ -40,6 +41,7 @@ export function loadActiveMonthlySubscription(
     FROM subscriptions s
     JOIN membership_plans p ON p.product_id = s.product_id
     WHERE s.member_id = ? AND s.status = 'Active' AND p.unit = 'Month'
+      AND TRIM(COALESCE(s.subscription_pause_started, '')) = ''
   `;
   const sid = subscriptionId?.trim();
   const row = sid
