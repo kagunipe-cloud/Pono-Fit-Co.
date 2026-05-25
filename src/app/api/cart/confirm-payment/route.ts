@@ -505,7 +505,15 @@ export async function POST(request: NextRequest) {
           }
         } else if (it.product_type === "pt_pack") {
           ensurePTSlotTables(db);
-          const pack = db.prepare("SELECT id, name, duration_minutes, credits, price FROM pt_pack_products WHERE id = ?").get(it.product_id) as { name?: string; duration_minutes: number; credits: number; price: string } | undefined;
+          const pack = db.prepare("SELECT id, name, duration_minutes, credits, price, product_id FROM pt_pack_products WHERE id = ?").get(it.product_id) as
+            | {
+                name?: string;
+                duration_minutes: number;
+                credits: number;
+                price: string;
+                product_id: string;
+              }
+            | undefined;
           if (pack) {
             const effUnit = getEffectiveUnitPriceString(db, it);
             const totalCredits = pack.credits * it.quantity;
@@ -515,6 +523,16 @@ export async function POST(request: NextRequest) {
               INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id)
               VALUES (?, ?, ?, 'purchase', 'sale', ?)
             `).run(member_id, pack.duration_minutes, totalCredits, sales_id);
+            /** Sales report (& admin PT category) use pt_bookings line dollars; ledger alone was invisible there. */
+            const ptBookingIdPack = randomUUID().slice(0, 8);
+            try {
+              db.prepare(`
+                INSERT INTO pt_bookings (pt_booking_id, product_id, member_id, payment_status, booking_date, sales_id, price, quantity)
+                VALUES (?, ?, ?, 'Paid', ?, ?, ?, ?)
+              `).run(ptBookingIdPack, pack.product_id, member_id, date_time, sales_id, effUnit, it.quantity);
+            } catch {
+              /* pt_bookings table may not exist in some envs */
+            }
           }
         } else if (it.product_type === "retail") {
           ensureRetailProductsTable(db);

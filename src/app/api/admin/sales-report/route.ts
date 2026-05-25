@@ -13,6 +13,51 @@ function parseNum(v: unknown): number {
   return Number.isNaN(n) ? 0 : n;
 }
 
+type SqliteDb = ReturnType<typeof getDb>;
+
+/**
+ * Older checkouts recorded PT pack purchases only on pt_credit_ledger (see pt_pack in confirm-payment).
+ * Estimate dollars for attribution when pt_bookings has no $ for that sale. Skipped when bookings already carry PT $ (avoid double-count with session purchases that also ledger).
+ */
+function estimatePtPackPurchaseUsdFromLedger(db: SqliteDb, salesId: string): { usd: number; lineCount: number } {
+  try {
+    const rows = db
+      .prepare(
+        `SELECT duration_minutes, amount FROM pt_credit_ledger
+         WHERE reference_type = 'sale' AND reference_id = ? AND reason = 'purchase'
+         ORDER BY id ASC`
+      )
+      .all(salesId) as { duration_minutes: number | null; amount: number | string | null }[];
+    if (rows.length === 0) return { usd: 0, lineCount: 0 };
+
+    let usd = 0;
+    let attributedLines = 0;
+    for (const r of rows) {
+      const amt = Math.max(0, Math.floor(Number(r.amount) || 0));
+      const dm = Math.round(Number(r.duration_minutes) || 0);
+      if (amt <= 0 || dm <= 0) continue;
+
+      let packs = db
+        .prepare(
+          `SELECT credits, CAST(REPLACE(IFNULL(price, '0'), ',', '') AS REAL) AS price
+           FROM pt_pack_products WHERE duration_minutes = ? AND credits IS NOT NULL AND credits > 0`
+        )
+        .all(dm) as { credits: number; price: number }[];
+      packs = packs.filter((p) => amt % Math.floor(Number(p.credits) || 0) === 0);
+      if (packs.length === 0) continue;
+      packs.sort((a, b) => Math.floor(Number(b.credits) || 0) - Math.floor(Number(a.credits) || 0));
+      const p = packs[0]!;
+      const c = Math.max(1, Math.floor(Number(p.credits) || 1));
+      const numSkus = amt / c;
+      usd += (Number.isFinite(p.price) ? p.price : 0) * numSkus;
+      attributedLines += 1;
+    }
+    return { usd, lineCount: attributedLines };
+  } catch {
+    return { usd: 0, lineCount: 0 };
+  }
+}
+
 /** GET: Sales report by category (admin only). Query: from=YYYY-MM-DD&to=YYYY-MM-DD (optional).
  *  Category revenue is attributed proportionally from sales.grand_total so totals match.
  *  Net = gross - tax. */
@@ -99,10 +144,19 @@ export async function GET(request: NextRequest) {
           const qty = Math.max(1, parseInt(String(r.quantity ?? 1), 10) || 1);
           ptAmt += parseNum(r.price) * qty;
         }
-        if (ptAmt > 0) categoryCounts.PT += ptRows.length;
       } catch {
         /* pt_bookings may not exist */
       }
+
+      let ptLedgerBacked = 0;
+      let ptLedgerLineCount = 0;
+      if (ptAmt <= 0) {
+        const est = estimatePtPackPurchaseUsdFromLedger(db, sid);
+        ptLedgerBacked = est.usd;
+        ptLedgerLineCount = est.lineCount;
+      }
+      const ptCombined = ptAmt + ptLedgerBacked;
+      if (ptCombined > 0) categoryCounts.PT += ptAmt > 0 ? ptRows.length : Math.max(ptLedgerLineCount, 1);
 
       try {
         retailRows = db.prepare(
@@ -121,13 +175,13 @@ export async function GET(request: NextRequest) {
         /* sale_retail_lines may not exist */
       }
 
-      const lineTotal = memAmt + classAmt + ptAmt + retailAmt;
+      const lineTotal = memAmt + classAmt + ptCombined + retailAmt;
       const saleType = (sale as { sale_type?: string | null }).sale_type ?? "";
 
       if (lineTotal > 0) {
         const memPct = memAmt / lineTotal;
         const classPct = classAmt / lineTotal;
-        const ptPct = ptAmt / lineTotal;
+        const ptPct = ptCombined / lineTotal;
         const retailPct = retailAmt / lineTotal;
         categoryRevenue.Membership += grandTotal * memPct;
         categoryRevenue.Class += grandTotal * classPct;

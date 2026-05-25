@@ -64,6 +64,18 @@ function getSalesIdsForCategory(db: ReturnType<typeof getDb>, category: string):
     } catch {
       /* pt_bookings may not exist */
     }
+    /** PT packs historically had credits on pt_credit_ledger only (no pt_bookings); include those receipts in PT drill-down */
+    try {
+      const ledgerRows = db
+        .prepare(
+          `SELECT DISTINCT reference_id AS sales_id FROM pt_credit_ledger
+           WHERE reference_type = 'sale' AND TRIM(IFNULL(reference_id, '')) != '' AND reason = 'purchase'`
+        )
+        .all() as { sales_id: string }[];
+      ledgerRows.forEach((r) => ids.add(String(r.sales_id)));
+    } catch {
+      /* pt_credit_ledger may not exist */
+    }
   } else if (category === "Pro Shop") {
     try {
       const rows = db
