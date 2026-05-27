@@ -6,7 +6,7 @@ export type TheBoardTab = "goals" | "records";
 
 export function TheBoardTabs({ active }: { active: TheBoardTab }) {
   const tabs: { id: TheBoardTab; label: string; href: string }[] = [
-    { id: "goals", label: "Goal Board", href: "/admin/the-board?tab=goals" },
+    { id: "goals", label: "Weekly Goals", href: "/admin/the-board?tab=goals" },
     { id: "records", label: "Gym Records", href: "/admin/the-board?tab=records" },
   ];
 

@@ -282,7 +282,7 @@ export default function MemberWorkoutsPage() {
 
       <div className="mb-6 p-4 rounded-xl border border-brand-100 bg-brand-50/40">
         <h2 className="text-sm font-semibold text-stone-800 mb-1">Set your workout goal</h2>
-        <p className="text-sm text-stone-600 mb-3">How many days/week do you want to log workouts for the Goal Board?</p>
+        <p className="text-sm text-stone-600 mb-3">How many days/week do you want to log workouts for The Board?</p>
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={workoutGoalDraft}

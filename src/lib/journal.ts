@@ -90,6 +90,15 @@ export function ensureJournalTables(db: ReturnType<typeof import("./db").getDb>)
     }
   }
 
+  const dayCols = db.prepare("PRAGMA table_info(journal_days)").all() as { name: string }[];
+  if (dayCols.every((c) => c.name !== "macros_finished_at")) {
+    try {
+      db.prepare("ALTER TABLE journal_days ADD COLUMN macros_finished_at TEXT").run();
+    } catch {
+      /* ignore */
+    }
+  }
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS member_weigh_ins (
       member_id TEXT NOT NULL,

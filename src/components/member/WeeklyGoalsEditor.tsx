@@ -132,7 +132,7 @@ export default function WeeklyGoalsEditor() {
     <div className="p-5 rounded-xl border-2 border-brand-200 bg-gradient-to-br from-brand-50 to-white shadow-sm">
       <h2 className="text-lg font-bold text-stone-800 mb-1">Set weekly goals</h2>
       <p className="text-sm text-stone-600 mb-4">
-        These feed the Goal Board. Workouts and macros use your existing pages; personal goals are set here for this week
+        These feed The Board. Workouts and macros use your existing pages; personal goals are set here for this week
         {weeklyGoals?.personal.week_start ? ` (Mon ${weeklyGoals.personal.week_start})` : ""}.
       </p>
 
