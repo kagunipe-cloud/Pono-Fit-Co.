@@ -15,6 +15,15 @@ import {
   memberHasPersonalGoalConfigured,
   scorePersonalGoals,
 } from "./weekly-personal-goals";
+import {
+  countMacroHitsInWeek,
+  ensureJournalHasMacrosFinishedAt,
+  loadManualMacroFinishedDates,
+  macroGoalsConfigured,
+  macroPastCountableDaysInWeek,
+  type MacroGoalRow,
+  type MacroTotals,
+} from "./macro-board-scoring";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -51,21 +60,6 @@ type MemberRow = {
   first_name: string | null;
   last_name: string | null;
   role: string | null;
-};
-
-type MacroGoalRow = {
-  member_id: string;
-  calories_goal: number | null;
-  protein_pct: number | null;
-  fat_pct: number | null;
-  carbs_pct: number | null;
-};
-
-type MacroTotals = {
-  cal: number;
-  p: number;
-  f: number;
-  c: number;
 };
 
 const MACRO_WEEK_TARGET_DAYS = 7;
@@ -107,33 +101,6 @@ function displayName(m: Pick<MemberRow, "member_id" | "first_name" | "last_name"
   return [m.first_name, m.last_name].filter(Boolean).join(" ").trim() || m.member_id;
 }
 
-function isWithinTenPercent(actual: number, goal: number): boolean {
-  if (!Number.isFinite(actual) || !Number.isFinite(goal) || goal <= 0) return false;
-  return Math.abs(actual - goal) <= goal * 0.1;
-}
-
-function macroDayHit(total: MacroTotals | undefined, goal: MacroGoalRow | undefined): boolean {
-  if (!goal || !total) return false;
-  const calories = Number(goal.calories_goal);
-  const proteinPct = Number(goal.protein_pct);
-  const fatPct = Number(goal.fat_pct);
-  const carbsPct = Number(goal.carbs_pct);
-  if (![calories, proteinPct, fatPct, carbsPct].every((n) => Number.isFinite(n) && n > 0)) {
-    return false;
-  }
-
-  const proteinGoal = (calories * (proteinPct / 100)) / 4;
-  const fatGoal = (calories * (fatPct / 100)) / 9;
-  const carbsGoal = (calories * (carbsPct / 100)) / 4;
-
-  return (
-    isWithinTenPercent(total.cal, calories) &&
-    isWithinTenPercent(total.p, proteinGoal) &&
-    isWithinTenPercent(total.f, fatGoal) &&
-    isWithinTenPercent(total.c, carbsGoal)
-  );
-}
-
 function sqlBoundsForWeek(weekStart: string, weekEnd: string, tz: string): { fromSql: string; toSql: string } {
   return {
     fromSql: startOfDayInTz(weekStart, tz).replace("T", " ").slice(0, 19),
@@ -165,15 +132,14 @@ export function buildGoalBoard(db: Db, tz: string, weekStart?: string, today?: s
   ensureWorkoutTables(db);
   ensureFoodsTable(db);
   ensureJournalTables(db);
+  ensureJournalHasMacrosFinishedAt(db);
 
   const todayYmd = today ?? todayInAppTz(tz);
   const start = weekStart ?? weekStartInAppTz(todayYmd);
   const end = addDaysToDateStr(start, 6);
   const personalGoalsByMember = loadWeeklyPersonalGoalsForWeek(db, start);
-  const previousDay = addDaysToDateStr(todayYmd, -1);
-  const macroEnd = todayYmd >= start && todayYmd <= end ? previousDay : end;
-  const macroDates = macroEnd >= start ? dateRange(start, macroEnd) : [];
-  const macroDateSet = new Set(macroDates);
+  const manualMacroFinishedDates = loadManualMacroFinishedDates(db, start, end);
+  const macroPastCountableDays = macroPastCountableDaysInWeek(start, end, todayYmd);
 
   const members = db
     .prepare(
@@ -199,6 +165,7 @@ export function buildGoalBoard(db: Db, tz: string, weekStart?: string, today?: s
     .prepare("SELECT member_id, calories_goal, protein_pct, fat_pct, carbs_pct FROM member_macro_goals")
     .all() as MacroGoalRow[];
   for (const row of macroGoalRows) {
+    if (!row.member_id) continue;
     macroGoals.set(row.member_id, row);
   }
 
@@ -268,12 +235,11 @@ export function buildGoalBoard(db: Db, tz: string, weekStart?: string, today?: s
 
     const memberMacroTotals = macroTotals.get(memberId);
     const macroGoal = macroGoals.get(memberId);
-    let macroHit = 0;
-    for (const date of macroDateSet) {
-      if (macroDayHit(memberMacroTotals?.get(date), macroGoal)) macroHit += 1;
-    }
+    const finishedDates = manualMacroFinishedDates.get(memberId) ?? new Set<string>();
+    const macroHit = countMacroHitsInWeek(start, end, todayYmd, memberMacroTotals, macroGoal, finishedDates);
     const macroTarget = MACRO_WEEK_TARGET_DAYS;
-    const macroPercent = macroTarget > 0 && macroGoal ? pct(macroHit, macroTarget) : null;
+    const macroConfigured = macroGoalsConfigured(macroGoal);
+    const macroPercent = macroConfigured ? pct(macroHit, macroTarget) : null;
 
     const personalGoalRow = personalGoalsByMember.get(memberId);
     const personalScored =
@@ -295,7 +261,7 @@ export function buildGoalBoard(db: Db, tz: string, weekStart?: string, today?: s
     const hasSignal =
       workoutGoal != null ||
       workoutHit > 0 ||
-      macroGoal != null ||
+      macroConfigured ||
       (memberMacroTotals != null && memberMacroTotals.size > 0) ||
       personalGoal != null;
     if (!hasSignal) continue;
@@ -331,7 +297,7 @@ export function buildGoalBoard(db: Db, tz: string, weekStart?: string, today?: s
     today: todayYmd,
     week_start: start,
     week_end: end,
-    macro_countable_days: macroDates.length,
+    macro_countable_days: macroPastCountableDays,
     rows: rows.map((r, i) => ({ ...r, rank: i + 1 })),
   };
 }
@@ -355,13 +321,14 @@ export function getMemberWeeklyGoalMetrics(
   ensureFoodsTable(db);
   ensureJournalTables(db);
 
+  ensureJournalTables(db);
+  ensureJournalHasMacrosFinishedAt(db);
+
   const todayYmd = todayInAppTz(tz);
   const start = weekStartInAppTz(todayYmd);
   const end = addDaysToDateStr(start, 6);
-  const previousDay = addDaysToDateStr(todayYmd, -1);
-  const macroEnd = todayYmd >= start && todayYmd <= end ? previousDay : end;
-  const macroDates = macroEnd >= start ? dateRange(start, macroEnd) : [];
-  const macroDateSet = new Set(macroDates);
+  const manualMacroFinishedDates = loadManualMacroFinishedDates(db, start, end);
+  const finishedDates = manualMacroFinishedDates.get(memberId) ?? new Set<string>();
 
   const workoutGoal = getMemberWorkoutGoal(db, memberId);
   const { fromSql, toSql } = sqlBoundsForWeek(start, end, tz);
@@ -384,14 +351,7 @@ export function getMemberWeeklyGoalMetrics(
   const macroGoal = db
     .prepare("SELECT calories_goal, protein_pct, fat_pct, carbs_pct FROM member_macro_goals WHERE member_id = ?")
     .get(memberId) as MacroGoalRow | undefined;
-  const macroGoalsSet = Boolean(
-    macroGoal &&
-      macroGoal.calories_goal != null &&
-      macroGoal.calories_goal > 0 &&
-      macroGoal.protein_pct != null &&
-      macroGoal.fat_pct != null &&
-      macroGoal.carbs_pct != null
-  );
+  const macroGoalsSet = macroGoalsConfigured(macroGoal);
 
   const totalsRows = db
     .prepare(
@@ -417,10 +377,7 @@ export function getMemberWeeklyGoalMetrics(
       c: Number(row.c) || 0,
     });
   }
-  let macroHit = 0;
-  for (const date of macroDateSet) {
-    if (macroDayHit(macroByDate.get(date), macroGoal)) macroHit += 1;
-  }
+  const macroHit = countMacroHitsInWeek(start, end, todayYmd, macroByDate, macroGoal, finishedDates);
   const macroTarget = MACRO_WEEK_TARGET_DAYS;
   const macroPercent = macroGoalsSet ? pct(macroHit, macroTarget) : null;
 

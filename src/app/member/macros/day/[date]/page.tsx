@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef, lazy, Suspense } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { formatDateForDisplay } from "@/lib/app-timezone";
+import { formatDateForDisplay, todayInAppTz } from "@/lib/app-timezone";
 import { useAppTimezone } from "@/lib/settings-context";
 import { getUnitType, MEASUREMENT_OPTIONS, getServingMeasurementOptions, formatPortionLabel, formatServingForDisplay, unitToGrams } from "@/lib/food-units";
 import { validateMacros } from "@/lib/food-quality";
@@ -49,7 +49,23 @@ function usdaMacros(food: USDAFoodHit): { cal: number | null; p: number | null; 
 
 type Entry = { id: number; food_id: number; amount: number; sort_order: number; quantity?: number | null; measurement?: string | null; food: Food | null };
 type Meal = { id: number; journal_day_id: number; name: string; sort_order: number; entries: Entry[] };
-type DayData = { id: number; member_id: string; date: string; created_at: string; meals: Meal[] };
+type MacroBoardDayStatus = {
+  goals_configured: boolean;
+  countable: boolean;
+  finished: boolean;
+  hit: boolean;
+  miss_reasons: string[];
+  tolerance_percent: number;
+};
+type DayData = {
+  id: number;
+  member_id: string;
+  date: string;
+  created_at: string;
+  macros_finished_at?: string | null;
+  board_macros?: MacroBoardDayStatus;
+  meals: Meal[];
+};
 type Favorite = { id: number; name: string; items: { food_id: number; amount: number; food_name: string }[] };
 type OFFSearchFood = { name: string; barcode: string; calories: number | null; protein_g: number | null; fat_g: number | null; carbs_g: number | null; fiber_g: number | null; serving_size: number | null; serving_size_unit: string | null; serving_description: string | null };
 
@@ -344,6 +360,7 @@ export default function MemberMacrosDayPage() {
   const [saveFavFromEntry, setSaveFavFromEntry] = useState<{ food_id: number; amount: number } | null>(null);
   const [saveFavFromMealId, setSaveFavFromMealId] = useState<number | null>(null);
   const [deletingDay, setDeletingDay] = useState(false);
+  const [finishSaving, setFinishSaving] = useState(false);
   const [aiFood, setAiFood] = useState("");
   const [aiCalculating, setAiCalculating] = useState(false);
   const [aiResult, setAiResult] = useState<{ calories: number; protein_g: number; fat_g: number; carbs_g: number } | null>(null);
@@ -1037,7 +1054,37 @@ export default function MemberMacrosDayPage() {
   if (loading && !day) return <div className="p-8 text-center text-stone-500">Loading…</div>;
 
   const dateLabel = formatDateForDisplay(date, tz);
+  const today = todayInAppTz(tz);
+  const isToday = date === today;
   const dayTotal = day ? sumMacros(day.meals.flatMap((m) => m.entries)) : { cal: 0, p: 0, f: 0, c: 0, fiber: 0 };
+  const board = day?.board_macros;
+
+  async function setMacroLogFinished(finish: boolean) {
+    setFinishSaving(true);
+    try {
+      const res = await fetch(`/api/member/journal/days/${date}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ finish }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(typeof json.error === "string" ? json.error : "Could not update day");
+        return;
+      }
+      setDay((prev) =>
+        prev
+          ? {
+              ...prev,
+              macros_finished_at: json.macros_finished_at ?? null,
+              board_macros: json.board_macros ?? prev.board_macros,
+            }
+          : prev
+      );
+    } finally {
+      setFinishSaving(false);
+    }
+  }
 
   return (
     <div className="max-w-2xl mx-auto p-6">
@@ -1179,6 +1226,60 @@ export default function MemberMacrosDayPage() {
         )}
       </div>
 
+      {board && (
+        <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-white">
+          <h3 className="font-semibold text-stone-800 mb-1">The Board — weekly macros</h3>
+          {!board.goals_configured ? (
+            <p className="text-sm text-stone-600">
+              Set daily calorie + protein/fat/carb % goals on{" "}
+              <Link href="/member/macros" className="font-medium text-brand-700 hover:underline">
+                My Macros
+              </Link>{" "}
+              for this day to score. (Weight goal alone doesn&apos;t count.)
+            </p>
+          ) : !board.countable ? (
+            <p className="text-sm text-stone-600">
+              Today&apos;s log scores after midnight, or tap <strong>Finish today&apos;s log</strong> below when you&apos;re done eating.
+            </p>
+          ) : board.hit ? (
+            <p className="text-sm font-medium text-emerald-700">Counts for The Board this week ✓</p>
+          ) : (
+            <p className="text-sm text-amber-800">
+              Logged, but outside {board.tolerance_percent}% on: {board.miss_reasons.join(", ")}.
+            </p>
+          )}
+          {isToday && board.goals_configured && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {!board.finished ? (
+                <button
+                  type="button"
+                  disabled={finishSaving || dayTotal.cal <= 0}
+                  onClick={() => void setMacroLogFinished(true)}
+                  className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+                >
+                  {finishSaving ? "Saving…" : "Finish today's log"}
+                </button>
+              ) : (
+                <>
+                  <span className="text-sm text-emerald-700 font-medium self-center">Finished for today ✓</span>
+                  <button
+                    type="button"
+                    disabled={finishSaving}
+                    onClick={() => void setMacroLogFinished(false)}
+                    className="px-3 py-2 rounded-lg border border-stone-300 text-sm text-stone-600 hover:bg-stone-50 disabled:opacity-50"
+                  >
+                    Reopen log
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+          {!isToday && board.countable && (
+            <p className="mt-2 text-xs text-stone-500">Past days lock at midnight gym time — no finish button needed.</p>
+          )}
+        </div>
+      )}
+
       {!day ? (
         <p className="text-stone-500">Creating your journal…</p>
       ) : (
@@ -1310,7 +1411,7 @@ export default function MemberMacrosDayPage() {
             const goalC = calGoal > 0 ? (cPct * calGoal) / 4 : 0;
             return (
               <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-white">
-                <p className="font-semibold text-stone-800 mb-4">Today&apos;s progress</p>
+                <p className="font-semibold text-stone-800 mb-4">{isToday ? "Today's progress" : "Day totals"}</p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
                   <PonoPlateTracker label="Calories" current={dayTotal.cal} goal={calGoal} unit="cal" fillColorClass="bg-brand-500" />
                   <PonoPlateTracker label="Protein" current={dayTotal.p} goal={goalP} unit="g" fillColorClass="bg-blue-500" />

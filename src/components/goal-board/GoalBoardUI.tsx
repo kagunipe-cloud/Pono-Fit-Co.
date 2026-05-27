@@ -18,9 +18,12 @@ export function formatGoalPercent(value: number | null): string {
   return value == null ? "N/A" : `${value}%`;
 }
 
-export function goalMetricSubtext(metric: GoalMetric | null): string {
-  if (!metric || metric.percent == null) return "Not set";
-  return `${metric.hit}/${metric.target}`;
+export function goalMetricSubtext(metric: GoalMetric | null | undefined): string {
+  if (!metric) return "Not set";
+  if (metric.target > 0) return `${metric.hit}/${metric.target}`;
+  if (metric.hit > 0) return `${metric.hit} logged`;
+  if (metric.percent != null) return `${metric.hit}/${metric.target}`;
+  return "Not set";
 }
 
 export function GoalBoardProgressRing({
