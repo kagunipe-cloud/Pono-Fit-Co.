@@ -68,7 +68,9 @@ export default function GoalBoardDisplay() {
         <p className="mt-2">
           <span className="font-medium text-stone-800">Workouts</span> need a weekly day goal saved on My Workouts.{" "}
           <span className="font-medium text-stone-800">Macros</span> need daily calorie + protein/fat/carb % goals on My Macros (weight
-          goal alone doesn&apos;t score). Each macro day requires calories and all three macros within 15% of targets.
+          goal alone doesn&apos;t score). Each macro day requires calories and all three macros within 15% of targets.{" "}
+          <span className="font-medium text-stone-800">Personal goals</span> score partial progress — e.g. halfway from your last PR or
+          weigh-in to your weekly target scores 50%, not zero.
         </p>
         <p className="mt-1">
           Current week: <span className="font-medium text-stone-800">{data.current.week_start}</span> to{" "}

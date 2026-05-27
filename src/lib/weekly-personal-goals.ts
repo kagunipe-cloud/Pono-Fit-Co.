@@ -22,6 +22,10 @@ export type WeeklyPersonalGoals = {
 export type WeeklyPersonalGoalProgress = WeeklyPersonalGoals & {
   pr_hit: boolean;
   weigh_hit: boolean;
+  pr_percent: number | null;
+  weigh_percent: number | null;
+  pr_baseline_lbs: number | null;
+  weigh_baseline_lbs: number | null;
   personal_hit: number;
   personal_target: number;
   personal_percent: number | null;
@@ -108,6 +112,138 @@ function sqlBoundsForWeek(weekStart: string, weekEnd: string, tz: string): { fro
   };
 }
 
+function clampPercent(value: number): number {
+  return Math.min(100, Math.max(0, Math.round(value)));
+}
+
+/** Progress from start → goal based on current value (0–100). Works for increase or decrease goals. */
+export function progressTowardGoal(current: number, start: number, goal: number): number {
+  const needed = goal - start;
+  if (Math.abs(needed) < 1e-9) {
+    return Math.abs(current - goal) < 1e-9 ? 100 : 0;
+  }
+  const moved = needed > 0 ? current - start : start - current;
+  return clampPercent((moved / Math.abs(needed)) * 100);
+}
+
+function maxLiftWeightAtReps(
+  db: Db,
+  memberId: string,
+  exerciseId: number,
+  minReps: number,
+  finishedBeforeSql: string | null,
+  finishedFromSql: string | null,
+  finishedToSql: string | null
+): number | null {
+  ensureWorkoutTables(db);
+  let sql = `
+    SELECT MAX(COALESCE(ws.weight_kg, 0)) AS max_w
+    FROM workouts w
+    JOIN workout_exercises we ON we.workout_id = w.id AND we.exercise_id = ? AND we.type = 'lift'
+    JOIN workout_sets ws ON ws.workout_exercise_id = we.id
+    WHERE w.member_id = ?
+      AND w.finished_at IS NOT NULL
+      AND COALESCE(ws.reps, 0) >= ?`;
+  const params: (string | number)[] = [exerciseId, memberId, minReps];
+  if (finishedBeforeSql != null) {
+    sql += " AND w.finished_at < ?";
+    params.push(finishedBeforeSql);
+  }
+  if (finishedFromSql != null && finishedToSql != null) {
+    sql += " AND w.finished_at >= ? AND w.finished_at <= ?";
+    params.push(finishedFromSql, finishedToSql);
+  }
+  const row = db.prepare(sql).get(...params) as { max_w: number | null } | undefined;
+  const maxW = row?.max_w != null ? Number(row.max_w) : null;
+  return maxW != null && Number.isFinite(maxW) && maxW > 0 ? maxW : null;
+}
+
+function priorWeighIn(db: Db, memberId: string, beforeDate: string): number | null {
+  ensureJournalTables(db);
+  const row = db
+    .prepare(
+      `SELECT weight FROM member_weigh_ins
+       WHERE member_id = ? AND date < ?
+       ORDER BY date DESC, id DESC
+       LIMIT 1`
+    )
+    .get(memberId, beforeDate) as { weight: number } | undefined;
+  const w = row?.weight != null ? Number(row.weight) : null;
+  return w != null && Number.isFinite(w) && w > 0 ? w : null;
+}
+
+function bestWeighInThisWeek(
+  db: Db,
+  memberId: string,
+  weekStart: string,
+  weekEnd: string,
+  direction: WeighDirection
+): number | null {
+  ensureJournalTables(db);
+  const agg = direction === "at_or_below" ? "MIN(weight)" : "MAX(weight)";
+  const row = db
+    .prepare(
+      `SELECT ${agg} AS w FROM member_weigh_ins
+       WHERE member_id = ? AND date >= ? AND date <= ?`
+    )
+    .get(memberId, weekStart, weekEnd) as { w: number | null } | undefined;
+  const w = row?.w != null ? Number(row.w) : null;
+  return w != null && Number.isFinite(w) && w > 0 ? w : null;
+}
+
+export function prGoalProgressPercent(
+  db: Db,
+  memberId: string,
+  weekStart: string,
+  weekEnd: string,
+  tz: string,
+  goal: WeeklyPersonalGoals
+): number | null {
+  if (!hasPrGoal(goal)) return null;
+  const goalWeight = goal.pr_weight_lbs ?? 0;
+  const minReps = goal.pr_reps ?? 0;
+  const { fromSql, toSql } = sqlBoundsForWeek(weekStart, weekEnd, tz);
+  const baseline =
+    maxLiftWeightAtReps(db, memberId, goal.pr_exercise_id!, minReps, fromSql, null, null) ?? 0;
+  const current =
+    maxLiftWeightAtReps(db, memberId, goal.pr_exercise_id!, minReps, null, fromSql, toSql) ?? baseline;
+  return progressTowardGoal(current, baseline, goalWeight);
+}
+
+export function weighGoalProgressPercent(
+  db: Db,
+  memberId: string,
+  weekStart: string,
+  weekEnd: string,
+  goal: WeeklyPersonalGoals
+): { percent: number | null; baseline_lbs: number | null; current_lbs: number | null } {
+  if (!hasWeighGoal(goal)) return { percent: null, baseline_lbs: null, current_lbs: null };
+  const target = goal.weigh_target_lbs ?? 0;
+  const baseline = priorWeighIn(db, memberId, weekStart);
+  if (baseline == null) {
+    return { percent: 0, baseline_lbs: null, current_lbs: bestWeighInThisWeek(db, memberId, weekStart, weekEnd, goal.weigh_direction!) };
+  }
+  const current = bestWeighInThisWeek(db, memberId, weekStart, weekEnd, goal.weigh_direction!) ?? baseline;
+  return {
+    percent: progressTowardGoal(current, baseline, target),
+    baseline_lbs: baseline,
+    current_lbs: current,
+  };
+}
+
+export function prGoalBaselineLbs(
+  db: Db,
+  memberId: string,
+  weekStart: string,
+  weekEnd: string,
+  tz: string,
+  goal: WeeklyPersonalGoals
+): number | null {
+  if (!hasPrGoal(goal)) return null;
+  const { fromSql } = sqlBoundsForWeek(weekStart, weekEnd, tz);
+  return maxLiftWeightAtReps(db, memberId, goal.pr_exercise_id!, goal.pr_reps ?? 0, fromSql, null, null);
+}
+
 export function prGoalHitThisWeek(
   db: Db,
   memberId: string,
@@ -161,25 +297,36 @@ export function scorePersonalGoals(
   weekStart: string,
   tz: string,
   goal: WeeklyPersonalGoals
-): { hit: number; target: number; percent: number | null } | null {
+): {
+  hit: number;
+  target: number;
+  percent: number | null;
+  pr_percent: number | null;
+  weigh_percent: number | null;
+} | null {
   const weekEnd = addDaysToDateStr(weekStart, 6);
-  let target = 0;
-  let hit = 0;
+  const parts: number[] = [];
+  let prPercent: number | null = null;
+  let weighPercent: number | null = null;
 
   if (hasPrGoal(goal)) {
-    target += 1;
-    if (prGoalHitThisWeek(db, memberId, weekStart, weekEnd, tz, goal)) hit += 1;
+    prPercent = prGoalProgressPercent(db, memberId, weekStart, weekEnd, tz, goal);
+    parts.push(prPercent ?? 0);
   }
   if (hasWeighGoal(goal)) {
-    target += 1;
-    if (weighGoalHitThisWeek(db, memberId, weekStart, weekEnd, goal)) hit += 1;
+    const weigh = weighGoalProgressPercent(db, memberId, weekStart, weekEnd, goal);
+    weighPercent = weigh.percent;
+    parts.push(weighPercent ?? 0);
   }
 
-  if (target <= 0) return null;
+  if (parts.length === 0) return null;
+  const percent = clampPercent(parts.reduce((sum, n) => sum + n, 0) / parts.length);
   return {
-    hit,
-    target,
-    percent: Math.round((hit / target) * 100),
+    hit: percent,
+    target: 100,
+    percent,
+    pr_percent: prPercent,
+    weigh_percent: weighPercent,
   };
 }
 
@@ -224,10 +371,15 @@ export function getMemberWeeklyPersonalGoalProgress(
   const prHit = prGoalHitThisWeek(db, memberId, goals.week_start, weekEnd, tz, goals);
   const weighHit = weighGoalHitThisWeek(db, memberId, goals.week_start, weekEnd, goals);
   const scored = scorePersonalGoals(db, memberId, goals.week_start, tz, goals);
+  const weighProgress = weighGoalProgressPercent(db, memberId, goals.week_start, weekEnd, goals);
   return {
     ...goals,
     pr_hit: prHit,
     weigh_hit: weighHit,
+    pr_percent: scored?.pr_percent ?? null,
+    weigh_percent: scored?.weigh_percent ?? null,
+    pr_baseline_lbs: prGoalBaselineLbs(db, memberId, goals.week_start, weekEnd, tz, goals),
+    weigh_baseline_lbs: weighProgress.baseline_lbs,
     personal_hit: scored?.hit ?? 0,
     personal_target: scored?.target ?? 0,
     personal_percent: scored?.percent ?? null,

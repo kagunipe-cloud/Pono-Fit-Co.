@@ -20,9 +20,10 @@ export function formatGoalPercent(value: number | null): string {
 
 export function goalMetricSubtext(metric: GoalMetric | null | undefined): string {
   if (!metric) return "Not set";
+  if (metric.target === 100 && metric.percent != null) return `${metric.percent}%`;
   if (metric.target > 0) return `${metric.hit}/${metric.target}`;
   if (metric.hit > 0) return `${metric.hit} logged`;
-  if (metric.percent != null) return `${metric.hit}/${metric.target}`;
+  if (metric.percent != null) return `${metric.percent}%`;
   return "Not set";
 }
 

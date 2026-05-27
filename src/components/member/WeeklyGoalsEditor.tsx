@@ -16,6 +16,10 @@ type WeeklyGoalsData = {
     weigh_direction: "at_or_below" | "at_or_above" | null;
     pr_hit: boolean;
     weigh_hit: boolean;
+    pr_percent: number | null;
+    weigh_percent: number | null;
+    pr_baseline_lbs: number | null;
+    weigh_baseline_lbs: number | null;
     personal_hit: number;
     personal_target: number;
     personal_percent: number | null;
@@ -171,7 +175,7 @@ export default function WeeklyGoalsEditor() {
           <div className="p-4 rounded-lg border border-stone-200 bg-white">
             <p className="text-sm font-medium text-stone-700 mb-2">Lift PR goal</p>
             <p className="text-xs text-stone-500 mb-3">
-              Pick a lift, target weight (lbs), and reps. Log that or better in a finished workout this week.
+              Progress is measured from your prior best at this rep count toward your weekly target weight. Hitting 50% of the way there scores 50% on The Board.
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
               <input
@@ -236,9 +240,18 @@ export default function WeeklyGoalsEditor() {
                 </button>
               )}
             </div>
-            {weeklyGoals?.personal.pr_exercise_id && (weeklyGoals.personal.personal_target ?? 0) > 0 && (
+            {weeklyGoals?.personal.pr_exercise_id && weeklyGoals.personal.pr_weight_lbs != null && (
               <p className={`text-xs mt-2 font-medium ${weeklyGoals.personal.pr_hit ? "text-emerald-700" : "text-stone-500"}`}>
-                Lift PR: {weeklyGoals.personal.pr_hit ? "Hit this week ✓" : "Not hit yet"}
+                Lift PR:{" "}
+                {weeklyGoals.personal.pr_hit
+                  ? "Goal hit this week ✓"
+                  : weeklyGoals.personal.pr_percent != null
+                    ? `${weeklyGoals.personal.pr_percent}% toward ${weeklyGoals.personal.pr_weight_lbs} lbs${
+                        weeklyGoals.personal.pr_baseline_lbs != null
+                          ? ` (from ${weeklyGoals.personal.pr_baseline_lbs} lbs)`
+                          : ""
+                      }`
+                    : "No attempts yet this week"}
               </p>
             )}
           </div>
@@ -246,7 +259,7 @@ export default function WeeklyGoalsEditor() {
           <div className="p-4 rounded-lg border border-stone-200 bg-white">
             <p className="text-sm font-medium text-stone-700 mb-2">Weekly weigh-in goal</p>
             <p className="text-xs text-stone-500 mb-3">
-              Separate from your long-term weight goal in Macros. Log a weigh-in that meets your target.
+              Separate from your long-term weight goal in Macros. Progress is measured from your last weigh-in before this week toward your target — partial progress counts on The Board.
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
               <input
@@ -292,20 +305,27 @@ export default function WeeklyGoalsEditor() {
                 </button>
               )}
             </div>
-            {weeklyGoals?.personal.weigh_target_lbs && (weeklyGoals.personal.personal_target ?? 0) > 0 && (
+            {weeklyGoals?.personal.weigh_target_lbs && weeklyGoals.personal.weigh_direction && (
               <p className={`text-xs mt-2 font-medium ${weeklyGoals.personal.weigh_hit ? "text-emerald-700" : "text-stone-500"}`}>
-                Weigh-in: {weeklyGoals.personal.weigh_hit ? "Hit this week ✓" : "Not hit yet"}
+                Weigh-in:{" "}
+                {weeklyGoals.personal.weigh_hit
+                  ? "Goal hit this week ✓"
+                  : weeklyGoals.personal.weigh_baseline_lbs == null
+                    ? "Log a weigh-in before this week to set your starting point"
+                    : weeklyGoals.personal.weigh_percent != null
+                      ? `${weeklyGoals.personal.weigh_percent}% toward ${weeklyGoals.personal.weigh_target_lbs} lbs (from ${weeklyGoals.personal.weigh_baseline_lbs} lbs)`
+                      : "No weigh-in logged this week yet"}
               </p>
             )}
           </div>
 
-          {weeklyGoals?.personal.personal_target ? (
+          {weeklyGoals?.personal.personal_percent != null ? (
             <p className="text-sm text-stone-700">
               Personal goal score:{" "}
-              <span className="font-semibold">
-                {weeklyGoals.personal.personal_hit}/{weeklyGoals.personal.personal_target}
-              </span>
-              {weeklyGoals.personal.personal_percent != null ? ` (${weeklyGoals.personal.personal_percent}%)` : ""}
+              <span className="font-semibold">{weeklyGoals.personal.personal_percent}%</span>
+              {weeklyGoals.personal.pr_percent != null && weeklyGoals.personal.weigh_percent != null
+                ? ` (lift ${weeklyGoals.personal.pr_percent}%, weigh-in ${weeklyGoals.personal.weigh_percent}%)`
+                : null}
             </p>
           ) : null}
         </div>
