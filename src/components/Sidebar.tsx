@@ -244,6 +244,7 @@ function NavList({
         </li>
         <li>{link("/member/workouts", "My Workouts", pathname?.startsWith("/member/workouts"))}</li>
         <li>{link("/member/macros", "My Macros", pathname?.startsWith("/member/macros"))}</li>
+        <li>{link("/member/weekly-goals", "Weekly Goals", pathname?.startsWith("/member/weekly-goals"))}</li>
         <li>{link("/rec-leagues", "Rec Leagues", pathname?.startsWith("/rec-leagues"))}</li>
         <li className="pt-2 mt-2 border-t border-white/20">
           <span className="block px-3 py-1 text-xs font-medium text-white/80">Purchase</span>
@@ -529,6 +530,7 @@ function NavList({
           <li>{link("/member", "Member Home", pathname === "/member")}</li>
           <li>{link("/member/workouts", "My Workouts", pathname?.startsWith("/member/workouts"))}</li>
           <li>{link("/member/macros", "My Macros", pathname?.startsWith("/member/macros"))}</li>
+          <li>{link("/member/weekly-goals", "Weekly Goals", pathname?.startsWith("/member/weekly-goals"))}</li>
           <li className="pt-2 mt-2 border-t border-white/20">
             <button
               type="button"

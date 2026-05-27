@@ -1,278 +1,563 @@
 "use client";
 
+
+
 import { useEffect, useState } from "react";
+
 import Link from "next/link";
+
 import { useRouter } from "next/navigation";
+
 import { toTitleCase } from "@/lib/format";
+
 import { formatDateForDisplay } from "@/lib/app-timezone";
+
 import OccupancyCount from "@/components/OccupancyCount";
 
+import MemberGoalBoardPreview from "@/components/member/MemberGoalBoardPreview";
+
+
+
 type MemberData = {
+
   member: { member_id: string; name: string; email: string | null };
+
   subscriptions: Record<string, unknown>[];
+
   classBookings: Record<string, unknown>[];
+
   occurrenceBookings: Record<string, unknown>[];
+
   ptBookings: Record<string, unknown>[];
+
   hasAccess: boolean;
+
   show_activate_pass_hint?: boolean;
+
   /** Signed waiver or admin waiver bypass — required for reliable door / day-pass flow */
+
   waiver_complete_for_door?: boolean;
+
 } | null;
 
+
+
 export default function MemberHomePage() {
+
   const router = useRouter();
+
   const [data, setData] = useState<MemberData>(null);
+
   const [loading, setLoading] = useState(true);
+
   const [unlocking, setUnlocking] = useState(false);
+
   const [unlockMessage, setUnlockMessage] = useState<string | null>(null);
+
   const [proShopSelfCheckout, setProShopSelfCheckout] = useState(false);
 
+
+
   useEffect(() => {
+
     fetch("/api/member/me")
+
       .then((res) => {
+
         if (res.status === 401) {
+
           router.replace("/login");
+
           return null;
+
         }
+
         return res.json();
+
       })
+
       .then(setData)
+
       .catch(() => setData(null))
+
       .finally(() => setLoading(false));
+
   }, [router]);
 
+
+
   useEffect(() => {
+
     if (!data?.member) return;
+
     fetch("/api/member/retail-access")
+
       .then((r) => (r.ok ? r.json() : null))
+
       .then((j) => setProShopSelfCheckout(Boolean(j?.member_self_checkout_enabled)))
+
       .catch(() => setProShopSelfCheckout(false));
+
   }, [data]);
 
+
+
   async function handleUnlock() {
+
     if (!data?.member) return;
+
     setUnlockMessage(null);
+
     setUnlocking(true);
+
     try {
+
       const res = await fetch("/api/kisi/unlock", {
+
         method: "POST",
+
         headers: { "Content-Type": "application/json" },
+
         body: JSON.stringify({ member_id: data.member.member_id }),
+
       });
+
       const json = await res.json();
+
       if (res.ok) {
+
         setUnlockMessage("Door unlocked.");
+
       } else {
+
         setUnlockMessage(json.error ?? "Unlock failed.");
+
       }
+
     } catch {
+
       setUnlockMessage("Unlock failed.");
+
     } finally {
+
       setUnlocking(false);
+
     }
+
   }
 
+
+
   if (loading) return <div className="p-8 text-center text-stone-500">Loading…</div>;
+
   if (!data || !data.member) return <div className="p-8 text-center text-stone-500">Unable to load. Try logging in again.</div>;
 
+
+
   const subscriptions = Array.isArray(data.subscriptions) ? data.subscriptions : [];
+
   const classBookings = Array.isArray(data.classBookings) ? data.classBookings : [];
+
   const occurrenceBookings = Array.isArray(data.occurrenceBookings) ? data.occurrenceBookings : [];
+
   const ptBookings = Array.isArray(data.ptBookings) ? data.ptBookings : [];
+
   const hasAccess = Boolean(data.hasAccess);
+
   const showActivatePassHint = Boolean(data.show_activate_pass_hint);
+
   const waiverCompleteForDoor = data.waiver_complete_for_door !== false;
+
   const activeSub = subscriptions.find((s) => s.status === "Active") as { plan_name?: string; expiry_date?: string } | undefined;
+
   const signWaiverHref = `/sign-waiver-required?redirect=${encodeURIComponent("/member")}`;
 
+
+
   return (
+
     <div className="max-w-2xl mx-auto p-6">
+
       <h1 className="text-2xl font-bold text-stone-800 mb-6">Welcome, {data.member.name}</h1>
 
+
+
       {!waiverCompleteForDoor && (
+
         <div className="mb-6 p-4 rounded-xl border border-amber-400 bg-amber-50 text-amber-950">
+
           <p className="font-semibold text-sm mb-1">Sign your liability waiver</p>
+
           <p className="text-sm text-amber-900/95 mb-3">
+
             One quick step activates door access once your membership or day pass is active. Tap below — no email link
+
             required if you&apos;re logged in here.
+
           </p>
+
           <Link
+
             href={signWaiverHref}
+
             className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg bg-amber-800 text-white text-sm font-medium hover:bg-amber-900"
+
           >
+
             Sign waiver now
+
           </Link>
+
         </div>
+
       )}
 
+
+
+      <MemberGoalBoardPreview />
+
+
+
       <div className="mb-8 flex flex-col sm:flex-row sm:items-start gap-6">
+
         <div className="flex-1">
+
         <h2 className="text-sm font-medium text-stone-500 mb-2">Door Access</h2>
+
 <button
+
             data-dumbbell-btn
+
             data-button-icon="app"
+
             type="button"
+
             onClick={handleUnlock}
+
           disabled={unlocking || !hasAccess || !waiverCompleteForDoor}
+
           className={`w-full sm:w-auto px-6 py-3 rounded-lg font-medium ${
+
             hasAccess && waiverCompleteForDoor
+
               ? "bg-brand-600 text-white hover:bg-brand-700 shadow-sm disabled:opacity-50"
+
               : "bg-stone-200 text-stone-500 cursor-not-allowed"
+
           }`}
+
         >
+
           {unlocking
+
             ? "Unlocking…"
+
             : !waiverCompleteForDoor
+
               ? "Sign waiver to unlock door"
+
               : hasAccess
+
                 ? "Unlock Door"
+
                 : "No Active Membership"}
+
         </button>
+
         {showActivatePassHint && (
+
           <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+
             You have day passes on your account. Open{" "}
+
             <Link href="/member/membership" className="font-medium text-brand-700 hover:underline">
+
               My Membership
+
             </Link>{" "}
+
             and tap <strong>Activate pass for today</strong> before you can unlock the door.
+
           </p>
+
         )}
+
         {!hasAccess && !showActivatePassHint && (
+
           <p className="text-sm text-stone-500 mt-2">Purchase a Membership to Unlock the Door.</p>
+
         )}
+
         {hasAccess && !waiverCompleteForDoor && (
+
           <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+
             Waiver required before the door unlocks — use{" "}
+
             <Link href={signWaiverHref} className="font-semibold text-amber-950 underline underline-offset-2 hover:no-underline">
+
               Sign waiver now
+
             </Link>
+
             .
+
           </p>
+
         )}
+
         {unlockMessage && (
+
           <p className="text-sm text-stone-600 mt-2">{unlockMessage}</p>
+
         )}
+
         </div>
+
         <OccupancyCount />
+
       </div>
+
+
 
       <div className="grid gap-4 sm:grid-cols-2">
+
         <Link
+
           href="/member/profile"
+
           className="block p-4 rounded-xl border border-brand-200 bg-brand-50 hover:bg-brand-100 transition-colors"
+
         >
+
           <h3 className="font-semibold text-brand-gray">Profile</h3>
+
           <p className="text-sm text-brand-gray mt-1">
+
             Name, contact, emergency info, spirit animal, password
+
           </p>
+
         </Link>
+
         <Link
+
           href="/member/membership"
+
           className="block p-4 rounded-xl border border-brand-200 bg-brand-50 hover:bg-brand-100 transition-colors"
+
         >
+
           <h3 className="font-semibold text-brand-gray">My Membership</h3>
+
           <p className="text-sm text-brand-gray mt-1">
+
             {activeSub
+
               ? `${toTitleCase(activeSub.plan_name ?? "Active")} — Expires ${formatDateForDisplay(activeSub.expiry_date) || ""}`
+
               : "No Active Membership"}
+
           </p>
+
         </Link>
+
         <Link
+
           href="/schedule"
+
           className="block p-4 rounded-xl border border-brand-200 bg-brand-50 hover:bg-brand-100 transition-colors"
+
         >
+
           <h3 className="font-semibold text-brand-gray">Schedule</h3>
+
           <p className="text-sm text-brand-gray mt-1">
+
             Book Classes & PT
+
           </p>
+
         </Link>
+
         <Link
+
           href="/member/class-bookings"
+
           className="block p-4 rounded-xl border border-brand-200 bg-brand-50 hover:bg-brand-100 transition-colors"
+
         >
+
           <h3 className="font-semibold text-brand-gray">My Class Bookings</h3>
+
           <p className="text-sm text-brand-gray mt-1">
+
             {classBookings.length + occurrenceBookings.length} booking{(classBookings.length + occurrenceBookings.length) !== 1 ? "s" : ""}
+
           </p>
+
         </Link>
+
         <Link
+
           href="/member/pt-bookings"
+
           className="block p-4 rounded-xl border border-brand-200 bg-brand-50 hover:bg-brand-100 transition-colors"
+
         >
+
           <h3 className="font-semibold text-brand-gray">My PT Bookings</h3>
+
           <p className="text-sm text-brand-gray mt-1">
+
             {ptBookings.length} booking{ptBookings.length !== 1 ? "s" : ""}
+
           </p>
+
         </Link>
+
         <Link
+
           href="/member/workouts"
+
           className="block p-4 rounded-xl border-0 text-white shadow-md hover:opacity-95 hover:shadow-lg transition-all bg-[linear-gradient(90deg,theme(colors.red.400),theme(colors.amber.400),theme(colors.emerald.400),theme(colors.sky.400),theme(colors.violet.400))]"
+
         >
+
           <h3 className="font-semibold">My Workouts</h3>
+
           <p className="text-sm text-white/90 mt-1">
+
             Track Your Lifts and Cardio
+
           </p>
+
         </Link>
+
         <Link
+
           href="/member/macros"
+
           className="block p-4 rounded-xl border-0 text-white shadow-md hover:opacity-95 hover:shadow-lg transition-all bg-[linear-gradient(90deg,theme(colors.violet.400),theme(colors.sky.400),theme(colors.emerald.400),theme(colors.amber.400),theme(colors.red.400))]"
+
         >
+
           <h3 className="font-semibold">My Macros</h3>
+
           <p className="text-sm text-white/90 mt-1">
+
             Log and Track Your Nutrition
+
           </p>
+
         </Link>
+
       </div>
 
+
+
       <div className="mt-8 pt-6 border-t border-stone-200">
+
         <h2 className="text-sm font-medium text-stone-500 mb-3">Purchase</h2>
+
         <div className="flex flex-wrap gap-2">
+
           <Link
+
             href="/member/classes"
+
             className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700"
+
           >
+
             Browse Classes
+
           </Link>
+
           <Link
+
             href="/member/class-packs"
+
             className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium"
+
           >
+
             Class Packs
+
           </Link>
+
           <Link
+
             href="/member/pt-sessions"
+
             className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium"
+
           >
+
             Browse PT Sessions
+
           </Link>
+
           <Link
+
             href="/member/pt-packs"
+
             className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium"
+
           >
+
             PT Packs
+
           </Link>
+
           <Link
+
             href="/member/memberships"
+
             className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium"
+
           >
+
             Memberships
+
           </Link>
+
           {proShopSelfCheckout ? (
+
             <Link
+
               href="/member/retail"
+
               className="px-4 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-900 font-medium hover:bg-emerald-100"
+
             >
+
               Pro Shop (scan & pay)
+
             </Link>
+
           ) : null}
+
           <Link
+
             href="/member/cart"
+
           className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium"
+
         >
+
           Cart
+
           </Link>
+
         </div>
+
       </div>
+
     </div>
+
   );
+
 }
+
+

@@ -56,6 +56,9 @@ export default function MemberWorkoutsPage() {
   const [error, setError] = useState<string | null>(null);
   const [prBadgesByWorkout, setPrBadgesByWorkout] = useState<Record<number, ("Reps" | "Auto 1RM" | "My 1RM")[]>>({});
   const [my1rmList, setMy1rmList] = useState<{ exercise_name: string; current_1rm_lbs: number | null }[]>([]);
+  const [workoutGoalDays, setWorkoutGoalDays] = useState<number | null>(null);
+  const [workoutGoalDraft, setWorkoutGoalDraft] = useState("");
+  const [workoutGoalSaving, setWorkoutGoalSaving] = useState(false);
 
   const fetchWorkouts = useCallback(() => {
     fetch("/api/member/workouts")
@@ -74,6 +77,26 @@ export default function MemberWorkoutsPage() {
   useEffect(() => {
     fetchWorkouts();
   }, [fetchWorkouts]);
+
+  useEffect(() => {
+    fetch("/api/member/workout-goal")
+      .then((res) => {
+        if (res.status === 401) {
+          router.replace("/login");
+          return null;
+        }
+        return res.ok ? res.json() : null;
+      })
+      .then((data: { days_per_week?: number | null } | null) => {
+        const days = typeof data?.days_per_week === "number" ? data.days_per_week : null;
+        setWorkoutGoalDays(days);
+        setWorkoutGoalDraft(days != null ? String(days) : "");
+      })
+      .catch(() => {
+        setWorkoutGoalDays(null);
+        setWorkoutGoalDraft("");
+      });
+  }, [router]);
 
   useEffect(() => {
     const finishedIds = workouts.filter((w) => w.finished_at).map((w) => w.id);
@@ -132,6 +155,38 @@ export default function MemberWorkoutsPage() {
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
       setStarting(false);
+    }
+  }
+
+  async function saveWorkoutGoal() {
+    const days = parseInt(workoutGoalDraft, 10);
+    if (!Number.isFinite(days) || days < 1 || days > 7) {
+      setError("Choose a workout goal from 1 to 7 days per week.");
+      return;
+    }
+    setError(null);
+    setWorkoutGoalSaving(true);
+    try {
+      const res = await fetch("/api/member/workout-goal", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days_per_week: days }),
+      });
+      if (res.status === 401) {
+        router.replace("/login");
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data?.error ?? "Failed to save workout goal");
+        return;
+      }
+      setWorkoutGoalDays(data.days_per_week ?? days);
+      setWorkoutGoalDraft(String(data.days_per_week ?? days));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setWorkoutGoalSaving(false);
     }
   }
 
@@ -223,6 +278,40 @@ export default function MemberWorkoutsPage() {
             </Link>
           </p>
         )}
+      </div>
+
+      <div className="mb-6 p-4 rounded-xl border border-brand-100 bg-brand-50/40">
+        <h2 className="text-sm font-semibold text-stone-800 mb-1">Set your workout goal</h2>
+        <p className="text-sm text-stone-600 mb-3">How many days/week do you want to log workouts for the Goal Board?</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={workoutGoalDraft}
+            onChange={(e) => setWorkoutGoalDraft(e.target.value)}
+            className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800"
+            disabled={workoutGoalSaving}
+          >
+            <option value="">Choose days/week</option>
+            {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+              <option key={n} value={n}>
+                {n} day{n === 1 ? "" : "s"} / week
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => void saveWorkoutGoal()}
+            disabled={workoutGoalSaving || !workoutGoalDraft}
+            className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+          >
+            {workoutGoalSaving ? "Saving..." : "Save goal"}
+          </button>
+          {workoutGoalDays != null && (
+            <span className="text-sm text-stone-600">
+              Current goal: <span className="font-medium text-stone-800">{workoutGoalDays}</span> day
+              {workoutGoalDays === 1 ? "" : "s"} / week
+            </span>
+          )}
+        </div>
       </div>
 
       {(volumeThisMonth > 0 || volumeThisYear > 0 || monthlyRecord || yearlyRecord) && (
