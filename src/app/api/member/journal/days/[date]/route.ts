@@ -3,8 +3,8 @@ import { getDb, getAppTimezone } from "@/lib/db";
 import { getMemberIdFromSession } from "@/lib/session";
 import { ensureFoodsTable } from "@/lib/macros";
 import { ensureJournalTables } from "@/lib/journal";
+import { getMacroBoardDayStatus } from "@/lib/macro-board-scoring";
 import { todayInAppTz } from "@/lib/app-timezone";
-import { getMacroBoardDayStatus } from "@/lib/goal-board";
 
 export const dynamic = "force-dynamic";
 
@@ -129,7 +129,7 @@ export async function GET(
   }
 }
 
-/** PATCH — finish or reopen today's macro log for The Board. Body: { finish: true | false } */
+/** PATCH — finish or reopen macro log for The Board. Body: { finish: true | false } */
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ date: string }> }
