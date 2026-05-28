@@ -3,6 +3,7 @@ import { getDb, getAppTimezone } from "@/lib/db";
 import { getMemberIdFromSession } from "@/lib/session";
 import { ensureJournalTables } from "@/lib/journal";
 import { todayInAppTz } from "@/lib/app-timezone";
+import { syncWeighWeekOpening } from "@/lib/weekly-personal-goals";
 
 export const dynamic = "force-dynamic";
 
@@ -76,10 +77,12 @@ export async function PATCH(request: NextRequest) {
 
     if (weight == null) {
       db.prepare("DELETE FROM member_weigh_ins WHERE member_id = ? AND date = ?").run(memberId, date);
+      syncWeighWeekOpening(db, memberId, date, null);
     } else {
       db.prepare(
         "INSERT INTO member_weigh_ins (member_id, date, weight) VALUES (?, ?, ?) ON CONFLICT(member_id, date) DO UPDATE SET weight = excluded.weight"
       ).run(memberId, date, weight);
+      syncWeighWeekOpening(db, memberId, date, weight);
     }
     db.close();
 

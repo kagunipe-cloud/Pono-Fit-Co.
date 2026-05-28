@@ -457,7 +457,7 @@ export default function WeeklyGoalsEditor() {
           <div className="p-4 rounded-lg border border-stone-200 bg-white">
             <p className="text-sm font-medium text-stone-700 mb-2">Weekly weigh-in goal</p>
             <p className="text-xs text-stone-500 mb-3">
-              Separate from your long-term weight goal in Macros. Progress starts at your first journal weigh-in this week, then tracks your best log this week toward the target.
+              Separate from your long-term weight goal in Macros. Progress uses your best weigh-in this week toward the target, starting from your first daily weigh-in this board week (Mon–Sun). That opening weight stays locked even when you log lower weights later.
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
               <input

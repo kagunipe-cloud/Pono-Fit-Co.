@@ -278,18 +278,147 @@ function repsPrHitInRange(
   return row != null;
 }
 
-function firstWeighInThisWeek(db: Db, memberId: string, weekStart: string, weekEnd: string): number | null {
+export function ensureWeighWeekOpeningsTable(db: Db): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS member_weigh_week_openings (
+      member_id TEXT NOT NULL,
+      week_start TEXT NOT NULL,
+      opening_date TEXT NOT NULL,
+      opening_weight_lbs REAL NOT NULL,
+      PRIMARY KEY (member_id, week_start)
+    );
+  `);
+}
+
+function weighInsThisWeekOrdered(
+  db: Db,
+  memberId: string,
+  weekStart: string,
+  weekEnd: string
+): { date: string; weight: number }[] {
   ensureJournalTables(db);
-  const row = db
+  const rows = db
     .prepare(
-      `SELECT weight FROM member_weigh_ins
+      `SELECT date, weight FROM member_weigh_ins
        WHERE member_id = ? AND date >= ? AND date <= ?
-       ORDER BY date ASC
-       LIMIT 1`
+       ORDER BY date ASC`
     )
-    .get(memberId, weekStart, weekEnd) as { weight: number } | undefined;
-  const w = row?.weight != null ? Number(row.weight) : null;
-  return w != null && Number.isFinite(w) && w > 0 ? w : null;
+    .all(memberId, weekStart, weekEnd) as { date: string; weight: number }[];
+  return rows
+    .map((r) => ({ date: String(r.date), weight: Number(r.weight) }))
+    .filter((r) => r.date && Number.isFinite(r.weight) && r.weight > 0);
+}
+
+function backfillWeighWeekOpeningFromLogs(
+  db: Db,
+  memberId: string,
+  weekStart: string,
+  weekEnd: string
+): { date: string; weight: number } | null {
+  const rows = weighInsThisWeekOrdered(db, memberId, weekStart, weekEnd);
+  if (rows.length === 0) return null;
+  const first = rows[0]!;
+  ensureWeighWeekOpeningsTable(db);
+  db.prepare(
+    `INSERT INTO member_weigh_week_openings (member_id, week_start, opening_date, opening_weight_lbs)
+     VALUES (?, ?, ?, ?)
+     ON CONFLICT(member_id, week_start) DO NOTHING`
+  ).run(memberId, weekStart, first.date, first.weight);
+  return first;
+}
+
+/** Locked opening weight for the board week — earliest daily weigh-in by date, never reset by later logs. */
+function getWeighWeekOpeningWeight(
+  db: Db,
+  memberId: string,
+  weekStart: string,
+  weekEnd: string
+): number | null {
+  ensureWeighWeekOpeningsTable(db);
+  ensureJournalTables(db);
+  let row = db
+    .prepare(
+      `SELECT opening_date, opening_weight_lbs FROM member_weigh_week_openings
+       WHERE member_id = ? AND week_start = ?`
+    )
+    .get(memberId, weekStart) as { opening_date: string; opening_weight_lbs: number } | undefined;
+
+  if (row) {
+    const still = db
+      .prepare(`SELECT weight FROM member_weigh_ins WHERE member_id = ? AND date = ?`)
+      .get(memberId, row.opening_date) as { weight: number } | undefined;
+    if (still && Number(still.weight) > 0) {
+      return Number(still.weight);
+    }
+    db.prepare(`DELETE FROM member_weigh_week_openings WHERE member_id = ? AND week_start = ?`).run(memberId, weekStart);
+    row = undefined;
+  }
+
+  const backfilled = backfillWeighWeekOpeningFromLogs(db, memberId, weekStart, weekEnd);
+  return backfilled?.weight ?? null;
+}
+
+/** Keep the frozen opening row in sync when a daily weigh-in is saved or cleared. */
+export function syncWeighWeekOpening(
+  db: Db,
+  memberId: string,
+  date: string,
+  weight: number | null
+): void {
+  ensureWeighWeekOpeningsTable(db);
+  ensureJournalTables(db);
+  const weekStart = weekStartInAppTz(date);
+  const weekEnd = addDaysToDateStr(weekStart, 6);
+  if (date < weekStart || date > weekEnd) return;
+
+  if (weight == null) {
+    const existing = db
+      .prepare(`SELECT opening_date FROM member_weigh_week_openings WHERE member_id = ? AND week_start = ?`)
+      .get(memberId, weekStart) as { opening_date: string } | undefined;
+    if (existing?.opening_date === date) {
+      db.prepare(`DELETE FROM member_weigh_week_openings WHERE member_id = ? AND week_start = ?`).run(memberId, weekStart);
+      backfillWeighWeekOpeningFromLogs(db, memberId, weekStart, weekEnd);
+    }
+    return;
+  }
+
+  const existing = db
+    .prepare(
+      `SELECT opening_date, opening_weight_lbs FROM member_weigh_week_openings
+       WHERE member_id = ? AND week_start = ?`
+    )
+    .get(memberId, weekStart) as { opening_date: string; opening_weight_lbs: number } | undefined;
+
+  if (!existing) {
+    db.prepare(
+      `INSERT INTO member_weigh_week_openings (member_id, week_start, opening_date, opening_weight_lbs)
+       VALUES (?, ?, ?, ?)`
+    ).run(memberId, weekStart, date, weight);
+    return;
+  }
+
+  if (date < existing.opening_date) {
+    db.prepare(
+      `UPDATE member_weigh_week_openings
+       SET opening_date = ?, opening_weight_lbs = ?
+       WHERE member_id = ? AND week_start = ?`
+    ).run(date, weight, memberId, weekStart);
+  } else if (date === existing.opening_date) {
+    db.prepare(
+      `UPDATE member_weigh_week_openings SET opening_weight_lbs = ? WHERE member_id = ? AND week_start = ?`
+    ).run(weight, memberId, weekStart);
+  }
+}
+
+/** Starting weight for weekly weigh-in progress (board week Mon–Sun). */
+function weighProgressStartWeight(
+  db: Db,
+  memberId: string,
+  weekStart: string,
+  weekEnd: string,
+  _direction: WeighDirection
+): number | null {
+  return getWeighWeekOpeningWeight(db, memberId, weekStart, weekEnd);
 }
 
 function bestWeighInThisWeek(
@@ -368,8 +497,9 @@ export function weighGoalProgressPercent(
 ): { percent: number | null; baseline_lbs: number | null; current_lbs: number | null } {
   if (!hasWeighGoal(goal)) return { percent: null, baseline_lbs: null, current_lbs: null };
   const target = goal.weigh_target_lbs ?? 0;
-  const progressStart = firstWeighInThisWeek(db, memberId, weekStart, weekEnd);
-  const currentBest = bestWeighInThisWeek(db, memberId, weekStart, weekEnd, goal.weigh_direction!);
+  const direction = goal.weigh_direction!;
+  const progressStart = weighProgressStartWeight(db, memberId, weekStart, weekEnd, direction);
+  const currentBest = bestWeighInThisWeek(db, memberId, weekStart, weekEnd, direction);
   if (progressStart == null) {
     return { percent: 0, baseline_lbs: null, current_lbs: currentBest };
   }
