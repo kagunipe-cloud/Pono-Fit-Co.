@@ -164,7 +164,7 @@ function priorWeighIn(db: Db, memberId: string, beforeDate: string): number | nu
     .prepare(
       `SELECT weight FROM member_weigh_ins
        WHERE member_id = ? AND date < ?
-       ORDER BY date DESC, id DESC
+       ORDER BY date DESC
        LIMIT 1`
     )
     .get(memberId, beforeDate) as { weight: number } | undefined;
