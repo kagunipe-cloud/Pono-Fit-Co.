@@ -309,22 +309,27 @@ function weighInsThisWeekOrdered(
     .filter((r) => r.date && Number.isFinite(r.weight) && r.weight > 0);
 }
 
-function backfillWeighWeekOpeningFromLogs(
+function reconcileWeighWeekOpening(
   db: Db,
   memberId: string,
   weekStart: string,
   weekEnd: string
-): { date: string; weight: number } | null {
+): number | null {
   const rows = weighInsThisWeekOrdered(db, memberId, weekStart, weekEnd);
-  if (rows.length === 0) return null;
-  const first = rows[0]!;
   ensureWeighWeekOpeningsTable(db);
+  if (rows.length === 0) {
+    db.prepare(`DELETE FROM member_weigh_week_openings WHERE member_id = ? AND week_start = ?`).run(memberId, weekStart);
+    return null;
+  }
+  const earliest = rows[0]!;
   db.prepare(
     `INSERT INTO member_weigh_week_openings (member_id, week_start, opening_date, opening_weight_lbs)
      VALUES (?, ?, ?, ?)
-     ON CONFLICT(member_id, week_start) DO NOTHING`
-  ).run(memberId, weekStart, first.date, first.weight);
-  return first;
+     ON CONFLICT(member_id, week_start) DO UPDATE SET
+       opening_date = excluded.opening_date,
+       opening_weight_lbs = excluded.opening_weight_lbs`
+  ).run(memberId, weekStart, earliest.date, earliest.weight);
+  return earliest.weight;
 }
 
 /** Locked opening weight for the board week — earliest daily weigh-in by date, never reset by later logs. */
@@ -334,80 +339,22 @@ function getWeighWeekOpeningWeight(
   weekStart: string,
   weekEnd: string
 ): number | null {
-  ensureWeighWeekOpeningsTable(db);
   ensureJournalTables(db);
-  let row = db
-    .prepare(
-      `SELECT opening_date, opening_weight_lbs FROM member_weigh_week_openings
-       WHERE member_id = ? AND week_start = ?`
-    )
-    .get(memberId, weekStart) as { opening_date: string; opening_weight_lbs: number } | undefined;
-
-  if (row) {
-    const still = db
-      .prepare(`SELECT weight FROM member_weigh_ins WHERE member_id = ? AND date = ?`)
-      .get(memberId, row.opening_date) as { weight: number } | undefined;
-    if (still && Number(still.weight) > 0) {
-      return Number(still.weight);
-    }
-    db.prepare(`DELETE FROM member_weigh_week_openings WHERE member_id = ? AND week_start = ?`).run(memberId, weekStart);
-    row = undefined;
-  }
-
-  const backfilled = backfillWeighWeekOpeningFromLogs(db, memberId, weekStart, weekEnd);
-  return backfilled?.weight ?? null;
+  return reconcileWeighWeekOpening(db, memberId, weekStart, weekEnd);
 }
 
-/** Keep the frozen opening row in sync when a daily weigh-in is saved or cleared. */
+/** Reconcile the frozen opening row after a daily weigh-in is saved or cleared. */
 export function syncWeighWeekOpening(
   db: Db,
   memberId: string,
   date: string,
-  weight: number | null
+  _weight: number | null
 ): void {
-  ensureWeighWeekOpeningsTable(db);
   ensureJournalTables(db);
   const weekStart = weekStartInAppTz(date);
   const weekEnd = addDaysToDateStr(weekStart, 6);
   if (date < weekStart || date > weekEnd) return;
-
-  if (weight == null) {
-    const existing = db
-      .prepare(`SELECT opening_date FROM member_weigh_week_openings WHERE member_id = ? AND week_start = ?`)
-      .get(memberId, weekStart) as { opening_date: string } | undefined;
-    if (existing?.opening_date === date) {
-      db.prepare(`DELETE FROM member_weigh_week_openings WHERE member_id = ? AND week_start = ?`).run(memberId, weekStart);
-      backfillWeighWeekOpeningFromLogs(db, memberId, weekStart, weekEnd);
-    }
-    return;
-  }
-
-  const existing = db
-    .prepare(
-      `SELECT opening_date, opening_weight_lbs FROM member_weigh_week_openings
-       WHERE member_id = ? AND week_start = ?`
-    )
-    .get(memberId, weekStart) as { opening_date: string; opening_weight_lbs: number } | undefined;
-
-  if (!existing) {
-    db.prepare(
-      `INSERT INTO member_weigh_week_openings (member_id, week_start, opening_date, opening_weight_lbs)
-       VALUES (?, ?, ?, ?)`
-    ).run(memberId, weekStart, date, weight);
-    return;
-  }
-
-  if (date < existing.opening_date) {
-    db.prepare(
-      `UPDATE member_weigh_week_openings
-       SET opening_date = ?, opening_weight_lbs = ?
-       WHERE member_id = ? AND week_start = ?`
-    ).run(date, weight, memberId, weekStart);
-  } else if (date === existing.opening_date) {
-    db.prepare(
-      `UPDATE member_weigh_week_openings SET opening_weight_lbs = ? WHERE member_id = ? AND week_start = ?`
-    ).run(weight, memberId, weekStart);
-  }
+  reconcileWeighWeekOpening(db, memberId, weekStart, weekEnd);
 }
 
 /** Starting weight for weekly weigh-in progress (board week Mon–Sun). */
