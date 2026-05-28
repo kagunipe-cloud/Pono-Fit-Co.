@@ -1,4 +1,6 @@
-import { parseAppDateToYMD } from "./app-timezone";
+import { parseAppDateToYMD, weekStartInAppTz as weekStart } from "./app-timezone";
+
+export { weekStart };
 
 /**
  * Daily Food Journal: journal_days (one per member per date), journal_meals (Breakfast, Lunch, etc.),
@@ -149,13 +151,4 @@ export function ensureJournalTables(db: ReturnType<typeof import("./db").getDb>)
   `);
 
   repairMemberWeighInDatesIfNeeded(db);
-}
-
-/** Monday of the week containing date (YYYY-MM-DD). */
-export function weekStart(dateStr: string): string {
-  const d = new Date(dateStr + "T12:00:00Z");
-  const day = d.getUTCDay();
-  const mondayOffset = day === 0 ? -6 : 1 - day;
-  d.setUTCDate(d.getUTCDate() + mondayOffset);
-  return d.toISOString().slice(0, 10);
 }

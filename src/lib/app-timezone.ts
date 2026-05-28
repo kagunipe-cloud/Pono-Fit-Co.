@@ -240,13 +240,24 @@ export function dateStringInAppTz(iso: string | null, timeZone: string = APP_TIM
   return parseStoredUtcToDate(iso).toLocaleDateString("en-CA", { timeZone });
 }
 
-/** Monday (YYYY-MM-DD) of the week containing the given date string. */
-export function weekStartInAppTz(dateStr: string): string {
-  const d = new Date(dateStr + "T12:00:00Z");
-  const day = d.getUTCDay();
+/** Monday (YYYY-MM-DD) of the board week containing the given date (Mon–Sun in gym timezone). */
+export function weekStartInAppTz(dateStr: string, timeZone: string = APP_TIMEZONE): string {
+  const normalized = normalizeDateToYMD(dateStr) ?? dateStr;
+  const weekday = formatWeekdayShortInAppTz(normalized, timeZone);
+  const dayIndex: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const day = dayIndex[weekday.slice(0, 3)] ?? 0;
   const mondayOffset = day === 0 ? -6 : 1 - day;
-  d.setUTCDate(d.getUTCDate() + mondayOffset);
-  return d.toISOString().slice(0, 10);
+  return addDaysToDateStr(normalized, mondayOffset);
+}
+
+/** Board week bounds: Monday through Sunday (gym timezone). */
+export function boardWeekBounds(
+  timeZone: string = APP_TIMEZONE,
+  todayYmd?: string
+): { weekStart: string; weekEnd: string } {
+  const today = todayYmd ?? todayInAppTz(timeZone);
+  const weekStart = weekStartInAppTz(today, timeZone);
+  return { weekStart, weekEnd: addDaysToDateStr(weekStart, 6) };
 }
 
 /** Add days to a YYYY-MM-DD string. Returns YYYY-MM-DD. */

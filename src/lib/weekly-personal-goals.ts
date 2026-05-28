@@ -1,9 +1,14 @@
 import type { getDb } from "./db";
-import { weekStartInAppTz, todayInAppTz } from "./app-timezone";
+import {
+  weekStartInAppTz,
+  todayInAppTz,
+  boardWeekBounds,
+  endOfDayInTz,
+  startOfDayInTz,
+  addDaysToDateStr,
+} from "./app-timezone";
 import { ensureJournalTables, normalizeWeighInDateToIso } from "./journal";
 import { ensureWorkoutTables } from "./workouts-server";
-import { endOfDayInTz, startOfDayInTz, dateStringInAppTz } from "./app-timezone";
-import { addDaysToDateStr } from "./app-timezone";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -24,6 +29,7 @@ export type WeeklyPersonalGoals = {
 };
 
 export type WeeklyPersonalGoalProgress = WeeklyPersonalGoals & {
+  week_end: string;
   weight_pr_hit: boolean;
   reps_pr_hit: boolean;
   weigh_hit: boolean;
@@ -366,10 +372,11 @@ export function syncWeighWeekOpening(
   db: Db,
   memberId: string,
   date: string,
-  _weight: number | null
+  _weight: number | null,
+  tz: string
 ): void {
   ensureJournalTables(db);
-  const weekStart = weekStartInAppTz(date);
+  const weekStart = weekStartInAppTz(date, tz);
   const weekEnd = addDaysToDateStr(weekStart, 6);
   if (date < weekStart || date > weekEnd) return;
   reconcileWeighWeekOpening(db, memberId, weekStart, weekEnd);
@@ -591,7 +598,7 @@ export function getMemberWeeklyPersonalGoals(
 ): WeeklyPersonalGoals {
   ensureMemberWeeklyPersonalGoalsTable(db);
   ensureWorkoutTables(db);
-  const start = weekStart ?? weekStartInAppTz(todayInAppTz(tz));
+  const start = weekStart ?? boardWeekBounds(tz).weekStart;
   const row = db
     .prepare(
       `${GOALS_SELECT}
@@ -620,8 +627,11 @@ export function getMemberWeeklyPersonalGoalProgress(
   tz: string,
   weekStart?: string
 ): WeeklyPersonalGoalProgress {
-  const goals = getMemberWeeklyPersonalGoals(db, memberId, tz, weekStart);
-  const weekEnd = addDaysToDateStr(goals.week_start, 6);
+  const bounds = weekStart
+    ? { weekStart, weekEnd: addDaysToDateStr(weekStart, 6) }
+    : boardWeekBounds(tz);
+  const goals = getMemberWeeklyPersonalGoals(db, memberId, tz, bounds.weekStart);
+  const weekEnd = bounds.weekEnd;
   const scored = scorePersonalGoals(db, memberId, goals.week_start, tz, goals);
   const weightProgress = weightPrGoalProgress(db, memberId, goals.week_start, weekEnd, tz, goals);
   const repsProgress = repsPrGoalProgress(db, memberId, goals.week_start, weekEnd, tz, goals);
@@ -629,6 +639,7 @@ export function getMemberWeeklyPersonalGoalProgress(
   const weighLogsThisWeek = weighInsThisWeekOrdered(db, memberId, goals.week_start, weekEnd);
   return {
     ...goals,
+    week_end: weekEnd,
     weight_pr_hit: weightPrGoalHitThisWeek(db, memberId, goals.week_start, weekEnd, tz, goals),
     reps_pr_hit: repsPrGoalHitThisWeek(db, memberId, goals.week_start, weekEnd, tz, goals),
     weigh_hit: weighGoalHitThisWeek(db, memberId, goals.week_start, weekEnd, goals),
@@ -674,7 +685,7 @@ export function saveMemberWeeklyPersonalGoals(
 ): WeeklyPersonalGoals {
   ensureMemberWeeklyPersonalGoalsTable(db);
   ensureWorkoutTables(db);
-  const start = weekStart ?? weekStartInAppTz(todayInAppTz(tz));
+  const start = weekStart ?? boardWeekBounds(tz).weekStart;
   const existing = getMemberWeeklyPersonalGoals(db, memberId, tz, start);
 
   let prExerciseId = existing.pr_exercise_id;

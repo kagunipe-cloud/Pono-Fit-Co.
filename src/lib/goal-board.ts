@@ -8,6 +8,7 @@ import {
   startOfDayInTz,
   todayInAppTz,
   weekStartInAppTz,
+  boardWeekBounds,
 } from "./app-timezone";
 import { ensureWorkoutTables } from "./workouts-server";
 import {
@@ -132,8 +133,11 @@ export function buildGoalBoard(db: Db, tz: string, weekStart?: string, today?: s
   ensureJournalHasMacrosFinishedAt(db);
 
   const todayYmd = today ?? todayInAppTz(tz);
-  const start = weekStart ?? weekStartInAppTz(todayYmd);
-  const end = addDaysToDateStr(start, 6);
+  const bounds = weekStart
+    ? { weekStart, weekEnd: addDaysToDateStr(weekStart, 6) }
+    : boardWeekBounds(tz, todayYmd);
+  const start = bounds.weekStart;
+  const end = bounds.weekEnd;
   const personalGoalsByMember = loadWeeklyPersonalGoalsForWeek(db, start);
   const manualMacroFinishedDates = loadManualMacroFinishedDates(db, start, end);
   const macroPastCountableDays = macroPastCountableDaysInWeek(start, end, todayYmd);
@@ -320,8 +324,7 @@ export function getMemberWeeklyGoalMetrics(
   ensureJournalHasMacrosFinishedAt(db);
 
   const todayYmd = todayInAppTz(tz);
-  const start = weekStartInAppTz(todayYmd);
-  const end = addDaysToDateStr(start, 6);
+  const { weekStart: start, weekEnd: end } = boardWeekBounds(tz, todayYmd);
   const manualMacroFinishedDates = loadManualMacroFinishedDates(db, start, end);
   const finishedDates = manualMacroFinishedDates.get(memberId) ?? new Set<string>();
 

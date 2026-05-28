@@ -77,12 +77,12 @@ export async function PATCH(request: NextRequest) {
 
     if (weight == null) {
       db.prepare("DELETE FROM member_weigh_ins WHERE member_id = ? AND date = ?").run(memberId, date);
-      syncWeighWeekOpening(db, memberId, date, null);
+      syncWeighWeekOpening(db, memberId, date, null, tz);
     } else {
       db.prepare(
         "INSERT INTO member_weigh_ins (member_id, date, weight) VALUES (?, ?, ?) ON CONFLICT(member_id, date) DO UPDATE SET weight = excluded.weight"
       ).run(memberId, date, weight);
-      syncWeighWeekOpening(db, memberId, date, weight);
+      syncWeighWeekOpening(db, memberId, date, weight, tz);
     }
     db.close();
 

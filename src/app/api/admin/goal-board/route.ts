@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminMemberId } from "@/lib/admin";
 import { getAppTimezone, getDb } from "@/lib/db";
-import { addDaysToDateStr, todayInAppTz, weekStartInAppTz } from "@/lib/app-timezone";
+import { addDaysToDateStr, todayInAppTz, weekStartInAppTz, boardWeekBounds } from "@/lib/app-timezone";
 import { buildGoalBoard } from "@/lib/goal-board";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,8 @@ export async function GET(request: NextRequest) {
     const url = new URL(request.url);
     const today = todayInAppTz(tz);
     const weekParam = (url.searchParams.get("week") ?? "").trim();
-    const weekStart = weekParam && isYmd(weekParam) ? weekStartInAppTz(weekParam) : weekStartInAppTz(today);
+    const weekStart =
+      weekParam && isYmd(weekParam) ? weekStartInAppTz(weekParam, tz) : boardWeekBounds(tz, today).weekStart;
     const previousWeekStart = addDaysToDateStr(weekStart, -7);
 
     const current = buildGoalBoard(db, tz, weekStart, today);

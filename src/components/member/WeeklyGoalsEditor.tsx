@@ -2,16 +2,20 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { formatDateForDisplay } from "@/lib/app-timezone";
 
 type GoalMetric = { hit: number; target: number; percent: number | null };
 
 type WeeklyGoalsData = {
+  week_start: string;
+  week_end: string;
   workouts_per_week: number | null;
   macro_goals_set: boolean;
   workouts?: GoalMetric;
   macros?: GoalMetric;
   personal: {
     week_start: string;
+    week_end?: string;
     pr_exercise_id: number | null;
     pr_exercise_name: string | null;
     pr_weight_lbs: number | null;
@@ -253,8 +257,10 @@ export default function WeeklyGoalsEditor() {
     <div className="p-5 rounded-xl border-2 border-brand-200 bg-gradient-to-br from-brand-50 to-white shadow-sm">
       <h2 className="text-lg font-bold text-stone-800 mb-1">Set weekly goals</h2>
       <p className="text-sm text-stone-600 mb-4">
-        These feed The Board. Workouts and macros use your existing pages; personal goals are set here for this week
-        {weeklyGoals?.personal.week_start ? ` (Mon ${weeklyGoals.personal.week_start})` : ""}.
+        These feed The Board. Workouts and macros use your existing pages; personal goals are set here for this board week
+        {weeklyGoals?.week_start && weeklyGoals?.week_end
+          ? ` (Mon ${formatDateForDisplay(weeklyGoals.week_start)} – Sun ${formatDateForDisplay(weeklyGoals.week_end)})`
+          : ""}.
       </p>
 
       <div className="grid gap-4 sm:grid-cols-2 mb-5">
@@ -458,7 +464,7 @@ export default function WeeklyGoalsEditor() {
           <div className="p-4 rounded-lg border border-stone-200 bg-white">
             <p className="text-sm font-medium text-stone-700 mb-2">Weekly weigh-in goal</p>
             <p className="text-xs text-stone-500 mb-3">
-              Separate from your long-term weight goal in Macros. Progress uses your best weigh-in this week toward the target, starting from your first daily weigh-in this board week (Mon–Sun). That opening weight stays locked even when you log lower weights later.
+              Separate from your long-term weight goal in Macros. The board week runs Monday through Sunday (gym time). Progress uses journal weigh-ins from that week — starting from your earliest log, toward your target.
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
               <input
@@ -519,7 +525,7 @@ export default function WeeklyGoalsEditor() {
             )}
             {weeklyGoals?.personal.weigh_logs_this_week && weeklyGoals.personal.weigh_logs_this_week.length > 0 && (
               <p className="text-xs text-stone-400 mt-1">
-                Counted for this board week:{" "}
+                Weigh-ins counted Mon–Sun this board week:{" "}
                 {weeklyGoals.personal.weigh_logs_this_week.map((l) => `${l.date} → ${l.weight} lbs`).join(", ")}
               </p>
             )}
