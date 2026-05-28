@@ -41,13 +41,20 @@ export function GoalBoardProgressRing({
   compact?: boolean;
 }) {
   const pct = value == null ? 0 : Math.min(100, Math.max(0, value));
-  const ring = value == null ? "#888" : "#98f8b1";
-  const track = dark ? "#737373" : "#777";
+  const progressColor = value == null ? "#888" : "#98f8b1";
+  const trackColor = dark ? "#737373" : "#777";
+  const progressOutlineColor = "#555";
   const sizeClass = compact ? "h-14 w-14" : "h-20 w-20";
   const insetClass = compact ? "inset-2" : "inset-3";
   const percentClass = compact ? "text-sm" : "text-lg";
   const subtextClass = compact ? "text-[0.5rem]" : "text-[0.58rem]";
   const labelClass = compact ? "text-[0.55rem]" : "text-[0.65rem]";
+  const strokeWidth = compact ? 7 : 9;
+  const outlineWidth = strokeWidth + 2;
+  const radius = 50 - strokeWidth / 2 - 1;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference - (pct / 100) * circumference;
+  const showProgress = value != null && pct > 0;
 
   return (
     <div className="flex flex-col items-center gap-1.5">
@@ -57,10 +64,45 @@ export function GoalBoardProgressRing({
         {label}
       </div>
       <div
-        className={`relative ${sizeClass} rounded-full`}
-        style={{ background: `conic-gradient(${ring} ${pct * 3.6}deg, ${track} 0deg)` }}
+        className={`relative ${sizeClass}`}
         aria-label={`${label}: ${formatGoalPercent(value)}`}
       >
+        <svg className="h-full w-full -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
+          <circle
+            cx="50"
+            cy="50"
+            r={radius}
+            fill="none"
+            stroke={trackColor}
+            strokeWidth={strokeWidth}
+          />
+          {showProgress && !dark && (
+            <circle
+              cx="50"
+              cy="50"
+              r={radius}
+              fill="none"
+              stroke={progressOutlineColor}
+              strokeWidth={outlineWidth}
+              strokeDasharray={circumference}
+              strokeDashoffset={dashOffset}
+              strokeLinecap="butt"
+            />
+          )}
+          {showProgress && (
+            <circle
+              cx="50"
+              cy="50"
+              r={radius}
+              fill="none"
+              stroke={progressColor}
+              strokeWidth={strokeWidth}
+              strokeDasharray={circumference}
+              strokeDashoffset={dashOffset}
+              strokeLinecap="butt"
+            />
+          )}
+        </svg>
         <div
           className={`absolute ${insetClass} rounded-full ${dark ? "bg-black" : "bg-[#9ef6b2]"} flex flex-col items-center justify-center`}
         >
