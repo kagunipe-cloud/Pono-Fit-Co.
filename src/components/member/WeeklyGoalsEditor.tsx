@@ -15,14 +15,21 @@ type WeeklyGoalsData = {
     pr_exercise_id: number | null;
     pr_exercise_name: string | null;
     pr_weight_lbs: number | null;
-    pr_reps: number | null;
+    pr_weight_at_reps: number | null;
+    pr_reps_at_weight_lbs: number | null;
+    pr_reps_target: number | null;
     weigh_target_lbs: number | null;
     weigh_direction: "at_or_below" | "at_or_above" | null;
-    pr_hit: boolean;
+    weight_pr_hit: boolean;
+    reps_pr_hit: boolean;
     weigh_hit: boolean;
-    pr_percent: number | null;
+    weight_pr_percent: number | null;
+    reps_pr_percent: number | null;
     weigh_percent: number | null;
-    pr_baseline_lbs: number | null;
+    weight_pr_baseline_lbs: number | null;
+    weight_pr_current_lbs: number | null;
+    reps_pr_baseline: number | null;
+    reps_pr_current: number | null;
     weigh_baseline_lbs: number | null;
     weigh_current_lbs: number | null;
     personal_hit: number;
@@ -42,8 +49,10 @@ export default function WeeklyGoalsEditor() {
   const [liftOptions, setLiftOptions] = useState<LiftOption[]>([]);
   const [liftSearch, setLiftSearch] = useState("");
   const [prExerciseId, setPrExerciseId] = useState("");
-  const [prWeight, setPrWeight] = useState("");
-  const [prReps, setPrReps] = useState("");
+  const [weightPrTarget, setWeightPrTarget] = useState("");
+  const [weightPrReps, setWeightPrReps] = useState("");
+  const [repsPrWeight, setRepsPrWeight] = useState("");
+  const [repsPrTarget, setRepsPrTarget] = useState("");
   const [weighTarget, setWeighTarget] = useState("");
   const [weighDirection, setWeighDirection] = useState<"at_or_below" | "at_or_above" | "">("");
 
@@ -59,8 +68,10 @@ export default function WeeklyGoalsEditor() {
         setWeeklyGoals(json);
         const p = json.personal;
         setPrExerciseId(p.pr_exercise_id != null ? String(p.pr_exercise_id) : "");
-        setPrWeight(p.pr_weight_lbs != null ? String(p.pr_weight_lbs) : "");
-        setPrReps(p.pr_reps != null ? String(p.pr_reps) : "");
+        setWeightPrTarget(p.pr_weight_lbs != null ? String(p.pr_weight_lbs) : "");
+        setWeightPrReps(p.pr_weight_at_reps != null ? String(p.pr_weight_at_reps) : "");
+        setRepsPrWeight(p.pr_reps_at_weight_lbs != null ? String(p.pr_reps_at_weight_lbs) : "");
+        setRepsPrTarget(p.pr_reps_target != null ? String(p.pr_reps_target) : "");
         setWeighTarget(p.weigh_target_lbs != null ? String(p.weigh_target_lbs) : "");
         setWeighDirection(p.weigh_direction ?? "");
         if (p.pr_exercise_name && p.pr_exercise_id != null) {
@@ -108,8 +119,10 @@ export default function WeeklyGoalsEditor() {
     setWeeklyGoals(json);
     const p = json.personal;
     setPrExerciseId(p.pr_exercise_id != null ? String(p.pr_exercise_id) : "");
-    setPrWeight(p.pr_weight_lbs != null ? String(p.pr_weight_lbs) : "");
-    setPrReps(p.pr_reps != null ? String(p.pr_reps) : "");
+    setWeightPrTarget(p.pr_weight_lbs != null ? String(p.pr_weight_lbs) : "");
+    setWeightPrReps(p.pr_weight_at_reps != null ? String(p.pr_weight_at_reps) : "");
+    setRepsPrWeight(p.pr_reps_at_weight_lbs != null ? String(p.pr_reps_at_weight_lbs) : "");
+    setRepsPrTarget(p.pr_reps_target != null ? String(p.pr_reps_target) : "");
     setWeighTarget(p.weigh_target_lbs != null ? String(p.weigh_target_lbs) : "");
     setWeighDirection(p.weigh_direction ?? "");
     if (p.pr_exercise_name && p.pr_exercise_id != null) {
@@ -142,30 +155,62 @@ export default function WeeklyGoalsEditor() {
     }
   }
 
-  async function savePrGoal() {
+  async function saveWeightPrGoal() {
     const exerciseId = prExerciseId ? parseInt(prExerciseId, 10) : NaN;
-    const weight = prWeight ? parseFloat(prWeight) : NaN;
-    const reps = prReps ? parseInt(prReps, 10) : NaN;
+    const weight = weightPrTarget ? parseFloat(weightPrTarget) : NaN;
+    const reps = weightPrReps ? parseInt(weightPrReps, 10) : NaN;
     if (!Number.isFinite(exerciseId) || !Number.isFinite(weight) || !Number.isFinite(reps)) {
-      setError("Lift PR goal needs exercise, weight (lbs), and reps.");
+      setError("Weight PR needs exercise, target weight (lbs), and rep count.");
       return;
     }
     await patchPersonalGoals(
       {
         pr_exercise_id: exerciseId,
         pr_weight_lbs: weight,
-        pr_reps: reps,
+        pr_weight_at_reps: reps,
       },
-      "Lift goal saved for this week."
+      "Weight PR goal saved for this week."
     );
   }
 
-  async function clearPrGoal() {
+  async function clearWeightPrGoal() {
+    setWeightPrTarget("");
+    setWeightPrReps("");
+    await patchPersonalGoals({ clear_weight_pr: true }, "Weight PR goal cleared.");
+  }
+
+  async function saveRepsPrGoal() {
+    const exerciseId = prExerciseId ? parseInt(prExerciseId, 10) : NaN;
+    const weight = repsPrWeight ? parseFloat(repsPrWeight) : NaN;
+    const reps = repsPrTarget ? parseInt(repsPrTarget, 10) : NaN;
+    if (!Number.isFinite(exerciseId) || !Number.isFinite(weight) || !Number.isFinite(reps)) {
+      setError("Reps PR needs exercise, weight (lbs), and target reps.");
+      return;
+    }
+    await patchPersonalGoals(
+      {
+        pr_exercise_id: exerciseId,
+        pr_reps_at_weight_lbs: weight,
+        pr_reps_target: reps,
+      },
+      "Reps PR goal saved for this week."
+    );
+  }
+
+  async function clearRepsPrGoal() {
+    setRepsPrWeight("");
+    setRepsPrTarget("");
+    await patchPersonalGoals({ clear_reps_pr: true }, "Reps PR goal cleared.");
+  }
+
+  async function clearAllLiftGoals() {
     setPrExerciseId("");
-    setPrWeight("");
-    setPrReps("");
+    setWeightPrTarget("");
+    setWeightPrReps("");
+    setRepsPrWeight("");
+    setRepsPrTarget("");
     setLiftSearch("");
-    await patchPersonalGoals({ clear_pr: true }, "Lift goal cleared.");
+    await patchPersonalGoals({ clear_pr: true }, "All lift goals cleared.");
   }
 
   async function saveWeighGoal() {
@@ -254,12 +299,12 @@ export default function WeeklyGoalsEditor() {
           )}
           {error && <p className="text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
-          <div className="p-4 rounded-lg border border-stone-200 bg-white">
-            <p className="text-sm font-medium text-stone-700 mb-2">Lift PR goal</p>
-            <p className="text-xs text-stone-500 mb-3">
-              Progress is measured from your prior best at this rep count toward your weekly target weight. Hitting 50% of the way there scores 50% on The Board.
-            </p>
-            <div className="grid gap-2 sm:grid-cols-2">
+          <div className="p-4 rounded-lg border border-stone-200 bg-white space-y-5">
+            <div>
+              <p className="text-sm font-medium text-stone-700 mb-1">Lift PR goals</p>
+              <p className="text-xs text-stone-500 mb-3">
+                Pick one exercise, then set a weight PR, a reps PR, or both. Weight PR = heavier at a rep count (e.g. 200 lbs × 2 when your best was 175 × 2). Reps PR = more reps at a weight (e.g. 2 reps at 200 when your best was 1 rep at 200).
+              </p>
               <input
                 type="text"
                 list="weekly-lift-options"
@@ -270,72 +315,149 @@ export default function WeeklyGoalsEditor() {
                   setPrExerciseId(match ? String(match.id) : "");
                 }}
                 placeholder="Search lift (e.g. Rack Pulls)"
-                className="rounded-lg border border-stone-300 px-3 py-2 text-sm sm:col-span-2"
+                className="rounded-lg border border-stone-300 px-3 py-2 text-sm w-full"
               />
               <datalist id="weekly-lift-options">
                 {liftOptions.map((o) => (
                   <option key={o.id} value={o.name} />
                 ))}
               </datalist>
-              <input
-                type="number"
-                min={1}
-                step={1}
-                value={prWeight}
-                onChange={(e) => setPrWeight(e.target.value)}
-                placeholder="Weight (lbs)"
-                className="rounded-lg border border-stone-300 px-3 py-2 text-sm"
-              />
-              <input
-                type="number"
-                min={1}
-                step={1}
-                value={prReps}
-                onChange={(e) => setPrReps(e.target.value)}
-                placeholder="Reps"
-                className="rounded-lg border border-stone-300 px-3 py-2 text-sm"
-              />
             </div>
-            <div className="flex flex-wrap gap-2 mt-3">
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() => void savePrGoal()}
-                className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
-              >
-                {saving ? "Saving…" : "Save lift goal"}
-              </button>
-              {(weeklyGoals?.personal.pr_exercise_id || prExerciseId) && (
+
+            <div className="border-t border-stone-100 pt-4">
+              <p className="text-sm font-medium text-stone-700 mb-2">Weight PR</p>
+              <p className="text-xs text-stone-500 mb-2">Hit a new weight at this rep count.</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={weightPrTarget}
+                  onChange={(e) => setWeightPrTarget(e.target.value)}
+                  placeholder="Target weight (lbs)"
+                  className="rounded-lg border border-stone-300 px-3 py-2 text-sm"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={weightPrReps}
+                  onChange={(e) => setWeightPrReps(e.target.value)}
+                  placeholder="At reps"
+                  className="rounded-lg border border-stone-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2 mt-3">
                 <button
                   type="button"
                   disabled={saving}
-                  onClick={() => void clearPrGoal()}
-                  className="px-3 py-2 rounded-lg border border-stone-300 text-sm text-stone-600 hover:bg-stone-50 disabled:opacity-50"
+                  onClick={() => void saveWeightPrGoal()}
+                  className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
                 >
-                  Clear lift goal
+                  {saving ? "Saving…" : "Save weight PR"}
                 </button>
+                {(weeklyGoals?.personal.pr_weight_lbs != null || weightPrTarget) && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void clearWeightPrGoal()}
+                    className="px-3 py-2 rounded-lg border border-stone-300 text-sm text-stone-600 hover:bg-stone-50 disabled:opacity-50"
+                  >
+                    Clear weight PR
+                  </button>
+                )}
+              </div>
+              {weeklyGoals?.personal.pr_weight_lbs != null && weeklyGoals.personal.pr_weight_at_reps != null && (
+                <p className={`text-xs mt-2 font-medium ${weeklyGoals.personal.weight_pr_hit ? "text-emerald-700" : "text-stone-500"}`}>
+                  Weight PR:{" "}
+                  {weeklyGoals.personal.weight_pr_hit
+                    ? "Goal hit this week ✓"
+                    : weeklyGoals.personal.weight_pr_percent != null
+                      ? `${weeklyGoals.personal.weight_pr_percent}% toward ${weeklyGoals.personal.pr_weight_lbs} lbs × ${weeklyGoals.personal.pr_weight_at_reps}${
+                          weeklyGoals.personal.weight_pr_baseline_lbs != null
+                            ? ` (from ${weeklyGoals.personal.weight_pr_baseline_lbs} lbs)`
+                            : ""
+                        }`
+                      : "No attempts yet this week"}
+                </p>
               )}
             </div>
-            {weeklyGoals?.personal.pr_exercise_id && weeklyGoals.personal.pr_weight_lbs != null && (
-              <p className={`text-xs mt-2 font-medium ${weeklyGoals.personal.pr_hit ? "text-emerald-700" : "text-stone-500"}`}>
-                Lift PR:{" "}
-                {weeklyGoals.personal.pr_hit
-                  ? "Goal hit this week ✓"
-                  : weeklyGoals.personal.pr_percent != null
-                    ? `${weeklyGoals.personal.pr_percent}% toward ${weeklyGoals.personal.pr_weight_lbs} lbs${
-                        weeklyGoals.personal.pr_baseline_lbs != null
-                          ? ` (from ${weeklyGoals.personal.pr_baseline_lbs} lbs)`
-                          : ""
-                      }`
-                    : "No attempts yet this week"}
-              </p>
+
+            <div className="border-t border-stone-100 pt-4">
+              <p className="text-sm font-medium text-stone-700 mb-2">Reps PR</p>
+              <p className="text-xs text-stone-500 mb-2">Hit more reps at this weight.</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={repsPrWeight}
+                  onChange={(e) => setRepsPrWeight(e.target.value)}
+                  placeholder="At weight (lbs)"
+                  className="rounded-lg border border-stone-300 px-3 py-2 text-sm"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={repsPrTarget}
+                  onChange={(e) => setRepsPrTarget(e.target.value)}
+                  placeholder="Target reps"
+                  className="rounded-lg border border-stone-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2 mt-3">
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void saveRepsPrGoal()}
+                  className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+                >
+                  {saving ? "Saving…" : "Save reps PR"}
+                </button>
+                {(weeklyGoals?.personal.pr_reps_at_weight_lbs != null || repsPrWeight) && (
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void clearRepsPrGoal()}
+                    className="px-3 py-2 rounded-lg border border-stone-300 text-sm text-stone-600 hover:bg-stone-50 disabled:opacity-50"
+                  >
+                    Clear reps PR
+                  </button>
+                )}
+              </div>
+              {weeklyGoals?.personal.pr_reps_at_weight_lbs != null && weeklyGoals.personal.pr_reps_target != null && (
+                <p className={`text-xs mt-2 font-medium ${weeklyGoals.personal.reps_pr_hit ? "text-emerald-700" : "text-stone-500"}`}>
+                  Reps PR:{" "}
+                  {weeklyGoals.personal.reps_pr_hit
+                    ? "Goal hit this week ✓"
+                    : weeklyGoals.personal.reps_pr_percent != null
+                      ? `${weeklyGoals.personal.reps_pr_percent}% toward ${weeklyGoals.personal.pr_reps_target} reps at ${weeklyGoals.personal.pr_reps_at_weight_lbs} lbs${
+                          weeklyGoals.personal.reps_pr_baseline != null
+                            ? ` (from ${weeklyGoals.personal.reps_pr_baseline} reps)`
+                            : ""
+                        }`
+                      : "No attempts yet this week"}
+                </p>
+              )}
+            </div>
+
+            {(weeklyGoals?.personal.pr_exercise_id || prExerciseId) && (
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void clearAllLiftGoals()}
+                className="text-xs text-stone-500 hover:text-stone-700 underline"
+              >
+                Clear all lift goals
+              </button>
             )}
           </div>
 
           <div className="p-4 rounded-lg border border-stone-200 bg-white">
             <p className="text-sm font-medium text-stone-700 mb-2">Weekly weigh-in goal</p>
             <p className="text-xs text-stone-500 mb-3">
-              Separate from your long-term weight goal in Macros. Progress uses your heaviest recent weigh-in (before this week or logged this week) when losing weight, or lightest when gaining — then your best log this week toward the target.
+              Separate from your long-term weight goal in Macros. Progress starts at your first journal weigh-in this week, then tracks your best log this week toward the target.
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
               <input
@@ -400,9 +522,20 @@ export default function WeeklyGoalsEditor() {
             <p className="text-sm text-stone-700">
               Personal goal score:{" "}
               <span className="font-semibold">{weeklyGoals.personal.personal_percent}%</span>
-              {weeklyGoals.personal.pr_percent != null && weeklyGoals.personal.weigh_percent != null
-                ? ` (lift ${weeklyGoals.personal.pr_percent}%, weigh-in ${weeklyGoals.personal.weigh_percent}%)`
-                : null}
+              {(() => {
+                const parts = [
+                  weeklyGoals.personal.weight_pr_percent != null
+                    ? `weight PR ${weeklyGoals.personal.weight_pr_percent}%`
+                    : null,
+                  weeklyGoals.personal.reps_pr_percent != null
+                    ? `reps PR ${weeklyGoals.personal.reps_pr_percent}%`
+                    : null,
+                  weeklyGoals.personal.weigh_percent != null
+                    ? `weigh-in ${weeklyGoals.personal.weigh_percent}%`
+                    : null,
+                ].filter(Boolean);
+                return parts.length > 0 ? <span className="text-stone-600"> ({parts.join(", ")})</span> : null;
+              })()}
             </p>
           ) : null}
         </div>

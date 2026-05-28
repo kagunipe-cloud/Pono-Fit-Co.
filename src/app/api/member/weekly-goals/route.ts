@@ -73,10 +73,14 @@ export async function PATCH(request: NextRequest) {
       saveMemberWeeklyPersonalGoals(db, memberId, tz, {
         pr_exercise_id: body.pr_exercise_id,
         pr_weight_lbs: body.pr_weight_lbs,
-        pr_reps: body.pr_reps,
+        pr_weight_at_reps: body.pr_weight_at_reps ?? body.pr_reps,
+        pr_reps_at_weight_lbs: body.pr_reps_at_weight_lbs,
+        pr_reps_target: body.pr_reps_target,
         weigh_target_lbs: body.weigh_target_lbs,
         weigh_direction: weighDirection,
         clear_pr: body.clear_pr === true,
+        clear_weight_pr: body.clear_weight_pr === true,
+        clear_reps_pr: body.clear_reps_pr === true,
         clear_weigh: body.clear_weigh === true,
       });
     } catch (e) {

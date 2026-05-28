@@ -70,9 +70,8 @@ export default function GoalBoardDisplay() {
           <span className="font-medium text-stone-800">Macros</span> need daily calorie + protein/fat/carb % goals on My Macros (weight
           goal alone doesn&apos;t score). Each macro day requires calories and all three macros within 15% of targets.{" "}
           <span className="font-medium text-stone-800">Personal goals</span> update as soon as a qualifying set is logged, a workout is
-          finished, or a journal weigh-in is saved — no macro finish or end-of-day wait. Weigh-in progress compares your best log this week to your
-          weekly target, starting from the heaviest (or lightest, if gaining) recent weigh-in. Partial progress counts (50% of the way to target
-          scores 50%).
+          finished, or a journal weigh-in is saved — no macro finish or end-of-day wait. Lift goals can be a <span className="font-medium text-stone-800">weight PR</span> (heavier at X reps) and/or a{" "}
+          <span className="font-medium text-stone-800">reps PR</span> (more reps at X lbs). Weigh-in progress starts from your first journal log this week. Partial progress counts (50% of the way to target scores 50%).
         </p>
         <p className="mt-1">
           Current week: <span className="font-medium text-stone-800">{data.current.week_start}</span> to{" "}
