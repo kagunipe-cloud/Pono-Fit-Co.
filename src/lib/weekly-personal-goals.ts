@@ -126,14 +126,17 @@ export function progressTowardGoal(current: number, start: number, goal: number)
   return clampPercent((moved / Math.abs(needed)) * 100);
 }
 
+/** When counting this week's lifts, include in-progress workouts (sets log before Finish). Baseline/history stays finished-only. */
+type LiftWeightQueryMode = "finished_before" | "in_week_including_in_progress";
+
 function maxLiftWeightAtReps(
   db: Db,
   memberId: string,
   exerciseId: number,
   minReps: number,
-  finishedBeforeSql: string | null,
-  finishedFromSql: string | null,
-  finishedToSql: string | null
+  mode: LiftWeightQueryMode,
+  fromSql: string,
+  toSql?: string
 ): number | null {
   ensureWorkoutTables(db);
   let sql = `
@@ -142,20 +145,49 @@ function maxLiftWeightAtReps(
     JOIN workout_exercises we ON we.workout_id = w.id AND we.exercise_id = ? AND we.type = 'lift'
     JOIN workout_sets ws ON ws.workout_exercise_id = we.id
     WHERE w.member_id = ?
-      AND w.finished_at IS NOT NULL
       AND COALESCE(ws.reps, 0) >= ?`;
   const params: (string | number)[] = [exerciseId, memberId, minReps];
-  if (finishedBeforeSql != null) {
-    sql += " AND w.finished_at < ?";
-    params.push(finishedBeforeSql);
-  }
-  if (finishedFromSql != null && finishedToSql != null) {
-    sql += " AND w.finished_at >= ? AND w.finished_at <= ?";
-    params.push(finishedFromSql, finishedToSql);
+  if (mode === "finished_before") {
+    sql += " AND w.finished_at IS NOT NULL AND w.finished_at < ?";
+    params.push(fromSql);
+  } else {
+    sql += " AND COALESCE(w.finished_at, w.started_at) >= ? AND COALESCE(w.finished_at, w.started_at) <= ?";
+    params.push(fromSql, toSql!);
   }
   const row = db.prepare(sql).get(...params) as { max_w: number | null } | undefined;
   const maxW = row?.max_w != null ? Number(row.max_w) : null;
   return maxW != null && Number.isFinite(maxW) && maxW > 0 ? maxW : null;
+}
+
+function prGoalHitInRange(
+  db: Db,
+  memberId: string,
+  exerciseId: number,
+  minReps: number,
+  goalWeight: number,
+  fromSql: string,
+  toSql: string,
+  finishedOnly: boolean
+): boolean {
+  ensureWorkoutTables(db);
+  const timeCol = finishedOnly ? "w.finished_at" : "COALESCE(w.finished_at, w.started_at)";
+  const finishedClause = finishedOnly ? " AND w.finished_at IS NOT NULL" : "";
+  const row = db
+    .prepare(
+      `SELECT 1 AS ok
+       FROM workouts w
+       JOIN workout_exercises we ON we.workout_id = w.id AND we.exercise_id = ? AND we.type = 'lift'
+       JOIN workout_sets ws ON ws.workout_exercise_id = we.id
+       WHERE w.member_id = ?
+         ${finishedClause}
+         AND ${timeCol} >= ?
+         AND ${timeCol} <= ?
+         AND COALESCE(ws.reps, 0) >= ?
+         AND COALESCE(ws.weight_kg, 0) >= ?
+       LIMIT 1`
+    )
+    .get(exerciseId, memberId, fromSql, toSql, minReps, goalWeight) as { ok: number } | undefined;
+  return row != null;
 }
 
 function priorWeighIn(db: Db, memberId: string, beforeDate: string): number | null {
@@ -170,6 +202,30 @@ function priorWeighIn(db: Db, memberId: string, beforeDate: string): number | nu
     .get(memberId, beforeDate) as { weight: number } | undefined;
   const w = row?.weight != null ? Number(row.weight) : null;
   return w != null && Number.isFinite(w) && w > 0 ? w : null;
+}
+
+/** Earliest weigh-in logged during the week (starting weight when nothing exists before Monday). */
+function firstWeighInThisWeek(db: Db, memberId: string, weekStart: string, weekEnd: string): number | null {
+  ensureJournalTables(db);
+  const row = db
+    .prepare(
+      `SELECT weight FROM member_weigh_ins
+       WHERE member_id = ? AND date >= ? AND date <= ?
+       ORDER BY date ASC
+       LIMIT 1`
+    )
+    .get(memberId, weekStart, weekEnd) as { weight: number } | undefined;
+  const w = row?.weight != null ? Number(row.weight) : null;
+  return w != null && Number.isFinite(w) && w > 0 ? w : null;
+}
+
+function weighBaselineLbs(
+  db: Db,
+  memberId: string,
+  weekStart: string,
+  weekEnd: string
+): number | null {
+  return priorWeighIn(db, memberId, weekStart) ?? firstWeighInThisWeek(db, memberId, weekStart, weekEnd);
 }
 
 function bestWeighInThisWeek(
@@ -204,9 +260,10 @@ export function prGoalProgressPercent(
   const minReps = goal.pr_reps ?? 0;
   const { fromSql, toSql } = sqlBoundsForWeek(weekStart, weekEnd, tz);
   const baseline =
-    maxLiftWeightAtReps(db, memberId, goal.pr_exercise_id!, minReps, fromSql, null, null) ?? 0;
+    maxLiftWeightAtReps(db, memberId, goal.pr_exercise_id!, minReps, "finished_before", fromSql) ?? 0;
   const current =
-    maxLiftWeightAtReps(db, memberId, goal.pr_exercise_id!, minReps, null, fromSql, toSql) ?? baseline;
+    maxLiftWeightAtReps(db, memberId, goal.pr_exercise_id!, minReps, "in_week_including_in_progress", fromSql, toSql) ??
+    baseline;
   return progressTowardGoal(current, baseline, goalWeight);
 }
 
@@ -219,11 +276,13 @@ export function weighGoalProgressPercent(
 ): { percent: number | null; baseline_lbs: number | null; current_lbs: number | null } {
   if (!hasWeighGoal(goal)) return { percent: null, baseline_lbs: null, current_lbs: null };
   const target = goal.weigh_target_lbs ?? 0;
-  const baseline = priorWeighIn(db, memberId, weekStart);
+  const direction = goal.weigh_direction!;
+  const baseline = weighBaselineLbs(db, memberId, weekStart, weekEnd);
+  const currentBest = bestWeighInThisWeek(db, memberId, weekStart, weekEnd, direction);
   if (baseline == null) {
-    return { percent: 0, baseline_lbs: null, current_lbs: bestWeighInThisWeek(db, memberId, weekStart, weekEnd, goal.weigh_direction!) };
+    return { percent: 0, baseline_lbs: null, current_lbs: currentBest };
   }
-  const current = bestWeighInThisWeek(db, memberId, weekStart, weekEnd, goal.weigh_direction!) ?? baseline;
+  const current = currentBest ?? baseline;
   return {
     percent: progressTowardGoal(current, baseline, target),
     baseline_lbs: baseline,
@@ -241,7 +300,7 @@ export function prGoalBaselineLbs(
 ): number | null {
   if (!hasPrGoal(goal)) return null;
   const { fromSql } = sqlBoundsForWeek(weekStart, weekEnd, tz);
-  return maxLiftWeightAtReps(db, memberId, goal.pr_exercise_id!, goal.pr_reps ?? 0, fromSql, null, null);
+  return maxLiftWeightAtReps(db, memberId, goal.pr_exercise_id!, goal.pr_reps ?? 0, "finished_before", fromSql);
 }
 
 export function prGoalHitThisWeek(
@@ -255,22 +314,16 @@ export function prGoalHitThisWeek(
   if (!hasPrGoal(goal)) return false;
   ensureWorkoutTables(db);
   const { fromSql, toSql } = sqlBoundsForWeek(weekStart, weekEnd, tz);
-  const row = db
-    .prepare(
-      `SELECT 1 AS ok
-       FROM workouts w
-       JOIN workout_exercises we ON we.workout_id = w.id AND we.exercise_id = ? AND we.type = 'lift'
-       JOIN workout_sets ws ON ws.workout_exercise_id = we.id
-       WHERE w.member_id = ?
-         AND w.finished_at IS NOT NULL
-         AND w.finished_at >= ?
-         AND w.finished_at <= ?
-         AND COALESCE(ws.reps, 0) >= ?
-         AND COALESCE(ws.weight_kg, 0) >= ?
-       LIMIT 1`
-    )
-    .get(goal.pr_exercise_id, memberId, fromSql, toSql, goal.pr_reps, goal.pr_weight_lbs) as { ok: number } | undefined;
-  return row != null;
+  return prGoalHitInRange(
+    db,
+    memberId,
+    goal.pr_exercise_id!,
+    goal.pr_reps ?? 0,
+    goal.pr_weight_lbs ?? 0,
+    fromSql,
+    toSql,
+    false
+  );
 }
 
 export function weighGoalHitThisWeek(db: Db, memberId: string, weekStart: string, weekEnd: string, goal: WeeklyPersonalGoals): boolean {

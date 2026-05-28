@@ -234,10 +234,11 @@ export function buildGoalBoard(db: Db, tz: string, weekStart?: string, today?: s
     const macroPercent = macroConfigured ? pct(macroHit, macroTarget) : null;
 
     const personalGoalRow = personalGoalsByMember.get(memberId);
-    const personalScored =
-      personalGoalRow && memberHasPersonalGoalConfigured(personalGoalRow)
-        ? scorePersonalGoals(db, memberId, start, tz, personalGoalRow)
-        : null;
+    const personalConfigured =
+      personalGoalRow != null && memberHasPersonalGoalConfigured(personalGoalRow);
+    const personalScored = personalConfigured
+      ? scorePersonalGoals(db, memberId, start, tz, personalGoalRow)
+      : null;
     const personalGoal: GoalMetric | null = personalScored
       ? {
           hit: personalScored.hit,
@@ -255,6 +256,7 @@ export function buildGoalBoard(db: Db, tz: string, weekStart?: string, today?: s
       workoutHit > 0 ||
       macroConfigured ||
       (memberMacroTotals != null && memberMacroTotals.size > 0) ||
+      personalConfigured ||
       personalGoal != null;
     if (!hasSignal) continue;
 
