@@ -24,6 +24,7 @@ type WeeklyGoalsData = {
     weigh_percent: number | null;
     pr_baseline_lbs: number | null;
     weigh_baseline_lbs: number | null;
+    weigh_current_lbs: number | null;
     personal_hit: number;
     personal_target: number;
     personal_percent: number | null;
@@ -334,7 +335,7 @@ export default function WeeklyGoalsEditor() {
           <div className="p-4 rounded-lg border border-stone-200 bg-white">
             <p className="text-sm font-medium text-stone-700 mb-2">Weekly weigh-in goal</p>
             <p className="text-xs text-stone-500 mb-3">
-              Separate from your long-term weight goal in Macros. Progress uses your most recent journal weigh-in before this week, or your first log this week if that&apos;s all you have.
+              Separate from your long-term weight goal in Macros. Progress uses your heaviest recent weigh-in (before this week or logged this week) when losing weight, or lightest when gaining — then your best log this week toward the target.
             </p>
             <div className="grid gap-2 sm:grid-cols-2">
               <input
@@ -384,7 +385,12 @@ export default function WeeklyGoalsEditor() {
                   : weeklyGoals.personal.weigh_baseline_lbs == null
                     ? "Log a weigh-in in your journal to start tracking progress"
                     : weeklyGoals.personal.weigh_percent != null
-                      ? `${weeklyGoals.personal.weigh_percent}% toward ${weeklyGoals.personal.weigh_target_lbs} lbs (from ${weeklyGoals.personal.weigh_baseline_lbs} lbs)`
+                      ? `${weeklyGoals.personal.weigh_percent}% toward ${weeklyGoals.personal.weigh_target_lbs} lbs (from ${weeklyGoals.personal.weigh_baseline_lbs} lbs${
+                          weeklyGoals.personal.weigh_current_lbs != null &&
+                          weeklyGoals.personal.weigh_current_lbs !== weeklyGoals.personal.weigh_baseline_lbs
+                            ? `, now ${weeklyGoals.personal.weigh_current_lbs} lbs`
+                            : ""
+                        })`
                       : "No weigh-in logged this week yet"}
               </p>
             )}

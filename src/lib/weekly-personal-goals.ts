@@ -26,6 +26,7 @@ export type WeeklyPersonalGoalProgress = WeeklyPersonalGoals & {
   weigh_percent: number | null;
   pr_baseline_lbs: number | null;
   weigh_baseline_lbs: number | null;
+  weigh_current_lbs: number | null;
   personal_hit: number;
   personal_target: number;
   personal_percent: number | null;
@@ -204,28 +205,33 @@ function priorWeighIn(db: Db, memberId: string, beforeDate: string): number | nu
   return w != null && Number.isFinite(w) && w > 0 ? w : null;
 }
 
-/** Earliest weigh-in logged during the week (starting weight when nothing exists before Monday). */
-function firstWeighInThisWeek(db: Db, memberId: string, weekStart: string, weekEnd: string): number | null {
+function weighInsThisWeek(db: Db, memberId: string, weekStart: string, weekEnd: string): number[] {
   ensureJournalTables(db);
-  const row = db
+  const rows = db
     .prepare(
       `SELECT weight FROM member_weigh_ins
        WHERE member_id = ? AND date >= ? AND date <= ?
-       ORDER BY date ASC
-       LIMIT 1`
+       ORDER BY date ASC`
     )
-    .get(memberId, weekStart, weekEnd) as { weight: number } | undefined;
-  const w = row?.weight != null ? Number(row.weight) : null;
-  return w != null && Number.isFinite(w) && w > 0 ? w : null;
+    .all(memberId, weekStart, weekEnd) as { weight: number }[];
+  return rows
+    .map((r) => Number(r.weight))
+    .filter((w) => Number.isFinite(w) && w > 0);
 }
 
-function weighBaselineLbs(
+/** Starting weight for weekly progress — the side you're coming from toward this week's target. */
+function weighProgressStartLbs(
   db: Db,
   memberId: string,
   weekStart: string,
-  weekEnd: string
+  weekEnd: string,
+  direction: WeighDirection
 ): number | null {
-  return priorWeighIn(db, memberId, weekStart) ?? firstWeighInThisWeek(db, memberId, weekStart, weekEnd);
+  const prior = priorWeighIn(db, memberId, weekStart);
+  const weekWeights = weighInsThisWeek(db, memberId, weekStart, weekEnd);
+  const candidates = [...(prior != null ? [prior] : []), ...weekWeights];
+  if (candidates.length === 0) return null;
+  return direction === "at_or_below" ? Math.max(...candidates) : Math.min(...candidates);
 }
 
 function bestWeighInThisWeek(
@@ -277,15 +283,15 @@ export function weighGoalProgressPercent(
   if (!hasWeighGoal(goal)) return { percent: null, baseline_lbs: null, current_lbs: null };
   const target = goal.weigh_target_lbs ?? 0;
   const direction = goal.weigh_direction!;
-  const baseline = weighBaselineLbs(db, memberId, weekStart, weekEnd);
+  const progressStart = weighProgressStartLbs(db, memberId, weekStart, weekEnd, direction);
   const currentBest = bestWeighInThisWeek(db, memberId, weekStart, weekEnd, direction);
-  if (baseline == null) {
+  if (progressStart == null) {
     return { percent: 0, baseline_lbs: null, current_lbs: currentBest };
   }
-  const current = currentBest ?? baseline;
+  const current = currentBest ?? progressStart;
   return {
-    percent: progressTowardGoal(current, baseline, target),
-    baseline_lbs: baseline,
+    percent: progressTowardGoal(current, progressStart, target),
+    baseline_lbs: progressStart,
     current_lbs: current,
   };
 }
@@ -433,6 +439,7 @@ export function getMemberWeeklyPersonalGoalProgress(
     weigh_percent: scored?.weigh_percent ?? null,
     pr_baseline_lbs: prGoalBaselineLbs(db, memberId, goals.week_start, weekEnd, tz, goals),
     weigh_baseline_lbs: weighProgress.baseline_lbs,
+    weigh_current_lbs: weighProgress.current_lbs,
     personal_hit: scored?.hit ?? 0,
     personal_target: scored?.target ?? 0,
     personal_percent: scored?.percent ?? null,

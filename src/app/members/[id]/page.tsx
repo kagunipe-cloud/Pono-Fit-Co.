@@ -105,6 +105,12 @@ export default function MemberDetailPage() {
   const [dayPassRemoveNote, setDayPassRemoveNote] = useState("");
   const [dayPassSubmitting, setDayPassSubmitting] = useState(false);
   const [dayPassMessage, setDayPassMessage] = useState<string | null>(null);
+  const [classCreditGrantAmount, setClassCreditGrantAmount] = useState(1);
+  const [classCreditGrantNote, setClassCreditGrantNote] = useState("");
+  const [classCreditRemoveAmount, setClassCreditRemoveAmount] = useState(1);
+  const [classCreditRemoveNote, setClassCreditRemoveNote] = useState("");
+  const [classCreditSubmitting, setClassCreditSubmitting] = useState(false);
+  const [classCreditMessage, setClassCreditMessage] = useState<string | null>(null);
   const [sendingWaiver, setSendingWaiver] = useState(false);
   const [sendingPasswordReset, setSendingPasswordReset] = useState(false);
   const [togglingAutoRenew, setTogglingAutoRenew] = useState(false);
@@ -589,6 +595,79 @@ export default function MemberDetailPage() {
     }
   }
 
+  async function grantClassCredits() {
+    const amt = Math.max(1, Math.min(99, Math.floor(classCreditGrantAmount)));
+    setClassCreditMessage(null);
+    setClassCreditSubmitting(true);
+    try {
+      const res = await fetch(`/api/members/${id}/class-credits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "grant",
+          amount: amt,
+          ...(classCreditGrantNote.trim() ? { note: classCreditGrantNote.trim() } : {}),
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.balance != null) {
+        setClassCreditMessage(`Granted ${amt} class credit${amt !== 1 ? "s" : ""}.`);
+        setClassCreditGrantAmount(1);
+        setClassCreditGrantNote("");
+        await fetchMember();
+      } else {
+        setClassCreditMessage(json.error ?? "Could not grant credits.");
+      }
+    } catch {
+      setClassCreditMessage("Request failed.");
+    } finally {
+      setClassCreditSubmitting(false);
+    }
+  }
+
+  async function removeClassCredits() {
+    const amt = Math.max(1, Math.min(99, Math.floor(classCreditRemoveAmount)));
+    const left = Number(data?.class_credits ?? 0);
+    if (left <= 0) {
+      setClassCreditMessage("No class credits to remove.");
+      return;
+    }
+    const take = Math.min(amt, left);
+    if (
+      !confirm(
+        `Remove ${take} class credit${take !== 1 ? "s" : ""} from this member? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    setClassCreditMessage(null);
+    setClassCreditSubmitting(true);
+    try {
+      const res = await fetch(`/api/members/${id}/class-credits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "remove",
+          amount: amt,
+          ...(classCreditRemoveNote.trim() ? { note: classCreditRemoveNote.trim() } : {}),
+        }),
+      });
+      const json = await res.json();
+      if (res.ok && json.balance != null) {
+        setClassCreditMessage(`Removed ${json.removed ?? take} class credit${(json.removed ?? take) !== 1 ? "s" : ""}.`);
+        setClassCreditRemoveAmount(1);
+        setClassCreditRemoveNote("");
+        await fetchMember();
+      } else {
+        setClassCreditMessage(json.error ?? "Could not remove credits.");
+      }
+    } catch {
+      setClassCreditMessage("Request failed.");
+    } finally {
+      setClassCreditSubmitting(false);
+    }
+  }
+
   async function grantDayPassCredits() {
     const amt = Math.max(1, Math.min(99, Math.floor(dayPassGrantAmount)));
     setDayPassMessage(null);
@@ -726,6 +805,7 @@ export default function MemberDetailPage() {
   const canUnlockDoor = memberEmail.length > 0 && hasDoorAccess;
 
   const dayPassLeft = Number((data as { day_pass_credits?: number })?.day_pass_credits ?? 0);
+  const classCreditsLeft = Number(data?.class_credits ?? 0);
   const todayYmd = (data?.today_ymd ?? "").trim();
   const passActivationDay = String((data?.member as { pass_activation_day?: string | null })?.pass_activation_day ?? "").trim();
   const passActiveToday = !!todayYmd && passActivationDay === todayYmd;
@@ -824,18 +904,99 @@ export default function MemberDetailPage() {
         <div className="mb-6 p-4 rounded-xl border border-brand-200 bg-brand-50/50 space-y-6">
           <div>
             <h2 className="text-base font-semibold text-stone-800 mb-2">Class credits</h2>
-            <p className="text-xs text-stone-600 mb-2">
-              Balance from class packs and complimentary class credits. Used when booking recurring / open classes with a credit.
+            <p className="text-xs text-stone-600 mb-3">
+              Balance from class packs and complimentary class credits. Used when booking recurring / open classes with a credit. Grant or remove credits here when needed.
             </p>
-            <p className="text-sm text-stone-700">
-              {data && (data.class_credits ?? 0) > 0 ? (
-                <>
-                  <strong>{data.class_credits}</strong> credit{(data.class_credits ?? 0) !== 1 ? "s" : ""} available.
-                </>
-              ) : (
-                <span className="text-stone-500">No class credits on file.</span>
-              )}
-            </p>
+            {classCreditsLeft <= 0 ? (
+              <p className="text-sm text-stone-500 mb-3">No class credits on file.</p>
+            ) : (
+              <div className="rounded-lg border border-stone-200 bg-white/80 px-3 py-2 text-sm text-stone-700 mb-3">
+                <span className="font-medium text-stone-800">Class credits</span>
+                <span className="text-stone-600">
+                  {" "}
+                  — {classCreditsLeft} credit{classCreditsLeft !== 1 ? "s" : ""} available
+                </span>
+              </div>
+            )}
+            <div className="flex flex-wrap items-end gap-3 mb-3">
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Credits to add</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={99}
+                  value={classCreditGrantAmount}
+                  onChange={(e) =>
+                    setClassCreditGrantAmount(Math.max(1, Math.min(99, parseInt(e.target.value, 10) || 1)))
+                  }
+                  className="w-20 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                />
+              </div>
+              <div className="flex-1 min-w-[180px]">
+                <label className="block text-xs font-medium text-stone-500 mb-1">Note (optional)</label>
+                <input
+                  type="text"
+                  value={classCreditGrantNote}
+                  onChange={(e) => setClassCreditGrantNote(e.target.value)}
+                  placeholder="e.g. Front desk comp"
+                  className="w-full px-2 py-1.5 rounded border border-stone-200 text-sm"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={grantClassCredits}
+                disabled={classCreditSubmitting}
+                className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
+              >
+                {classCreditSubmitting ? "Saving…" : "Grant credits"}
+              </button>
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <label className="block text-xs font-medium text-stone-500 mb-1">Credits to remove</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={Math.max(1, classCreditsLeft)}
+                  value={classCreditRemoveAmount}
+                  onChange={(e) =>
+                    setClassCreditRemoveAmount(
+                      Math.max(1, Math.min(Math.max(1, classCreditsLeft), parseInt(e.target.value, 10) || 1))
+                    )
+                  }
+                  className="w-20 px-2 py-1.5 rounded border border-stone-200 text-sm"
+                />
+              </div>
+              <div className="flex-1 min-w-[180px]">
+                <label className="block text-xs font-medium text-stone-500 mb-1">Note (optional)</label>
+                <input
+                  type="text"
+                  value={classCreditRemoveNote}
+                  onChange={(e) => setClassCreditRemoveNote(e.target.value)}
+                  placeholder="e.g. Entered in error"
+                  className="w-full px-2 py-1.5 rounded border border-stone-200 text-sm"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={removeClassCredits}
+                disabled={classCreditSubmitting || classCreditsLeft <= 0}
+                className="px-4 py-2 rounded-lg border border-stone-300 bg-white text-stone-800 font-medium hover:bg-stone-50 disabled:opacity-50"
+              >
+                {classCreditSubmitting ? "Saving…" : "Remove credits"}
+              </button>
+            </div>
+            {classCreditMessage && (
+              <p
+                className={`mt-3 text-sm ${
+                  classCreditMessage.startsWith("Granted") || classCreditMessage.startsWith("Removed")
+                    ? "text-emerald-700"
+                    : "text-amber-700"
+                }`}
+              >
+                {classCreditMessage}
+              </p>
+            )}
           </div>
 
           <div className="pt-4 border-t border-stone-200/80">
