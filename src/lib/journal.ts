@@ -1,7 +1,44 @@
+import { parseAppDateToYMD } from "./app-timezone";
+
 /**
  * Daily Food Journal: journal_days (one per member per date), journal_meals (Breakfast, Lunch, etc.),
  * journal_meal_entries (food_id + amount per serving). Member favorites: named food or meal (list of food+amount).
  */
+
+/** Normalize journal weigh-in dates to YYYY-MM-DD for reliable week filtering. */
+export function normalizeWeighInDateToIso(dateStr: string): string | null {
+  const ymd = parseAppDateToYMD(dateStr);
+  if (!ymd) return null;
+  const [y, m, d] = ymd;
+  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+function repairMemberWeighInDatesIfNeeded(db: ReturnType<typeof import("./db").getDb>): void {
+  const bad = db
+    .prepare(`SELECT member_id, date, weight FROM member_weigh_ins WHERE date NOT GLOB '????-??-??' LIMIT 1`)
+    .get() as { member_id: string; date: string; weight: number } | undefined;
+  if (!bad) return;
+
+  const rows = db.prepare("SELECT member_id, date, weight FROM member_weigh_ins").all() as {
+    member_id: string;
+    date: string;
+    weight: number;
+  }[];
+  for (const row of rows) {
+    const iso = normalizeWeighInDateToIso(String(row.date));
+    if (!iso || iso === row.date) continue;
+    const conflict = db
+      .prepare("SELECT weight FROM member_weigh_ins WHERE member_id = ? AND date = ?")
+      .get(row.member_id, iso) as { weight: number } | undefined;
+    if (conflict) {
+      const merged = Math.max(Number(row.weight), Number(conflict.weight));
+      db.prepare("UPDATE member_weigh_ins SET weight = ? WHERE member_id = ? AND date = ?").run(merged, row.member_id, iso);
+      db.prepare("DELETE FROM member_weigh_ins WHERE member_id = ? AND date = ?").run(row.member_id, row.date);
+    } else {
+      db.prepare("UPDATE member_weigh_ins SET date = ? WHERE member_id = ? AND date = ?").run(iso, row.member_id, row.date);
+    }
+  }
+}
 
 export function ensureJournalTables(db: ReturnType<typeof import("./db").getDb>) {
   db.exec(`
@@ -110,6 +147,8 @@ export function ensureJournalTables(db: ReturnType<typeof import("./db").getDb>)
     CREATE INDEX IF NOT EXISTS idx_member_weigh_ins_member ON member_weigh_ins(member_id);
     CREATE INDEX IF NOT EXISTS idx_member_weigh_ins_date ON member_weigh_ins(member_id, date);
   `);
+
+  repairMemberWeighInDatesIfNeeded(db);
 }
 
 /** Monday of the week containing date (YYYY-MM-DD). */

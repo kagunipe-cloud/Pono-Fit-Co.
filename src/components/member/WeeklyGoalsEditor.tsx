@@ -32,6 +32,7 @@ type WeeklyGoalsData = {
     reps_pr_current: number | null;
     weigh_baseline_lbs: number | null;
     weigh_current_lbs: number | null;
+    weigh_logs_this_week?: { date: string; weight: number }[];
     personal_hit: number;
     personal_target: number;
     personal_percent: number | null;
@@ -514,6 +515,12 @@ export default function WeeklyGoalsEditor() {
                             : ""
                         })`
                       : "No weigh-in logged this week yet"}
+              </p>
+            )}
+            {weeklyGoals?.personal.weigh_logs_this_week && weeklyGoals.personal.weigh_logs_this_week.length > 0 && (
+              <p className="text-xs text-stone-400 mt-1">
+                Counted for this board week:{" "}
+                {weeklyGoals.personal.weigh_logs_this_week.map((l) => `${l.date} → ${l.weight} lbs`).join(", ")}
               </p>
             )}
           </div>

@@ -1,6 +1,6 @@
 import type { getDb } from "./db";
 import { weekStartInAppTz, todayInAppTz } from "./app-timezone";
-import { ensureJournalTables } from "./journal";
+import { ensureJournalTables, normalizeWeighInDateToIso } from "./journal";
 import { ensureWorkoutTables } from "./workouts-server";
 import { endOfDayInTz, startOfDayInTz, dateStringInAppTz } from "./app-timezone";
 import { addDaysToDateStr } from "./app-timezone";
@@ -36,6 +36,8 @@ export type WeeklyPersonalGoalProgress = WeeklyPersonalGoals & {
   reps_pr_current: number | null;
   weigh_baseline_lbs: number | null;
   weigh_current_lbs: number | null;
+  /** All normalized journal weigh-ins counted for this board week (for troubleshooting). */
+  weigh_logs_this_week: { date: string; weight: number }[];
   personal_hit: number;
   personal_target: number;
   personal_percent: number | null;
@@ -290,6 +292,20 @@ export function ensureWeighWeekOpeningsTable(db: Db): void {
   `);
 }
 
+function priorWeighIn(db: Db, memberId: string, beforeDate: string): number | null {
+  ensureJournalTables(db);
+  const rows = db
+    .prepare(`SELECT date, weight FROM member_weigh_ins WHERE member_id = ? ORDER BY date DESC`)
+    .all(memberId) as { date: string; weight: number }[];
+  for (const row of rows) {
+    const iso = normalizeWeighInDateToIso(String(row.date));
+    const weight = Number(row.weight);
+    if (!iso || iso >= beforeDate || !Number.isFinite(weight) || weight <= 0) continue;
+    return weight;
+  }
+  return null;
+}
+
 function weighInsThisWeekOrdered(
   db: Db,
   memberId: string,
@@ -298,15 +314,17 @@ function weighInsThisWeekOrdered(
 ): { date: string; weight: number }[] {
   ensureJournalTables(db);
   const rows = db
-    .prepare(
-      `SELECT date, weight FROM member_weigh_ins
-       WHERE member_id = ? AND date >= ? AND date <= ?
-       ORDER BY date ASC`
-    )
-    .all(memberId, weekStart, weekEnd) as { date: string; weight: number }[];
+    .prepare(`SELECT date, weight FROM member_weigh_ins WHERE member_id = ?`)
+    .all(memberId) as { date: string; weight: number }[];
   return rows
-    .map((r) => ({ date: String(r.date), weight: Number(r.weight) }))
-    .filter((r) => r.date && Number.isFinite(r.weight) && r.weight > 0);
+    .map((r) => {
+      const iso = normalizeWeighInDateToIso(String(r.date));
+      const weight = Number(r.weight);
+      if (!iso || !Number.isFinite(weight) || weight <= 0) return null;
+      return { date: iso, weight };
+    })
+    .filter((r): r is { date: string; weight: number } => r != null && r.date >= weekStart && r.date <= weekEnd)
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 function reconcileWeighWeekOpening(
@@ -363,9 +381,19 @@ function weighProgressStartWeight(
   memberId: string,
   weekStart: string,
   weekEnd: string,
-  _direction: WeighDirection
+  direction: WeighDirection
 ): number | null {
-  return getWeighWeekOpeningWeight(db, memberId, weekStart, weekEnd);
+  const rows = weighInsThisWeekOrdered(db, memberId, weekStart, weekEnd);
+  if (rows.length === 0) return null;
+
+  let start = rows[0]!.weight;
+  const prior = priorWeighIn(db, memberId, weekStart);
+  if (direction === "at_or_below") {
+    if (prior != null && prior > start) start = prior;
+  } else if (prior != null && prior < start) {
+    start = prior;
+  }
+  return start;
 }
 
 function bestWeighInThisWeek(
@@ -375,16 +403,10 @@ function bestWeighInThisWeek(
   weekEnd: string,
   direction: WeighDirection
 ): number | null {
-  ensureJournalTables(db);
-  const agg = direction === "at_or_below" ? "MIN(weight)" : "MAX(weight)";
-  const row = db
-    .prepare(
-      `SELECT ${agg} AS w FROM member_weigh_ins
-       WHERE member_id = ? AND date >= ? AND date <= ?`
-    )
-    .get(memberId, weekStart, weekEnd) as { w: number | null } | undefined;
-  const w = row?.w != null ? Number(row.w) : null;
-  return w != null && Number.isFinite(w) && w > 0 ? w : null;
+  const rows = weighInsThisWeekOrdered(db, memberId, weekStart, weekEnd);
+  if (rows.length === 0) return null;
+  const weights = rows.map((r) => r.weight);
+  return direction === "at_or_below" ? Math.min(...weights) : Math.max(...weights);
 }
 
 export function weightPrGoalProgress(
@@ -504,18 +526,10 @@ export function repsPrGoalHitThisWeek(
 
 export function weighGoalHitThisWeek(db: Db, memberId: string, weekStart: string, weekEnd: string, goal: WeeklyPersonalGoals): boolean {
   if (!hasWeighGoal(goal)) return false;
-  ensureJournalTables(db);
-  const rows = db
-    .prepare(
-      `SELECT weight FROM member_weigh_ins
-       WHERE member_id = ? AND date >= ? AND date <= ?`
-    )
-    .all(memberId, weekStart, weekEnd) as { weight: number }[];
+  const rows = weighInsThisWeekOrdered(db, memberId, weekStart, weekEnd);
   for (const r of rows) {
-    const w = Number(r.weight);
-    if (!Number.isFinite(w)) continue;
-    if (goal.weigh_direction === "at_or_below" && w <= (goal.weigh_target_lbs ?? 0)) return true;
-    if (goal.weigh_direction === "at_or_above" && w >= (goal.weigh_target_lbs ?? 0)) return true;
+    if (goal.weigh_direction === "at_or_below" && r.weight <= (goal.weigh_target_lbs ?? 0)) return true;
+    if (goal.weigh_direction === "at_or_above" && r.weight >= (goal.weigh_target_lbs ?? 0)) return true;
   }
   return false;
 }
@@ -612,6 +626,7 @@ export function getMemberWeeklyPersonalGoalProgress(
   const weightProgress = weightPrGoalProgress(db, memberId, goals.week_start, weekEnd, tz, goals);
   const repsProgress = repsPrGoalProgress(db, memberId, goals.week_start, weekEnd, tz, goals);
   const weighProgress = weighGoalProgressPercent(db, memberId, goals.week_start, weekEnd, goals);
+  const weighLogsThisWeek = weighInsThisWeekOrdered(db, memberId, goals.week_start, weekEnd);
   return {
     ...goals,
     weight_pr_hit: weightPrGoalHitThisWeek(db, memberId, goals.week_start, weekEnd, tz, goals),
@@ -626,6 +641,7 @@ export function getMemberWeeklyPersonalGoalProgress(
     reps_pr_current: repsProgress.current_reps,
     weigh_baseline_lbs: weighProgress.baseline_lbs,
     weigh_current_lbs: weighProgress.current_lbs,
+    weigh_logs_this_week: weighLogsThisWeek,
     personal_hit: scored?.hit ?? 0,
     personal_target: scored?.target ?? 0,
     personal_percent: scored?.percent ?? null,
