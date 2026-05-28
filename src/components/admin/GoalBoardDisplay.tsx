@@ -61,12 +61,12 @@ export default function GoalBoardDisplay() {
     <>
       <div className="mb-4 rounded-xl border border-stone-200 bg-white p-4 text-sm text-stone-600 shadow-sm">
         <p>
-          Workouts update when a workout is <span className="font-medium text-stone-800">finished</span> (not just started). Past macro days
+          Workouts update when a workout is <span className="font-medium text-stone-800">finished</span> (not just started). Each finished workout counts toward the weekly goal — two sessions on the same day count as two. Past macro days
           lock at midnight in <span className="font-medium text-stone-800">{data.timezone}</span>; members can tap{" "}
           <span className="font-medium text-stone-800">Finish today&apos;s log</span> on today&apos;s journal to score early.
         </p>
         <p className="mt-2">
-          <span className="font-medium text-stone-800">Workouts</span> need a weekly day goal saved on My Workouts.{" "}
+          <span className="font-medium text-stone-800">Workouts</span> need a weekly workout goal saved on My Workouts.{" "}
           <span className="font-medium text-stone-800">Macros</span> need daily calorie + protein/fat/carb % goals on My Macros (weight
           goal alone doesn&apos;t score). Each macro day requires calories and all three macros within 15% of targets.{" "}
           <span className="font-medium text-stone-800">Personal goals</span> update as soon as a qualifying set is logged, a workout is

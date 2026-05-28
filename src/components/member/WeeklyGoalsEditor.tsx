@@ -3,9 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
+type GoalMetric = { hit: number; target: number; percent: number | null };
+
 type WeeklyGoalsData = {
-  workout_days_per_week: number | null;
+  workouts_per_week: number | null;
   macro_goals_set: boolean;
+  workouts?: GoalMetric;
+  macros?: GoalMetric;
   personal: {
     week_start: string;
     pr_exercise_id: number | null;
@@ -33,6 +37,7 @@ export default function WeeklyGoalsEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [liftOptions, setLiftOptions] = useState<LiftOption[]>([]);
   const [liftSearch, setLiftSearch] = useState("");
   const [prExerciseId, setPrExerciseId] = useState("");
@@ -94,24 +99,29 @@ export default function WeeklyGoalsEditor() {
     return () => window.clearTimeout(t);
   }, [liftSearch]);
 
-  async function savePersonalWeeklyGoals(clearPr?: boolean, clearWeigh?: boolean) {
+  async function refreshWeeklyGoals(): Promise<WeeklyGoalsData | null> {
+    const res = await fetch("/api/member/weekly-goals");
+    if (!res.ok) return null;
+    const json = (await res.json()) as WeeklyGoalsData;
+    if (!json?.personal) return null;
+    setWeeklyGoals(json);
+    const p = json.personal;
+    setPrExerciseId(p.pr_exercise_id != null ? String(p.pr_exercise_id) : "");
+    setPrWeight(p.pr_weight_lbs != null ? String(p.pr_weight_lbs) : "");
+    setPrReps(p.pr_reps != null ? String(p.pr_reps) : "");
+    setWeighTarget(p.weigh_target_lbs != null ? String(p.weigh_target_lbs) : "");
+    setWeighDirection(p.weigh_direction ?? "");
+    if (p.pr_exercise_name && p.pr_exercise_id != null) {
+      setLiftSearch(p.pr_exercise_name);
+    }
+    return json;
+  }
+
+  async function patchPersonalGoals(body: Record<string, unknown>, successMessage: string) {
     setError(null);
+    setSavedMessage(null);
     setSaving(true);
     try {
-      const body: Record<string, unknown> = {};
-      if (clearPr) {
-        body.clear_pr = true;
-      } else if (prExerciseId || prWeight || prReps) {
-        body.pr_exercise_id = prExerciseId ? parseInt(prExerciseId, 10) : null;
-        body.pr_weight_lbs = prWeight ? parseFloat(prWeight) : null;
-        body.pr_reps = prReps ? parseInt(prReps, 10) : null;
-      }
-      if (clearWeigh) {
-        body.clear_weigh = true;
-      } else if (weighTarget || weighDirection) {
-        body.weigh_target_lbs = weighTarget ? parseFloat(weighTarget) : null;
-        body.weigh_direction = weighDirection || null;
-      }
       const res = await fetch("/api/member/weekly-goals", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -122,14 +132,74 @@ export default function WeeklyGoalsEditor() {
         setError(json.error ?? "Could not save personal goals");
         return;
       }
-      if (json.personal && weeklyGoals) {
-        setWeeklyGoals({ ...weeklyGoals, personal: json.personal });
-      }
+      await refreshWeeklyGoals();
+      setSavedMessage(successMessage);
     } catch {
       setError("Could not save personal goals");
     } finally {
       setSaving(false);
     }
+  }
+
+  async function savePrGoal() {
+    const exerciseId = prExerciseId ? parseInt(prExerciseId, 10) : NaN;
+    const weight = prWeight ? parseFloat(prWeight) : NaN;
+    const reps = prReps ? parseInt(prReps, 10) : NaN;
+    if (!Number.isFinite(exerciseId) || !Number.isFinite(weight) || !Number.isFinite(reps)) {
+      setError("Lift PR goal needs exercise, weight (lbs), and reps.");
+      return;
+    }
+    await patchPersonalGoals(
+      {
+        pr_exercise_id: exerciseId,
+        pr_weight_lbs: weight,
+        pr_reps: reps,
+      },
+      "Lift goal saved for this week."
+    );
+  }
+
+  async function clearPrGoal() {
+    setPrExerciseId("");
+    setPrWeight("");
+    setPrReps("");
+    setLiftSearch("");
+    await patchPersonalGoals({ clear_pr: true }, "Lift goal cleared.");
+  }
+
+  async function saveWeighGoal() {
+    if (!weighTarget.trim()) {
+      setError("Enter a target weight.");
+      return;
+    }
+    if (!weighDirection) {
+      setError("Choose whether to weigh in at or below / above your target.");
+      return;
+    }
+    const target = parseFloat(weighTarget);
+    if (!Number.isFinite(target) || target <= 0) {
+      setError("Enter a valid target weight.");
+      return;
+    }
+    await patchPersonalGoals(
+      {
+        weigh_target_lbs: target,
+        weigh_direction: weighDirection,
+      },
+      "Weigh-in goal saved for this week."
+    );
+  }
+
+  async function clearWeighGoal() {
+    setWeighTarget("");
+    setWeighDirection("");
+    await patchPersonalGoals({ clear_weigh: true }, "Weigh-in goal cleared.");
+  }
+
+  function formatGoalProgress(metric: GoalMetric | undefined, unit: string): string | null {
+    if (!metric || metric.target <= 0) return null;
+    if (metric.percent != null) return `${metric.hit}/${metric.target} ${unit} (${metric.percent}%)`;
+    return `${metric.hit}/${metric.target} ${unit}`;
   }
 
   return (
@@ -147,9 +217,14 @@ export default function WeeklyGoalsEditor() {
         >
           <h3 className="font-semibold text-stone-800">Workouts</h3>
           <p className="text-sm text-stone-600 mt-1">
-            {weeklyGoals?.workout_days_per_week
-              ? `Goal: ${weeklyGoals.workout_days_per_week} day${weeklyGoals.workout_days_per_week === 1 ? "" : "s"} / week`
-              : "Set how many days/week you want to log workouts"}
+            {weeklyGoals?.workouts_per_week
+              ? `Goal: ${weeklyGoals.workouts_per_week} workout${weeklyGoals.workouts_per_week === 1 ? "" : "s"} / week`
+              : "Set how many workouts/week you want to log"}
+            {formatGoalProgress(weeklyGoals?.workouts, "workouts") ? (
+              <span className="block mt-1 text-stone-500">
+                This week: {formatGoalProgress(weeklyGoals?.workouts, "workouts")}
+              </span>
+            ) : null}
           </p>
           <span className="text-sm text-brand-700 font-medium mt-2 inline-block">Open My Workouts →</span>
         </Link>
@@ -160,6 +235,9 @@ export default function WeeklyGoalsEditor() {
           <h3 className="font-semibold text-stone-800">Macros</h3>
           <p className="text-sm text-stone-600 mt-1">
             {weeklyGoals?.macro_goals_set ? "Daily macro goals are set" : "Set daily calorie + macro targets"}
+            {formatGoalProgress(weeklyGoals?.macros, "days") ? (
+              <span className="block mt-1 text-stone-500">This week: {formatGoalProgress(weeklyGoals?.macros, "days")}</span>
+            ) : null}
           </p>
           <span className="text-sm text-brand-700 font-medium mt-2 inline-block">Open My Macros →</span>
         </Link>
@@ -170,6 +248,9 @@ export default function WeeklyGoalsEditor() {
       ) : (
         <div className="space-y-4 border-t border-stone-200 pt-4">
           <h3 className="font-semibold text-stone-800">Personal goals (this week)</h3>
+          {savedMessage && (
+            <p className="text-sm text-emerald-800 bg-emerald-50 rounded-lg px-3 py-2">{savedMessage}</p>
+          )}
           {error && <p className="text-sm text-red-700 bg-red-50 rounded-lg px-3 py-2">{error}</p>}
 
           <div className="p-4 rounded-lg border border-stone-200 bg-white">
@@ -218,7 +299,7 @@ export default function WeeklyGoalsEditor() {
               <button
                 type="button"
                 disabled={saving}
-                onClick={() => void savePersonalWeeklyGoals()}
+                onClick={() => void savePrGoal()}
                 className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
               >
                 {saving ? "Saving…" : "Save lift goal"}
@@ -227,13 +308,7 @@ export default function WeeklyGoalsEditor() {
                 <button
                   type="button"
                   disabled={saving}
-                  onClick={() => {
-                    setPrExerciseId("");
-                    setPrWeight("");
-                    setPrReps("");
-                    setLiftSearch("");
-                    void savePersonalWeeklyGoals(true, false);
-                  }}
+                  onClick={() => void clearPrGoal()}
                   className="px-3 py-2 rounded-lg border border-stone-300 text-sm text-stone-600 hover:bg-stone-50 disabled:opacity-50"
                 >
                   Clear lift goal
@@ -285,7 +360,7 @@ export default function WeeklyGoalsEditor() {
               <button
                 type="button"
                 disabled={saving}
-                onClick={() => void savePersonalWeeklyGoals()}
+                onClick={() => void saveWeighGoal()}
                 className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
               >
                 {saving ? "Saving…" : "Save weigh-in goal"}
@@ -294,11 +369,7 @@ export default function WeeklyGoalsEditor() {
                 <button
                   type="button"
                   disabled={saving}
-                  onClick={() => {
-                    setWeighTarget("");
-                    setWeighDirection("");
-                    void savePersonalWeeklyGoals(false, true);
-                  }}
+                  onClick={() => void clearWeighGoal()}
                   className="px-3 py-2 rounded-lg border border-stone-300 text-sm text-stone-600 hover:bg-stone-50 disabled:opacity-50"
                 >
                   Clear weigh-in goal

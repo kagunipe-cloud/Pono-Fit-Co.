@@ -87,10 +87,15 @@ export default function MemberWorkoutsPage() {
         }
         return res.ok ? res.json() : null;
       })
-      .then((data: { days_per_week?: number | null } | null) => {
-        const days = typeof data?.days_per_week === "number" ? data.days_per_week : null;
-        setWorkoutGoalDays(days);
-        setWorkoutGoalDraft(days != null ? String(days) : "");
+      .then((data: { workouts_per_week?: number | null; days_per_week?: number | null } | null) => {
+        const count =
+          typeof data?.workouts_per_week === "number"
+            ? data.workouts_per_week
+            : typeof data?.days_per_week === "number"
+              ? data.days_per_week
+              : null;
+        setWorkoutGoalDays(count);
+        setWorkoutGoalDraft(count != null ? String(count) : "");
       })
       .catch(() => {
         setWorkoutGoalDays(null);
@@ -159,9 +164,9 @@ export default function MemberWorkoutsPage() {
   }
 
   async function saveWorkoutGoal() {
-    const days = parseInt(workoutGoalDraft, 10);
-    if (!Number.isFinite(days) || days < 1 || days > 7) {
-      setError("Choose a workout goal from 1 to 7 days per week.");
+    const count = parseInt(workoutGoalDraft, 10);
+    if (!Number.isFinite(count) || count < 1 || count > 14) {
+      setError("Choose a workout goal from 1 to 14 workouts per week.");
       return;
     }
     setError(null);
@@ -170,7 +175,7 @@ export default function MemberWorkoutsPage() {
       const res = await fetch("/api/member/workout-goal", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ days_per_week: days }),
+        body: JSON.stringify({ workouts_per_week: count }),
       });
       if (res.status === 401) {
         router.replace("/login");
@@ -181,8 +186,14 @@ export default function MemberWorkoutsPage() {
         setError(data?.error ?? "Failed to save workout goal");
         return;
       }
-      setWorkoutGoalDays(data.days_per_week ?? days);
-      setWorkoutGoalDraft(String(data.days_per_week ?? days));
+      const saved =
+        typeof data.workouts_per_week === "number"
+          ? data.workouts_per_week
+          : typeof data.days_per_week === "number"
+            ? data.days_per_week
+            : count;
+      setWorkoutGoalDays(saved);
+      setWorkoutGoalDraft(String(saved));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
@@ -282,7 +293,9 @@ export default function MemberWorkoutsPage() {
 
       <div className="mb-6 p-4 rounded-xl border border-brand-100 bg-brand-50/40">
         <h2 className="text-sm font-semibold text-stone-800 mb-1">Set your workout goal</h2>
-        <p className="text-sm text-stone-600 mb-3">How many days/week do you want to log workouts for The Board?</p>
+        <p className="text-sm text-stone-600 mb-3">
+          How many workouts/week do you want to log for The Board? Each finished workout counts — two in one day counts as two.
+        </p>
         <div className="flex flex-wrap items-center gap-2">
           <select
             value={workoutGoalDraft}
@@ -290,10 +303,10 @@ export default function MemberWorkoutsPage() {
             className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-800"
             disabled={workoutGoalSaving}
           >
-            <option value="">Choose days/week</option>
-            {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+            <option value="">Choose workouts/week</option>
+            {Array.from({ length: 14 }, (_, i) => i + 1).map((n) => (
               <option key={n} value={n}>
-                {n} day{n === 1 ? "" : "s"} / week
+                {n} workout{n === 1 ? "" : "s"} / week
               </option>
             ))}
           </select>
@@ -307,7 +320,7 @@ export default function MemberWorkoutsPage() {
           </button>
           {workoutGoalDays != null && (
             <span className="text-sm text-stone-600">
-              Current goal: <span className="font-medium text-stone-800">{workoutGoalDays}</span> day
+              Current goal: <span className="font-medium text-stone-800">{workoutGoalDays}</span> workout
               {workoutGoalDays === 1 ? "" : "s"} / week
             </span>
           )}

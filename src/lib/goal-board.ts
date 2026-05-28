@@ -39,7 +39,7 @@ export type GoalBoardRow = {
   first_name: string | null;
   last_name: string | null;
   display_name: string;
-  workout_goal_days: number | null;
+  workouts_per_week_goal: number | null;
   workouts: GoalMetric;
   macros: GoalMetric;
   personal_goal: GoalMetric | null;
@@ -76,13 +76,18 @@ export function ensureMemberWorkoutGoalsTable(db: Db): void {
   `);
 }
 
-export function normalizeWorkoutGoalDays(raw: unknown): number | null {
+const MAX_WORKOUTS_PER_WEEK_GOAL = 14;
+
+export function normalizeWorkoutsPerWeek(raw: unknown): number | null {
   const n = typeof raw === "number" ? raw : parseInt(String(raw ?? ""), 10);
   if (!Number.isFinite(n)) return null;
-  const days = Math.floor(n);
-  if (days < 1 || days > 7) return null;
-  return days;
+  const count = Math.floor(n);
+  if (count < 1 || count > MAX_WORKOUTS_PER_WEEK_GOAL) return null;
+  return count;
 }
+
+/** @deprecated use normalizeWorkoutsPerWeek */
+export const normalizeWorkoutGoalDays = normalizeWorkoutsPerWeek;
 
 function pct(hit: number, target: number): number | null {
   if (target <= 0) return null;
@@ -105,18 +110,18 @@ export function getMemberWorkoutGoal(db: Db, memberId: string): number | null {
   const row = db
     .prepare("SELECT days_per_week FROM member_workout_goals WHERE member_id = ?")
     .get(memberId) as { days_per_week: number | null } | undefined;
-  return normalizeWorkoutGoalDays(row?.days_per_week);
+  return normalizeWorkoutsPerWeek(row?.days_per_week);
 }
 
-export function setMemberWorkoutGoal(db: Db, memberId: string, daysPerWeek: number): void {
-  const days = normalizeWorkoutGoalDays(daysPerWeek);
-  if (days == null) throw new Error("Workout goal must be 1-7 days per week.");
+export function setMemberWorkoutGoal(db: Db, memberId: string, workoutsPerWeek: number): void {
+  const count = normalizeWorkoutsPerWeek(workoutsPerWeek);
+  if (count == null) throw new Error(`Workout goal must be 1-${MAX_WORKOUTS_PER_WEEK_GOAL} workouts per week.`);
   ensureMemberWorkoutGoalsTable(db);
   db.prepare(
     `INSERT INTO member_workout_goals (member_id, days_per_week, updated_at)
      VALUES (?, ?, datetime('now'))
      ON CONFLICT(member_id) DO UPDATE SET days_per_week = excluded.days_per_week, updated_at = datetime('now')`
-  ).run(memberId, days);
+  ).run(memberId, count);
 }
 
 export function buildGoalBoard(db: Db, tz: string, weekStart?: string, today?: string): GoalBoardPayload {
@@ -148,8 +153,8 @@ export function buildGoalBoard(db: Db, tz: string, weekStart?: string, today?: s
     .prepare("SELECT member_id, days_per_week FROM member_workout_goals")
     .all() as { member_id: string; days_per_week: number | null }[];
   for (const row of workoutGoalRows) {
-    const days = normalizeWorkoutGoalDays(row.days_per_week);
-    if (days != null) workoutGoals.set(row.member_id, days);
+    const count = normalizeWorkoutsPerWeek(row.days_per_week);
+    if (count != null) workoutGoals.set(row.member_id, count);
   }
 
   const macroGoals = new Map<string, MacroGoalRow>();
@@ -162,7 +167,7 @@ export function buildGoalBoard(db: Db, tz: string, weekStart?: string, today?: s
   }
 
   const { fromSql, toSql } = sqlBoundsForWeek(start, end, tz);
-  const workoutDays = new Map<string, Set<string>>();
+  const workoutCounts = new Map<string, number>();
   const workoutRows = db
     .prepare(
       `SELECT member_id, finished_at FROM workouts
@@ -174,9 +179,7 @@ export function buildGoalBoard(db: Db, tz: string, weekStart?: string, today?: s
     if (!memberId || !row.finished_at) continue;
     const ymd = dateStringInAppTz(row.finished_at, tz);
     if (ymd < start || ymd > end) continue;
-    const set = workoutDays.get(memberId) ?? new Set<string>();
-    set.add(ymd);
-    workoutDays.set(memberId, set);
+    workoutCounts.set(memberId, (workoutCounts.get(memberId) ?? 0) + 1);
   }
 
   const macroTotals = new Map<string, Map<string, MacroTotals>>();
@@ -211,7 +214,7 @@ export function buildGoalBoard(db: Db, tz: string, weekStart?: string, today?: s
   const candidates = new Set<string>();
   for (const id of workoutGoals.keys()) candidates.add(id);
   for (const id of macroGoals.keys()) candidates.add(id);
-  for (const id of workoutDays.keys()) candidates.add(id);
+  for (const id of workoutCounts.keys()) candidates.add(id);
   for (const id of macroTotals.keys()) candidates.add(id);
   for (const id of personalGoalsByMember.keys()) candidates.add(id);
 
@@ -221,7 +224,7 @@ export function buildGoalBoard(db: Db, tz: string, weekStart?: string, today?: s
     if (!member) continue;
 
     const workoutGoal = workoutGoals.get(memberId) ?? null;
-    const workoutHit = workoutDays.get(memberId)?.size ?? 0;
+    const workoutHit = workoutCounts.get(memberId) ?? 0;
     const workoutTarget = workoutGoal ?? 0;
     const workoutPercent = workoutGoal ? pct(workoutHit, workoutGoal) : null;
 
@@ -265,7 +268,7 @@ export function buildGoalBoard(db: Db, tz: string, weekStart?: string, today?: s
       first_name: member.first_name,
       last_name: member.last_name,
       display_name: displayName(member),
-      workout_goal_days: workoutGoal,
+      workouts_per_week_goal: workoutGoal,
       workouts: { hit: workoutHit, target: workoutTarget, percent: workoutPercent },
       macros: { hit: macroHit, target: macroTarget, percent: macroPercent },
       personal_goal: personalGoal,
@@ -304,7 +307,7 @@ export function getMemberWeeklyGoalMetrics(
 ): {
   week_start: string;
   week_end: string;
-  workout_days_per_week: number | null;
+  workouts_per_week: number | null;
   macro_goals_set: boolean;
   workouts: GoalMetric;
   macros: GoalMetric;
@@ -330,13 +333,12 @@ export function getMemberWeeklyGoalMetrics(
        WHERE member_id = ? AND finished_at IS NOT NULL AND finished_at >= ? AND finished_at <= ?`
     )
     .all(memberId, fromSql, toSql) as { finished_at: string | null }[];
-  const workoutDays = new Set<string>();
+  let workoutHit = 0;
   for (const row of workoutRows) {
     if (!row.finished_at) continue;
     const ymd = dateStringInAppTz(row.finished_at, tz);
-    if (ymd >= start && ymd <= end) workoutDays.add(ymd);
+    if (ymd >= start && ymd <= end) workoutHit += 1;
   }
-  const workoutHit = workoutDays.size;
   const workoutTarget = workoutGoal ?? 0;
   const workoutPercent = workoutGoal ? pct(workoutHit, workoutGoal) : null;
 
@@ -385,7 +387,7 @@ export function getMemberWeeklyGoalMetrics(
   return {
     week_start: start,
     week_end: end,
-    workout_days_per_week: workoutGoal,
+    workouts_per_week: workoutGoal,
     macro_goals_set: macroGoalsSet,
     workouts: { hit: workoutHit, target: workoutTarget, percent: workoutPercent },
     macros: { hit: macroHit, target: macroTarget, percent: macroPercent },
@@ -441,7 +443,7 @@ export function getMemberGoalBoardPreview(db: Db, memberId: string, tz: string):
       first_name: member.first_name,
       last_name: member.last_name,
       display_name: displayName(member),
-      workout_goal_days: metrics.workout_days_per_week,
+      workouts_per_week_goal: metrics.workouts_per_week,
       workouts: metrics.workouts,
       macros: metrics.macros,
       personal_goal: metrics.personal,

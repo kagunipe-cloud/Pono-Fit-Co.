@@ -21,7 +21,7 @@ export async function GET() {
     const tz = getAppTimezone(db);
     ensureJournalTables(db);
 
-    const workout_days_per_week = getMemberWorkoutGoal(db, memberId);
+    const workouts_per_week = getMemberWorkoutGoal(db, memberId);
     const personal = getMemberWeeklyPersonalGoalProgress(db, memberId, tz);
     const metrics = getMemberWeeklyGoalMetrics(db, memberId, tz);
 
@@ -31,7 +31,8 @@ export async function GET() {
       timezone: tz,
       week_start: metrics.week_start,
       week_end: metrics.week_end,
-      workout_days_per_week,
+      workouts_per_week,
+      workout_days_per_week: workouts_per_week,
       macro_goals_set: metrics.macro_goals_set,
       workouts: metrics.workouts,
       macros: metrics.macros,
