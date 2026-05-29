@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatDateTimeInAppTz } from "@/lib/app-timezone";
@@ -48,6 +48,49 @@ function buildMemberEditForm(m: Record<string, unknown>) {
     emergency_info: String(m.emergency_info ?? ""),
     spirit_animal: String(m.spirit_animal ?? ""),
   };
+}
+
+function formatPtCreditsSummary(balances: Record<number, number> | null): string {
+  if (balances === null) return "Loading…";
+  const entries = Object.entries(balances)
+    .filter(([, n]) => n > 0)
+    .sort(([a], [b]) => Number(a) - Number(b));
+  if (entries.length === 0) return "No credits on file";
+  return entries.map(([mins, n]) => `${n}×${mins}-min`).join(", ");
+}
+
+function AdminCreditSection({
+  title,
+  summary,
+  expanded,
+  onToggle,
+  children,
+}: {
+  title: string;
+  summary: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="py-3 first:pt-0 last:pb-0">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        className="w-full flex items-start gap-2 text-left rounded-lg -mx-1 px-1 py-1 hover:bg-white/60 transition-colors"
+      >
+        <span className="text-stone-400 text-xs mt-1 shrink-0 w-3" aria-hidden>
+          {expanded ? "▼" : "▶"}
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="text-base font-semibold text-stone-800">{title}</span>
+          <span className="block text-sm text-stone-600 mt-0.5">{summary}</span>
+        </span>
+      </button>
+      {expanded ? <div className="mt-3 pl-5 border-t border-stone-200/80 pt-3">{children}</div> : null}
+    </div>
+  );
 }
 
 export default function MemberDetailPage() {
@@ -111,6 +154,9 @@ export default function MemberDetailPage() {
   const [classCreditRemoveNote, setClassCreditRemoveNote] = useState("");
   const [classCreditSubmitting, setClassCreditSubmitting] = useState(false);
   const [classCreditMessage, setClassCreditMessage] = useState<string | null>(null);
+  const [classCreditsExpanded, setClassCreditsExpanded] = useState(false);
+  const [dayPassCreditsExpanded, setDayPassCreditsExpanded] = useState(false);
+  const [ptCreditsExpanded, setPtCreditsExpanded] = useState(false);
   const [sendingWaiver, setSendingWaiver] = useState(false);
   const [sendingPasswordReset, setSendingPasswordReset] = useState(false);
   const [togglingAutoRenew, setTogglingAutoRenew] = useState(false);
@@ -901,15 +947,21 @@ export default function MemberDetailPage() {
       )}
 
       {isAdmin && (
-        <div className="mb-6 p-4 rounded-xl border border-brand-200 bg-brand-50/50 space-y-6">
-          <div>
-            <h2 className="text-base font-semibold text-stone-800 mb-2">Class credits</h2>
+        <div className="mb-6 p-4 rounded-xl border border-brand-200 bg-brand-50/50 divide-y divide-stone-200/80">
+          <AdminCreditSection
+            title="Class credits"
+            summary={
+              classCreditsLeft > 0
+                ? `${classCreditsLeft} credit${classCreditsLeft !== 1 ? "s" : ""} available`
+                : "No credits on file"
+            }
+            expanded={classCreditsExpanded}
+            onToggle={() => setClassCreditsExpanded((v) => !v)}
+          >
             <p className="text-xs text-stone-600 mb-3">
               Balance from class packs and complimentary class credits. Used when booking recurring / open classes with a credit. Grant or remove credits here when needed.
             </p>
-            {classCreditsLeft <= 0 ? (
-              <p className="text-sm text-stone-500 mb-3">No class credits on file.</p>
-            ) : (
+            {classCreditsLeft > 0 ? (
               <div className="rounded-lg border border-stone-200 bg-white/80 px-3 py-2 text-sm text-stone-700 mb-3">
                 <span className="font-medium text-stone-800">Class credits</span>
                 <span className="text-stone-600">
@@ -917,7 +969,7 @@ export default function MemberDetailPage() {
                   — {classCreditsLeft} credit{classCreditsLeft !== 1 ? "s" : ""} available
                 </span>
               </div>
-            )}
+            ) : null}
             <div className="flex flex-wrap items-end gap-3 mb-3">
               <div>
                 <label className="block text-xs font-medium text-stone-500 mb-1">Credits to add</label>
@@ -997,16 +1049,29 @@ export default function MemberDetailPage() {
                 {classCreditMessage}
               </p>
             )}
-          </div>
+          </AdminCreditSection>
 
-          <div className="pt-4 border-t border-stone-200/80">
-            <h2 className="text-base font-semibold text-stone-800 mb-2">Day pass packs</h2>
+          <AdminCreditSection
+            title="Day pass packs"
+            summary={
+              dayPassLeft > 0 || passActiveToday
+                ? [
+                    dayPassLeft > 0
+                      ? `${dayPassLeft} day${dayPassLeft !== 1 ? "s" : ""} banked`
+                      : null,
+                    passActiveToday ? "Active today" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")
+                : "No banked days on file"
+            }
+            expanded={dayPassCreditsExpanded}
+            onToggle={() => setDayPassCreditsExpanded((v) => !v)}
+          >
             <p className="text-xs text-stone-600 mb-3">
               Banked days (same ledger as class/PT credits). Members activate one calendar day at a time from My Membership. Grant or remove credits here when needed.
             </p>
-            {dayPassLeft <= 0 && !passActiveToday ? (
-              <p className="text-sm text-stone-500 mb-3">No banked day passes on file.</p>
-            ) : (
+            {dayPassLeft > 0 || passActiveToday ? (
               <div className="rounded-lg border border-stone-200 bg-white/80 px-3 py-2 text-sm text-stone-700 mb-3">
                 <span className="font-medium text-stone-800">Day pass credits</span>
                 <span className="text-stone-600">
@@ -1020,7 +1085,7 @@ export default function MemberDetailPage() {
                   <span className="block text-xs text-stone-500 mt-0.5">Last activated: {passActivationDay}</span>
                 ) : null}
               </div>
-            )}
+            ) : null}
             <div className="flex flex-wrap items-end gap-3 mb-3">
               <div>
                 <label className="block text-xs font-medium text-stone-500 mb-1">Credits to add</label>
@@ -1100,10 +1165,14 @@ export default function MemberDetailPage() {
                 {dayPassMessage}
               </p>
             )}
-          </div>
+          </AdminCreditSection>
 
-          <div className="pt-4 border-t border-stone-200/80">
-            <h2 className="text-base font-semibold text-stone-800 mb-2">PT credits</h2>
+          <AdminCreditSection
+            title="PT credits"
+            summary={formatPtCreditsSummary(ptCreditBalances)}
+            expanded={ptCreditsExpanded}
+            onToggle={() => setPtCreditsExpanded((v) => !v)}
+          >
             <p className="text-xs text-stone-600 mb-3">
               Balances used when booking PT by session length. Grant or remove one-off credits here (e.g. purchase didn&apos;t record correctly, or a correction is needed).
             </p>
@@ -1231,7 +1300,7 @@ export default function MemberDetailPage() {
                 </div>
               </>
             )}
-          </div>
+          </AdminCreditSection>
         </div>
       )}
 

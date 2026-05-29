@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone, expiryDateSortableSql, ensureMembersAccountDeletedAtColumn } from "../../../lib/db";
 import { formatDateForStorage, todayInAppTz, parseAppDateToYMD, ymdGte } from "../../../lib/app-timezone";
+import { getAutoRenewRecurringMemberIds } from "../../../lib/mrr";
 import { randomUUID } from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -81,6 +82,7 @@ export async function GET(request: NextRequest) {
     const tz = getAppTimezone(db);
     const todayYMD = getTodayYMD(tz);
     const typesMap = getMemberTypesMap(db);
+    const autoRenewRecurringIds = getAutoRenewRecurringMemberIds(db);
 
     const subquery = `(SELECT s.expiry_date FROM subscriptions s WHERE s.member_id = m.member_id AND s.status = 'Active' ORDER BY ${expiryDateSortableSql("s.expiry_date")} DESC LIMIT 1)`;
     let rows: Record<string, unknown>[];
@@ -116,8 +118,9 @@ export async function GET(request: NextRequest) {
       const parsed = parseAppDateToYMD(exp) ?? parseAppDateToYMD(subExp);
       const active = ymdGte(parsed, todayYMD);
       const types = typesMap.get(String(m.member_id)) ?? [];
+      const auto_renew_recurring = autoRenewRecurringIds.has(String(m.member_id));
       const { subscription_expiry, ...rest } = m;
-      return { ...rest, active, types };
+      return { ...rest, active, types, auto_renew_recurring };
     });
 
     db.close();

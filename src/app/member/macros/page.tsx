@@ -57,8 +57,9 @@ export default function MemberMacrosPage() {
   const [goalsEditing, setGoalsEditing] = useState(false);
   const [savingGoals, setSavingGoals] = useState(false);
   const [weekSummary, setWeekSummary] = useState<Record<string, DaySummary> | null>(null);
-  const [currentWeekSummary, setCurrentWeekSummary] = useState<Record<string, DaySummary> | null>(null);
-  const [loadingCurrentWeek, setLoadingCurrentWeek] = useState(true);
+  const [calendarWeekSummary, setCalendarWeekSummary] = useState<Record<string, DaySummary> | null>(null);
+  const [loadingCalendarWeek, setLoadingCalendarWeek] = useState(true);
+  const [weekOffset, setWeekOffset] = useState(0);
   const [weighIns, setWeighIns] = useState<{ date: string; weight: number }[]>([]);
   const [weightChartRange, setWeightChartRange] = useState<"week" | "month" | "3m" | "6m" | "1y">("1y");
   /** Point index whose weight label is shown on hover; last point always shows its label. */
@@ -66,21 +67,22 @@ export default function MemberMacrosPage() {
 
   const today = todayInAppTz(tz);
   const thisWeekMonday = weekStartInAppTz(today, tz);
+  const calendarWeekStart = addDaysToDateStr(thisWeekMonday, weekOffset * 7);
   const weekList = weeks.includes(thisWeekMonday) ? weeks : [thisWeekMonday, ...weeks];
   const historyWeeks = weekList.filter((monday) => monday !== thisWeekMonday);
 
-  const fetchCurrentWeekSummary = useCallback(() => {
-    setLoadingCurrentWeek(true);
-    fetch(`/api/member/journal/days/summary?week=${thisWeekMonday}`)
+  const fetchCalendarWeekSummary = useCallback(() => {
+    setLoadingCalendarWeek(true);
+    fetch(`/api/member/journal/days/summary?week=${calendarWeekStart}`)
       .then((res) => (res.ok ? res.json() : {}))
-      .then((summary: Record<string, DaySummary>) => setCurrentWeekSummary(summary))
-      .catch(() => setCurrentWeekSummary(null))
-      .finally(() => setLoadingCurrentWeek(false));
-  }, [thisWeekMonday]);
+      .then((summary: Record<string, DaySummary>) => setCalendarWeekSummary(summary))
+      .catch(() => setCalendarWeekSummary(null))
+      .finally(() => setLoadingCalendarWeek(false));
+  }, [calendarWeekStart]);
 
   useEffect(() => {
-    fetchCurrentWeekSummary();
-  }, [fetchCurrentWeekSummary]);
+    fetchCalendarWeekSummary();
+  }, [fetchCalendarWeekSummary]);
 
   const fetchWeeks = useCallback(() => {
     fetch("/api/member/journal/weeks")
@@ -124,7 +126,7 @@ export default function MemberMacrosPage() {
         if (r.ok) {
           setGoals(goalsDraft);
           setGoalsEditing(false);
-          fetchCurrentWeekSummary();
+          fetchCalendarWeekSummary();
         }
       })
       .finally(() => setSavingGoals(false));
@@ -143,7 +145,7 @@ export default function MemberMacrosPage() {
           setGoals(cleared);
           setGoalsDraft(cleared);
           setGoalsEditing(false);
-          fetchCurrentWeekSummary();
+          fetchCalendarWeekSummary();
         }
       })
       .finally(() => setSavingGoals(false));
@@ -546,11 +548,14 @@ export default function MemberMacrosPage() {
       </div>
 
       <MacroWeekCalendar
-        weekStart={thisWeekMonday}
+        weekStart={calendarWeekStart}
         today={today}
         tz={tz}
-        summary={currentWeekSummary}
-        loading={loadingCurrentWeek}
+        summary={calendarWeekSummary}
+        loading={loadingCalendarWeek}
+        isCurrentWeek={weekOffset === 0}
+        onPrevWeek={() => setWeekOffset((w) => w - 1)}
+        onNextWeek={() => setWeekOffset((w) => w + 1)}
       />
 
       <h2 className="text-sm font-medium text-stone-500 mb-3">Past weeks</h2>

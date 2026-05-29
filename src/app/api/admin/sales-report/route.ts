@@ -3,6 +3,7 @@ import { getDb } from "../../../../lib/db";
 import { getAdminMemberId } from "../../../../lib/admin";
 import { ensureSaleRetailLinesTable } from "../../../../lib/retail-products";
 import { hasClassCreditLedgerPurchase, hasPtCreditLedgerPurchase } from "../../../../lib/sales-categories";
+import { computeMrrSummary } from "../../../../lib/mrr";
 
 export const dynamic = "force-dynamic";
 
@@ -257,6 +258,8 @@ export async function GET(request: NextRequest) {
       byCategory.push({ category: "Other", count: categoryCounts.Other, revenue: categoryRevenue.Other, netRevenue: categoryNetRevenue.Other });
     }
 
+    const mrrSummary = computeMrrSummary(db);
+
     db.close();
 
     return NextResponse.json({
@@ -265,6 +268,8 @@ export async function GET(request: NextRequest) {
       totalTaxCollected,
       totalNetRevenue,
       byCategory,
+      mrr: mrrSummary.mrr,
+      mrrMemberCount: mrrSummary.memberCount,
       from: hasRange ? from : null,
       to: hasRange ? to : null,
     });

@@ -206,6 +206,104 @@ export function quantityAndMeasurementToAmount(
   return quantity;
 }
 
+/** Step size for journal entry quantity spinners / inputs. */
+export function getEditStepForMeasurement(measurement: string): number {
+  const m = norm(measurement);
+  if (m === "servings" || m === "serving") return 1;
+  if (m === "oz" || m === "ounce") return 1;
+  if (m === "g" || m === "gram") return 1;
+  if (m === "cup") return 0.25;
+  if (m === "tbsp" || m === "tablespoon") return 0.5;
+  if (m === "tsp" || m === "teaspoon") return 0.5;
+  if (m === "ml" || m === "milliliter" || m === "mlt") return 5;
+  if (m === "l" || m === "liter") return 0.1;
+  // Count units: slice, bar, cookie, etc.
+  if (getUnitType(measurement) === "serving") return 1;
+  return 0.25;
+}
+
+/** Format quantity for the edit input (matches diary display units). */
+export function formatEditQuantityInput(quantity: number, measurement: string): string {
+  const m = norm(measurement);
+  if (m === "oz" || m === "ounce") return (Math.round(quantity * 10) / 10).toFixed(1);
+  if (Number.isInteger(quantity) || Math.abs(quantity - Math.round(quantity)) < 0.001) {
+    return String(Math.round(quantity));
+  }
+  return String(Math.round(quantity * 100) / 100);
+}
+
+/**
+ * Derive user-facing quantity + measurement for editing an entry.
+ * Prefers stored quantity/measurement when consistent with internal amount; otherwise mirrors formatPortionLabel.
+ */
+export function entryEditUnits(
+  amount: number,
+  storedQuantity: number | null | undefined,
+  storedMeasurement: string | null | undefined,
+  servingSize: number | null,
+  servingUnit: string | null,
+  servingDescription?: string | null,
+  source?: string | null
+): { quantity: number; measurement: string } {
+  const size = servingSize;
+  const unit = servingUnit;
+
+  if (storedQuantity != null && storedQuantity > 0 && storedMeasurement?.trim()) {
+    const measurement = storedMeasurement.trim();
+    const computed = quantityAndMeasurementToAmount(storedQuantity, measurement, size, unit);
+    if (computed != null && computed > 0 && Math.abs(computed - amount) < 0.05) {
+      return { quantity: storedQuantity, measurement };
+    }
+  }
+
+  if (amount === 1 && servingDescription?.trim()) {
+    return { quantity: 1, measurement: "servings" };
+  }
+  if (amount === 1 && source === "gemini") {
+    return { quantity: 1, measurement: "servings" };
+  }
+
+  if (size == null || size <= 0 || !unit) {
+    return { quantity: amount, measurement: "servings" };
+  }
+
+  const u = norm(unit);
+  const type = getUnitType(unit);
+
+  if (type === "serving") {
+    const singular = u || "serving";
+    return { quantity: amount, measurement: amount === 1 ? singular : singular + "s" };
+  }
+
+  if (type === "weight") {
+    if (u === "g" || u === "gram" || u === "grams" || u === "grm") {
+      const totalOz = amount * size * G_TO_OZ;
+      return { quantity: Math.round(totalOz * 10) / 10, measurement: "oz" };
+    }
+    if (u === "oz" || u === "ounce") {
+      const totalOz = amount * size;
+      return { quantity: Math.round(totalOz * 10) / 10, measurement: "oz" };
+    }
+    if (u === "mg" || u === "milligram") {
+      return { quantity: Math.round(amount * size), measurement: "mg" };
+    }
+  }
+
+  if (type === "volume") {
+    const total = amount * size;
+    if (u === "ml" || u === "milliliter" || u === "mlt") return { quantity: Math.round(total), measurement: "mL" };
+    if (u === "l" || u === "liter") return { quantity: Math.round(total * 100) / 100, measurement: "L" };
+    if (u === "cup") return { quantity: Math.round(total * 100) / 100, measurement: "cup" };
+    if (u === "tablespoon" || u === "tbsp") return { quantity: Math.round(total * 10) / 10, measurement: "tbsp" };
+    if (u === "teaspoon" || u === "tsp") return { quantity: Math.round(total * 10) / 10, measurement: "tsp" };
+    if (u === "oz" || u === "fluid ounce" || u === "fl oz") {
+      return { quantity: Math.round(total * 10) / 10, measurement: "oz" };
+    }
+  }
+
+  return { quantity: amount, measurement: "servings" };
+}
+
 /** Format a display label for portion (e.g. " — 50 g" or " × 2 serving(s)"). */
 export function formatPortionLabel(
   amount: number,

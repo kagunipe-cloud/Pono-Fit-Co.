@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { formatDateForDisplay, todayInAppTz } from "@/lib/app-timezone";
 import { useAppTimezone } from "@/lib/settings-context";
-import { getUnitType, MEASUREMENT_OPTIONS, getServingMeasurementOptions, formatPortionLabel, formatServingForDisplay, unitToGrams } from "@/lib/food-units";
+import { getUnitType, MEASUREMENT_OPTIONS, getServingMeasurementOptions, formatPortionLabel, formatServingForDisplay, unitToGrams, entryEditUnits, formatEditQuantityInput, getEditStepForMeasurement } from "@/lib/food-units";
 import { validateMacros } from "@/lib/food-quality";
 
 const CameraBarcodeScanner = lazy(() => import("@/components/CameraBarcodeScanner"));
@@ -354,7 +354,8 @@ export default function MemberMacrosDayPage() {
   const [addMeasurement, setAddMeasurement] = useState<string>("servings");
   const [addingEntry, setAddingEntry] = useState(false);
   const [editEntryId, setEditEntryId] = useState<number | null>(null);
-  const [editAmount, setEditAmount] = useState("");
+  const [editQuantity, setEditQuantity] = useState("");
+  const [editMeasurement, setEditMeasurement] = useState("servings");
   const [savingFavorite, setSavingFavorite] = useState(false);
   const [saveFavName, setSaveFavName] = useState("");
   const [saveFavFromEntry, setSaveFavFromEntry] = useState<{ food_id: number; amount: number } | null>(null);
@@ -997,17 +998,33 @@ export default function MemberMacrosDayPage() {
   }
 
   async function handleUpdateEntryAmount(entryId: number) {
-    const amount = parseFloat(editAmount);
-    if (Number.isNaN(amount) || amount <= 0) return;
+    const quantity = parseFloat(editQuantity);
+    if (Number.isNaN(quantity) || quantity <= 0) return;
     const res = await fetch(`/api/member/journal/entries/${entryId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount }),
+      body: JSON.stringify({ quantity, measurement: editMeasurement }),
     });
     if (res.ok) {
       setEditEntryId(null);
       fetchDay();
     }
+  }
+
+  function startEditEntry(e: Entry) {
+    const f = e.food;
+    const { quantity, measurement } = entryEditUnits(
+      e.amount,
+      e.quantity,
+      e.measurement,
+      f?.serving_size ?? null,
+      f?.serving_size_unit ?? null,
+      f?.serving_description ?? null,
+      f?.source
+    );
+    setEditEntryId(e.id);
+    setEditQuantity(formatEditQuantityInput(quantity, measurement));
+    setEditMeasurement(measurement);
   }
 
   async function handleDeleteEntry(entryId: number) {
@@ -1226,60 +1243,6 @@ export default function MemberMacrosDayPage() {
         )}
       </div>
 
-      {board && (
-        <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-white">
-          <h3 className="font-semibold text-stone-800 mb-1">The Board — weekly macros</h3>
-          {!board.goals_configured ? (
-            <p className="text-sm text-stone-600">
-              Set daily calorie + protein/fat/carb % goals on{" "}
-              <Link href="/member/macros" className="font-medium text-brand-700 hover:underline">
-                My Macros
-              </Link>{" "}
-              for this day to score. (Weight goal alone doesn&apos;t count.)
-            </p>
-          ) : !board.countable ? (
-            <p className="text-sm text-stone-600">
-              Today&apos;s log scores after midnight, or tap <strong>Finish today&apos;s log</strong> below when you&apos;re done eating.
-            </p>
-          ) : board.hit ? (
-            <p className="text-sm font-medium text-emerald-700">Counts for The Board this week ✓</p>
-          ) : (
-            <p className="text-sm text-amber-800">
-              Logged, but outside {board.tolerance_percent}% on: {board.miss_reasons.join(", ")}.
-            </p>
-          )}
-          {isToday && board.goals_configured && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {!board.finished ? (
-                <button
-                  type="button"
-                  disabled={finishSaving || dayTotal.cal <= 0}
-                  onClick={() => void setMacroLogFinished(true)}
-                  className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
-                >
-                  {finishSaving ? "Saving…" : "Finish today's log"}
-                </button>
-              ) : (
-                <>
-                  <span className="text-sm text-emerald-700 font-medium self-center">Finished for today ✓</span>
-                  <button
-                    type="button"
-                    disabled={finishSaving}
-                    onClick={() => void setMacroLogFinished(false)}
-                    className="px-3 py-2 rounded-lg border border-stone-300 text-sm text-stone-600 hover:bg-stone-50 disabled:opacity-50"
-                  >
-                    Reopen log
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-          {!isToday && board.countable && (
-            <p className="mt-2 text-xs text-stone-500">Past days lock at midnight gym time — no finish button needed.</p>
-          )}
-        </div>
-      )}
-
       {!day ? (
         <p className="text-stone-500">Creating your journal…</p>
       ) : (
@@ -1338,52 +1301,79 @@ export default function MemberMacrosDayPage() {
                       </button>
                     </div>
                   </div>
-                  <ul className="space-y-1 text-sm text-stone-600">
-                    {meal.entries.map((e) => (
-                      <li key={e.id} className="flex items-center justify-between gap-2">
-                        {editEntryId === e.id ? (
-                          <span className="flex flex-col gap-1">
-                            <span className="flex items-center gap-2">
-                              <input
-                                type="number"
-                                step="0.25"
-                                value={editAmount}
-                                onChange={(ev) => setEditAmount(ev.target.value)}
-                                className="w-20 px-2 py-1 border rounded"
-                              />
-                              <button type="button" onClick={() => handleUpdateEntryAmount(e.id)} className="text-brand-600 text-sm font-medium">Save</button>
-                              <button type="button" onClick={() => setEditEntryId(null)} className="text-stone-400 text-sm">Cancel</button>
+                  <ul className="space-y-2 text-sm text-stone-600">
+                    {meal.entries.map((e) => {
+                      const entryName = capitalizeWords(e.food?.name ?? "") || "—";
+                      const macrosText = (() => {
+                        const m = entryMacros(e);
+                        return `${Math.round(m.cal)} cal · P ${m.p.toFixed(0)}g · F ${m.f.toFixed(0)}g · C ${m.c.toFixed(0)}g${m.fiber > 0 ? ` · Fiber ${m.fiber.toFixed(0)}g` : ""}`;
+                      })();
+                      const isEditing = editEntryId === e.id;
+
+                      return (
+                        <li key={e.id} className="flex flex-col gap-1.5">
+                          {isEditing ? (
+                            <div className="flex flex-col gap-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <input
+                                  type="number"
+                                  step={getEditStepForMeasurement(editMeasurement)}
+                                  min={getEditStepForMeasurement(editMeasurement)}
+                                  value={editQuantity}
+                                  onChange={(ev) => setEditQuantity(ev.target.value)}
+                                  className="w-24 px-2 py-1 border rounded"
+                                />
+                                <span className="text-sm text-stone-600">{formatMeasurementLabel(editMeasurement)}</span>
+                                <button type="button" onClick={() => handleUpdateEntryAmount(e.id)} className="text-brand-600 text-sm font-medium">
+                                  Save
+                                </button>
+                                <button type="button" onClick={() => setEditEntryId(null)} className="text-stone-400 text-sm">
+                                  Cancel
+                                </button>
+                              </div>
+                              {e.amount === 1 && e.food?.serving_description?.trim() && (
+                                <span className="text-xs text-stone-400">
+                                  1 = full portion ({e.food.serving_description.trim()}). Use 2 only to add another same portion.
+                                </span>
+                              )}
+                            </div>
+                          ) : null}
+                          <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
+                            <span>
+                              {entryName}
+                              {entryPortionLabel(e)}
                             </span>
-                            {e.amount === 1 && e.food?.serving_description?.trim() && (
-                              <span className="text-xs text-stone-400">1 = full portion ({e.food.serving_description.trim()}). Use 2 only to add another same portion.</span>
-                            )}
-                          </span>
-                        ) : (
-                          <>
-                            <span>{capitalizeWords(e.food?.name ?? "") || "—"}{entryPortionLabel(e)}</span>
-                            <span className="text-stone-400 text-xs">
-                              {(() => {
-                                const m = entryMacros(e);
-                                return `${Math.round(m.cal)} cal · P ${m.p.toFixed(0)}g · F ${m.f.toFixed(0)}g · C ${m.c.toFixed(0)}g${m.fiber > 0 ? ` · Fiber ${m.fiber.toFixed(0)}g` : ""}`;
-                              })()}
-                            </span>
-                            <span className="flex gap-1">
-                              <button type="button" onClick={() => { setEditEntryId(e.id); setEditAmount(String(e.amount)); }} className="text-stone-500 hover:underline text-sm font-medium">Edit</button>
-                              <button type="button" onClick={() => handleDeleteEntry(e.id)} className="text-red-500 hover:underline text-sm font-medium">Delete</button>
-                              {e.food && (
+                            <span className="text-stone-400 text-xs">{macrosText}</span>
+                            {!isEditing ? (
+                              <span className="flex gap-1 w-full sm:w-auto sm:ml-auto">
                                 <button
                                   type="button"
-                                  onClick={() => { setSaveFavFromEntry({ food_id: e.food!.id, amount: e.amount }); setSaveFavName(e.food!.name); }}
-                                  className="text-brand-600 hover:underline text-sm font-medium"
+                                  onClick={() => startEditEntry(e)}
+                                  className="text-stone-500 hover:underline text-sm font-medium"
                                 >
-                                  Save to Favorites
+                                  Edit
                                 </button>
-                              )}
-                            </span>
-                          </>
-                        )}
-                      </li>
-                    ))}
+                                <button type="button" onClick={() => handleDeleteEntry(e.id)} className="text-red-500 hover:underline text-sm font-medium">
+                                  Delete
+                                </button>
+                                {e.food && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSaveFavFromEntry({ food_id: e.food!.id, amount: e.amount });
+                                      setSaveFavName(e.food!.name);
+                                    }}
+                                    className="text-brand-600 hover:underline text-sm font-medium"
+                                  >
+                                    Save to Favorites
+                                  </button>
+                                )}
+                              </span>
+                            ) : null}
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ul>
                   <div className="mt-2 pt-2 border-t border-stone-100 text-xs font-medium text-stone-500">
                     Meal total: {Math.round(mealMacros.cal)} cal · P {mealMacros.p.toFixed(0)}g · F {mealMacros.f.toFixed(0)}g · C {mealMacros.c.toFixed(0)}g{mealMacros.fiber > 0 ? ` · Fiber ${mealMacros.fiber.toFixed(0)}g` : ""}
@@ -1399,6 +1389,59 @@ export default function MemberMacrosDayPage() {
               );
             })}
           </div>
+
+          {board && (
+            <div className="mb-6 p-4 rounded-xl border border-stone-200 bg-white">
+              {isToday && board.goals_configured && (
+                <div className="flex flex-wrap gap-2">
+                  {!board.finished ? (
+                    <button
+                      type="button"
+                      disabled={finishSaving || dayTotal.cal <= 0}
+                      onClick={() => void setMacroLogFinished(true)}
+                      className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+                    >
+                      {finishSaving ? "Saving…" : "Finish today's log"}
+                    </button>
+                  ) : (
+                    <>
+                      <span className="text-sm text-emerald-700 font-medium self-center">Finished for today ✓</span>
+                      <button
+                        type="button"
+                        disabled={finishSaving}
+                        onClick={() => void setMacroLogFinished(false)}
+                        className="px-3 py-2 rounded-lg border border-stone-300 text-sm text-stone-600 hover:bg-stone-50 disabled:opacity-50"
+                      >
+                        Reopen log
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+              {!board.goals_configured ? (
+                <p className="text-sm text-stone-600">
+                  Set daily calorie + protein/fat/carb % goals on{" "}
+                  <Link href="/member/macros" className="font-medium text-brand-700 hover:underline">
+                    My Macros
+                  </Link>{" "}
+                  for this day to score. (Weight goal alone doesn&apos;t count.)
+                </p>
+              ) : !board.countable ? (
+                <p className="text-sm text-stone-600 mt-3">
+                  Today&apos;s log scores after midnight, or tap <strong>Finish today&apos;s log</strong> when you&apos;re done eating.
+                </p>
+              ) : board.hit ? (
+                <p className="text-sm font-medium text-emerald-700 mt-3">Counts for The Board this week ✓</p>
+              ) : (
+                <p className="text-sm text-amber-800 mt-3">
+                  Logged, but outside {board.tolerance_percent}% on: {board.miss_reasons.join(", ")}.
+                </p>
+              )}
+              {!isToday && board.countable && (
+                <p className="mt-2 text-xs text-stone-500">Past days lock at midnight gym time — no finish button needed.</p>
+              )}
+            </div>
+          )}
 
           {/* Today's progress: Pono plate trackers */}
           {(goals.calories_goal != null && goals.calories_goal > 0) && (() => {

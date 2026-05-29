@@ -120,28 +120,36 @@ export function GoalBoardRowView({
   row,
   index,
   compact = false,
+  hideName = false,
 }: {
   row: GoalBoardRowData;
   index: number;
   compact?: boolean;
+  hideName?: boolean;
 }) {
   const dark = index % 2 === 1;
   const rankLabel = row.rank > 0 ? `${row.rank}.` : "—";
   const paddingClass = compact ? "px-3 py-4 sm:px-4" : "px-5 py-7";
   const nameClass = compact ? "text-base sm:text-lg" : "text-lg";
-  const gridClass = compact
-    ? "grid grid-cols-[minmax(5rem,1fr)_repeat(4,minmax(3.25rem,0.75fr))] items-center gap-2 sm:gap-3"
-    : "grid grid-cols-[minmax(8rem,1.2fr)_repeat(4,minmax(4.5rem,0.8fr))] items-center gap-4";
+  const gridClass = hideName
+    ? compact
+      ? "grid grid-cols-2 sm:grid-cols-4 items-center justify-items-center gap-3 sm:gap-4"
+      : "grid grid-cols-2 sm:grid-cols-4 items-center justify-items-center gap-6"
+    : compact
+      ? "grid grid-cols-[minmax(5rem,1fr)_repeat(4,minmax(3.25rem,0.75fr))] items-center gap-2 sm:gap-3"
+      : "grid grid-cols-[minmax(8rem,1.2fr)_repeat(4,minmax(4.5rem,0.8fr))] items-center gap-4";
 
   return (
     <div className={`${dark ? "bg-black text-[#9ef6b2]" : "bg-[#9ef6b2] text-stone-950"} ${paddingClass}`}>
       <div className={gridClass}>
-        <div className="min-w-0">
-          <div className="flex items-baseline gap-1.5 sm:gap-2">
-            <span className={`${nameClass} font-black`}>{rankLabel}</span>
-            <span className={`truncate ${nameClass} font-black uppercase tracking-wide`}>{row.display_name}</span>
+        {!hideName ? (
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-1.5 sm:gap-2">
+              <span className={`${nameClass} font-black`}>{rankLabel}</span>
+              <span className={`truncate ${nameClass} font-black uppercase tracking-wide`}>{row.display_name}</span>
+            </div>
           </div>
-        </div>
+        ) : null}
         <GoalBoardProgressRing
           label="Workouts"
           value={row.workouts.percent}

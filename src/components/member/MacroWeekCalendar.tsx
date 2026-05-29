@@ -22,6 +22,9 @@ type MacroWeekCalendarProps = {
   tz: string;
   summary: Record<string, MacroDaySummary> | null;
   loading?: boolean;
+  isCurrentWeek?: boolean;
+  onPrevWeek?: () => void;
+  onNextWeek?: () => void;
 };
 
 function weekDates(weekStart: string): string[] {
@@ -34,17 +37,40 @@ export default function MacroWeekCalendar({
   tz,
   summary,
   loading = false,
+  isCurrentWeek = true,
+  onPrevWeek,
+  onNextWeek,
 }: MacroWeekCalendarProps) {
   const dates = weekDates(weekStart);
   const weekEnd = dates[6]!;
 
   return (
     <div className="mb-8 p-4 rounded-xl border-2 border-brand-200 bg-gradient-to-br from-brand-50/80 to-white shadow-sm">
-      <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
-        <h2 className="font-semibold text-stone-800">This board week</h2>
-        <p className="text-xs text-stone-500">
-          {formatDateForDisplay(weekStart, tz)} – {formatDateForDisplay(weekEnd, tz)}
-        </p>
+      <div className="flex items-center gap-2 mb-3">
+        <button
+          type="button"
+          onClick={onPrevWeek}
+          disabled={!onPrevWeek}
+          aria-label="Previous week"
+          className="shrink-0 flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+        >
+          ←
+        </button>
+        <div className="flex-1 min-w-0 text-center">
+          <h2 className="font-semibold text-stone-800">{isCurrentWeek ? "This week" : "Week"}</h2>
+          <p className="text-xs text-stone-500">
+            {formatDateForDisplay(weekStart, tz)} – {formatDateForDisplay(weekEnd, tz)}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onNextWeek}
+          disabled={!onNextWeek}
+          aria-label="Next week"
+          className="shrink-0 flex h-9 w-9 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-800 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+        >
+          →
+        </button>
       </div>
       <p className="text-xs text-stone-500 mb-4">
         Tap a day to open your journal. Hit your macros (within 15%) and earn a shaka on The Board.
@@ -68,7 +94,7 @@ export default function MacroWeekCalendar({
             const cellClass = [
               "flex flex-col items-center justify-center rounded-xl border min-h-[4.5rem] sm:min-h-[5.25rem] p-1.5 transition-colors",
               isToday ? "border-brand-500 bg-white ring-2 ring-brand-200" : "border-stone-200 bg-white",
-              isFuture ? "opacity-55" : "hover:border-brand-300 hover:bg-brand-50/50",
+              isFuture && !isToday ? "border-dashed border-brand-200/80 hover:border-brand-400 hover:bg-brand-50/60" : "hover:border-brand-300 hover:bg-brand-50/50",
             ].join(" ");
 
             const inner = (
@@ -84,7 +110,15 @@ export default function MacroWeekCalendar({
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src="/shaka.svg" alt="Macros hit" className="h-7 w-7 sm:h-8 sm:w-8 object-contain" />
                   ) : isFuture ? (
-                    <span className="text-[0.6rem] text-stone-400">—</span>
+                    hasLog ? (
+                      <span className="text-[0.55rem] sm:text-[0.6rem] text-stone-500 text-center leading-tight px-0.5">
+                        {Math.round(day!.cal).toLocaleString()} cal
+                      </span>
+                    ) : (
+                      <span className="text-[0.55rem] sm:text-[0.6rem] text-brand-700 text-center leading-tight px-0.5 font-semibold">
+                        Start planning!
+                      </span>
+                    )
                   ) : !goalsSet ? (
                     <span className="text-[0.55rem] sm:text-[0.6rem] text-stone-400 text-center leading-tight px-0.5">
                       Set goals

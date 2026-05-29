@@ -5,6 +5,7 @@ import Link from "next/link";
 import { formatDateForDisplay } from "@/lib/app-timezone";
 
 export type MemberType = "Monthly" | "Day pass" | "Week pass" | "Class client" | "PT client";
+type MemberTypeFilter = MemberType | "Monthly recurring";
 
 type Member = {
   id: number;
@@ -17,9 +18,11 @@ type Member = {
   exp_next_payment_date: string | null;
   active: boolean;
   types: MemberType[];
+  auto_renew_recurring?: boolean;
 };
 
 const MEMBER_TYPES: MemberType[] = ["Monthly", "Day pass", "Week pass", "Class client", "PT client"];
+const TYPE_FILTERS: MemberTypeFilter[] = [...MEMBER_TYPES, "Monthly recurring"];
 
 type SortKey = "name" | "email" | "type" | "role" | "join_date" | "renewal" | "member_id";
 
@@ -85,7 +88,7 @@ export default function MembersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | "active" | "inactive">("all");
-  const [typeFilter, setTypeFilter] = useState<MemberType | null>(null);
+  const [typeFilter, setTypeFilter] = useState<MemberTypeFilter | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
     key: "name",
     dir: "asc",
@@ -123,7 +126,8 @@ export default function MembersPage() {
     let list = members;
     if (activeFilter === "active") list = list.filter((m) => m.active);
     if (activeFilter === "inactive") list = list.filter((m) => !m.active);
-    if (typeFilter) list = list.filter((m) => m.types?.includes(typeFilter));
+    if (typeFilter === "Monthly recurring") list = list.filter((m) => m.auto_renew_recurring);
+    else if (typeFilter) list = list.filter((m) => m.types?.includes(typeFilter));
     return list;
   }, [members, activeFilter, typeFilter]);
 
@@ -220,7 +224,7 @@ export default function MembersPage() {
             >
               All types
             </button>
-            {MEMBER_TYPES.map((t) => (
+            {TYPE_FILTERS.map((t) => (
               <button
                 key={t}
                 type="button"

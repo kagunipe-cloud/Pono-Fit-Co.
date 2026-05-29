@@ -21,6 +21,8 @@ type Report = {
   totalTaxCollected?: number;
   totalNetRevenue?: number;
   byCategory: CategoryRow[];
+  mrr?: number;
+  mrrMemberCount?: number;
   from: string | null;
   to: string | null;
 } | null;
@@ -271,7 +273,7 @@ export default function SalesPage() {
         <p className="p-6 text-stone-500">Could not load report.</p>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
             <div className="rounded-xl border border-stone-200 bg-white p-4">
               <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Transactions</p>
               <p className="text-2xl font-bold text-stone-800 mt-1">{report.totalCount}</p>
@@ -287,6 +289,22 @@ export default function SalesPage() {
             <div className="rounded-xl border border-stone-200 bg-white p-4">
               <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Net revenue</p>
               <p className="text-2xl font-bold text-stone-800 mt-1">{formatMoney(report.totalNetRevenue ?? report.totalRevenue - (report.totalTaxCollected ?? 0))}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+            <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-4">
+              <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Monthly recurring revenue (MRR)</p>
+              <p className="text-2xl font-bold text-stone-800 mt-1">{formatMoney(report.mrr ?? 0)}</p>
+              <p className="text-xs text-stone-500 mt-1.5">
+                Active auto-renew members with billable plans, normalized to monthly (includes negotiated renewal pricing).
+              </p>
+            </div>
+            <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-4">
+              <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Auto-renew members</p>
+              <p className="text-2xl font-bold text-stone-800 mt-1">{report.mrrMemberCount ?? 0}</p>
+              <p className="text-xs text-stone-500 mt-1.5">
+                Members contributing to MRR (non-zero recurring price, excludes complimentary / paused / pass packs).
+              </p>
             </div>
           </div>
           <div className="rounded-xl border border-stone-200 bg-white overflow-x-auto">

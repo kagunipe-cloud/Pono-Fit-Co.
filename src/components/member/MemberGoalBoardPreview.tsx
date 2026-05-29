@@ -101,7 +101,7 @@ export default function MemberGoalBoardPreview() {
       <WeeklyGoalsHeader weekStart={week_start} weekEnd={week_end} rank={row.rank} totalRanked={total_ranked} />
 
       <div className="relative">
-        <GoalBoardRowView row={row} index={0} compact />
+        <GoalBoardRowView row={row} index={0} compact hideName />
         <div
           className="pointer-events-none absolute inset-0 bg-stone-950/10"
           aria-hidden
