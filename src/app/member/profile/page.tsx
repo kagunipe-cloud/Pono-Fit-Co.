@@ -125,7 +125,11 @@ export default function MemberProfilePage() {
         setError(json.error ?? "Save failed.");
         return;
       }
-      setSuccess("Profile saved.");
+      setSuccess(
+        typeof json.kisi_sync_warning === "string"
+          ? `Profile saved. ${json.kisi_sync_warning}`
+          : "Profile saved."
+      );
       window.dispatchEvent(new Event("member-me-refresh"));
       router.refresh();
     } catch {
@@ -299,7 +303,7 @@ export default function MemberProfilePage() {
           <h2 className="text-sm font-semibold text-stone-800 mb-3">Name &amp; contact</h2>
           <p className="text-xs text-stone-500 mb-4">
             <span className="text-stone-700 font-medium">Required:</span> first name, last name, and email only.
-            All other fields on this page are optional. Your email is your login; we also use it for receipts and reminders.
+            All other fields on this page are optional. Your email is your login; we also use it for receipts, reminders, and door access.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm">

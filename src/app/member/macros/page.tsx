@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatDateForDisplay, formatInAppTz, formatWeekdayShortInAppTz, todayInAppTz, weekStartInAppTz } from "@/lib/app-timezone";
+import { formatDateForDisplay, formatInAppTz, formatWeekdayShortInAppTz, todayInAppTz, weekStartInAppTz, addDaysToDateStr } from "@/lib/app-timezone";
 import { useAppTimezone } from "@/lib/settings-context";
+import MacroWeekCalendar, { type MacroDaySummary } from "@/components/member/MacroWeekCalendar";
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -19,7 +20,7 @@ function useIsMobile() {
 
 type JournalDay = { id: number; member_id: string; date: string; created_at: string };
 type MacroGoals = { calories_goal: number | null; protein_pct: number | null; fat_pct: number | null; carbs_pct: number | null; weight_goal: number | null; fiber_goal: number | null };
-type DaySummary = { cal: number; p: number; f: number; c: number };
+type DaySummary = MacroDaySummary;
 
 function weekLabel(monday: string, tz: string): string {
   const d = new Date(monday + "T12:00:00Z");
@@ -56,14 +57,30 @@ export default function MemberMacrosPage() {
   const [goalsEditing, setGoalsEditing] = useState(false);
   const [savingGoals, setSavingGoals] = useState(false);
   const [weekSummary, setWeekSummary] = useState<Record<string, DaySummary> | null>(null);
+  const [currentWeekSummary, setCurrentWeekSummary] = useState<Record<string, DaySummary> | null>(null);
+  const [loadingCurrentWeek, setLoadingCurrentWeek] = useState(true);
   const [weighIns, setWeighIns] = useState<{ date: string; weight: number }[]>([]);
   const [weightChartRange, setWeightChartRange] = useState<"week" | "month" | "3m" | "6m" | "1y">("1y");
   /** Point index whose weight label is shown on hover; last point always shows its label. */
   const [weightChartHoverIndex, setWeightChartHoverIndex] = useState<number | null>(null);
 
   const today = todayInAppTz(tz);
-  const thisWeekMonday = weekStartInAppTz(today);
+  const thisWeekMonday = weekStartInAppTz(today, tz);
   const weekList = weeks.includes(thisWeekMonday) ? weeks : [thisWeekMonday, ...weeks];
+  const historyWeeks = weekList.filter((monday) => monday !== thisWeekMonday);
+
+  const fetchCurrentWeekSummary = useCallback(() => {
+    setLoadingCurrentWeek(true);
+    fetch(`/api/member/journal/days/summary?week=${thisWeekMonday}`)
+      .then((res) => (res.ok ? res.json() : {}))
+      .then((summary: Record<string, DaySummary>) => setCurrentWeekSummary(summary))
+      .catch(() => setCurrentWeekSummary(null))
+      .finally(() => setLoadingCurrentWeek(false));
+  }, [thisWeekMonday]);
+
+  useEffect(() => {
+    fetchCurrentWeekSummary();
+  }, [fetchCurrentWeekSummary]);
 
   const fetchWeeks = useCallback(() => {
     fetch("/api/member/journal/weeks")
@@ -107,6 +124,7 @@ export default function MemberMacrosPage() {
         if (r.ok) {
           setGoals(goalsDraft);
           setGoalsEditing(false);
+          fetchCurrentWeekSummary();
         }
       })
       .finally(() => setSavingGoals(false));
@@ -125,6 +143,7 @@ export default function MemberMacrosPage() {
           setGoals(cleared);
           setGoalsDraft(cleared);
           setGoalsEditing(false);
+          fetchCurrentWeekSummary();
         }
       })
       .finally(() => setSavingGoals(false));
@@ -526,12 +545,20 @@ export default function MemberMacrosPage() {
         </Link>
       </div>
 
-      <h2 className="text-sm font-medium text-stone-500 mb-3">Weeks</h2>
-      {weekList.length === 0 ? (
+      <MacroWeekCalendar
+        weekStart={thisWeekMonday}
+        today={today}
+        tz={tz}
+        summary={currentWeekSummary}
+        loading={loadingCurrentWeek}
+      />
+
+      <h2 className="text-sm font-medium text-stone-500 mb-3">Past weeks</h2>
+      {historyWeeks.length === 0 ? (
         <p className="text-stone-500">Open today&apos;s journal and add a meal to get started.</p>
       ) : (
         <ul className="space-y-4">
-          {weekList.map((monday) => (
+          {historyWeeks.map((monday) => (
             <li key={monday}>
               <button
                 type="button"
@@ -539,19 +566,11 @@ export default function MemberMacrosPage() {
                 className="w-full text-left p-4 rounded-xl border border-stone-200 bg-white hover:bg-stone-50"
               >
                 <span className="font-medium text-stone-800">{weekLabel(monday, tz)}</span>
-                {monday === thisWeekMonday && (
-                  <span className="ml-2 text-xs font-medium text-brand-600">This week</span>
-                )}
               </button>
               {selectedWeek === monday && (
                 <>
                   {weekSummary && (() => {
-                    const weekDays: string[] = [];
-                    for (let i = 0; i < 7; i++) {
-                      const d = new Date(monday + "T12:00:00Z");
-                      d.setUTCDate(d.getUTCDate() + i);
-                      weekDays.push(d.toISOString().slice(0, 10));
-                    }
+                    const weekDays = Array.from({ length: 7 }, (_, i) => addDaysToDateStr(monday, i));
                     const pastAndToday = weekDays.filter((d) => d <= today);
                     const totals = pastAndToday.reduce((acc, d) => {
                       const s = weekSummary[d];
@@ -586,12 +605,7 @@ export default function MemberMacrosPage() {
                       (() => {
                         const days = daysByWeek[monday] ?? [];
                         const daySet = new Set(days.map((d) => d.date));
-                        const weekDays: string[] = [];
-                        for (let i = 0; i < 7; i++) {
-                          const d = new Date(monday + "T12:00:00Z");
-                          d.setUTCDate(d.getUTCDate() + i);
-                          weekDays.push(d.toISOString().slice(0, 10));
-                        }
+                        const weekDays = Array.from({ length: 7 }, (_, i) => addDaysToDateStr(monday, i));
                         const pastAndToday = weekDays.filter((d) => d <= today);
                         return pastAndToday.map((date) => {
                           const s = weekSummary?.[date];

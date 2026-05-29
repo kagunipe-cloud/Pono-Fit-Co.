@@ -10,6 +10,7 @@ import {
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { stripeCustomerIdForApi } from "../../../../lib/stripe-customer";
 import { parseBirthday } from "../../../../lib/member-birthday";
+import { ensureKisiUser, updateKisiUser } from "../../../../lib/kisi";
 
 export const dynamic = "force-dynamic";
 
@@ -142,8 +143,14 @@ export async function PATCH(request: NextRequest) {
     ensureMembersStripeColumn(db);
 
     const existing = db.prepare(
-      "SELECT email, stripe_customer_id FROM members WHERE member_id = ?"
-    ).get(memberId) as { email: string | null; stripe_customer_id: string | null } | undefined;
+      "SELECT email, stripe_customer_id, kisi_id, first_name, last_name FROM members WHERE member_id = ?"
+    ).get(memberId) as {
+      email: string | null;
+      stripe_customer_id: string | null;
+      kisi_id: string | null;
+      first_name: string | null;
+      last_name: string | null;
+    } | undefined;
     if (!existing) {
       db.close();
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
@@ -159,6 +166,11 @@ export async function PATCH(request: NextRequest) {
 
     const prevEmail = (existing.email ?? "").trim().toLowerCase();
     const emailChanged = prevEmail !== email;
+    const prevFirst = (existing.first_name ?? "").trim();
+    const prevLast = (existing.last_name ?? "").trim();
+    const nameChanged = prevFirst !== first_name || prevLast !== last_name;
+    const kisiEmail = emailRaw.trim();
+    const kisiName = [first_name, last_name].filter(Boolean).join(" ").trim() || undefined;
 
     db.prepare(
       `UPDATE members SET
@@ -170,7 +182,7 @@ export async function PATCH(request: NextRequest) {
       first_name,
       last_name,
       preferred_name || null,
-      emailRaw.trim(),
+      kisiEmail,
       phone || null,
       emergency_contact_name || null,
       emergency_contact_phone || null,
@@ -181,6 +193,24 @@ export async function PATCH(request: NextRequest) {
       mailing_address || null,
       memberId
     );
+
+    let kisiSyncWarning: string | undefined;
+    if (emailChanged || nameChanged) {
+      try {
+        const kisiId = existing.kisi_id?.trim();
+        if (kisiId) {
+          await updateKisiUser(kisiId, { email: kisiEmail, name: kisiName });
+        } else {
+          const newKisiId = await ensureKisiUser(kisiEmail, kisiName);
+          db.prepare("UPDATE members SET kisi_id = ? WHERE member_id = ?").run(newKisiId, memberId);
+        }
+      } catch (e) {
+        console.error("[member profile] Kisi sync failed:", e);
+        kisiSyncWarning =
+          "Profile saved, but door access may need a moment to update. Contact the gym if unlock stops working.";
+      }
+    }
+
     db.close();
 
     if (emailChanged) {
@@ -189,7 +219,7 @@ export async function PATCH(request: NextRequest) {
       if (cid && stripeSecret) {
         try {
           const stripe = new Stripe(stripeSecret);
-          await stripe.customers.update(cid, { email: emailRaw.trim() });
+          await stripe.customers.update(cid, { email: kisiEmail });
         } catch (e) {
           console.error("[member profile] Stripe customer email sync failed:", e);
           /* DB already updated; billing email may be stale until staff fixes in Stripe */
@@ -197,7 +227,10 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({
+      ok: true,
+      ...(kisiSyncWarning ? { kisi_sync_warning: kisiSyncWarning } : {}),
+    });
   } catch (err) {
     console.error(err);
     return NextResponse.json(

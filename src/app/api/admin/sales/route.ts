@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone } from "../../../../lib/db";
 import { getAdminMemberId } from "../../../../lib/admin";
 import { todayInAppTz } from "../../../../lib/app-timezone";
+import {
+  dedupeSalesRowsBySalesId,
+  hasClassCreditLedgerPurchase,
+  hasPtCreditLedgerPurchase,
+} from "../../../../lib/sales-categories";
 
 export const dynamic = "force-dynamic";
 
@@ -109,7 +114,16 @@ function getSalesIdsForCategory(db: ReturnType<typeof getDb>, category: string):
       } catch {
         /* ignore */
       }
-      if (!hasSub && !hasClass && !hasPt && !hasRetailLines(db, s.sales_id)) ids.add(s.sales_id);
+      if (
+        !hasSub &&
+        !hasClass &&
+        !hasPt &&
+        !hasRetailLines(db, s.sales_id) &&
+        !hasPtCreditLedgerPurchase(db, s.sales_id) &&
+        !hasClassCreditLedgerPurchase(db, s.sales_id)
+      ) {
+        ids.add(s.sales_id);
+      }
     }
   }
   return ids;
@@ -170,6 +184,8 @@ export async function GET(request: NextRequest) {
       const categoryIds = getSalesIdsForCategory(db, categoryParam);
       rows = rows.filter((r) => categoryIds.has(String(r.sales_id ?? "")));
     }
+
+    rows = dedupeSalesRowsBySalesId(rows);
 
     db.close();
     return NextResponse.json(rows);

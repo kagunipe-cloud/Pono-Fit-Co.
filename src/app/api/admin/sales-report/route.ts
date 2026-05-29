@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
 import { getAdminMemberId } from "../../../../lib/admin";
 import { ensureSaleRetailLinesTable } from "../../../../lib/retail-products";
+import { hasClassCreditLedgerPurchase, hasPtCreditLedgerPurchase } from "../../../../lib/sales-categories";
 
 export const dynamic = "force-dynamic";
 
@@ -156,7 +157,8 @@ export async function GET(request: NextRequest) {
         ptLedgerLineCount = est.lineCount;
       }
       const ptCombined = ptAmt + ptLedgerBacked;
-      if (ptCombined > 0) categoryCounts.PT += ptAmt > 0 ? ptRows.length : Math.max(ptLedgerLineCount, 1);
+      const hasPtLedgerPurchase = hasPtCreditLedgerPurchase(db, sid);
+      if (ptCombined > 0 || hasPtLedgerPurchase) categoryCounts.PT += 1;
 
       try {
         retailRows = db.prepare(
@@ -205,8 +207,8 @@ export async function GET(request: NextRequest) {
           categoryCounts.Class += clsRows.length;
           categoryRevenue.Class += grandTotal;
           categoryNetRevenue.Class += netTotal;
-        } else if (ptRows.length > 0) {
-          categoryCounts.PT += ptRows.length;
+        } else if (ptRows.length > 0 || hasPtCreditLedgerPurchase(db, sid)) {
+          categoryCounts.PT += 1;
           categoryRevenue.PT += grandTotal;
           categoryNetRevenue.PT += netTotal;
         } else if (retailRows.length > 0) {
@@ -223,6 +225,14 @@ export async function GET(request: NextRequest) {
         categoryCounts["Pro Shop"] += retailRows.length;
         categoryRevenue["Pro Shop"] += grandTotal;
         categoryNetRevenue["Pro Shop"] += netTotal;
+      } else if (hasPtCreditLedgerPurchase(db, sid)) {
+        categoryCounts.PT += 1;
+        categoryRevenue.PT += grandTotal;
+        categoryNetRevenue.PT += netTotal;
+      } else if (hasClassCreditLedgerPurchase(db, sid)) {
+        categoryCounts.Class += 1;
+        categoryRevenue.Class += grandTotal;
+        categoryNetRevenue.Class += netTotal;
       } else {
         categoryCounts.Other += 1;
         categoryRevenue.Other += grandTotal;
