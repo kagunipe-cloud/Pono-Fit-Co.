@@ -11,6 +11,10 @@ import { MAX_WORKOUT_NOTE_LEN } from "@/lib/workout-notes";
 import { MuscleMapPicker } from "@/components/MuscleMapPicker";
 import { PRBadge } from "@/components/PRBadge";
 import { LiftSetPrPercent } from "@/components/LiftSetPrPercent";
+import MemberRecipientLookup, {
+  resolveMemberRecipient,
+  type MemberLookupHit,
+} from "@/components/member/MemberRecipientLookup";
 
 type LiftDropRow = { reps: string; weight: string; note?: string };
 type LiftSetRow = { reps: string; weight: string; drops?: LiftDropRow[]; note?: string };
@@ -218,7 +222,8 @@ export default function MemberWorkoutDetailPage() {
   const [congratsPrCount, setCongratsPrCount] = useState<number>(0);
   /** Exercise name + badge types for CHEE HOO modal */
   const [congratsPrLines, setCongratsPrLines] = useState<{ exercise_name: string; badges: string[] }[]>([]);
-  const [shareEmail, setShareEmail] = useState("");
+  const [shareInput, setShareInput] = useState("");
+  const [shareRecipient, setShareRecipient] = useState<MemberLookupHit | null>(null);
   const [sharing, setSharing] = useState(false);
   const [shareResult, setShareResult] = useState<{ ok: boolean; message?: string } | null>(null);
   const [showShare, setShowShare] = useState(false);
@@ -961,20 +966,24 @@ export default function MemberWorkoutDetailPage() {
   }
 
   async function handleSendToMember() {
-    const email = shareEmail.trim().toLowerCase();
-    if (!email) return;
+    const payload = resolveMemberRecipient(shareInput, shareRecipient);
+    if (!payload) {
+      setShareResult({ ok: false, message: "Enter an email or pick a member from the list." });
+      return;
+    }
     setShareResult(null);
     setSharing(true);
     try {
       const res = await fetch(`/api/member/workouts/${id}/send-to-member`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recipient_email: email }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setShareResult({ ok: true, message: (data as { message?: string }).message });
-        setShareEmail("");
+        setShareInput("");
+        setShareRecipient(null);
         setShowShare(false);
       } else {
         setShareResult({ ok: false, message: (data as { error?: string }).error ?? "Failed to send" });
@@ -1081,14 +1090,16 @@ export default function MemberWorkoutDetailPage() {
                   Send to a member
                 </button>
               ) : (
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="email"
-                    value={shareEmail}
-                    onChange={(e) => setShareEmail(e.target.value)}
-                    placeholder="Member's email"
-                    className="px-3 py-2 rounded-lg border border-stone-200 text-sm w-44"
-                    onKeyDown={(e) => e.key === "Enter" && handleSendToMember()}
+                <div className="flex flex-wrap items-end gap-2">
+                  <MemberRecipientLookup
+                    value={shareInput}
+                    selected={shareRecipient}
+                    onChange={(value, selected) => {
+                      setShareInput(value);
+                      setShareRecipient(selected);
+                    }}
+                    placeholder="Name or email"
+                    onEnter={handleSendToMember}
                   />
                   <button
                     type="button"
@@ -1100,8 +1111,13 @@ export default function MemberWorkoutDetailPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setShowShare(false); setShareEmail(""); setShareResult(null); }}
-                    className="text-stone-500 hover:text-stone-700 text-sm"
+                    onClick={() => {
+                      setShowShare(false);
+                      setShareInput("");
+                      setShareRecipient(null);
+                      setShareResult(null);
+                    }}
+                    className="text-stone-500 hover:text-stone-700 text-sm pb-2"
                   >
                     Cancel
                   </button>

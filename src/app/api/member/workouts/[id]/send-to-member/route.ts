@@ -8,7 +8,7 @@ import { ensureWorkoutTables } from "@/lib/workouts-server";
 export const dynamic = "force-dynamic";
 
 /**
- * POST { recipient_email: string }.
+ * POST { recipient_email?: string, recipient_member_id?: string }.
  * Copies this finished workout (exercises + sets) to the recipient's account as a new finished workout.
  * Member-only; you can't send to yourself.
  */
@@ -25,9 +25,10 @@ export async function POST(
     if (Number.isNaN(workoutId)) return NextResponse.json({ error: "Invalid workout id" }, { status: 400 });
 
     const body = await request.json().catch(() => ({}));
+    const recipientMemberId = (body.recipient_member_id ?? "").toString().trim();
     const recipientEmail = (body.recipient_email ?? "").toString().trim().toLowerCase();
-    if (!recipientEmail) {
-      return NextResponse.json({ error: "recipient_email is required" }, { status: 400 });
+    if (!recipientMemberId && !recipientEmail) {
+      return NextResponse.json({ error: "recipient_email or recipient_member_id is required" }, { status: 400 });
     }
 
     const db = getDb();
@@ -43,10 +44,38 @@ export async function POST(
       return NextResponse.json({ error: "Only finished workouts can be sent. Finish this workout first." }, { status: 400 });
     }
 
-    const recipient = db.prepare("SELECT member_id FROM members WHERE LOWER(TRIM(email)) = ? LIMIT 1").get(recipientEmail) as { member_id: string } | undefined;
+    const recipient = recipientMemberId
+      ? (db
+          .prepare(
+            `SELECT member_id, email, first_name, last_name, preferred_name
+             FROM members WHERE member_id = ? AND TRIM(COALESCE(email, '')) != '' LIMIT 1`
+          )
+          .get(recipientMemberId) as
+          | {
+              member_id: string;
+              email: string | null;
+              first_name: string | null;
+              last_name: string | null;
+              preferred_name: string | null;
+            }
+          | undefined)
+      : (db
+          .prepare(
+            `SELECT member_id, email, first_name, last_name, preferred_name
+             FROM members WHERE LOWER(TRIM(email)) = ? LIMIT 1`
+          )
+          .get(recipientEmail) as
+          | {
+              member_id: string;
+              email: string | null;
+              first_name: string | null;
+              last_name: string | null;
+              preferred_name: string | null;
+            }
+          | undefined);
     if (!recipient) {
       db.close();
-      return NextResponse.json({ error: "No member found with that email" }, { status: 404 });
+      return NextResponse.json({ error: "No member found with that name or email" }, { status: 404 });
     }
     if (recipient.member_id === senderId) {
       db.close();
@@ -189,9 +218,13 @@ export async function POST(
     }
 
     db.close();
+    const recipientLabel =
+      String(recipient.preferred_name ?? "").trim() ||
+      [recipient.first_name, recipient.last_name].filter(Boolean).join(" ").trim() ||
+      String(recipient.email ?? "").trim();
     return NextResponse.json({
       ok: true,
-      message: `Workout sent to ${recipientEmail}. They'll see it in their Workouts list and can repeat it.`,
+      message: `Workout sent to ${recipientLabel}. They'll see it in their Workouts list and can repeat it.`,
     });
   } catch (err) {
     console.error(err);
