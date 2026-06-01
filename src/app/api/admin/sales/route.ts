@@ -7,10 +7,22 @@ import {
   hasClassCreditLedgerPurchase,
   hasPtCreditLedgerPurchase,
 } from "../../../../lib/sales-categories";
+import {
+  getSalesIdsForMembershipSubcategory,
+  MEMBERSHIP_SUBCATEGORIES,
+  type MembershipSubcategory,
+} from "../../../../lib/membership-sales-breakdown";
 
 export const dynamic = "force-dynamic";
 
-const VALID_CATEGORIES = ["Membership", "Class", "PT", "Pro Shop", "Other"] as const;
+const VALID_CATEGORIES = [
+  ...MEMBERSHIP_SUBCATEGORIES,
+  "Membership",
+  "Class",
+  "PT",
+  "Pro Shop",
+  "Other",
+] as const;
 
 function hasRetailLines(db: ReturnType<typeof getDb>, salesId: string): boolean {
   try {
@@ -23,6 +35,9 @@ function hasRetailLines(db: ReturnType<typeof getDb>, salesId: string): boolean 
 
 function getSalesIdsForCategory(db: ReturnType<typeof getDb>, category: string): Set<string> {
   const ids = new Set<string>();
+  if (MEMBERSHIP_SUBCATEGORIES.includes(category as MembershipSubcategory)) {
+    return getSalesIdsForMembershipSubcategory(db, category as MembershipSubcategory);
+  }
   if (category === "Membership") {
     try {
       const rows = db.prepare("SELECT sales_id FROM subscriptions WHERE sales_id IS NOT NULL AND TRIM(sales_id) != ''").all() as { sales_id: string }[];

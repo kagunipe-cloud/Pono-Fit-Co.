@@ -191,7 +191,9 @@ export default function SalesPage() {
   return (
     <div className="max-w-3xl mx-auto p-6">
       <h1 className="text-2xl font-bold text-stone-800 mb-2">Sales</h1>
-      <p className="text-stone-500 mb-4">Transactions by category. Refunds are excluded. Filter by date range below.</p>
+      <p className="text-stone-500 mb-4">
+        Transactions by category. Membership is split into recurring, manual monthly, day/week passes, and pass packs. Refunds are excluded.
+      </p>
 
       <div className="flex flex-wrap gap-2 mb-4">
         <button
@@ -331,6 +333,7 @@ export default function SalesPage() {
             </div>
           </div>
           <div className="rounded-xl border border-stone-200 bg-white overflow-x-auto">
+            <p className="px-4 pt-4 pb-1 text-xs font-medium text-stone-500 uppercase tracking-wide">Revenue by category</p>
             <table className="w-full text-left text-sm min-w-[400px]">
               <thead>
                 <tr className="bg-stone-50 text-stone-500">
@@ -345,10 +348,24 @@ export default function SalesPage() {
                   const isExpanded = expandedCategory === row.category;
                   const canExpand = row.count > 0;
                   const { loading: salesLoading, sales } = categorySales[row.category] ?? { loading: false, sales: [] };
+                  const isMembershipRow = [
+                    "Monthly recurring",
+                    "Monthly non-recurring",
+                    "Day pass",
+                    "Week pass",
+                    "Pass packs",
+                  ].includes(row.category);
                   return (
                     <React.Fragment key={row.category}>
+                      {row.category === "Monthly recurring" && (
+                        <tr className="bg-stone-50/80">
+                          <td colSpan={4} className="py-2 px-4 text-xs font-semibold text-stone-500 uppercase tracking-wide">
+                            Membership
+                          </td>
+                        </tr>
+                      )}
                       <tr
-                        className={`border-t border-stone-100 ${canExpand ? "cursor-pointer hover:bg-stone-50" : ""}`}
+                        className={`border-t border-stone-100 ${canExpand ? "cursor-pointer hover:bg-stone-50" : ""} ${isMembershipRow ? "bg-stone-50/30" : ""}`}
                         onClick={() => canExpand && toggleCategory(row)}
                       >
                         <td className="py-2 px-4 font-medium text-stone-800">

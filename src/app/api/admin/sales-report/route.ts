@@ -4,6 +4,14 @@ import { getAdminMemberId } from "../../../../lib/admin";
 import { ensureSaleRetailLinesTable } from "../../../../lib/retail-products";
 import { hasClassCreditLedgerPurchase, hasPtCreditLedgerPurchase } from "../../../../lib/sales-categories";
 import { computeMrrSummary } from "../../../../lib/mrr";
+import {
+  addComplimentaryMembershipSubcategoryTotals,
+  addSaleMembershipSubcategoryTotals,
+  createEmptyMembershipSubcategoryTotals,
+  getMembershipLineAmountsForSale,
+  hasDayPassCreditLedgerPurchase,
+  membershipSubcategoryToCategoryRows,
+} from "../../../../lib/membership-sales-breakdown";
 
 export const dynamic = "force-dynamic";
 
@@ -78,18 +86,25 @@ export async function GET(request: NextRequest) {
     const dateArgs = hasRange ? [from, to] : [];
 
     const sales = db.prepare(
-      `SELECT s.sales_id, CAST(s.grand_total AS REAL) AS grand_total, CAST(s.tax_amount AS REAL) AS tax_amount, s.sale_type
+      `SELECT s.sales_id, s.member_id, CAST(s.grand_total AS REAL) AS grand_total, CAST(s.tax_amount AS REAL) AS tax_amount, s.sale_type
        FROM sales s WHERE s.status != 'Refunded'${dateFilter}`
-    ).all(...dateArgs) as { sales_id: string; grand_total: number; tax_amount: number; sale_type?: string | null }[];
+    ).all(...dateArgs) as {
+      sales_id: string;
+      member_id: string;
+      grand_total: number;
+      tax_amount: number;
+      sale_type?: string | null;
+    }[];
 
     const totalCount = sales.length;
     const totalRevenue = sales.reduce((sum, s) => sum + (parseNum(s.grand_total) || 0), 0);
     const totalTaxCollected = sales.reduce((sum, s) => sum + (parseNum(s.tax_amount) || 0), 0);
     const totalNetRevenue = totalRevenue - totalTaxCollected;
 
-    const categoryCounts: Record<string, number> = { Membership: 0, Class: 0, PT: 0, "Pro Shop": 0, Other: 0 };
-    const categoryRevenue: Record<string, number> = { Membership: 0, Class: 0, PT: 0, "Pro Shop": 0, Other: 0 };
-    const categoryNetRevenue: Record<string, number> = { Membership: 0, Class: 0, PT: 0, "Pro Shop": 0, Other: 0 };
+    const categoryCounts: Record<string, number> = { Class: 0, PT: 0, "Pro Shop": 0, Other: 0 };
+    const categoryRevenue: Record<string, number> = { Class: 0, PT: 0, "Pro Shop": 0, Other: 0 };
+    const categoryNetRevenue: Record<string, number> = { Class: 0, PT: 0, "Pro Shop": 0, Other: 0 };
+    const membershipTotals = createEmptyMembershipSubcategoryTotals();
 
     try {
       ensureSaleRetailLinesTable(db);
@@ -102,6 +117,7 @@ export async function GET(request: NextRequest) {
       const grandTotal = parseNum(sale.grand_total) || 0;
       const taxAmount = parseNum(sale.tax_amount) || 0;
       const netTotal = Math.max(0, grandTotal - taxAmount);
+      const saleType = (sale as { sale_type?: string | null }).sale_type ?? "";
 
       let memAmt = 0;
       let classAmt = 0;
@@ -112,6 +128,8 @@ export async function GET(request: NextRequest) {
       let ptRows: { price: string | number | null; quantity: string | number | null }[] = [];
       let retailRows: { price: string | number | null; quantity: string | number | null }[] = [];
 
+      const memLineAmounts = getMembershipLineAmountsForSale(db, sid, saleType, sale.member_id ?? "");
+
       try {
         subRows = db.prepare(
           "SELECT price, quantity FROM subscriptions WHERE sales_id = ?"
@@ -120,10 +138,10 @@ export async function GET(request: NextRequest) {
           const qty = Math.max(1, parseInt(String(r.quantity ?? 1), 10) || 1);
           memAmt += parseNum(r.price) * qty;
         }
-        if (memAmt > 0) categoryCounts.Membership += subRows.length;
       } catch {
         /* subscriptions table may not exist */
       }
+      memAmt = Math.max(memAmt, Object.values(memLineAmounts).reduce((s, v) => s + v.usd, 0));
 
       try {
         clsRows = db.prepare(
@@ -179,31 +197,49 @@ export async function GET(request: NextRequest) {
       }
 
       const lineTotal = memAmt + classAmt + ptCombined + retailAmt;
-      const saleType = (sale as { sale_type?: string | null }).sale_type ?? "";
 
       if (lineTotal > 0) {
         const memPct = memAmt / lineTotal;
         const classPct = classAmt / lineTotal;
         const ptPct = ptCombined / lineTotal;
         const retailPct = retailAmt / lineTotal;
-        categoryRevenue.Membership += grandTotal * memPct;
+        addSaleMembershipSubcategoryTotals(
+          membershipTotals,
+          memLineAmounts,
+          memAmt,
+          lineTotal,
+          grandTotal,
+          netTotal,
+          saleType
+        );
         categoryRevenue.Class += grandTotal * classPct;
         categoryRevenue.PT += grandTotal * ptPct;
         categoryRevenue["Pro Shop"] += grandTotal * retailPct;
-        categoryNetRevenue.Membership += netTotal * memPct;
         categoryNetRevenue.Class += netTotal * classPct;
         categoryNetRevenue.PT += netTotal * ptPct;
         categoryNetRevenue["Pro Shop"] += netTotal * retailPct;
       } else if (saleType === "renewal") {
-        categoryCounts.Membership += 1;
-        categoryRevenue.Membership += grandTotal;
-        categoryNetRevenue.Membership += netTotal;
+        addSaleMembershipSubcategoryTotals(
+          membershipTotals,
+          memLineAmounts,
+          0,
+          0,
+          grandTotal,
+          netTotal,
+          saleType
+        );
       } else if (saleType === "complimentary") {
-        /** Complimentary rows store price 0 on line items; bucket by what was granted (matches transactions category filters). */
-        if (subRows.length > 0) {
-          categoryCounts.Membership += subRows.length;
-          categoryRevenue.Membership += grandTotal;
-          categoryNetRevenue.Membership += netTotal;
+        /** Complimentary rows store price 0 on line items; bucket by what was granted. */
+        if (
+          addComplimentaryMembershipSubcategoryTotals(
+            membershipTotals,
+            memLineAmounts,
+            grandTotal,
+            netTotal,
+            subRows.length
+          )
+        ) {
+          /* membership attributed */
         } else if (clsRows.length > 0) {
           categoryCounts.Class += clsRows.length;
           categoryRevenue.Class += grandTotal;
@@ -226,6 +262,16 @@ export async function GET(request: NextRequest) {
         categoryCounts["Pro Shop"] += retailRows.length;
         categoryRevenue["Pro Shop"] += grandTotal;
         categoryNetRevenue["Pro Shop"] += netTotal;
+      } else if (hasDayPassCreditLedgerPurchase(db, sid)) {
+        addSaleMembershipSubcategoryTotals(
+          membershipTotals,
+          memLineAmounts,
+          0,
+          0,
+          grandTotal,
+          netTotal,
+          saleType
+        );
       } else if (hasPtCreditLedgerPurchase(db, sid)) {
         categoryCounts.PT += 1;
         categoryRevenue.PT += grandTotal;
@@ -242,7 +288,7 @@ export async function GET(request: NextRequest) {
     }
 
     const byCategory: CategoryRow[] = [
-      { category: "Membership", count: categoryCounts.Membership, revenue: categoryRevenue.Membership, netRevenue: categoryNetRevenue.Membership },
+      ...membershipSubcategoryToCategoryRows(membershipTotals),
       { category: "Class", count: categoryCounts.Class, revenue: categoryRevenue.Class, netRevenue: categoryNetRevenue.Class },
       { category: "PT", count: categoryCounts.PT, revenue: categoryRevenue.PT, netRevenue: categoryNetRevenue.PT },
     ];
