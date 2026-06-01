@@ -5,6 +5,7 @@ import { isTimedExerciseType, parseExerciseType, type ExerciseType } from "@/lib
 import { getMemberIdFromSession } from "@/lib/session";
 import { ensureWorkoutTables } from "@/lib/workouts-server";
 import { normalizeWorkoutNote } from "@/lib/workout-notes";
+import { getWorkoutOwnerForSession } from "@/lib/member-workout-access";
 
 export const dynamic = "force-dynamic";
 
@@ -39,8 +40,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string; exId: string }> }
 ) {
   try {
-    const memberId = await getMemberIdFromSession();
-    if (!memberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    const sessionMemberId = await getMemberIdFromSession();
 
     const workoutId = parseInt((await params).id, 10);
     const exId = parseInt((await params).exId, 10);
@@ -53,10 +53,10 @@ export async function POST(
     const db = getDb();
     ensureWorkoutTables(db);
 
-    const workout = db.prepare("SELECT id FROM workouts WHERE id = ? AND member_id = ?").get(workoutId, memberId);
-    if (!workout) {
+    const access = getWorkoutOwnerForSession(sessionMemberId, workoutId, db);
+    if (!access.ok) {
       db.close();
-      return NextResponse.json({ error: "Workout not found" }, { status: 404 });
+      return access.response;
     }
 
     const exercise = db
@@ -131,8 +131,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string; exId: string }> }
 ) {
   try {
-    const memberId = await getMemberIdFromSession();
-    if (!memberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    const sessionMemberId = await getMemberIdFromSession();
 
     const workoutId = parseInt((await params).id, 10);
     const exId = parseInt((await params).exId, 10);
@@ -145,10 +144,10 @@ export async function PUT(
     const db = getDb();
     ensureWorkoutTables(db);
 
-    const workout = db.prepare("SELECT id FROM workouts WHERE id = ? AND member_id = ?").get(workoutId, memberId);
-    if (!workout) {
+    const access = getWorkoutOwnerForSession(sessionMemberId, workoutId, db);
+    if (!access.ok) {
       db.close();
-      return NextResponse.json({ error: "Workout not found" }, { status: 404 });
+      return access.response;
     }
 
     const exercise = db
@@ -222,8 +221,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; exId: string }> }
 ) {
   try {
-    const memberId = await getMemberIdFromSession();
-    if (!memberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    const sessionMemberId = await getMemberIdFromSession();
 
     const workoutId = parseInt((await params).id, 10);
     const exId = parseInt((await params).exId, 10);
@@ -239,10 +237,10 @@ export async function DELETE(
     const db = getDb();
     ensureWorkoutTables(db);
 
-    const workout = db.prepare("SELECT id FROM workouts WHERE id = ? AND member_id = ?").get(workoutId, memberId);
-    if (!workout) {
+    const access = getWorkoutOwnerForSession(sessionMemberId, workoutId, db);
+    if (!access.ok) {
       db.close();
-      return NextResponse.json({ error: "Workout not found" }, { status: 404 });
+      return access.response;
     }
 
     const exercise = db

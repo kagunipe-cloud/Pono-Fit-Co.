@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getMemberIdFromSession } from "@/lib/session";
 import { ensureWorkoutTables } from "@/lib/workouts-server";
+import { canAccessMemberExerciseStats } from "@/lib/member-exercise-access";
 
 export const dynamic = "force-dynamic";
 
@@ -18,13 +19,14 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: NextRequest) {
   try {
-    const memberId = await getMemberIdFromSession();
-    if (!memberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    const sessionMemberId = await getMemberIdFromSession();
+    if (!sessionMemberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
 
     const exercise_id = request.nextUrl.searchParams.get("exercise_id");
     const exercise_name = request.nextUrl.searchParams.get("exercise_name")?.trim();
     const weightParam = request.nextUrl.searchParams.get("weight");
     const exclude_workout_id = request.nextUrl.searchParams.get("exclude_workout_id");
+    const forMemberParam = request.nextUrl.searchParams.get("for_member_id")?.trim() || null;
 
     const weight = weightParam != null && weightParam !== "" ? parseFloat(weightParam) : null;
     if (weight == null || Number.isNaN(weight) || weight <= 0) {
@@ -38,6 +40,15 @@ export async function GET(request: NextRequest) {
 
     const db = getDb();
     ensureWorkoutTables(db);
+
+    let memberId = sessionMemberId;
+    if (forMemberParam && forMemberParam !== sessionMemberId) {
+      if (!canAccessMemberExerciseStats(db, sessionMemberId, forMemberParam)) {
+        db.close();
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      memberId = forMemberParam;
+    }
 
     // Weight tolerance: match within 0.05 lbs (handles 40 vs 40.0)
     const weightLo = weight - 0.05;

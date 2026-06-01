@@ -66,8 +66,11 @@ type OfficialExercise = { id: number; name: string; type: string };
 
 type WorkoutData = {
   id: number;
+  member_id?: string;
   started_at: string;
   finished_at: string | null;
+  is_recording_for_client?: boolean;
+  client_display_name?: string | null;
   source_workout_id?: number | null;
   assigned_by_admin?: number;
   assigned_by_trainer_member_id?: string | null;
@@ -107,9 +110,10 @@ type PRInfoProps = {
   exerciseName: string;
   weight: string;
   excludeWorkoutId: number | null;
+  forMemberId?: string | null;
 };
 
-function PRInfo({ exerciseId, exerciseName, weight, excludeWorkoutId }: PRInfoProps) {
+function PRInfo({ exerciseId, exerciseName, weight, excludeWorkoutId, forMemberId }: PRInfoProps) {
   const [data, setData] = useState<{ pr_reps: number | null; last_session_reps: number | null; last_session_date: string | null } | null>(null);
   const [loading, setLoading] = useState(false);
   const weightNum = parseFloat(weight);
@@ -124,6 +128,7 @@ function PRInfo({ exerciseId, exerciseName, weight, excludeWorkoutId }: PRInfoPr
       setLoading(true);
       const params = new URLSearchParams({ weight: String(weightNum) });
       if (excludeWorkoutId != null) params.set("exclude_workout_id", String(excludeWorkoutId));
+      if (forMemberId) params.set("for_member_id", forMemberId);
       if (exerciseId != null) params.set("exercise_id", String(exerciseId));
       else params.set("exercise_name", exerciseName.trim());
       fetch(`/api/member/workouts/pr?${params}`)
@@ -133,7 +138,7 @@ function PRInfo({ exerciseId, exerciseName, weight, excludeWorkoutId }: PRInfoPr
         .finally(() => setLoading(false));
     }, 300);
     return () => clearTimeout(t);
-  }, [exerciseId, exerciseName, weight, weightNum, excludeWorkoutId, valid]);
+  }, [exerciseId, exerciseName, weight, weightNum, excludeWorkoutId, valid, forMemberId]);
 
   if (!valid || (data?.pr_reps == null && data?.last_session_reps == null && !loading)) return null;
   if (loading) return <span className="text-xs text-stone-400">Loading PR…</span>;
@@ -181,6 +186,16 @@ export default function MemberWorkoutDetailPage() {
   const router = useRouter();
   const id = params.id as string;
   const [workout, setWorkout] = useState<WorkoutData | null>(null);
+  const recordingForMemberId = useMemo(
+    () => (workout?.is_recording_for_client && workout.member_id ? workout.member_id : null),
+    [workout?.is_recording_for_client, workout?.member_id]
+  );
+  const clientBoostQuery = recordingForMemberId
+    ? `&boost_for_member_id=${encodeURIComponent(recordingForMemberId)}`
+    : "";
+  const frequentForQuery = recordingForMemberId
+    ? `&for_member_id=${encodeURIComponent(recordingForMemberId)}`
+    : "";
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<ExerciseType | null>(null);
   const [exerciseName, setExerciseName] = useState("");
@@ -277,8 +292,9 @@ export default function MemberWorkoutDetailPage() {
     fetchWorkout();
   }, [fetchWorkout]);
 
-  function fetchMy1rm() {
-    fetch("/api/member/workouts/my-1rm")
+  function fetchMy1rm(forMemberId?: string | null) {
+    const q = forMemberId ? `?for_member_id=${encodeURIComponent(forMemberId)}` : "";
+    fetch(`/api/member/workouts/my-1rm${q}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         const list = Array.isArray(d?.exercises) ? d.exercises : [];
@@ -288,8 +304,8 @@ export default function MemberWorkoutDetailPage() {
   }
 
   useEffect(() => {
-    fetchMy1rm();
-  }, [workout?.id, workout?.finished_at]);
+    fetchMy1rm(recordingForMemberId);
+  }, [workout?.id, workout?.finished_at, recordingForMemberId]);
 
   useEffect(() => {
     if (!workout?.finished_at || !id) {
@@ -383,7 +399,7 @@ export default function MemberWorkoutDetailPage() {
     }
     if (!editName.trim()) {
       let cancelled = false;
-      fetch(`/api/member/exercises/frequent?type=${editType}&limit=20`)
+      fetch(`/api/member/exercises/frequent?type=${editType}&limit=20${frequentForQuery}`)
         .then((r) => (r.ok ? r.json() : { exercises: [] }))
         .then((d: { exercises?: OfficialExercise[] }) => {
           if (!cancelled) setEditExerciseSuggestions(Array.isArray(d.exercises) ? d.exercises : []);
@@ -396,13 +412,13 @@ export default function MemberWorkoutDetailPage() {
       };
     }
     const t = setTimeout(() => {
-      fetch(`/api/exercises?q=${encodeURIComponent(editName.trim())}&type=${editType}&boost_member=1`)
+      fetch(`/api/exercises?q=${encodeURIComponent(editName.trim())}&type=${editType}&boost_member=1${clientBoostQuery}`)
         .then((r) => (r.ok ? r.json() : []))
         .then((list: OfficialExercise[]) => setEditExerciseSuggestions(list))
         .catch(() => setEditExerciseSuggestions([]));
     }, 200);
     return () => clearTimeout(t);
-  }, [editingExId, editType, editName]);
+  }, [editingExId, editType, editName, frequentForQuery, clientBoostQuery]);
 
   useEffect(() => {
     if (!mode) {
@@ -411,7 +427,7 @@ export default function MemberWorkoutDetailPage() {
     }
     if (!exerciseName.trim()) {
       let cancelled = false;
-      fetch(`/api/member/exercises/frequent?type=${mode}&limit=20`)
+      fetch(`/api/member/exercises/frequent?type=${mode}&limit=20${frequentForQuery}`)
         .then((r) => (r.ok ? r.json() : { exercises: [] }))
         .then((d: { exercises?: OfficialExercise[] }) => {
           if (!cancelled) setExerciseSuggestions(Array.isArray(d.exercises) ? d.exercises : []);
@@ -425,14 +441,14 @@ export default function MemberWorkoutDetailPage() {
     }
     const t = setTimeout(() => {
       fetch(
-        `/api/exercises?q=${encodeURIComponent(exerciseName.trim())}&type=${mode}&boost_member=1`
+        `/api/exercises?q=${encodeURIComponent(exerciseName.trim())}&type=${mode}&boost_member=1${clientBoostQuery}`
       )
         .then((r) => (r.ok ? r.json() : []))
         .then((list: OfficialExercise[]) => setExerciseSuggestions(list))
         .catch(() => setExerciseSuggestions([]));
     }, 200);
     return () => clearTimeout(t);
-  }, [mode, exerciseName]);
+  }, [mode, exerciseName, frequentForQuery, clientBoostQuery]);
 
   async function toggleExerciseFavorite(exerciseId: number, e: React.MouseEvent) {
     e.preventDefault();
@@ -446,7 +462,7 @@ export default function MemberWorkoutDetailPage() {
       const d = (await res.json()) as { ids?: number[] };
       if (Array.isArray(d.ids)) setFavoriteExerciseIds(new Set(d.ids));
       if (mode && !exerciseName.trim()) {
-        const fr = await fetch(`/api/member/exercises/frequent?type=${mode}&limit=20`);
+        const fr = await fetch(`/api/member/exercises/frequent?type=${mode}&limit=20${frequentForQuery}`);
         const fd = fr.ok ? await fr.json() : null;
         const list = Array.isArray(fd?.exercises) ? fd.exercises : [];
         setExerciseSuggestions(list);
@@ -560,9 +576,11 @@ export default function MemberWorkoutDetailPage() {
 
   async function finishWorkout() {
     if (!workout) return;
-    const confirmMsg = workout.assigned_by_trainer_member_id
-      ? "Finish this workout and send it to your trainer?"
-      : "Finish this workout and save it to your past workouts?";
+    const confirmMsg = workout.is_recording_for_client
+      ? `Save this as a completed workout for ${workout.client_display_name?.trim() || "this member"}?`
+      : workout.assigned_by_trainer_member_id
+        ? "Finish this workout and send it to your trainer?"
+        : "Finish this workout and save it to your past workouts?";
     if (!confirm(confirmMsg)) return;
     setFinishing(true);
     try {
@@ -997,6 +1015,16 @@ export default function MemberWorkoutDetailPage() {
 
   return (
     <div className="max-w-2xl mx-auto p-6">
+      {workout.is_recording_for_client && (
+        <div className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-950">
+          <p className="font-medium">
+            Recording workout for {workout.client_display_name?.trim() || "member"}
+          </p>
+          <p className="mt-1 text-amber-900/80">
+            Log exercises and sets as usual. When you finish, this saves as a completed workout on their account — they won&apos;t need to fill anything in.
+          </p>
+        </div>
+      )}
       <div className="mb-6 flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2 flex-wrap">
           {editingWorkoutName ? (
@@ -1031,7 +1059,16 @@ export default function MemberWorkoutDetailPage() {
           ) : (
             <>
               <h1 className="text-2xl font-bold text-stone-800">
-                {workout.name?.trim() || (isOpen ? (isRepeatMode ? "Repeat workout" : workout.assigned_by_trainer_member_id ? "Start workout" : "Workout in progress") : "Past workout")}
+                {workout.name?.trim() ||
+                  (isOpen
+                    ? workout.is_recording_for_client
+                      ? `Recording for ${workout.client_display_name?.trim() || "member"}`
+                      : isRepeatMode
+                        ? "Repeat workout"
+                        : workout.assigned_by_trainer_member_id
+                          ? "Start workout"
+                          : "Workout in progress"
+                    : "Past workout")}
               </h1>
               <button
                 type="button"
@@ -1255,7 +1292,7 @@ export default function MemberWorkoutDetailPage() {
                       let exerciseId = selectedOfficialId ?? null;
                       if (exerciseId == null) {
                         const searchRes = await fetch(
-                          `/api/exercises?q=${encodeURIComponent(exerciseName.trim())}&type=${mode}&boost_member=1`
+                          `/api/exercises?q=${encodeURIComponent(exerciseName.trim())}&type=${mode}&boost_member=1${clientBoostQuery}`
                         );
                         if (searchRes.ok) {
                           const list = await searchRes.json();
@@ -1332,6 +1369,7 @@ export default function MemberWorkoutDetailPage() {
                           exerciseName={exerciseName.trim()}
                           weight={row.weight}
                           excludeWorkoutId={workout?.id ?? null}
+                          forMemberId={recordingForMemberId}
                         />
                         <AutoImplied1RMDisplay reps={row.reps} weight={row.weight} />
                         <LiftSetPrPercent
@@ -1340,6 +1378,7 @@ export default function MemberWorkoutDetailPage() {
                           weightStr={row.weight}
                           repsStr={row.reps}
                           excludeWorkoutId={workout?.id ?? null}
+                          forMemberId={recordingForMemberId}
                           invalidateKey={prInvalidateKey}
                         />
                       </div>
@@ -1404,6 +1443,7 @@ export default function MemberWorkoutDetailPage() {
                               weightStr={drop.weight}
                               repsStr={drop.reps}
                               excludeWorkoutId={workout?.id ?? null}
+                          forMemberId={recordingForMemberId}
                               invalidateKey={prInvalidateKey}
                             />
                           </div>
@@ -1722,6 +1762,7 @@ export default function MemberWorkoutDetailPage() {
                                     exerciseName={editName}
                                     weight={row.weight}
                                     excludeWorkoutId={workout?.id ?? null}
+                          forMemberId={recordingForMemberId}
                                   />
                                   <AutoImplied1RMDisplay reps={row.reps} weight={row.weight} />
                                   <LiftSetPrPercent
@@ -1730,6 +1771,7 @@ export default function MemberWorkoutDetailPage() {
                                     weightStr={row.weight}
                                     repsStr={row.reps}
                                     excludeWorkoutId={workout?.id ?? null}
+                          forMemberId={recordingForMemberId}
                                     invalidateKey={prInvalidateKey}
                                   />
                                   <button
@@ -1803,6 +1845,7 @@ export default function MemberWorkoutDetailPage() {
                                         weightStr={drop.weight}
                                         repsStr={drop.reps}
                                         excludeWorkoutId={workout?.id ?? null}
+                          forMemberId={recordingForMemberId}
                                         invalidateKey={prInvalidateKey}
                                       />
                                     </div>
@@ -2019,7 +2062,7 @@ export default function MemberWorkoutDetailPage() {
                               let exerciseId = ex.exercise_id ?? null;
                               if (exerciseId == null) {
                                 const searchRes = await fetch(
-                                  `/api/exercises?q=${encodeURIComponent(ex.exercise_name)}&type=${ex.type}&boost_member=1`
+                                  `/api/exercises?q=${encodeURIComponent(ex.exercise_name)}&type=${ex.type}&boost_member=1${clientBoostQuery}`
                                 );
                                 if (searchRes.ok) {
                                   const list = await searchRes.json();
@@ -2098,6 +2141,7 @@ export default function MemberWorkoutDetailPage() {
                                           weightStr={s.weight_kg != null ? String(s.weight_kg) : ""}
                                           repsStr={s.reps != null ? String(s.reps) : ""}
                                           excludeWorkoutId={workout?.id ?? null}
+                          forMemberId={recordingForMemberId}
                                           invalidateKey={prInvalidateKey}
                                           showPineapple={prLines.length === 0 || j > 0}
                                         />
@@ -2217,6 +2261,7 @@ export default function MemberWorkoutDetailPage() {
                                           exerciseName={exForPr.exercise_name}
                                           weight={row.weight}
                                           excludeWorkoutId={workout?.id ?? null}
+                          forMemberId={recordingForMemberId}
                                         />
                                       ) : null;
                                     })()}
@@ -2230,6 +2275,7 @@ export default function MemberWorkoutDetailPage() {
                                           weightStr={row.weight}
                                           repsStr={row.reps}
                                           excludeWorkoutId={workout?.id ?? null}
+                          forMemberId={recordingForMemberId}
                                           invalidateKey={prInvalidateKey}
                                         />
                                       ) : null;
@@ -2333,6 +2379,7 @@ export default function MemberWorkoutDetailPage() {
                                               weightStr={drop.weight}
                                               repsStr={drop.reps}
                                               excludeWorkoutId={workout?.id ?? null}
+                          forMemberId={recordingForMemberId}
                                               invalidateKey={prInvalidateKey}
                                             />
                                           ) : null;
@@ -2524,13 +2571,13 @@ export default function MemberWorkoutDetailPage() {
 
       {isOpen && (
         <div className="pt-4 border-t border-stone-200">
-          {workout.assigned_by_trainer_member_id && workout.trainer_notes && (
+          {workout.assigned_by_trainer_member_id && !workout.is_recording_for_client && workout.trainer_notes && (
             <div className="mb-4 p-3 rounded-lg bg-brand-50 border border-brand-100">
               <p className="text-xs font-medium text-brand-800 mb-1">Note from your trainer</p>
               <p className="text-sm text-stone-700 whitespace-pre-wrap">{workout.trainer_notes}</p>
             </div>
           )}
-          {workout.assigned_by_trainer_member_id && (
+          {workout.assigned_by_trainer_member_id && !workout.is_recording_for_client && (
             <div className="mb-4">
               <label className="block text-sm font-medium text-stone-700 mb-1">Notes to trainer (optional)</label>
               <textarea
@@ -2549,12 +2596,20 @@ export default function MemberWorkoutDetailPage() {
             disabled={finishing}
             className="w-full sm:w-auto px-6 py-3 rounded-lg bg-stone-800 text-white font-medium hover:bg-stone-900 disabled:opacity-50"
           >
-            {finishing ? "Saving…" : workout.assigned_by_trainer_member_id ? "Finish Workout and Send to Trainer" : "Finish Workout"}
+            {finishing
+              ? "Saving…"
+              : workout.is_recording_for_client
+                ? `Save completed workout for ${workout.client_display_name?.trim() || "member"}`
+                : workout.assigned_by_trainer_member_id
+                  ? "Finish Workout and Send to Trainer"
+                  : "Finish Workout"}
           </button>
           <p className="mt-2 text-sm text-stone-500">
-            {workout.assigned_by_trainer_member_id
-              ? "This will save your sets, reps, and weight and send the results to your trainer."
-              : "This will save the workout to your past workouts and return you to the list."}
+            {workout.is_recording_for_client
+              ? "This goes straight onto their workout history with all sets logged."
+              : workout.assigned_by_trainer_member_id
+                ? "This will save your sets, reps, and weight and send the results to your trainer."
+                : "This will save the workout to your past workouts and return you to the list."}
           </p>
         </div>
       )}

@@ -7,6 +7,7 @@ import { formatDateInAppTz, formatInAppTz, parseStoredUtcToDate } from "@/lib/ap
 import { getWeightComparisonWithArticle } from "@/lib/workout-congrats";
 import { useAppTimezone } from "@/lib/settings-context";
 import { PRBadge } from "@/components/PRBadge";
+import MemberRecipientLookup, { type MemberLookupHit } from "@/components/member/MemberRecipientLookup";
 
 type Workout = {
   id: number;
@@ -59,6 +60,10 @@ export default function MemberWorkoutsPage() {
   const [workoutGoalDays, setWorkoutGoalDays] = useState<number | null>(null);
   const [workoutGoalDraft, setWorkoutGoalDraft] = useState("");
   const [workoutGoalSaving, setWorkoutGoalSaving] = useState(false);
+  const [canRecordForClient, setCanRecordForClient] = useState(false);
+  const [recordClientInput, setRecordClientInput] = useState("");
+  const [recordClientSelected, setRecordClientSelected] = useState<MemberLookupHit | null>(null);
+  const [recordingForClient, setRecordingForClient] = useState(false);
 
   const fetchWorkouts = useCallback(() => {
     fetch("/api/member/workouts")
@@ -77,6 +82,12 @@ export default function MemberWorkoutsPage() {
   useEffect(() => {
     fetchWorkouts();
   }, [fetchWorkouts]);
+
+  useEffect(() => {
+    fetch("/api/trainer/clients")
+      .then((res) => setCanRecordForClient(res.ok))
+      .catch(() => setCanRecordForClient(false));
+  }, []);
 
   useEffect(() => {
     fetch("/api/member/workout-goal")
@@ -160,6 +171,42 @@ export default function MemberWorkoutsPage() {
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
       setStarting(false);
+    }
+  }
+
+  async function handleRecordForClient() {
+    if (!recordClientSelected?.member_id) {
+      setError("Pick a member from the list.");
+      return;
+    }
+    setError(null);
+    setRecordingForClient(true);
+    try {
+      const res = await fetch("/api/trainer/workouts/start-for-client", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_member_id: recordClientSelected.member_id }),
+      });
+      if (res.status === 401) {
+        router.replace("/login");
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 409 && data?.workout_id) {
+        router.push(`/member/workouts/${data.workout_id}`);
+        return;
+      }
+      if (!res.ok) {
+        setError(data?.error ?? "Failed to start workout for member");
+        return;
+      }
+      if (data?.id) {
+        router.push(`/member/workouts/${data.id}`);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong");
+    } finally {
+      setRecordingForClient(false);
     }
   }
 
@@ -290,6 +337,37 @@ export default function MemberWorkoutsPage() {
           </p>
         )}
       </div>
+
+      {canRecordForClient && (
+        <div className="mb-8 p-4 rounded-xl border border-amber-200 bg-amber-50/50">
+          <h2 className="text-sm font-semibold text-stone-800 mb-1">Record workout for member / client</h2>
+          <p className="text-sm text-stone-600 mb-3">
+            Train someone in person? Log their session here — when you finish, it saves as a completed workout on their account (sets included). They won&apos;t need to fill anything in.
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <MemberRecipientLookup
+              value={recordClientInput}
+              selected={recordClientSelected}
+              onChange={(value, selected) => {
+                setRecordClientInput(value);
+                setRecordClientSelected(selected);
+              }}
+              placeholder="Search member name or email"
+              scope="clients"
+              className="flex-1 min-w-[14rem]"
+              onEnter={() => void handleRecordForClient()}
+            />
+            <button
+              type="button"
+              onClick={() => void handleRecordForClient()}
+              disabled={recordingForClient || !recordClientSelected}
+              className="px-5 py-2 rounded-lg bg-amber-700 text-white font-medium hover:bg-amber-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {recordingForClient ? "Opening…" : "Start recording"}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="mb-6 p-4 rounded-xl border border-brand-100 bg-brand-50/40">
         <h2 className="text-sm font-semibold text-stone-800 mb-1">Set your workout goal</h2>

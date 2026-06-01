@@ -5,7 +5,7 @@ import Link from "next/link";
 import { formatDateForDisplay } from "@/lib/app-timezone";
 
 export type MemberType = "Monthly" | "Day pass" | "Week pass" | "Class client" | "PT client";
-type MemberTypeFilter = MemberType | "Monthly recurring";
+type MemberTypeFilter = MemberType | "Monthly recurring" | "Manual monthly";
 
 type Member = {
   id: number;
@@ -22,7 +22,7 @@ type Member = {
 };
 
 const MEMBER_TYPES: MemberType[] = ["Monthly", "Day pass", "Week pass", "Class client", "PT client"];
-const TYPE_FILTERS: MemberTypeFilter[] = [...MEMBER_TYPES, "Monthly recurring"];
+const TYPE_FILTERS: MemberTypeFilter[] = [...MEMBER_TYPES, "Monthly recurring", "Manual monthly"];
 
 type SortKey = "name" | "email" | "type" | "role" | "join_date" | "renewal" | "member_id";
 
@@ -127,7 +127,9 @@ export default function MembersPage() {
     if (activeFilter === "active") list = list.filter((m) => m.active);
     if (activeFilter === "inactive") list = list.filter((m) => !m.active);
     if (typeFilter === "Monthly recurring") list = list.filter((m) => m.auto_renew_recurring);
-    else if (typeFilter) list = list.filter((m) => m.types?.includes(typeFilter));
+    else if (typeFilter === "Manual monthly") {
+      list = list.filter((m) => m.active && m.types?.includes("Monthly") && !m.auto_renew_recurring);
+    } else if (typeFilter) list = list.filter((m) => m.types?.includes(typeFilter));
     return list;
   }, [members, activeFilter, typeFilter]);
 
@@ -228,6 +230,13 @@ export default function MembersPage() {
               <button
                 key={t}
                 type="button"
+                title={
+                  t === "Monthly recurring"
+                    ? "Active monthly with auto-renew on (included in MRR)"
+                    : t === "Manual monthly"
+                      ? "Active monthly without auto-renew (excluded from MRR)"
+                      : undefined
+                }
                 onClick={() => setTypeFilter(typeFilter === t ? null : t)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
                   typeFilter === t ? "bg-stone-700 text-white" : "bg-stone-100 text-stone-700 hover:bg-stone-200"
@@ -237,6 +246,18 @@ export default function MembersPage() {
               </button>
             ))}
           </div>
+          {typeFilter === "Manual monthly" && (
+            <p className="text-sm text-stone-500">
+              Active monthly members with auto-renew off — same group excluded from the sales report auto-renew count and MRR.
+              Pair with <strong className="font-medium text-stone-600">Monthly recurring</strong> to reconcile against{" "}
+              <strong className="font-medium text-stone-600">Monthly</strong> + <strong className="font-medium text-stone-600">Active</strong>.
+            </p>
+          )}
+          {typeFilter === "Monthly recurring" && (
+            <p className="text-sm text-stone-500">
+              Active monthly with auto-renew checked — matches the sales report auto-renew member count.
+            </p>
+          )}
         </div>
 
         <div className="overflow-x-auto">

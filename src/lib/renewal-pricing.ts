@@ -17,15 +17,23 @@ function parseMoney(s: string): number {
 
 /** Dollar string for one unit: Stripe renewal / display. */
 export function computeRenewalChargePrice(planPrice: string, sub: RenewalPricingInput): string {
+  const subStored = parseMoney(String(sub.sub_price ?? "0"));
   const useNegotiated =
     (sub.promo_renewals_remaining != null && sub.promo_renewals_remaining > 0) ||
     (sub.renewal_price_indefinite ?? 0) === 1;
-  if (useNegotiated) return String(sub.sub_price ?? "0");
+  if (useNegotiated && subStored > 0) return String(subStored);
+
   const pct = sub.renewal_discount_percent;
   if (pct != null && pct > 0 && pct < 100) {
     const catalog = parseMoney(planPrice);
-    const eff = catalog * (1 - pct / 100);
-    return String(Math.round(eff * 100) / 100);
+    if (catalog > 0) {
+      const eff = catalog * (1 - pct / 100);
+      return String(Math.round(eff * 100) / 100);
+    }
   }
-  return String(planPrice);
+
+  const catalog = parseMoney(planPrice);
+  if (catalog > 0) return String(planPrice);
+  if (subStored > 0) return String(subStored);
+  return "0";
 }

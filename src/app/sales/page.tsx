@@ -23,6 +23,9 @@ type Report = {
   byCategory: CategoryRow[];
   mrr?: number;
   mrrMemberCount?: number;
+  mrrBillableMemberCount?: number;
+  autoRenewFlagCount?: number;
+  autoRenewUnmatchedCount?: number;
   from: string | null;
   to: string | null;
 } | null;
@@ -296,14 +299,34 @@ export default function SalesPage() {
               <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Monthly recurring revenue (MRR)</p>
               <p className="text-2xl font-bold text-stone-800 mt-1">{formatMoney(report.mrr ?? 0)}</p>
               <p className="text-xs text-stone-500 mt-1.5">
-                Active auto-renew members with billable plans, normalized to monthly (includes negotiated renewal pricing).
+                Billable renewal rate for active monthly members with auto-renew on (excludes manual renewals, paused, complimentary, and $0).
               </p>
             </div>
             <div className="rounded-xl border border-brand-200 bg-brand-50/40 p-4">
               <p className="text-xs font-medium text-stone-500 uppercase tracking-wide">Auto-renew members</p>
               <p className="text-2xl font-bold text-stone-800 mt-1">{report.mrrMemberCount ?? 0}</p>
               <p className="text-xs text-stone-500 mt-1.5">
-                Members contributing to MRR (non-zero recurring price, excludes complimentary / paused / pass packs).
+                Active monthly members with auto-renew checked (same as Members → Monthly recurring).
+                {(report.mrrBillableMemberCount ?? 0) > 0 &&
+                (report.mrrBillableMemberCount ?? 0) !== (report.mrrMemberCount ?? 0) ? (
+                  <>
+                    {" "}
+                    <span className="text-stone-600">
+                      {report.mrrBillableMemberCount} billable;{" "}
+                      {(report.mrrMemberCount ?? 0) - (report.mrrBillableMemberCount ?? 0)} paused, complimentary, or $0 renewal.
+                    </span>
+                  </>
+                ) : null}
+                {(report.autoRenewFlagCount ?? 0) > (report.mrrMemberCount ?? 0) ? (
+                  <>
+                    {" "}
+                    <span className="text-amber-800">
+                      {report.autoRenewFlagCount} have auto-renew on file;{" "}
+                      {report.autoRenewUnmatchedCount ?? 0} not matched to an active monthly sub
+                      (missing subscription or plan link).
+                    </span>
+                  </>
+                ) : null}
               </p>
             </div>
           </div>

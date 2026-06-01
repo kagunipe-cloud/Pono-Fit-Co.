@@ -269,7 +269,10 @@ export async function GET(request: NextRequest) {
       totalNetRevenue,
       byCategory,
       mrr: mrrSummary.mrr,
-      mrrMemberCount: mrrSummary.memberCount,
+      mrrMemberCount: mrrSummary.autoRenewMemberCount,
+      mrrBillableMemberCount: mrrSummary.autoRenewBillableMemberCount,
+      autoRenewFlagCount: mrrSummary.autoRenewFlagCount,
+      autoRenewUnmatchedCount: mrrSummary.autoRenewUnmatchedCount,
       from: hasRange ? from : null,
       to: hasRange ? to : null,
     });

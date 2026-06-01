@@ -8,7 +8,7 @@ import { computeRenewalChargePrice, type RenewalPricingInput } from "./renewal-p
 
 type AppDb = ReturnType<typeof getDb>;
 
-export type AutoRenewSubscriptionRow = {
+export type MonthlySubscriptionRow = {
   member_id: string;
   subscription_id: string;
   sub_price: string;
@@ -20,9 +20,25 @@ export type AutoRenewSubscriptionRow = {
   plan_price: string;
   length: string;
   unit: string;
+  auto_renew: number;
+  subscription_pause_started: string | null;
 };
 
+/** @deprecated Use MonthlySubscriptionRow */
+export type AutoRenewSubscriptionRow = MonthlySubscriptionRow;
+
 const AVG_DAYS_PER_MONTH = 365.25 / 12;
+
+/** Match subscription.product_id to plan (product_id or legacy numeric plan id). */
+export const MEMBERSHIP_PLAN_JOIN_SQL = `(
+  TRIM(COALESCE(p.product_id, '')) = TRIM(COALESCE(s.product_id, ''))
+  OR CAST(p.id AS TEXT) = TRIM(COALESCE(s.product_id, ''))
+)`;
+
+/** Same "Monthly" membership as the Members page: active sub + plan unit month. */
+export const ACTIVE_MONTHLY_SUBSCRIPTION_SQL = `
+  LOWER(TRIM(COALESCE(s.status, ''))) = 'active'
+  AND LOWER(TRIM(COALESCE(p.unit, ''))) = 'month'`;
 
 function parseMoney(v: unknown): number {
   if (v == null || v === "") return 0;
@@ -41,8 +57,8 @@ export function billingPeriodMonths(lengthRaw: string | number | null | undefine
   return length;
 }
 
-/** Monthly recurring revenue for one active auto-renew subscription row (0 if complimentary / free). */
-export function subscriptionMonthlyRecurringRevenueUsd(row: AutoRenewSubscriptionRow): number {
+/** Monthly recurring revenue for one active monthly subscription row (0 if complimentary / free). */
+export function subscriptionMonthlyRecurringRevenueUsd(row: MonthlySubscriptionRow): number {
   if ((row.complimentary ?? 0) === 1) return 0;
 
   const pricing: RenewalPricingInput = {
@@ -62,49 +78,114 @@ export function subscriptionMonthlyRecurringRevenueUsd(row: AutoRenewSubscriptio
   return Math.round(mrr * 100) / 100;
 }
 
-export function loadAutoRenewSubscriptionRows(db: AppDb): AutoRenewSubscriptionRow[] {
+const AUTO_RENEW_MONTHLY_SUBSCRIPTION_SQL = `
+  SELECT s.member_id, s.subscription_id, s.price AS sub_price, s.quantity,
+         s.promo_renewals_remaining, s.renewal_price_indefinite,
+         s.renewal_discount_percent, s.complimentary,
+         p.price AS plan_price, p.length, p.unit,
+         COALESCE(m.auto_renew, 0) AS auto_renew,
+         s.subscription_pause_started
+  FROM members m
+  INNER JOIN subscriptions s ON s.member_id = m.member_id
+  INNER JOIN membership_plans p ON ${MEMBERSHIP_PLAN_JOIN_SQL}
+  WHERE COALESCE(m.auto_renew, 0) = 1
+    AND ${ACTIVE_MONTHLY_SUBSCRIPTION_SQL}
+    AND (m.account_deleted_at IS NULL OR TRIM(COALESCE(m.account_deleted_at, '')) = '')`;
+
+/** Active monthly membership + auto-renew checked on the member profile. */
+export function loadAutoRenewMonthlySubscriptionRows(db: AppDb): MonthlySubscriptionRow[] {
   ensureMembersAutoRenewColumn(db);
   ensureSubscriptionPauseStartedColumn(db);
   ensureMembersAccountDeletedAtColumn(db);
-
-  return db
-    .prepare(
-      `SELECT s.member_id, s.subscription_id, s.price AS sub_price, s.quantity,
-              s.promo_renewals_remaining, s.renewal_price_indefinite,
-              s.renewal_discount_percent, s.complimentary,
-              p.price AS plan_price, p.length, p.unit
-       FROM members m
-       INNER JOIN subscriptions s ON s.member_id = m.member_id
-       INNER JOIN membership_plans p ON p.product_id = s.product_id
-       WHERE COALESCE(m.auto_renew, 0) = 1
-         AND s.status = 'Active'
-         AND s.pass_credits_remaining IS NULL
-         AND TRIM(COALESCE(s.subscription_pause_started, '')) = ''
-         AND (m.account_deleted_at IS NULL OR TRIM(COALESCE(m.account_deleted_at, '')) = '')`
-    )
-    .all() as AutoRenewSubscriptionRow[];
+  return db.prepare(AUTO_RENEW_MONTHLY_SUBSCRIPTION_SQL).all() as MonthlySubscriptionRow[];
 }
 
-export function computeMrrSummary(db: AppDb): { mrr: number; memberCount: number } {
-  const rows = loadAutoRenewSubscriptionRows(db);
-  const memberMrr = new Map<string, number>();
-
-  for (const row of rows) {
-    const subMrr = subscriptionMonthlyRecurringRevenueUsd(row);
-    if (subMrr <= 0) continue;
-    memberMrr.set(row.member_id, (memberMrr.get(row.member_id) ?? 0) + subMrr);
-  }
-
-  let mrr = 0;
-  for (const value of memberMrr.values()) mrr += value;
-
-  return { mrr: Math.round(mrr * 100) / 100, memberCount: memberMrr.size };
+function isSubscriptionPaused(row: MonthlySubscriptionRow): boolean {
+  return String(row.subscription_pause_started ?? "").trim() !== "";
 }
 
-export function getAutoRenewRecurringMemberIds(db: AppDb): Set<string> {
+/** @deprecated Use loadAutoRenewMonthlySubscriptionRows */
+export function loadAutoRenewSubscriptionRows(db: AppDb): MonthlySubscriptionRow[] {
+  return loadAutoRenewMonthlySubscriptionRows(db);
+}
+
+export function getAutoRenewMonthlyMemberIds(db: AppDb): Set<string> {
   const ids = new Set<string>();
-  for (const row of loadAutoRenewSubscriptionRows(db)) {
-    if (subscriptionMonthlyRecurringRevenueUsd(row) > 0) ids.add(row.member_id);
+  for (const row of loadAutoRenewMonthlySubscriptionRows(db)) {
+    ids.add(row.member_id);
   }
   return ids;
+}
+
+/** Members with auto-renew on and an active monthly membership (includes complimentary / $0). */
+export function getAutoRenewRecurringMemberIds(db: AppDb): Set<string> {
+  return getAutoRenewMonthlyMemberIds(db);
+}
+
+function countAutoRenewFlagMembers(db: AppDb): number {
+  ensureMembersAutoRenewColumn(db);
+  ensureMembersAccountDeletedAtColumn(db);
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS c FROM members
+       WHERE COALESCE(auto_renew, 0) = 1
+         AND (account_deleted_at IS NULL OR TRIM(COALESCE(account_deleted_at, '')) = '')`
+    )
+    .get() as { c: number };
+  return row?.c ?? 0;
+}
+
+/** auto_renew=1 on member but no active monthly sub (missing subscription or plan link). */
+function countAutoRenewUnmatchedMembers(db: AppDb, matchedMemberIds: Set<string>): number {
+  ensureMembersAutoRenewColumn(db);
+  ensureMembersAccountDeletedAtColumn(db);
+  const flagged = db
+    .prepare(
+      `SELECT member_id FROM members
+       WHERE COALESCE(auto_renew, 0) = 1
+         AND (account_deleted_at IS NULL OR TRIM(COALESCE(account_deleted_at, '')) = '')`
+    )
+    .all() as { member_id: string }[];
+  let unmatched = 0;
+  for (const { member_id } of flagged) {
+    if (!matchedMemberIds.has(member_id)) unmatched++;
+  }
+  return unmatched;
+}
+
+export function computeMrrSummary(db: AppDb): {
+  /** Billable MRR from auto-renew active monthly members only. */
+  mrr: number;
+  /** Distinct auto-renew members with a qualifying active monthly sub. */
+  autoRenewMemberCount: number;
+  /** Auto-renew members with billable renewal price (contributes to MRR). */
+  autoRenewBillableMemberCount: number;
+  /** Members with auto_renew=1 on file (may exceed autoRenewMemberCount). */
+  autoRenewFlagCount: number;
+  /** auto_renew=1 but not in autoRenewMemberCount (data gap to investigate). */
+  autoRenewUnmatchedCount: number;
+} {
+  const rows = loadAutoRenewMonthlySubscriptionRows(db);
+  const autoRenewIds = new Set<string>();
+  const autoRenewBillableIds = new Set<string>();
+  let mrr = 0;
+
+  for (const row of rows) {
+    autoRenewIds.add(row.member_id);
+    if (isSubscriptionPaused(row)) continue;
+    const subMrr = subscriptionMonthlyRecurringRevenueUsd(row);
+    if (subMrr <= 0) continue;
+    mrr += subMrr;
+    autoRenewBillableIds.add(row.member_id);
+  }
+
+  const autoRenewFlagCount = countAutoRenewFlagMembers(db);
+
+  return {
+    mrr: Math.round(mrr * 100) / 100,
+    autoRenewMemberCount: autoRenewIds.size,
+    autoRenewBillableMemberCount: autoRenewBillableIds.size,
+    autoRenewFlagCount,
+    autoRenewUnmatchedCount: countAutoRenewUnmatchedMembers(db, autoRenewIds),
+  };
 }

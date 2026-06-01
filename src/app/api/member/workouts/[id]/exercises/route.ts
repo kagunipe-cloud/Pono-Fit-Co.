@@ -5,6 +5,7 @@ import { isTimedExerciseType, parseExerciseType } from "../../../../../../lib/ex
 import { getMemberIdFromSession } from "../../../../../../lib/session";
 import { ensureWorkoutTables } from "@/lib/workouts-server";
 import { normalizeWorkoutNote } from "@/lib/workout-notes";
+import { getWorkoutOwnerForSession } from "@/lib/member-workout-access";
 
 export const dynamic = "force-dynamic";
 
@@ -23,8 +24,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const memberId = await getMemberIdFromSession();
-    if (!memberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    const sessionMemberId = await getMemberIdFromSession();
 
     const workoutId = parseInt((await params).id, 10);
     if (Number.isNaN(workoutId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
@@ -38,14 +38,15 @@ export async function POST(
 
     const db = getDb();
     ensureWorkoutTables(db);
+    const access = getWorkoutOwnerForSession(sessionMemberId, workoutId, db);
+    if (!access.ok) {
+      db.close();
+      return access.response;
+    }
+    const memberId = access.ownerMemberId;
     if (exercise_id != null) {
       const exRow = db.prepare("SELECT id FROM exercises WHERE id = ?").get(exercise_id) as { id: number } | undefined;
       if (!exRow) exercise_id = null;
-    }
-    const workout = db.prepare("SELECT id FROM workouts WHERE id = ? AND member_id = ?").get(workoutId, memberId);
-    if (!workout) {
-      db.close();
-      return NextResponse.json({ error: "Workout not found" }, { status: 404 });
     }
 
     const maxOrder = db.prepare("SELECT COALESCE(MAX(sort_order), -1) AS m FROM workout_exercises WHERE workout_id = ?").get(workoutId) as { m: number };

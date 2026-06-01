@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { getMemberIdFromSession } from "@/lib/session";
 import { ensureWorkoutTables } from "@/lib/workouts-server";
 import { estimate1RM } from "@/lib/workout-units";
+import { getWorkoutOwnerForSession } from "@/lib/member-workout-access";
 
 export const dynamic = "force-dynamic";
 
@@ -32,14 +33,20 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const memberId = await getMemberIdFromSession();
-    if (!memberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    const sessionMemberId = await getMemberIdFromSession();
 
     const workoutId = parseInt((await params).id, 10);
     if (Number.isNaN(workoutId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
     const db = getDb();
     ensureWorkoutTables(db);
+
+    const access = getWorkoutOwnerForSession(sessionMemberId, workoutId, db);
+    if (!access.ok) {
+      db.close();
+      return access.response;
+    }
+    const memberId = access.ownerMemberId;
 
     const workout = db.prepare("SELECT id, finished_at FROM workouts WHERE id = ? AND member_id = ?").get(workoutId, memberId) as { id: number; finished_at: string | null } | undefined;
     if (!workout || !workout.finished_at) {

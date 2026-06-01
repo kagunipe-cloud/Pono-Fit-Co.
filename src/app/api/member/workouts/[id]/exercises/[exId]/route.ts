@@ -5,6 +5,7 @@ import { getMemberIdFromSession } from "@/lib/session";
 import { ensureWorkoutTables } from "@/lib/workouts-server";
 import { estimate1RM } from "@/lib/workout-units";
 import { normalizeWorkoutNote } from "@/lib/workout-notes";
+import { getWorkoutOwnerForSession } from "@/lib/member-workout-access";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +15,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; exId: string }> }
 ) {
   try {
-    const memberId = await getMemberIdFromSession();
-    if (!memberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    const sessionMemberId = await getMemberIdFromSession();
 
     const workoutId = parseInt((await params).id, 10);
     const exId = parseInt((await params).exId, 10);
@@ -26,11 +26,12 @@ export async function PATCH(
     const db = getDb();
     ensureWorkoutTables(db);
 
-    const workout = db.prepare("SELECT id FROM workouts WHERE id = ? AND member_id = ?").get(workoutId, memberId);
-    if (!workout) {
+    const access = getWorkoutOwnerForSession(sessionMemberId, workoutId, db);
+    if (!access.ok) {
       db.close();
-      return NextResponse.json({ error: "Workout not found" }, { status: 404 });
+      return access.response;
     }
+    const memberId = access.ownerMemberId;
 
     const row = db
       .prepare("SELECT id, exercise_name, type, exercise_id FROM workout_exercises WHERE id = ? AND workout_id = ?")
@@ -129,8 +130,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; exId: string }> }
 ) {
   try {
-    const memberId = await getMemberIdFromSession();
-    if (!memberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    const sessionMemberId = await getMemberIdFromSession();
 
     const workoutId = parseInt((await params).id, 10);
     const exId = parseInt((await params).exId, 10);
@@ -140,10 +140,10 @@ export async function DELETE(
     const db = getDb();
     ensureWorkoutTables(db);
 
-    const workout = db.prepare("SELECT id FROM workouts WHERE id = ? AND member_id = ?").get(workoutId, memberId);
-    if (!workout) {
+    const access = getWorkoutOwnerForSession(sessionMemberId, workoutId, db);
+    if (!access.ok) {
       db.close();
-      return NextResponse.json({ error: "Workout not found" }, { status: 404 });
+      return access.response;
     }
 
     const ex = db.prepare("SELECT id FROM workout_exercises WHERE id = ? AND workout_id = ?").get(exId, workoutId);

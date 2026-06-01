@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getMemberIdFromSession } from "@/lib/session";
 import { ensureWorkoutTables } from "@/lib/workouts-server";
+import { canAccessMemberExerciseStats } from "@/lib/member-exercise-access";
 
 export const dynamic = "force-dynamic";
 
@@ -9,13 +10,24 @@ export const dynamic = "force-dynamic";
  * GET — Returns all designated "My 1RM" exercises and their current best.
  * { exercises: [{ exercise_id, exercise_name, current_1rm_lbs, records: [{ date, estimated_1rm_lbs }] }] }
  */
-export async function GET(_request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const memberId = await getMemberIdFromSession();
-    if (!memberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    const sessionMemberId = await getMemberIdFromSession();
+    if (!sessionMemberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+
+    const forMemberParam = request.nextUrl.searchParams.get("for_member_id")?.trim() || null;
 
     const db = getDb();
     ensureWorkoutTables(db);
+
+    let memberId = sessionMemberId;
+    if (forMemberParam && forMemberParam !== sessionMemberId) {
+      if (!canAccessMemberExerciseStats(db, sessionMemberId, forMemberParam)) {
+        db.close();
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      memberId = forMemberParam;
+    }
 
     const settings = db.prepare("SELECT exercise_id FROM member_1rm_settings WHERE member_id = ?").all(memberId) as { exercise_id: number }[];
     if (settings.length === 0) {

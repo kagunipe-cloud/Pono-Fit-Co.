@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { kmToMiles } from "@/lib/workouts";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { formatDateTimeInAppTz, parseStoredUtcToDate } from "@/lib/app-timezone";
 import { useAppTimezone } from "@/lib/settings-context";
 
@@ -43,6 +43,7 @@ type ClientGoals = {
 
 export default function ClientPTDashboardPage() {
   const params = useParams();
+  const router = useRouter();
   const tz = useAppTimezone();
   const clientId = (params.clientId as string) ?? "";
   const [clientName, setClientName] = useState<string>("");
@@ -55,6 +56,7 @@ export default function ClientPTDashboardPage() {
   const [goalsForm, setGoalsForm] = useState({ goal_weight: "", goal_body_fat: "", goal_muscle_gain: "" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [recordingLive, setRecordingLive] = useState(false);
   const [showBodyCompForm, setShowBodyCompForm] = useState(false);
   const [bodyCompSaving, setBodyCompSaving] = useState(false);
   const [bodyCompForm, setBodyCompForm] = useState({
@@ -138,6 +140,31 @@ export default function ClientPTDashboardPage() {
       .finally(() => setBodyCompSaving(false));
   }
 
+  async function startLiveRecording() {
+    if (!clientId) return;
+    setError(null);
+    setRecordingLive(true);
+    try {
+      const res = await fetch("/api/trainer/workouts/start-for-client", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ client_member_id: clientId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 409 && data?.workout_id) {
+        router.push(`/member/workouts/${data.workout_id}`);
+        return;
+      }
+      if (!res.ok) {
+        setError((data as { error?: string }).error ?? "Failed to start live recording");
+        return;
+      }
+      if (data?.id) router.push(`/member/workouts/${data.id}`);
+    } finally {
+      setRecordingLive(false);
+    }
+  }
+
   /** Simple line chart: points is [{x: dateLabel, y: number}], height 80. Needs at least 2 points. */
   function MiniChart({ points, label, unit }: { points: { x: string; y: number }[]; label: string; unit?: string }) {
     const valid = points.filter((p) => typeof p.y === "number" && !Number.isNaN(p.y));
@@ -181,15 +208,28 @@ export default function ClientPTDashboardPage() {
 
       <div className="mb-8">
         <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-          <h2 className="text-lg font-semibold text-stone-800">Create Workout for Member</h2>
-          <Link
-            href={`/trainer/my-clients/${clientId}/create-workout`}
-            className="px-4 py-2.5 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700"
-          >
-            Create Workout for Member
-          </Link>
+          <h2 className="text-lg font-semibold text-stone-800">Workouts</h2>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void startLiveRecording()}
+              disabled={recordingLive}
+              className="px-4 py-2.5 rounded-lg border-2 border-amber-600 text-amber-800 font-medium hover:bg-amber-50 disabled:opacity-50"
+            >
+              {recordingLive ? "Opening…" : "Record live session"}
+            </button>
+            <Link
+              href={`/trainer/my-clients/${clientId}/create-workout`}
+              className="px-4 py-2.5 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700"
+            >
+              Create workout (send or save)
+            </Link>
+          </div>
         </div>
-        <p className="text-sm text-stone-500">Send a workout to this client. They will see it under &quot;Workouts from my trainer&quot; and can fill in sets, reps, and weight, then finish to send results back here.</p>
+        <p className="text-sm text-stone-500">
+          <span className="font-medium text-stone-600">Record live session</span> opens the same logging screen you use for your own workouts — finish to save a completed session on their history.
+          <span className="font-medium text-stone-600"> Create workout</span> builds a prescription they can open later (or save as already finished).
+        </p>
       </div>
 
       <div className="mb-8">

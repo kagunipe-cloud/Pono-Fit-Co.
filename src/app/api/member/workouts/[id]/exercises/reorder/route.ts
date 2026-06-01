@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import { getMemberIdFromSession } from "@/lib/session";
 import { ensureWorkoutTables } from "@/lib/workouts-server";
+import { getWorkoutOwnerForSession } from "@/lib/member-workout-access";
 
 export const dynamic = "force-dynamic";
 
 /** POST body: { exercise_ids: number[] } — full ordered list of workout_exercises.id for this workout. */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const memberId = await getMemberIdFromSession();
-    if (!memberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    const sessionMemberId = await getMemberIdFromSession();
+    if (!sessionMemberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
 
     const workoutId = parseInt((await params).id, 10);
     if (Number.isNaN(workoutId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
@@ -29,10 +30,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     const db = getDb();
     ensureWorkoutTables(db);
-    const owned = db.prepare("SELECT id FROM workouts WHERE id = ? AND member_id = ?").get(workoutId, memberId);
-    if (!owned) {
+    const access = getWorkoutOwnerForSession(sessionMemberId, workoutId, db);
+    if (!access.ok) {
       db.close();
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return access.response;
     }
 
     const existing = db

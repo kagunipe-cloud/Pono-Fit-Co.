@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone, expiryDateSortableSql, ensureMembersAccountDeletedAtColumn } from "../../../lib/db";
 import { formatDateForStorage, todayInAppTz, parseAppDateToYMD, ymdGte } from "../../../lib/app-timezone";
-import { getAutoRenewRecurringMemberIds } from "../../../lib/mrr";
+import {
+  ACTIVE_MONTHLY_SUBSCRIPTION_SQL,
+  getAutoRenewRecurringMemberIds,
+  MEMBERSHIP_PLAN_JOIN_SQL,
+} from "../../../lib/mrr";
 import { randomUUID } from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -24,8 +28,8 @@ function getMemberTypesMap(db: ReturnType<typeof getDb>): Map<string, MemberType
   try {
     const monthly = db.prepare(`
       SELECT DISTINCT s.member_id FROM subscriptions s
-      JOIN membership_plans p ON p.product_id = s.product_id
-      WHERE s.status = 'Active' AND p.unit = 'Month'
+      JOIN membership_plans p ON ${MEMBERSHIP_PLAN_JOIN_SQL}
+      WHERE ${ACTIVE_MONTHLY_SUBSCRIPTION_SQL}
     `).all() as { member_id: string }[];
     monthly.forEach((r) => add(r.member_id, "Monthly"));
   } catch { /* ignore */ }

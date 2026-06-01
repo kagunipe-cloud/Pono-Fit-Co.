@@ -11,6 +11,8 @@ type LiftSetPrPercentProps = {
   repsStr: string;
   /** Current workout id — excludes this workout from PR so % matches “vs your prior best at this weight”. */
   excludeWorkoutId: number | null;
+  /** When set, PR lookups use this member's history (trainer recording for client). */
+  forMemberId?: string | null;
   /** Increment when workout data is refetched (e.g. after saving sets). */
   invalidateKey: number;
   /** If false, only the percentage is shown (e.g. finished workout already shows 🍍 + PR copy from pr-badges). */
@@ -28,6 +30,7 @@ export function LiftSetPrPercent({
   repsStr,
   excludeWorkoutId,
   invalidateKey,
+  forMemberId,
   showPineapple = true,
 }: LiftSetPrPercentProps) {
   const [data, setData] = useState<PrData | null>(null);
@@ -50,6 +53,7 @@ export function LiftSetPrPercent({
       setLoading(true);
       const params = new URLSearchParams({ weight: String(weightNum) });
       if (excludeWorkoutId != null) params.set("exclude_workout_id", String(excludeWorkoutId));
+      if (forMemberId) params.set("for_member_id", forMemberId);
       if (exerciseId != null) params.set("exercise_id", String(exerciseId));
       else params.set("exercise_name", exerciseName.trim());
       fetch(`/api/member/workouts/pr?${params}`)
@@ -59,7 +63,7 @@ export function LiftSetPrPercent({
         .finally(() => setLoading(false));
     }, 300);
     return () => clearTimeout(t);
-  }, [valid, exerciseId, exerciseName, weightNum, repsNum, excludeWorkoutId, invalidateKey]);
+  }, [valid, exerciseId, exerciseName, weightNum, repsNum, excludeWorkoutId, invalidateKey, forMemberId]);
 
   if (!valid) return null;
   if (loading) {

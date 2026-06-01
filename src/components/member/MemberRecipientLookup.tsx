@@ -15,6 +15,8 @@ type MemberRecipientLookupProps = {
   placeholder?: string;
   className?: string;
   onEnter?: () => void;
+  /** When "clients", trainers only see their PT clients (admins still see everyone). */
+  scope?: "clients" | "all";
 };
 
 export function resolveMemberRecipient(
@@ -41,6 +43,7 @@ export default function MemberRecipientLookup({
   placeholder = "Name or email",
   className = "",
   onEnter,
+  scope = "all",
 }: MemberRecipientLookupProps) {
   const [hits, setHits] = useState<MemberLookupHit[]>([]);
   const [loading, setLoading] = useState(false);
@@ -61,7 +64,9 @@ export default function MemberRecipientLookup({
 
     const t = setTimeout(() => {
       setLoading(true);
-      fetch(`/api/member/member-lookup?q=${encodeURIComponent(term)}`)
+      fetch(
+        `/api/member/member-lookup?q=${encodeURIComponent(term)}${scope === "clients" ? "&scope=clients" : ""}`
+      )
         .then((r) => (r.ok ? r.json() : []))
         .then((rows) => {
           const list = Array.isArray(rows) ? (rows as MemberLookupHit[]) : [];
@@ -76,7 +81,7 @@ export default function MemberRecipientLookup({
     }, 300);
 
     return () => clearTimeout(t);
-  }, [value, selected]);
+  }, [value, selected, scope]);
 
   return (
     <div className={`relative min-w-[12rem] ${className}`}>

@@ -3,6 +3,7 @@ import { getDb } from "../../../../../lib/db";
 import { getMemberIdFromSession } from "../../../../../lib/session";
 import { ensureWorkoutTables } from "@/lib/workouts-server";
 import { applyMemberWorkoutFinishSideEffects } from "@/lib/workout-finish-side-effects";
+import { resolveWorkoutOwnerMemberId } from "@/lib/member-workout-access";
 
 export const dynamic = "force-dynamic";
 
@@ -94,23 +95,50 @@ async function getWorkoutWithExercises(db: ReturnType<typeof getDb>, workoutId: 
   };
 }
 
+function clientDisplayName(row: {
+  preferred_name?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+}): string {
+  const preferred = String(row.preferred_name ?? "").trim();
+  if (preferred) return preferred;
+  return [row.first_name, row.last_name].filter(Boolean).join(" ").trim() || "Member";
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const memberId = await getMemberIdFromSession();
-    if (!memberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    const sessionMemberId = await getMemberIdFromSession();
+    if (!sessionMemberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
 
     const id = parseInt((await params).id, 10);
     if (Number.isNaN(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
     const db = getDb();
     ensureWorkoutTables(db);
-    const workout = await getWorkoutWithExercises(db, id, memberId);
+    const access = resolveWorkoutOwnerMemberId(db, sessionMemberId, id);
+    if (!access.ok) {
+      db.close();
+      return NextResponse.json({ error: access.error === "forbidden" ? "Forbidden" : "Not found" }, { status: access.error === "forbidden" ? 403 : 404 });
+    }
+    const ownerMemberId = access.ownerMemberId;
+    const workout = await getWorkoutWithExercises(db, id, ownerMemberId);
+    let client_display_name: string | null = null;
+    if (sessionMemberId !== ownerMemberId) {
+      const client = db
+        .prepare("SELECT first_name, last_name, preferred_name FROM members WHERE member_id = ?")
+        .get(ownerMemberId) as { first_name: string | null; last_name: string | null; preferred_name: string | null } | undefined;
+      client_display_name = client ? clientDisplayName(client) : null;
+    }
     db.close();
     if (!workout) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    return NextResponse.json(workout);
+    return NextResponse.json({
+      ...workout,
+      is_recording_for_client: sessionMemberId !== ownerMemberId,
+      client_display_name,
+    });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: "Failed to fetch workout" }, { status: 500 });
@@ -123,8 +151,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const memberId = await getMemberIdFromSession();
-    if (!memberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    const sessionMemberId = await getMemberIdFromSession();
+    if (!sessionMemberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
 
     const id = parseInt((await params).id, 10);
     if (Number.isNaN(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
@@ -132,6 +160,12 @@ export async function PATCH(
     const body = await request.json().catch(() => ({}));
     const db = getDb();
     ensureWorkoutTables(db);
+    const access = resolveWorkoutOwnerMemberId(db, sessionMemberId, id);
+    if (!access.ok) {
+      db.close();
+      return NextResponse.json({ error: access.error === "forbidden" ? "Forbidden" : "Not found" }, { status: access.error === "forbidden" ? 403 : 404 });
+    }
+    const memberId = access.ownerMemberId;
     const existing = db.prepare("SELECT id FROM workouts WHERE id = ? AND member_id = ?").get(id, memberId);
     if (!existing) {
       db.close();
@@ -169,14 +203,20 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const memberId = await getMemberIdFromSession();
-    if (!memberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+    const sessionMemberId = await getMemberIdFromSession();
+    if (!sessionMemberId) return NextResponse.json({ error: "Not logged in" }, { status: 401 });
 
     const id = parseInt((await params).id, 10);
     if (Number.isNaN(id)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
     const db = getDb();
     ensureWorkoutTables(db);
+    const access = resolveWorkoutOwnerMemberId(db, sessionMemberId, id);
+    if (!access.ok) {
+      db.close();
+      return NextResponse.json({ error: access.error === "forbidden" ? "Forbidden" : "Not found" }, { status: access.error === "forbidden" ? 403 : 404 });
+    }
+    const memberId = access.ownerMemberId;
     const existing = db.prepare("SELECT id FROM workouts WHERE id = ? AND member_id = ?").get(id, memberId);
     if (!existing) {
       db.close();
