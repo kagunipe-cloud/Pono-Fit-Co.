@@ -9,10 +9,9 @@ import { getPresetRange } from "@/lib/report-date-presets";
 import {
   formatInsuranceProgramLabel,
   INSURANCE_PROGRAM_LABELS,
-  type InsuranceProgramValue,
+  INSURANCE_REPORT_FILTER_LABELS,
+  type InsuranceReportFilter,
 } from "@/lib/insurance-program";
-
-type ReportProgramFilter = "all" | InsuranceProgramValue;
 
 type Row = {
   id: number;
@@ -39,7 +38,7 @@ export default function InsuranceReportPage() {
   const router = useRouter();
   const tz = useAppTimezone();
 
-  const [program, setProgram] = useState<ReportProgramFilter>("all");
+  const [program, setProgram] = useState<InsuranceReportFilter>("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [members, setMembers] = useState<MemberSummary[]>([]);
@@ -47,6 +46,7 @@ export default function InsuranceReportPage() {
   const [timezone, setTimezone] = useState("");
   const [truncated, setTruncated] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedMember, setExpandedMember] = useState<string | null>(null);
 
@@ -99,11 +99,54 @@ export default function InsuranceReportPage() {
     setTo(r.to);
   }
 
+  async function downloadAshExport() {
+    if (!from || !to) return;
+    setExporting(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({ from, to });
+      const res = await fetch(`/api/admin/reports/insurance-ash-export?${params}`);
+      if (res.status === 401) {
+        router.replace("/login");
+        return;
+      }
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setError(typeof json.error === "string" ? json.error : "ASH export failed.");
+        return;
+      }
+      const skippedFitness = Number(res.headers.get("X-Ash-Skipped-Missing-Fitness-Id") ?? "0");
+      const skippedBirthday = Number(res.headers.get("X-Ash-Skipped-Missing-Birthday") ?? "0");
+      const exportedRows = Number(res.headers.get("X-Ash-Exported-Rows") ?? "0");
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const match = /filename="([^"]+)"/.exec(disposition);
+      const filename = match?.[1] ?? `ash-bulk-claims_${from}_to_${to}.tsv`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      if (skippedFitness > 0 || skippedBirthday > 0) {
+        const parts: string[] = [];
+        if (skippedFitness > 0) parts.push(`${skippedFitness} missing Fitness ID`);
+        if (skippedBirthday > 0) parts.push(`${skippedBirthday} missing birthday`);
+        setError(
+          `Downloaded ${exportedRows} row${exportedRows === 1 ? "" : "s"}. Skipped: ${parts.join(", ")}.`
+        );
+      }
+    } catch {
+      setError("ASH export failed.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const name = (r: { first_name: string | null; last_name: string | null; member_id: string }) =>
     [r.first_name, r.last_name].filter(Boolean).join(" ").trim() || r.member_id;
 
-  const programFilterLabel =
-    program === "all" ? "All insurance programs" : INSURANCE_PROGRAM_LABELS[program];
+  const programFilterLabel = INSURANCE_REPORT_FILTER_LABELS[program];
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
@@ -113,8 +156,8 @@ export default function InsuranceReportPage() {
       <h1 className="text-2xl font-bold text-stone-800 mb-2">Insurance report</h1>
       <p className="text-stone-600 text-sm mb-6">
         For reporting, <strong>one visit per member per calendar day</strong> — the first successful door unlock that day
-        (gym time). Includes members with <strong>any</strong> insurance program on file, or narrow to Optum / Tivity
-        below. The table lists each member and their <strong>billable visit-day count</strong>; click a count to see every
+        (gym time). Includes members with <strong>any</strong> insurance program on file, or narrow to Optum / Tivity /
+        ASH below. The table lists each member and their <strong>billable visit-day count</strong>; click a count to see every
         unlock in this range. Dates use the gym timezone
         {timezone ? ` (${timezone})` : ""}.
       </p>
@@ -144,6 +187,15 @@ export default function InsuranceReportPage() {
                 {INSURANCE_PROGRAM_LABELS[p]}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setProgram("ash")}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                program === "ash" ? "bg-white shadow text-stone-900" : "text-stone-600 hover:text-stone-900"
+              }`}
+            >
+              ASH
+            </button>
           </div>
         </div>
 
@@ -191,11 +243,37 @@ export default function InsuranceReportPage() {
             >
               {loading ? "Loading…" : "Run report"}
             </button>
+            {program === "ash" ? (
+              <button
+                type="button"
+                onClick={downloadAshExport}
+                disabled={exporting || !from || !to}
+                className="px-3 py-1.5 rounded-lg border border-brand-600 text-brand-700 text-sm font-medium hover:bg-brand-50 disabled:opacity-50"
+              >
+                {exporting ? "Exporting…" : "Download ASH bulk file"}
+              </button>
+            ) : null}
           </div>
+          {program === "ash" ? (
+            <p className="text-xs text-stone-500 mt-2">
+              Tab-separated file for ASHLink bulk upload (Silver &amp; Fit + Active &amp; Fit). One row per billable visit;
+              members need ASH Fitness ID and birthday on their profile.
+            </p>
+          ) : null}
         </div>
       </div>
 
-      {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
+      {error && (
+        <p
+          className={`text-sm mb-4 rounded-lg px-3 py-2 ${
+            error.startsWith("Downloaded")
+              ? "text-amber-800 bg-amber-50 border border-amber-200"
+              : "text-red-600"
+          }`}
+        >
+          {error}
+        </p>
+      )}
       {truncated && (
         <p className="text-amber-800 text-sm mb-4 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
           Loaded the first 100,000 unlock events in this range (oldest first). Very large ranges may be incomplete —

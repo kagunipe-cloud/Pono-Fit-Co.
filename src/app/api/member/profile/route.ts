@@ -10,7 +10,7 @@ import {
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { stripeCustomerIdForApi } from "../../../../lib/stripe-customer";
 import { parseBirthday } from "../../../../lib/member-birthday";
-import { ensureKisiUser, updateKisiUser } from "../../../../lib/kisi";
+import { syncMemberProfileToKisi } from "../../../../lib/kisi";
 
 export const dynamic = "force-dynamic";
 
@@ -197,17 +197,18 @@ export async function PATCH(request: NextRequest) {
     let kisiSyncWarning: string | undefined;
     if (emailChanged || nameChanged) {
       try {
-        const kisiId = existing.kisi_id?.trim();
-        if (kisiId) {
-          await updateKisiUser(kisiId, { email: kisiEmail, name: kisiName });
-        } else {
-          const newKisiId = await ensureKisiUser(kisiEmail, kisiName);
-          db.prepare("UPDATE members SET kisi_id = ? WHERE member_id = ?").run(newKisiId, memberId);
+        const sync = await syncMemberProfileToKisi({
+          email: kisiEmail,
+          name: kisiName,
+          kisiId: existing.kisi_id,
+        });
+        if (sync.kisi_id !== (existing.kisi_id ?? "").trim()) {
+          db.prepare("UPDATE members SET kisi_id = ? WHERE member_id = ?").run(sync.kisi_id, memberId);
         }
       } catch (e) {
         console.error("[member profile] Kisi sync failed:", e);
-        kisiSyncWarning =
-          "Profile saved, but door access may need a moment to update. Contact the gym if unlock stops working.";
+        const detail = e instanceof Error ? e.message : "Kisi sync failed";
+        kisiSyncWarning = `Profile saved, but Kisi was not updated: ${detail}`;
       }
     }
 

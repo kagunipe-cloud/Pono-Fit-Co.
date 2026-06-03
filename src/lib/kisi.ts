@@ -168,7 +168,7 @@ export async function updateKisiUser(
   if (updates.name !== undefined) user.name = (updates.name ?? "").trim() || undefined;
   if (Object.keys(user).length === 0) return;
 
-  const res = await fetch(`${KISI_API_BASE}/users/${kisiId}`, {
+  const res = await fetchKisiWithRetry(`${KISI_API_BASE}/users/${encodeURIComponent(kisiId)}`, {
     method: "PATCH",
     headers,
     body: JSON.stringify({ user }),
@@ -177,8 +177,57 @@ export async function updateKisiUser(
   if (!res.ok) {
     const err = await res.text();
     console.error("[Kisi] update user failed:", res.status, err);
-    throw new Error(`Kisi user update failed: ${res.status}`);
+    const detail = err.trim().slice(0, 300);
+    throw new Error(
+      detail ? `Kisi user update failed: ${res.status} — ${detail}` : `Kisi user update failed: ${res.status}`
+    );
   }
+}
+
+/**
+ * Keep Kisi in sync when a member's email or name changes in the app.
+ * Uses `members.kisi_id` when set; otherwise finds or creates the user by email.
+ * Verifies the Kisi user's email after PATCH so typos (e.g. gmail.con) are caught if the API rejects the change.
+ */
+export async function syncMemberProfileToKisi(opts: {
+  email: string;
+  name?: string | null;
+  kisiId?: string | null;
+}): Promise<{ kisi_id: string }> {
+  const emailTrim = opts.email?.trim();
+  if (!emailTrim) {
+    throw new Error("Email required to sync member to Kisi");
+  }
+  const name = opts.name !== undefined ? (opts.name ?? "").trim() || undefined : undefined;
+
+  let kisiId = opts.kisiId?.trim() || null;
+  if (kisiId) {
+    let kisiUser = await getKisiUserById(kisiId);
+    if (!kisiUser) {
+      console.warn(`[Kisi] sync: stale kisi_id ${kisiId}; linking by email ${emailTrim}`);
+      kisiId = await ensureKisiUser(emailTrim, name);
+      return { kisi_id: kisiId };
+    }
+
+    const emailDiffers = kisiUser.email.toLowerCase() !== emailTrim.toLowerCase();
+    const nameDiffers = name !== undefined && (kisiUser.name ?? "") !== (name ?? "");
+    if (emailDiffers || nameDiffers) {
+      if (emailDiffers) {
+        console.log(`[Kisi] sync: updating user ${kisiId} email ${kisiUser.email} → ${emailTrim}`);
+      }
+      await updateKisiUser(kisiId, { email: emailTrim, name });
+      kisiUser = await getKisiUserById(kisiId);
+      if (kisiUser && kisiUser.email.toLowerCase() !== emailTrim.toLowerCase()) {
+        throw new Error(
+          `Kisi still has ${kisiUser.email} after update (app has ${emailTrim}). Update the email in the Kisi dashboard or contact Kisi support.`
+        );
+      }
+    }
+    return { kisi_id: kisiId };
+  }
+
+  kisiId = await ensureKisiUser(emailTrim, name);
+  return { kisi_id: kisiId };
 }
 
 export async function grantAccess(kisiUserId: string, validUntil: Date): Promise<void> {
@@ -381,18 +430,39 @@ export async function grantAccessForGroup(
   }
 }
 
-/**
- * Create a short-lived login for a managed user so we can make API calls as them (e.g. unlock).
- * Returns the user's secret (API key) for that login.
- */
-export async function createLoginForUser(email: string): Promise<string> {
+/** Fetch a Kisi user by id. Returns null if the user was deleted (stale `members.kisi_id`). */
+export async function getKisiUserById(
+  kisiUserId: string
+): Promise<{ id: string; email: string; name: string | null } | null> {
   const headers = authHeaders();
   if (!headers.Authorization) {
     throw new Error("KISI_API_KEY not set");
   }
-  const emailTrim = email?.trim();
-  if (!emailTrim) {
-    throw new Error("Email required to create Kisi login");
+  const id = kisiUserId?.trim();
+  if (!id) return null;
+
+  const res = await fetchKisiWithRetry(`${KISI_API_BASE}/users/${encodeURIComponent(id)}`, {
+    method: "GET",
+    headers,
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Kisi fetch user failed: ${res.status} ${err}`);
+  }
+  const data = (await res.json()) as { id?: number; email?: string; name?: string };
+  if (data?.id == null || !String(data.email ?? "").trim()) return null;
+  return {
+    id: String(data.id),
+    email: String(data.email).trim(),
+    name: (data.name ?? "").trim() || null,
+  };
+}
+
+async function postCreateLogin(emailTrim: string): Promise<string> {
+  const headers = authHeaders();
+  if (!headers.Authorization) {
+    throw new Error("KISI_API_KEY not set");
   }
 
   const res = await fetchKisiWithRetry(`${KISI_API_BASE}/logins`, {
@@ -405,7 +475,7 @@ export async function createLoginForUser(email: string): Promise<string> {
         device_model: "Browser",
         os_name: "Web",
         email: emailTrim,
-        expire: "false",
+        expire: false,
       },
     }),
   });
@@ -418,6 +488,49 @@ export async function createLoginForUser(email: string): Promise<string> {
     throw new Error("Kisi create login returned no secret");
   }
   return data.secret;
+}
+
+/**
+ * Create a short-lived login for a managed user so we can make API calls as them (e.g. unlock).
+ * Returns the user's secret (API key) for that login.
+ *
+ * When `kisiUserId` is set, uses the email on that Kisi user (not only the app profile email).
+ * Fixes 404 when the member has door access in Kisi but the app email was changed or never matched.
+ */
+export async function createLoginForUser(email: string, kisiUserId?: string | null): Promise<string> {
+  const appEmail = email?.trim();
+  if (!appEmail && !kisiUserId?.trim()) {
+    throw new Error("Email required to create Kisi login");
+  }
+
+  let loginEmail = appEmail;
+  if (kisiUserId?.trim()) {
+    const kisiUser = await getKisiUserById(kisiUserId.trim());
+    if (kisiUser?.email) {
+      loginEmail = kisiUser.email;
+      if (appEmail && loginEmail.toLowerCase() !== appEmail.toLowerCase()) {
+        console.warn(
+          `[Kisi] create login: using Kisi user email (${loginEmail}); app profile has ${appEmail} (kisi_id ${kisiUserId})`
+        );
+      }
+    }
+  }
+  if (!loginEmail) {
+    throw new Error("Email required to create Kisi login");
+  }
+
+  try {
+    return await postCreateLogin(loginEmail);
+  } catch (firstErr) {
+    if (appEmail && loginEmail.toLowerCase() !== appEmail.toLowerCase()) {
+      try {
+        return await postCreateLogin(appEmail);
+      } catch {
+        /* fall through */
+      }
+    }
+    throw firstErr;
+  }
 }
 
 /** Optional data for Kisi unlock — use proximity + OTP when group/door has reader or geofence restrictions. */

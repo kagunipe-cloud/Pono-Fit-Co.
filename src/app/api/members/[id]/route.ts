@@ -7,6 +7,7 @@ import {
   ensureMembersDoorAccessWaiverExemptColumn,
   ensureMembersProfileColumns,
   ensureMembersInsuranceProgramColumn,
+  ensureMembersInsuranceFitnessIdColumn,
   ensureSubscriptionPassPackColumns,
   ensureSubscriptionPauseStartedColumn,
 } from "../../../../lib/db";
@@ -15,7 +16,7 @@ import { normalizeInsuranceProgram } from "../../../../lib/insurance-program";
 import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../lib/recurring-classes";
 import { todayInAppTz, calendarDaysUntilExpiryYmd } from "../../../../lib/app-timezone";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
-import { updateKisiUser, ensureKisiUser } from "../../../../lib/kisi";
+import { syncMemberProfileToKisi } from "../../../../lib/kisi";
 import { parseBirthday } from "../../../../lib/member-birthday";
 import { memberHasDoorAccessToday } from "../../../../lib/pass-access";
 import {
@@ -43,6 +44,7 @@ export async function GET(
     ensureMembersDoorAccessWaiverExemptColumn(db);
     ensureMembersProfileColumns(db);
     ensureMembersInsuranceProgramColumn(db);
+    ensureMembersInsuranceFitnessIdColumn(db);
     ensureDayPassCreditLedger(db);
     ensureMembersPassActivationDayColumn(db);
     migrateLegacyPassPackSubscriptionsToLedger(db);
@@ -55,7 +57,7 @@ export async function GET(
         COALESCE(m.exp_next_payment_date, (SELECT s.expiry_date FROM subscriptions s WHERE s.member_id = m.member_id AND s.status = 'Active' ORDER BY ${expiryDateSortableSql("s.expiry_date")} DESC LIMIT 1)) AS exp_next_payment_date,
         m.role, m.created_at, m.waiver_signed_at, m.door_access_waiver_exempt, m.stripe_customer_id, m.auto_renew,
         m.emergency_contact_name, m.emergency_contact_phone, m.emergency_info, m.spirit_animal,
-        m.pronouns, m.birthday, m.mailing_address, m.pass_activation_day, m.insurance_program
+        m.pronouns, m.birthday, m.mailing_address, m.pass_activation_day, m.insurance_program, m.insurance_fitness_id
       FROM members m WHERE ${isPurelyNumeric ? "m.id = ? OR m.member_id = ?" : "m.member_id = ?"}
     `);
     const member = (isPurelyNumeric
@@ -209,11 +211,20 @@ export async function PATCH(
     const db = getDb();
     ensureMembersProfileColumns(db);
     ensureMembersInsuranceProgramColumn(db);
+    ensureMembersInsuranceFitnessIdColumn(db);
     ensureMembersDoorAccessWaiverExemptColumn(db);
     const isPurelyNumeric = /^\d+$/.test(id);
     const existing = (isPurelyNumeric
-      ? db.prepare("SELECT id FROM members WHERE id = ? OR member_id = ?").get(parseInt(id, 10), id)
-      : db.prepare("SELECT id FROM members WHERE member_id = ?").get(id)) as { id: number } | undefined;
+      ? db
+          .prepare(
+            "SELECT id, email, first_name, last_name, kisi_id FROM members WHERE id = ? OR member_id = ?"
+          )
+          .get(parseInt(id, 10), id)
+      : db
+          .prepare("SELECT id, email, first_name, last_name, kisi_id FROM members WHERE member_id = ?")
+          .get(id)) as
+      | { id: number; email: string | null; first_name: string | null; last_name: string | null; kisi_id: string | null }
+      | undefined;
     if (!existing) {
       db.close();
       return NextResponse.json({ error: "Member not found" }, { status: 404 });
@@ -274,6 +285,7 @@ export async function PATCH(
       "birthday",
       "mailing_address",
       "insurance_program",
+      "insurance_fitness_id",
     ] as const;
     for (const field of fields) {
       if (body[field] !== undefined) {
@@ -314,7 +326,7 @@ export async function PATCH(
       `SELECT id, member_id, first_name, last_name, preferred_name, email, phone, kisi_id, kisi_group_id, join_date, exp_next_payment_date, role, created_at,
               waiver_signed_at, door_access_waiver_exempt, stripe_customer_id, auto_renew,
               emergency_contact_name, emergency_contact_phone, emergency_info, spirit_animal,
-              pronouns, birthday, mailing_address, insurance_program
+              pronouns, birthday, mailing_address, insurance_program, insurance_fitness_id
        FROM members WHERE id = ?`
     ).get(memberId) as {
       id: number;
@@ -326,27 +338,34 @@ export async function PATCH(
       kisi_id: string | null;
     } | undefined;
 
-    // Sync email/name to Kisi regardless of current door access (handles cancel-and-return members)
-    const profileChanged =
+    // Sync email/name to Kisi when profile fields change (fixes Kisi typos like gmail.con vs .com)
+    const profileTouched =
       body.email !== undefined || body.first_name !== undefined || body.last_name !== undefined;
     const email = row?.email?.trim();
     const name = [row?.first_name, row?.last_name].filter(Boolean).join(" ").trim() || undefined;
-    if (profileChanged && email && row) {
+    const prevEmail = (existing.email ?? "").trim().toLowerCase();
+    const emailChanged = body.email !== undefined && email != null && email.toLowerCase() !== prevEmail;
+    if (profileTouched && email && row) {
       try {
-        const kisiId = row.kisi_id?.trim();
-        if (kisiId) {
-          await updateKisiUser(kisiId, { email, name });
-        } else {
-          const newKisiId = await ensureKisiUser(email, name);
-          db.prepare("UPDATE members SET kisi_id = ? WHERE id = ?").run(newKisiId, memberId);
-          (row as { kisi_id: string }).kisi_id = newKisiId;
+        const sync = await syncMemberProfileToKisi({
+          email,
+          name,
+          kisiId: row.kisi_id,
+        });
+        if (sync.kisi_id !== (row.kisi_id ?? "").trim()) {
+          db.prepare("UPDATE members SET kisi_id = ? WHERE id = ?").run(sync.kisi_id, memberId);
+          (row as { kisi_id: string }).kisi_id = sync.kisi_id;
+        }
+        if (emailChanged) {
+          (row as { kisi_synced?: boolean }).kisi_synced = true;
         }
       } catch (e) {
         console.error("[members PATCH] Kisi sync failed:", e);
+        const detail = e instanceof Error ? e.message : "Kisi sync failed";
         db.close();
         return NextResponse.json({
           ...row,
-          kisi_sync_warning: "Member updated but Kisi sync failed. Update the email in Kisi manually if needed.",
+          kisi_sync_warning: `Member saved in the app, but Kisi was not updated: ${detail}`,
         });
       }
     }

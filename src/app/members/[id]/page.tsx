@@ -10,14 +10,26 @@ import {
   FETCH_TIMEOUT_EMAIL_MS,
   isFetchAbortError,
 } from "@/lib/client-fetch-timeout";
-import { INSURANCE_PROGRAM_LABELS } from "@/lib/insurance-program";
+import {
+  formatInsuranceProgramLabel,
+  INSURANCE_PROGRAM_LABELS,
+  isAshInsuranceProgram,
+} from "@/lib/insurance-program";
 
 type Member = Record<string, unknown>;
 type LinkedRow = Record<string, unknown>;
 
 function insuranceEditValue(m: Record<string, unknown>): string {
   const v = String(m.insurance_program ?? "").trim().toLowerCase();
-  return v === "optum" || v === "tivity" ? v : "";
+  if (
+    v === "optum" ||
+    v === "tivity" ||
+    v === "ash_silver_fit" ||
+    v === "ash_active_fit"
+  ) {
+    return v;
+  }
+  return "";
 }
 
 /** Calendar monthly (not pass-pack rows that reuse subscription fields). */
@@ -37,6 +49,7 @@ function buildMemberEditForm(m: Record<string, unknown>) {
     phone: String(m.phone ?? ""),
     role: String(m.role ?? "Member"),
     insurance_program: insuranceEditValue(m),
+    insurance_fitness_id: String(m.insurance_fitness_id ?? ""),
     join_date: String(m.join_date ?? ""),
     exp_next_payment_date: String(m.exp_next_payment_date ?? ""),
     preferred_name: String(m.preferred_name ?? ""),
@@ -832,7 +845,11 @@ export default function MemberDetailPage() {
       });
       const updated = await res.json();
       if (!res.ok) throw new Error("Failed to update");
-      if (updated.kisi_sync_warning) alert(updated.kisi_sync_warning);
+      if (updated.kisi_sync_warning) {
+        alert(updated.kisi_sync_warning);
+      } else if (updated.kisi_synced) {
+        alert("Member saved. Kisi email updated to match the app.");
+      }
       setEditing(false);
       await fetchMember();
     } catch {
@@ -1631,13 +1648,17 @@ export default function MemberDetailPage() {
               <div>
                 <dt className="text-stone-500">Insurance benefit</dt>
                 <dd className="font-medium">
-                  {member.insurance_program === "optum"
-                    ? INSURANCE_PROGRAM_LABELS.optum
-                    : member.insurance_program === "tivity"
-                      ? INSURANCE_PROGRAM_LABELS.tivity
-                      : "—"}
+                  {formatInsuranceProgramLabel(String(member.insurance_program ?? ""))}
                 </dd>
               </div>
+              {isAshInsuranceProgram(String(member.insurance_program ?? "")) ? (
+                <div>
+                  <dt className="text-stone-500">ASH Fitness ID</dt>
+                  <dd className="font-medium font-mono text-sm">
+                    {String(member.insurance_fitness_id ?? "").trim() || "—"}
+                  </dd>
+                </div>
+              ) : null}
               <div><dt className="text-stone-500">Join date</dt><dd className="font-medium">{String(member.join_date ?? "—")}</dd></div>
               <div><dt className="text-stone-500">Renewal date</dt><dd className="font-medium">{String(member.exp_next_payment_date ?? "—")}</dd></div>
               <div className="sm:col-span-2 border-t border-stone-100 pt-3 mt-1">

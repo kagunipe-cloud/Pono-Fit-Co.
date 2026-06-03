@@ -176,6 +176,7 @@ export function getDb() {
   ensureMembersPhoneColumn(db);
   ensureMembersProfileColumns(db);
   ensureMembersInsuranceProgramColumn(db);
+  ensureMembersInsuranceFitnessIdColumn(db);
   ensureMembersAccountDeletedAtColumn(db);
   ensureMembersCreatedAtColumn(db);
   ensurePaymentFailuresTable(db);
@@ -468,6 +469,15 @@ export function ensureMembersProfileColumns(db: ReturnType<typeof getDb>) {
 export function ensureMembersInsuranceProgramColumn(db: ReturnType<typeof getDb>) {
   try {
     db.exec("ALTER TABLE members ADD COLUMN insurance_program TEXT");
+  } catch {
+    /* already exists */
+  }
+}
+
+/** ASH Silver & Fit / Active & Fit member id for bulk claims upload. */
+export function ensureMembersInsuranceFitnessIdColumn(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE members ADD COLUMN insurance_fitness_id TEXT");
   } catch {
     /* already exists */
   }

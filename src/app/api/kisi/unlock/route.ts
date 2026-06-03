@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone } from "../../../../lib/db";
-import { createLoginForUser, ensureKisiUser, grantAccess, unlockWithUserSecret } from "../../../../lib/kisi";
+import {
+  createLoginForUser,
+  ensureKisiUser,
+  getKisiUserById,
+  grantAccess,
+  unlockWithUserSecret,
+} from "../../../../lib/kisi";
 import { getSubscriptionDoorAccessValidUntil, kisiDayPassValidUntilIfUnlockShouldSync } from "../../../../lib/pass-access";
 import { addOccupancyEntry, ensureOccupancyTable } from "../../../../lib/occupancy";
 
@@ -43,11 +49,22 @@ export async function POST(request: NextRequest) {
     // Ensure Kisi user exists (fixes 404 for complimentary members who weren't granted at signup)
     let kisiId = member.kisi_id?.trim() || null;
     /** True only when we just linked Kisi — grant door role here. Skip on normal unlocks (grantAccess is slow: list + deletes + POST). */
-    const needsInitialKisiGrant = !kisiId;
+    let needsInitialKisiGrant = !kisiId;
+    if (kisiId) {
+      const kisiUser = await getKisiUserById(kisiId);
+      if (!kisiUser) {
+        console.warn(`[Kisi unlock] stale kisi_id ${kisiId} for ${member_id}; re-linking by email`);
+        const name = [member.first_name, member.last_name].filter(Boolean).join(" ").trim() || undefined;
+        kisiId = await ensureKisiUser(member.email.trim(), name);
+        db.prepare("UPDATE members SET kisi_id = ? WHERE member_id = ?").run(kisiId, member_id);
+        needsInitialKisiGrant = true;
+      }
+    }
     if (!kisiId) {
       const name = [member.first_name, member.last_name].filter(Boolean).join(" ").trim() || undefined;
       kisiId = await ensureKisiUser(member.email.trim(), name);
       db.prepare("UPDATE members SET kisi_id = ? WHERE member_id = ?").run(kisiId, member_id);
+      needsInitialKisiGrant = true;
     }
     const tzUnlock = getAppTimezone(db);
     const dayPassValidUntil = kisiDayPassValidUntilIfUnlockShouldSync(db, member_id, tzUnlock);
@@ -75,7 +92,7 @@ export async function POST(request: NextRequest) {
 
     db.close();
 
-    const secret = await createLoginForUser(member.email);
+    const secret = await createLoginForUser(member.email.trim(), kisiId);
     await unlockWithUserSecret(secret, {
       ...(lockIdOverride ? { lockId: lockIdOverride } : {}),
       ...(proximityProof ? { proximityProof } : {}),

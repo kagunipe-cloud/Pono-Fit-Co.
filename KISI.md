@@ -63,6 +63,10 @@ Advanced: `POST /api/kisi/unlock` JSON may include `proximity_proof`, `lock_id`,
 
 Each member who gets door access must have an **email** in your app. We use it to find or create their Kisi user and to store the returned Kisi user id (`kisi_id`) for renewals. If a member has no email, we still complete the sale and create the subscription but skip the Kisi step.
 
+**Unlock 404 “record could not be found”:** The app creates a Kisi login using the email on the **Kisi user** linked by `kisi_id` when possible. If unlock still fails, the profile email may not match Kisi (common after Glofox import, a typo in Kisi like `gmail.con`, or a manual Kisi edit). Fix the email in **Members → Edit → Save** — that pushes the app email to the linked Kisi user. If you see a “Kisi was not updated” warning, fix the email in the Kisi dashboard.
+
+**Profile email → Kisi:** When an admin or member saves a profile change to email or name, the app PATCHes the linked Kisi user (`members.kisi_id`) and verifies the email stuck. Always use **Save** on the member profile after correcting an email; editing only in Kisi does not update the app.
+
 ## Unlock tracking (webhook)
 
 To record gym usage when members unlock the door, configure a **Kisi Event Webhook** so Kisi POSTs `lock.unlock` events to your app:

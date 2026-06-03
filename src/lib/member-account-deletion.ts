@@ -71,6 +71,7 @@ export async function softDeleteAnonymizeMember(db: Db, internalId: number, memb
       kisi_id = NULL, kisi_group_id = NULL,
       stripe_customer_id = NULL,
       insurance_program = NULL,
+      insurance_fitness_id = NULL,
       waiver_signed_at = NULL, privacy_terms_accepted_at = NULL,
       door_access_waiver_exempt = 0,
       auto_renew = 0,
