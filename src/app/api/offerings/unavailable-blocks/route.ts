@@ -3,6 +3,10 @@ import { getDb } from "../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { getUnavailableInRange } from "../../../../lib/pt-availability";
 import { getAdminMemberId, getTrainerMemberId } from "../../../../lib/admin";
+import {
+  canViewUnavailableHoldDescriptions,
+  redactUnavailableOccurrences,
+} from "../../../../lib/unavailable-hold-privacy";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +19,13 @@ export async function GET(request: NextRequest) {
     const from = request.nextUrl.searchParams.get("from")?.trim();
     const to = request.nextUrl.searchParams.get("to")?.trim();
     if (from && to) {
-      const occurrences = getUnavailableInRange(from, to);
+      const staff = await canViewUnavailableHoldDescriptions(request);
+      const occurrences = redactUnavailableOccurrences(getUnavailableInRange(from, to), staff);
       return NextResponse.json(occurrences);
+    }
+    const adminId = await getAdminMemberId(request);
+    if (!adminId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const db = getDb();
     ensurePTSlotTables(db);

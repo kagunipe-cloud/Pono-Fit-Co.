@@ -39,6 +39,15 @@ type CellItem =
 const SLOT_MINUTES = 30;
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+function blockedHoldLabel(description: string | undefined | null, staff: boolean): string {
+  if (!staff) return "";
+  return (description ?? "").trim() || "Blocked hold";
+}
+
+function blockedHoldTitle(description: string | undefined | null, staff: boolean): string {
+  return staff ? blockedHoldLabel(description, true) : "Unavailable";
+}
+
 /** Light-gray PT slots: no recurring trainer hours (not an admin block). */
 const SCHEDULE_LABEL_TRAINER_NO_HOURS = "Trainer/s Unavailable";
 
@@ -117,6 +126,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
   const bookPtQuery = productId ? `&product=${encodeURIComponent(productId)}` : "";
   const isMaster = variant === "master";
   const isTrainer = variant === "trainer";
+  const canViewHoldDescriptions = isMaster || isTrainer || !!allowAdminEdit;
   const effectiveTrainerId = trainerMemberId ?? null;
   const trainerQuery = variant === "member" && effectiveTrainerId && trainerDisplayName
     ? `&trainer=${encodeURIComponent(effectiveTrainerId)}&trainer_name=${encodeURIComponent(trainerDisplayName)}`
@@ -580,7 +590,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
     if (!selectedSlot) return;
     const desc = trainerHoldDescription.trim();
     if (desc.length < 2) {
-      alert("Enter a short reason for this hold (everyone sees it on the schedule).");
+      alert("Enter a short reason for this hold (only staff see it on the schedule).");
       return;
     }
     setTrainerBlockSubmitting(true);
@@ -804,15 +814,16 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                             </div>
                           )}
                           {item.type === "unavailable" && (() => {
-                            const holdLabel = (item.description ?? "").trim() || "Blocked hold";
-                            const staff = isMaster || allowAdminEdit || isTrainer;
+                            const holdLabel = blockedHoldLabel(item.description, canViewHoldDescriptions);
                             return (
                             <div
-                              className={`rounded-lg bg-stone-600 border border-stone-700 min-h-[2.5rem] flex items-center gap-1 px-2 py-1.5 text-stone-100 ${staff ? "justify-between" : "justify-center"}`}
-                              title={holdLabel}
+                              className={`rounded-lg bg-stone-600 border border-stone-700 min-h-[2.5rem] flex items-center gap-1 px-2 py-1.5 text-stone-100 ${canViewHoldDescriptions ? "justify-between" : "justify-center"}`}
+                              title={blockedHoldTitle(item.description, canViewHoldDescriptions)}
                             >
-                              <span className={`text-xs truncate flex-1 min-w-0 ${staff ? "" : "text-center"}`}>{holdLabel}</span>
-                              {staff ? (
+                              {holdLabel ? (
+                                <span className="text-xs truncate flex-1 min-w-0">{holdLabel}</span>
+                              ) : null}
+                              {canViewHoldDescriptions ? (
                                 <button
                                   type="button"
                                   onClick={(e) => { e.stopPropagation(); handleRemoveUnavailable(item.id); }}
@@ -868,9 +879,14 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                               : "bg-brand-50 border-2 border-brand-500 hover:border-brand-600"}`}>
                               {item.booked ? (
                                 item.unavailable ? (
-                                  <span className="text-xs block truncate text-center w-full px-0.5" title={(item.description ?? "").trim() || "Blocked hold"}>
-                                    {(item.description ?? "").trim() || "Blocked hold"}
-                                  </span>
+                                  canViewHoldDescriptions ? (
+                                    <span
+                                      className="text-xs block truncate text-center w-full px-0.5"
+                                      title={blockedHoldTitle(item.description, true)}
+                                    >
+                                      {blockedHoldLabel(item.description, true)}
+                                    </span>
+                                  ) : null
                                 ) : (isMaster || isTrainer || allowAdminEdit) ? (
                                   <span
                                     className={`text-xs block truncate ${item.payment_type === "pay_on_arrival" ? "text-red-100" : "text-violet-100"}`}
@@ -983,7 +999,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
               {isTrainer && !allowAdminEdit && (
                 <li className="rounded-lg border border-stone-100 bg-stone-50 p-3 space-y-1.5">
                   <label className="block text-xs font-medium text-stone-600">Hold description (required)</label>
-                  <p className="text-xs text-stone-500">Everyone sees this text on dark &quot;Blocked hold&quot; cells when you add a one-off hold.</p>
+                  <p className="text-xs text-stone-500">Only staff see this label on dark hold cells; members just see unavailable time.</p>
                   <input
                     type="text"
                     value={trainerHoldDescription}

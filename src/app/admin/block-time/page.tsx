@@ -68,7 +68,7 @@ function BlockTimeContent() {
     e.preventDefault();
     const trimmedDesc = description.trim();
     if (trimmedDesc.length < 2) {
-      alert("Enter a description for this blocked-off time (at least 2 characters). Everyone sees it on the schedule.");
+      alert("Enter a description for this blocked-off time (at least 2 characters). Only admins and trainers see it on the schedule.");
       return;
     }
     if (recurrenceType === "one_time" && !occurrenceDate) {
@@ -255,7 +255,7 @@ function BlockTimeContent() {
             minLength={2}
             className="w-full px-3 py-2 rounded-lg border border-stone-200"
           />
-          <p className="text-xs text-stone-500 mt-1">Shown on the schedule for blocked slots (members and staff).</p>
+          <p className="text-xs text-stone-500 mt-1">Shown on blocked slots for admins and trainers only; members see unavailable time with no label.</p>
         </div>
         <button
           type="submit"

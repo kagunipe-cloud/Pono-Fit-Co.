@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
 import { getBlocksInRange, getUnavailableInRange, getUnavailableRangesForBlock, getBookableStartTimes, getBlockSegments } from "../../../../lib/pt-availability";
+import {
+  canViewUnavailableHoldDescriptions,
+  redactBlockSegments,
+  redactUnavailableOccurrences,
+} from "../../../../lib/unavailable-hold-privacy";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +46,8 @@ export async function GET(request: NextRequest) {
         blocks = byMemberId;
       }
     }
-    const unavailableOccurrences = getUnavailableInRange(from, to);
+    const staff = await canViewUnavailableHoldDescriptions(request);
+    const unavailableOccurrences = redactUnavailableOccurrences(getUnavailableInRange(from, to), staff);
     const db = getDb();
 
     const result = blocks.map((block) => {
@@ -62,7 +68,10 @@ export async function GET(request: NextRequest) {
         my_booking,
       };
       if (segments) {
-        out.segments = getBlockSegments(db, block, block.date, unavailableOccurrences);
+        out.segments = redactBlockSegments(
+          getBlockSegments(db, block, block.date, unavailableOccurrences),
+          staff
+        );
       }
       return out;
     });
