@@ -1548,8 +1548,31 @@ export default function MemberDetailPage() {
                   <option value="">None</option>
                   <option value="optum">{INSURANCE_PROGRAM_LABELS.optum}</option>
                   <option value="tivity">{INSURANCE_PROGRAM_LABELS.tivity}</option>
+                  <option value="ash_silver_fit">{INSURANCE_PROGRAM_LABELS.ash_silver_fit}</option>
+                  <option value="ash_active_fit">{INSURANCE_PROGRAM_LABELS.ash_active_fit}</option>
                 </select>
               </div>
+              {(editForm.insurance_program === "ash_silver_fit" ||
+                editForm.insurance_program === "ash_active_fit") && (
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-stone-600 mb-1">
+                    ASH Fitness ID
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={editForm.insurance_fitness_id ?? ""}
+                    onChange={(e) =>
+                      setEditForm((f) => ({ ...f, insurance_fitness_id: e.target.value }))
+                    }
+                    placeholder="e.g. 32003002"
+                    className="w-full max-w-xs px-3 py-2 rounded-lg border border-stone-200 font-mono text-sm"
+                  />
+                  <p className="text-xs text-stone-500 mt-1">
+                    Required for ASH bulk claims export. Birthday must also be on file.
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-stone-600 mb-1">Join date</label>
                 <input

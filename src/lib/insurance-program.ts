@@ -18,8 +18,8 @@ export type AshInsuranceProgramValue = (typeof ASH_INSURANCE_PROGRAM_VALUES)[num
 export const INSURANCE_PROGRAM_LABELS: Record<InsuranceProgramValue, string> = {
   optum: "Optum",
   tivity: "Tivity Health",
-  ash_silver_fit: "Silver & Fit (ASH)",
-  ash_active_fit: "Active & Fit (ASH)",
+  ash_silver_fit: "ASH — Silver & Fit",
+  ash_active_fit: "ASH — Active & Fit",
 };
 
 export const INSURANCE_REPORT_FILTER_LABELS: Record<InsuranceReportFilter, string> = {
