@@ -26,6 +26,14 @@ type Report = {
   mrrBillableMemberCount?: number;
   autoRenewFlagCount?: number;
   autoRenewUnmatchedCount?: number;
+  autoRenewUnmatched?: {
+    member_id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    reason: string;
+    detail: string | null;
+  }[];
   from: string | null;
   to: string | null;
 } | null;
@@ -330,6 +338,33 @@ export default function SalesPage() {
                   </>
                 ) : null}
               </p>
+              {(report.autoRenewUnmatchedCount ?? 0) > 0 && (report.autoRenewUnmatched?.length ?? 0) > 0 ? (
+                <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-left">
+                  <p className="text-xs font-semibold text-amber-950 mb-2">
+                    Auto-renew on file, not in Monthly recurring ({report.autoRenewUnmatched!.length})
+                  </p>
+                  <ul className="space-y-2 max-h-48 overflow-y-auto text-xs text-amber-950">
+                    {report.autoRenewUnmatched!.map((m) => {
+                      const name =
+                        [m.first_name, m.last_name].filter(Boolean).join(" ").trim() || m.member_id;
+                      return (
+                        <li key={m.member_id} className="border-b border-amber-100/80 pb-2 last:border-0 last:pb-0">
+                          <Link
+                            href={`/members/${encodeURIComponent(m.member_id)}`}
+                            className="font-medium text-brand-800 hover:underline"
+                          >
+                            {name}
+                          </Link>
+                          <span className="text-amber-900/80"> · {m.reason}</span>
+                          {m.detail ? (
+                            <span className="block text-amber-900/70 mt-0.5">{m.detail}</span>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
             </div>
           </div>
           <div className="rounded-xl border border-stone-200 bg-white overflow-x-auto">

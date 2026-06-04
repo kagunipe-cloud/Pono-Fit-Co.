@@ -319,6 +319,7 @@ export async function GET(request: NextRequest) {
       mrrBillableMemberCount: mrrSummary.autoRenewBillableMemberCount,
       autoRenewFlagCount: mrrSummary.autoRenewFlagCount,
       autoRenewUnmatchedCount: mrrSummary.autoRenewUnmatchedCount,
+      autoRenewUnmatched: mrrSummary.autoRenewUnmatched,
       from: hasRange ? from : null,
       to: hasRange ? to : null,
     });

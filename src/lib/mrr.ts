@@ -135,22 +135,107 @@ function countAutoRenewFlagMembers(db: AppDb): number {
   return row?.c ?? 0;
 }
 
-/** auto_renew=1 on member but no active monthly sub (missing subscription or plan link). */
-function countAutoRenewUnmatchedMembers(db: AppDb, matchedMemberIds: Set<string>): number {
+export type AutoRenewUnmatchedMember = {
+  member_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  reason: string;
+  detail: string | null;
+};
+
+function diagnoseAutoRenewUnmatched(
+  subs: {
+    status: string | null;
+    plan_name: string | null;
+    unit: string | null;
+    product_id: string | null;
+    plan_linked: number;
+  }[]
+): { reason: string; detail: string | null } {
+  if (subs.length === 0) {
+    return { reason: "No subscription", detail: null };
+  }
+
+  const active = subs.filter((s) => String(s.status ?? "").trim().toLowerCase() === "active");
+  if (active.length === 0) {
+    const statuses = [...new Set(subs.map((s) => String(s.status ?? "—").trim() || "—"))].join(", ");
+    return { reason: "No active subscription", detail: `Status on file: ${statuses}` };
+  }
+
+  const activeMonthly = active.filter((s) => String(s.unit ?? "").trim().toLowerCase() === "month");
+  if (activeMonthly.length === 0) {
+    const bits = active.map((s) => {
+      const name = String(s.plan_name ?? s.product_id ?? "—").trim();
+      const unit = String(s.unit ?? "—").trim();
+      return `${name} (${unit})`;
+    });
+    return { reason: "Active sub is not monthly", detail: bits.join("; ") };
+  }
+
+  const linkedMonthly = activeMonthly.filter((s) => Number(s.plan_linked) === 1);
+  if (linkedMonthly.length === 0) {
+    const bits = activeMonthly.map((s) => {
+      const pid = String(s.product_id ?? "").trim() || "—";
+      return `${String(s.plan_name ?? "Monthly plan").trim()} · product_id ${pid} (no matching plan row)`;
+    });
+    return { reason: "Plan link missing", detail: bits.join("; ") };
+  }
+
+  return { reason: "Not in recurring pool", detail: "Check paused or data sync" };
+}
+
+/** Members with auto_renew=1 but no row in loadAutoRenewMonthlySubscriptionRows (not in MRR / Monthly recurring). */
+export function loadAutoRenewUnmatchedMembers(db: AppDb): AutoRenewUnmatchedMember[] {
+  const matched = getAutoRenewMonthlyMemberIds(db);
   ensureMembersAutoRenewColumn(db);
   ensureMembersAccountDeletedAtColumn(db);
+
   const flagged = db
     .prepare(
-      `SELECT member_id FROM members
+      `SELECT member_id, first_name, last_name, email FROM members
        WHERE COALESCE(auto_renew, 0) = 1
-         AND (account_deleted_at IS NULL OR TRIM(COALESCE(account_deleted_at, '')) = '')`
+         AND (account_deleted_at IS NULL OR TRIM(COALESCE(account_deleted_at, '')) = '')
+       ORDER BY last_name ASC, first_name ASC`
     )
-    .all() as { member_id: string }[];
-  let unmatched = 0;
-  for (const { member_id } of flagged) {
-    if (!matchedMemberIds.has(member_id)) unmatched++;
+    .all() as {
+      member_id: string;
+      first_name: string | null;
+      last_name: string | null;
+      email: string | null;
+    }[];
+
+  const subStmt = db.prepare(
+    `SELECT s.status, s.product_id, p.plan_name, p.unit,
+            CASE WHEN p.id IS NULL THEN 0 ELSE 1 END AS plan_linked
+     FROM subscriptions s
+     LEFT JOIN membership_plans p ON ${MEMBERSHIP_PLAN_JOIN_SQL}
+     WHERE s.member_id = ?
+     ORDER BY CASE WHEN LOWER(TRIM(COALESCE(s.status, ''))) = 'active' THEN 0 ELSE 1 END,
+              s.start_date DESC`
+  );
+
+  const out: AutoRenewUnmatchedMember[] = [];
+  for (const m of flagged) {
+    if (matched.has(m.member_id)) continue;
+    const subs = subStmt.all(m.member_id) as {
+      status: string | null;
+      plan_name: string | null;
+      unit: string | null;
+      product_id: string | null;
+      plan_linked: number;
+    }[];
+    const { reason, detail } = diagnoseAutoRenewUnmatched(subs);
+    out.push({
+      member_id: m.member_id,
+      first_name: m.first_name,
+      last_name: m.last_name,
+      email: m.email,
+      reason,
+      detail,
+    });
   }
-  return unmatched;
+  return out;
 }
 
 export function computeMrrSummary(db: AppDb): {
@@ -164,6 +249,7 @@ export function computeMrrSummary(db: AppDb): {
   autoRenewFlagCount: number;
   /** auto_renew=1 but not in autoRenewMemberCount (data gap to investigate). */
   autoRenewUnmatchedCount: number;
+  autoRenewUnmatched: AutoRenewUnmatchedMember[];
 } {
   const rows = loadAutoRenewMonthlySubscriptionRows(db);
   const autoRenewIds = new Set<string>();
@@ -180,12 +266,14 @@ export function computeMrrSummary(db: AppDb): {
   }
 
   const autoRenewFlagCount = countAutoRenewFlagMembers(db);
+  const autoRenewUnmatched = loadAutoRenewUnmatchedMembers(db);
 
   return {
     mrr: Math.round(mrr * 100) / 100,
     autoRenewMemberCount: autoRenewIds.size,
     autoRenewBillableMemberCount: autoRenewBillableIds.size,
     autoRenewFlagCount,
-    autoRenewUnmatchedCount: countAutoRenewUnmatchedMembers(db, autoRenewIds),
+    autoRenewUnmatchedCount: autoRenewUnmatched.length,
+    autoRenewUnmatched,
   };
 }
