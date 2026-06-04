@@ -7,8 +7,9 @@ import Sidebar from "./Sidebar";
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isEmbed = pathname?.startsWith("/embed");
+  const isLanding = pathname === "/small-group-training";
 
-  if (isEmbed) {
+  if (isEmbed || isLanding) {
     return <>{children}</>;
   }
 
