@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone } from "../../../../lib/db";
-import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../lib/recurring-classes";
+import { getDb } from "../../../../lib/db";
+import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
 import { getMemberIdFromSession } from "../../../../lib/session";
-import {
-  sendStaffEmail,
-  sendMemberEmail,
-  sendMemberBookingConfirmationEmail,
-  getTrainerDisplayNameFromMemberId,
-} from "../../../../lib/email";
 import { isOpenGroupSessionKind } from "../../../../lib/open-group-pt";
+import { CLASSES_DISCONTINUED_API_ERROR } from "../../../../lib/classes-discontinued";
 
 export const dynamic = "force-dynamic";
 
@@ -61,80 +56,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    const balance = getMemberCreditBalance(db, memberId);
-    if (balance < 1) {
-      db.close();
-      return NextResponse.json({ error: "No class credits. Purchase a class pack first." }, { status: 400 });
-    }
-    const today = new Date().toISOString().slice(0, 10);
-    if (occurrence.occurrence_date < today) {
-      db.close();
-      return NextResponse.json({ error: "Cannot book past classes" }, { status: 400 });
-    }
-    try {
-      db.prepare("INSERT INTO occurrence_bookings (member_id, class_occurrence_id) VALUES (?, ?)").run(memberId, occurrenceId);
-      db.prepare(`
-        INSERT INTO class_credit_ledger (member_id, amount, reason, reference_type, reference_id)
-        VALUES (?, -1, 'booking', 'occurrence_booking', ?)
-      `).run(memberId, String(occurrenceId));
-    } catch (e) {
-      const err = e as { message?: string };
-      if (err.message?.includes("UNIQUE")) {
-        db.close();
-        return NextResponse.json({ error: "You are already booked for this class" }, { status: 400 });
-      }
-      throw e;
-    }
-    const newBalance = getMemberCreditBalance(db, memberId);
-
-    // Email notifications: staff + assigned trainer (if any)
-    try {
-      const memberRow = db
-        .prepare("SELECT email, first_name, last_name FROM members WHERE member_id = ?")
-        .get(memberId) as { email: string | null; first_name: string | null; last_name: string | null } | undefined;
-      const memberName = memberRow ? [memberRow.first_name, memberRow.last_name].filter(Boolean).join(" ").trim() || memberId : memberId;
-      const whenStr = `${occurrence.occurrence_date} ${occurrence.occurrence_time ?? ""}`.trim();
-      const className = occurrence.class_name || "Class";
-
-      const staffSubject = `Class booking: ${memberName} → ${className}`;
-      const staffBody = `${memberName} booked ${className} on ${whenStr || occurrence.occurrence_date}.`;
-      // Fire and forget
-      sendStaffEmail(staffSubject, staffBody).catch(() => {});
-
-      const trainerId = (occurrence.trainer_member_id ?? "").trim();
-      if (trainerId) {
-        const trainerRow = db
-          .prepare("SELECT email, first_name, last_name FROM members WHERE member_id = ?")
-          .get(trainerId) as { email: string | null; first_name: string | null; last_name: string | null } | undefined;
-        const trainerEmail = trainerRow?.email?.trim();
-        if (trainerEmail) {
-          const trainerSubject = `New class booking for ${className}`;
-          const trainerBody = `${memberName} booked your class "${className}" on ${whenStr || occurrence.occurrence_date}.`;
-          sendMemberEmail(trainerEmail, trainerSubject, trainerBody).catch(() => {});
-        }
-      }
-
-      const memberEmail = memberRow?.email?.trim();
-      if (memberEmail) {
-        const tz = getAppTimezone(db);
-        const trainerDisplay = getTrainerDisplayNameFromMemberId(db, occurrence.trainer_member_id);
-        sendMemberBookingConfirmationEmail({
-          to: memberEmail,
-          memberFirstName: memberRow?.first_name,
-          kind: "class",
-          sessionTitle: className,
-          dateYmd: occurrence.occurrence_date,
-          timeRaw: occurrence.occurrence_time ?? "",
-          trainerDisplayName: trainerDisplay,
-          timeZone: tz,
-        }).catch(() => {});
-      }
-    } catch {
-      // Don't block booking on email issues
-    }
-
     db.close();
-    return NextResponse.json({ success: true, balance: newBalance });
+    return NextResponse.json({ error: CLASSES_DISCONTINUED_API_ERROR }, { status: 403 });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "Booking failed" }, { status: 500 });

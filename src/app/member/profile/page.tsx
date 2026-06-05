@@ -275,14 +275,12 @@ export default function MemberProfilePage() {
                   <>None right now.</>
                 )}
               </p>
-              <p className="mt-2">
-                <Link href="/member/book-classes" className="text-brand-600 font-medium hover:underline">
-                  Book a class
+              <p className="mt-2 text-sm text-stone-600">
+                Classes are paused — book{" "}
+                <Link href="/schedule" className="text-brand-600 font-medium hover:underline">
+                  Small-Group PT on the schedule
                 </Link>
-                {" · "}
-                <Link href="/member/class-packs" className="text-brand-600 font-medium hover:underline">
-                  Class packs
-                </Link>
+                .
               </p>
             </div>
           </div>

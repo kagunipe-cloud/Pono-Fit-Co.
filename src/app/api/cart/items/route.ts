@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
 import { ensureCartTables } from "../../../../lib/cart";
 import { getMemberIdFromSession } from "../../../../lib/session";
-import { getTrainerMemberId } from "../../../../lib/admin";
+import { getAdminMemberId, getTrainerMemberId } from "../../../../lib/admin";
+import { CLASSES_DISCONTINUED_API_ERROR } from "../../../../lib/classes-discontinued";
 import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
 import { isOpenGroupSessionKind } from "../../../../lib/open-group-pt";
 import {
@@ -30,8 +31,12 @@ export async function POST(request: NextRequest) {
 
     const sessionMemberId = await getMemberIdFromSession();
     const isStaff = !!(await getTrainerMemberId(request));
+    const isAdmin = !!(await getAdminMemberId(request));
     if (sessionMemberId !== member_id && !isStaff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (!isAdmin && !isStaff && (product_type === "class" || product_type === "class_pack")) {
+      return NextResponse.json({ error: CLASSES_DISCONTINUED_API_ERROR }, { status: 403 });
     }
 
     if (!member_id || !product_type) {
@@ -149,6 +154,10 @@ export async function POST(request: NextRequest) {
           },
           { status: 400 }
         );
+      }
+      if (!isAdmin && !isStaff) {
+        db.close();
+        return NextResponse.json({ error: CLASSES_DISCONTINUED_API_ERROR }, { status: 403 });
       }
     }
 

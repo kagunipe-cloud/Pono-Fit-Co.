@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatPrice, toTitleCase } from "@/lib/format";
+import { ClassesDiscontinuedNotice } from "@/components/member/ClassesDiscontinuedNotice";
 
 type ClassType = { class_name: string; instructor: string | null; price: string | null; description: string | null; image_url: string | null };
 type ClassPack = { id: number; name: string; price: string; credits: number };
@@ -17,8 +18,6 @@ export default function MemberClassesPage() {
   const [classPacks, setClassPacks] = useState<ClassPack[]>([]);
   const [singleCreditPack, setSingleCreditPack] = useState<{ id: number; price: string } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [addingId, setAddingId] = useState<number | null>(null);
-  const [addingSingleCredit, setAddingSingleCredit] = useState(false);
   const [expandedDescriptionIndex, setExpandedDescriptionIndex] = useState<number | null>(null);
 
   const multiCreditPacks = classPacks.filter((p) => p.credits > 1);
@@ -42,44 +41,15 @@ export default function MemberClassesPage() {
       .finally(() => setLoading(false));
   }, [router]);
 
-  async function addPackToCart(pack: ClassPack) {
-    if (!memberId) return;
-    setAddingId(pack.id);
-    try {
-      const res = await fetch("/api/cart/items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ member_id: memberId, product_type: "class_pack", product_id: pack.id, quantity: 1 }),
-      });
-      if (res.ok) router.push("/member/cart");
-    } finally {
-      setAddingId(null);
-    }
-  }
-
-  async function addSingleCreditToCart() {
-    if (!memberId || !singleCreditPack) return;
-    setAddingSingleCredit(true);
-    try {
-      const res = await fetch("/api/cart/items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ member_id: memberId, product_type: "class_pack", product_id: singleCreditPack.id, quantity: 1 }),
-      });
-      if (res.ok) router.push("/member/cart");
-    } finally {
-      setAddingSingleCredit(false);
-    }
-  }
-
   if (loading) return <div className="p-8 text-center text-stone-500">Loading…</div>;
   if (!memberId) return null;
 
   return (
     <div className="max-w-2xl mx-auto p-6">
       <h1 className="text-2xl font-bold text-stone-800 mb-2">Browse Classes</h1>
+      <ClassesDiscontinuedNotice />
       <p className="text-stone-500 text-sm mb-6">
-        Browse class types below. Pick a date and time on the Schedule when you’re ready to book, or buy one credit and schedule later.
+        Class types are listed below for reference. New bookings use Small-Group PT on the schedule instead.
       </p>
       {multiCreditPacks.length > 0 && (
         <div className="mb-8">
@@ -99,11 +69,11 @@ export default function MemberClassesPage() {
               </div>
               <button
                 type="button"
-                onClick={() => addPackToCart(pack)}
-                disabled={addingId !== null}
-                className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+                disabled
+                title="Class packs are paused"
+                className="px-4 py-2 rounded-lg bg-stone-300 text-stone-500 text-sm font-medium cursor-not-allowed"
               >
-                {addingId === pack.id ? "Adding…" : `${formatPrice(pack.price)} — Add to Cart`}
+                Unavailable
               </button>
             </div>
           ))}
@@ -150,21 +120,11 @@ export default function MemberClassesPage() {
               )}
             </div>
             <div className="w-full sm:w-auto shrink-0 flex flex-wrap gap-2 sm:flex-nowrap">
-              {singleCreditPack && (
-                <button
-                  type="button"
-                  onClick={addSingleCreditToCart}
-                  disabled={addingSingleCredit}
-                  className="px-4 py-2 rounded-lg border border-brand-600 text-brand-700 text-sm font-medium hover:bg-brand-50 disabled:opacity-50 whitespace-nowrap"
-                >
-                  {addingSingleCredit ? "Adding…" : "Buy now and schedule later"}
-                </button>
-              )}
               <Link
                 href="/schedule"
                 className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 inline-block text-center whitespace-nowrap"
               >
-                View on Schedule
+                Book on Schedule
               </Link>
             </div>
           </li>
@@ -174,13 +134,7 @@ export default function MemberClassesPage() {
       <p className="mt-6">
         <Link href="/schedule" className="text-brand-600 hover:underline">Open Schedule →</Link>
         {" · "}
-        <Link href="/member/book-classes" className="text-brand-600 hover:underline">Book With Credit</Link>
-        {singleCreditPack && (
-          <>
-            {" · "}
-            <Link href="/member/class-packs" className="text-brand-600 hover:underline">More Class Packs</Link>
-          </>
-        )}
+        <Link href="/member/book-pt" className="text-brand-600 hover:underline">Book PT / Small-Group PT</Link>
       </p>
     </div>
   );

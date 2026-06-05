@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatDateForDisplay } from "@/lib/app-timezone";
+import { ClassesDiscontinuedNotice } from "@/components/member/ClassesDiscontinuedNotice";
 
 type Booking = { class_name?: string; class_date?: string; class_time?: string; booking_date?: string; payment_status?: string };
 type OccurrenceBooking = { id?: number; class_name?: string; occurrence_date?: string; occurrence_time?: string };
@@ -36,7 +37,7 @@ export default function MemberClassBookingsPage() {
 
   async function cancelOccurrence(b: OccurrenceBooking) {
     if (b.id == null) return;
-    if (!confirm("Cancel this class booking? You can cancel up to 24 hours before the start time.")) return;
+    if (!confirm("Cancel this class booking? There is no cancellation fee. You can cancel up to 24 hours before the start time.")) return;
     setCancellingId(b.id);
     try {
       const res = await fetch(`/api/member/class-bookings/${b.id}`, { method: "DELETE" });
@@ -60,7 +61,8 @@ export default function MemberClassBookingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto p-6">
-      <h1 className="text-2xl font-bold text-stone-800 mb-6">My Class Bookings</h1>
+      <h1 className="text-2xl font-bold text-stone-800 mb-4">My Class Bookings</h1>
+      <ClassesDiscontinuedNotice compact />
       {bookings.length === 0 && occurrenceBookings.length === 0 ? (
         <p className="text-stone-500">You don’t have any class bookings yet.</p>
       ) : (
@@ -108,7 +110,9 @@ export default function MemberClassBookingsPage() {
         </>
       )}
       <p className="mt-6">
-        <Link href="/member/book-classes" className="text-brand-600 hover:underline">Book a class →</Link>
+        <Link href="/schedule" className="text-brand-600 hover:underline">Schedule →</Link>
+        {" · "}
+        <Link href="/member/book-pt" className="text-brand-600 hover:underline">Book PT / Small-Group PT →</Link>
       </p>
     </div>
   );
