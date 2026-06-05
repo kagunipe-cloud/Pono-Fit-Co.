@@ -18,8 +18,9 @@ export async function GET(request: NextRequest) {
     }
     const db = getDb();
     ensurePTSlotTables(db);
-    let trainerMemberId: string | null = null;
-    if (!Number.isNaN(pt_session_id)) {
+    const trainerParam = request.nextUrl.searchParams.get("trainer_member_id")?.trim();
+    let trainerMemberId: string | null = trainerParam || null;
+    if (!trainerMemberId && !Number.isNaN(pt_session_id)) {
       const session = db.prepare("SELECT trainer FROM pt_sessions WHERE id = ?").get(pt_session_id) as { trainer: string | null } | undefined;
       if (session?.trainer) trainerMemberId = getTrainerMemberIdByDisplayName(db, session.trainer);
     }

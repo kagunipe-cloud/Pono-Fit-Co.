@@ -146,8 +146,8 @@ function MemberBookClassesContent() {
                   <p className="font-medium text-stone-800 flex flex-wrap items-center gap-2">
                     {o.class_name}
                     {og ? (
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-200 text-orange-900 border border-orange-300">
-                        Open Group PT
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-100 text-brand-900 border border-brand-200">
+                        Small-Group PT
                       </span>
                     ) : null}
                   </p>

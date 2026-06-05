@@ -1,6 +1,8 @@
-/** Recurring class `session_kind` value for Open Group Personal Training. */
+/** Recurring class `session_kind` value for Open Group Personal Training / Small-Group PT. */
 export const SESSION_KIND_STANDARD = "standard";
 export const SESSION_KIND_OPEN_GROUP_PT = "open_group_pt";
+
+export const SMALL_GROUP_PT_DISPLAY_NAME = "Small-Group PT";
 
 export const OPEN_GROUP_MAX_PARTICIPANTS = 4;
 /** Default flat fee label / desk charge (actual payment at gym). */

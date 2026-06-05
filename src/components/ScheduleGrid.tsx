@@ -226,7 +226,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
           Math.floor((startMin - TIME_SLOT_MIN) / SLOT_MINUTES) * SLOT_MINUTES + TIME_SLOT_MIN;
         const o = overlapping.find((occ) => toClassStartSlot(parseTimeToMinutes(occ.occurrence_time)) === slotMin)
           ?? overlapping[0];
-        if (o) {
+        if (o && !(variant === "member" && isOpenGroupSessionKind(o.session_kind))) {
           const startMin = parseTimeToMinutes(o.occurrence_time);
           const durationMin = typeof o.duration_minutes === "number" ? o.duration_minutes : 60;
           const oClassStartSlot = toClassStartSlot(startMin);
@@ -691,7 +691,6 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
           )}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-stone-800">Class</span>
-            <span className="rounded-lg border border-orange-300 bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-900">Open Group PT</span>
             <span className="rounded-lg border border-stone-300 bg-stone-200 px-2.5 py-1 text-xs font-medium text-stone-700">{SCHEDULE_LABEL_TRAINER_NO_HOURS}</span>
             <span className="rounded-lg bg-stone-600 px-2.5 py-1 text-xs font-medium text-stone-100">Blocked hold</span>
             {(isMaster || isTrainer || allowAdminEdit) && (
@@ -726,7 +725,6 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
           <div className="p-3 border-b border-stone-100 bg-stone-50/80 flex flex-wrap items-center justify-center gap-3 text-sm rounded-t-xl">
             <span className="font-medium text-stone-600">{weekLabel}</span>
             <span className="rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-medium text-stone-800">Class</span>
-            <span className="rounded-lg border border-orange-300 bg-orange-50 px-2.5 py-1 text-xs font-medium text-orange-900">Open Group PT</span>
             <span className="rounded-lg border border-stone-300 bg-stone-200 px-2.5 py-1 text-xs font-medium text-stone-700">{SCHEDULE_LABEL_TRAINER_NO_HOURS}</span>
             <span className="rounded-lg bg-stone-600 px-2.5 py-1 text-xs font-medium text-stone-100">Blocked hold</span>
             {(isMaster || isTrainer || allowAdminEdit) && (
