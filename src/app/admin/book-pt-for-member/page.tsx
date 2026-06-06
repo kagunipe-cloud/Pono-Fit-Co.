@@ -3,10 +3,12 @@
 import { Suspense, useEffect, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { OPEN_GROUP_DEFAULT_FLAT_PRICE, OPEN_GROUP_MAX_PARTICIPANTS } from "@/lib/open-group-pt";
 
 type Member = { member_id: string; first_name: string | null; last_name: string | null; email: string | null };
 type PtSession = { id: number; session_name: string; duration_minutes: number; price: string; trainer: string | null; trainer_member_id?: string | null };
 type Trainer = { member_id: string; display_name: string };
+type BookingKind = "pt" | "small_group_pt";
 
 function normalizeTimeToHHmm(t: string): string {
   const parts = String(t).trim().split(/[:\s]/).map((x) => parseInt(x, 10));
@@ -30,9 +32,11 @@ function AdminBookPTForMemberContent() {
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [selectedTrainerId, setSelectedTrainerId] = useState<string>("");
+  const [bookingKind, setBookingKind] = useState<BookingKind>("pt");
   const [submitting, setSubmitting] = useState(false);
   const [useCreditSubmitting, setUseCreditSubmitting] = useState(false);
   const [payOnArrivalSubmitting, setPayOnArrivalSubmitting] = useState(false);
+  const [smallGroupSubmitting, setSmallGroupSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [credits, setCredits] = useState<Record<number, number>>({});
 
@@ -205,6 +209,61 @@ function AdminBookPTForMemberContent() {
     }
   }
 
+  async function resolveBlockId(): Promise<number | null> {
+    let blockId: number | null = block ? parseInt(block, 10) : null;
+    const effectiveTrainerId = selectedTrainerId || selectedSession?.trainer_member_id;
+    if (!block && effectiveTrainerId) {
+      const findRes = await fetch(
+        `/api/pt-bookings/find-block?date=${encodeURIComponent(date)}&time=${encodeURIComponent(startTime)}&trainer_member_id=${encodeURIComponent(effectiveTrainerId)}`
+      );
+      const findData = await findRes.json();
+      blockId = findData.block_id ?? null;
+      if (!blockId) {
+        throw new Error(
+          "This trainer has no availability at that date/time. Choose a different time or leave trainer as no preference."
+        );
+      }
+    }
+    return blockId && !Number.isNaN(blockId) ? blockId : null;
+  }
+
+  async function handleSmallGroupPt() {
+    if (!selectedMemberId || !date || !startTime) {
+      setError("Select a member. Date and time must be in the URL.");
+      return;
+    }
+    setError(null);
+    setSmallGroupSubmitting(true);
+    try {
+      const blockId = await resolveBlockId();
+      const res = await fetch("/api/class-bookings/book-small-group-from-slot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          member_id: selectedMemberId,
+          occurrence_date: date,
+          start_time: startTime,
+          duration_minutes: duration,
+          ...(blockId != null ? { trainer_availability_id: blockId } : {}),
+          ...(selectedTrainerId ? { trainer_member_id: selectedTrainerId } : {}),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not reserve Small-Group PT");
+      const share = typeof data.share_url === "string" ? data.share_url : "";
+      if (share) {
+        window.alert(
+          `Small-Group PT reserved.\n\nGive the organizer this invite link:\n\n${share}`
+        );
+      }
+      router.push(data.occurrence_id ? `/schedule/${data.occurrence_id}/roster` : "/master-schedule");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Booking failed");
+    } finally {
+      setSmallGroupSubmitting(false);
+    }
+  }
+
   async function handleAddToCart() {
     if (!selectedMemberId || !selectedSessionId || !date || !startTime) {
       setError("Select a member and a PT session. Date and time must be in the URL.");
@@ -239,13 +298,16 @@ function AdminBookPTForMemberContent() {
     }
   }
 
-  const canSubmit = selectedMemberId && selectedSessionId && date && startTime;
+  const canSubmitPt = selectedMemberId && selectedSessionId && date && startTime;
+  const canSubmitSmallGroup = selectedMemberId && date && startTime;
 
   return (
     <div className="max-w-lg mx-auto">
       <Link href="/master-schedule" className="text-stone-500 hover:text-stone-700 text-sm mb-4 inline-block">← Back to Master Schedule</Link>
-      <h1 className="text-2xl font-bold text-stone-800 mb-1">Book PT for member</h1>
-      <p className="text-stone-500 text-sm mb-6">Select the member, choose session type. Use their credit if they have one, or add to cart to charge.</p>
+      <h1 className="text-2xl font-bold text-stone-800 mb-1">Book slot for member</h1>
+      <p className="text-stone-500 text-sm mb-6">
+        Choose PT (1-on-1) or Small-Group PT. For PT, use credit, pay on arrival, or add to cart. Small-Group PT is free to reserve — flat fee at the gym after.
+      </p>
 
       <div className="mb-4 p-3 rounded-lg bg-stone-100 text-sm">
         <span className="font-medium text-stone-700">Slot: </span>
@@ -253,9 +315,43 @@ function AdminBookPTForMemberContent() {
         {block && <span className="text-stone-500"> (block {block})</span>}
       </div>
 
+      <fieldset className="space-y-2 mb-6">
+        <legend className="text-sm font-medium text-stone-700 mb-2">What are you booking?</legend>
+        <label className="flex items-start gap-2 p-3 rounded-lg border border-stone-200 bg-white cursor-pointer has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50/50">
+          <input
+            type="radio"
+            name="adminBookingKind"
+            checked={bookingKind === "pt"}
+            onChange={() => setBookingKind("pt")}
+            className="mt-1"
+          />
+          <span>
+            <span className="font-medium text-stone-800 block">PT (1-on-1)</span>
+            <span className="text-xs text-stone-500">Credit, pay on arrival, or cart checkout.</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2 p-3 rounded-lg border border-stone-200 bg-white cursor-pointer has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50/50">
+          <input
+            type="radio"
+            name="adminBookingKind"
+            checked={bookingKind === "small_group_pt"}
+            onChange={() => setBookingKind("small_group_pt")}
+            className="mt-1"
+          />
+          <span>
+            <span className="font-medium text-stone-800 block">Small-Group PT</span>
+            <span className="text-xs text-stone-500">
+              ${OPEN_GROUP_DEFAULT_FLAT_PRICE} total at gym · up to {OPEN_GROUP_MAX_PARTICIPANTS} people · invite link for friends · no cancellation fee
+            </span>
+          </span>
+        </label>
+      </fieldset>
+
       <div className="space-y-4 mb-6">
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1">Member to charge</label>
+          <label className="block text-sm font-medium text-stone-700 mb-1">
+            {bookingKind === "small_group_pt" ? "Organizer (member)" : "Member to charge"}
+          </label>
           <input
             type="text"
             value={memberQuery}
@@ -279,7 +375,9 @@ function AdminBookPTForMemberContent() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1">PT session type</label>
+          <label className="block text-sm font-medium text-stone-700 mb-1">
+            {bookingKind === "small_group_pt" ? "Session length" : "PT session type"}
+          </label>
           <select
             value={selectedSessionId ?? ""}
             onChange={(e) => setSelectedSessionId(e.target.value ? Number(e.target.value) : null)}
@@ -288,10 +386,14 @@ function AdminBookPTForMemberContent() {
             <option value="">— Select session —</option>
             {sessions.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.session_name} — {s.duration_minutes} min · ${s.price}
+                {s.session_name} — {s.duration_minutes} min
+                {bookingKind === "pt" ? ` · $${s.price}` : ""}
               </option>
             ))}
           </select>
+          {bookingKind === "small_group_pt" && (
+            <p className="text-xs text-stone-500 mt-1">Length sets how long the slot is held on the schedule.</p>
+          )}
         </div>
 
         <div>
@@ -314,50 +416,73 @@ function AdminBookPTForMemberContent() {
 
       {error && <p className="mb-4 text-red-600 text-sm">{error}</p>}
 
-      <div className="flex flex-wrap gap-3">
-        {hasCredit && (
-          <button
-            type="button"
-            onClick={handleUseCredit}
-            disabled={!canSubmit || useCreditSubmitting}
-            className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-50"
-          >
-            {useCreditSubmitting ? "Booking…" : "Use 1 credit (free)"}
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={handlePayOnArrival}
-          disabled={!canSubmit || payOnArrivalSubmitting}
-          className="px-4 py-2 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 disabled:opacity-50"
-        >
-          {payOnArrivalSubmitting ? "Booking…" : "Pay on arrival"}
-        </button>
-        <button
-          type="button"
-          onClick={handleAddToCart}
-          disabled={!canSubmit || submitting}
-          className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
-        >
-          {submitting ? "Adding…" : "Add to cart & pay"}
-        </button>
-        <Link href="/master-schedule" className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium">
-          Cancel
-        </Link>
-      </div>
+      {bookingKind === "small_group_pt" ? (
+        <div className="space-y-3">
+          <p className="text-sm text-stone-600 leading-relaxed">
+            Reserves the slot for the organizer. They can copy the invite link to add friends. No app charge — ${OPEN_GROUP_DEFAULT_FLAT_PRICE} flat fee collected at the gym after the session.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => void handleSmallGroupPt()}
+              disabled={!canSubmitSmallGroup || !selectedSessionId || smallGroupSubmitting}
+              className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
+            >
+              {smallGroupSubmitting ? "Reserving…" : "Reserve Small-Group PT"}
+            </button>
+            <Link href="/master-schedule" className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium">
+              Cancel
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-3">
+            {hasCredit && (
+              <button
+                type="button"
+                onClick={handleUseCredit}
+                disabled={!canSubmitPt || useCreditSubmitting}
+                className="px-4 py-2 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {useCreditSubmitting ? "Booking…" : "Use 1 credit (free)"}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handlePayOnArrival}
+              disabled={!canSubmitPt || payOnArrivalSubmitting}
+              className="px-4 py-2 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 disabled:opacity-50"
+            >
+              {payOnArrivalSubmitting ? "Booking…" : "Pay on arrival"}
+            </button>
+            <button
+              type="button"
+              onClick={handleAddToCart}
+              disabled={!canSubmitPt || submitting}
+              className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
+            >
+              {submitting ? "Adding…" : "Add to cart & pay"}
+            </button>
+            <Link href="/master-schedule" className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium">
+              Cancel
+            </Link>
+          </div>
 
-      <p className="mt-4 text-stone-500 text-xs space-y-1">
-        {hasCredit ? (
-          <span className="block">Member has {credits[duration]}×{duration}-min credit(s). </span>
-        ) : selectedSession && ptCreditSummary ? (
-          <span className="block text-amber-800">
-            PT credits on file ({ptCreditSummary}) don&apos;t match this session length ({duration} min). Credits are per duration — choose a session type with the same length as the pack they bought, or use Pay on arrival / Add to cart.
-          </span>
-        ) : null}
-        <span className="block">
-          &quot;Pay on arrival&quot; holds the slot (red on schedule); they pay when they arrive. &quot;Add to cart&quot; charges now.
-        </span>
-      </p>
+          <p className="mt-4 text-stone-500 text-xs space-y-1">
+            {hasCredit ? (
+              <span className="block">Member has {credits[duration]}×{duration}-min credit(s). </span>
+            ) : selectedSession && ptCreditSummary ? (
+              <span className="block text-amber-800">
+                PT credits on file ({ptCreditSummary}) don&apos;t match this session length ({duration} min). Credits are per duration — choose a session type with the same length as the pack they bought, or use Pay on arrival / Add to cart.
+              </span>
+            ) : null}
+            <span className="block">
+              &quot;Pay on arrival&quot; holds the slot (red on schedule); they pay when they arrive. &quot;Add to cart&quot; charges now.
+            </span>
+          </p>
+        </>
+      )}
     </div>
   );
 }

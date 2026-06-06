@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { getDb, getAppTimezone } from "@/lib/db";
 import { ensurePTSlotTables } from "@/lib/pt-slots";
 import { getMemberIdFromSession } from "@/lib/session";
+import { getAdminMemberId, getTrainerMemberId } from "@/lib/admin";
 import {
   OPEN_GROUP_DEFAULT_FLAT_PRICE,
   OPEN_GROUP_MAX_PARTICIPANTS,
@@ -24,17 +25,31 @@ import { normalizePtDurationMinutes } from "@/lib/pt-slots";
 export const dynamic = "force-dynamic";
 
 /**
- * POST { occurrence_date, start_time, duration_minutes?, trainer_availability_id?, trainer_member_id? }
+ * POST { occurrence_date, start_time, duration_minutes?, trainer_availability_id?, trainer_member_id?, member_id? }
  * Creates a one-off Small-Group PT occurrence at an open schedule time and books the member as organizer.
+ * Admin may pass member_id to book on behalf of a member.
  */
 export async function POST(request: NextRequest) {
   try {
-    const memberId = await getMemberIdFromSession();
-    if (!memberId) {
+    const sessionMemberId = await getMemberIdFromSession();
+    const isAdmin = !!(await getAdminMemberId(request));
+    const isTrainer = !!(await getTrainerMemberId(request));
+    if (!sessionMemberId && !isAdmin && !isTrainer) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await request.json().catch(() => ({}));
+    const bodyMemberId = String(body.member_id ?? "").trim();
+    let memberId = sessionMemberId;
+    if (bodyMemberId) {
+      if (!isAdmin && !isTrainer) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      memberId = bodyMemberId;
+    }
+    if (!memberId) {
+      return NextResponse.json({ error: "member_id required" }, { status: 400 });
+    }
     const occurrence_date = String(body.occurrence_date ?? "").trim();
     const start_time = String(body.start_time ?? "").trim().slice(0, 5);
     const duration_minutes = normalizePtDurationMinutes(body.duration_minutes, 60);

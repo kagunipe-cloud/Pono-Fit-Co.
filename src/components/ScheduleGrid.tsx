@@ -1072,9 +1072,9 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
               )}
               {selectedSlot.item.type === "pt_segment" && !selectedSlot.item.booked && (isMaster || allowAdminEdit) && (
                 <li className="rounded-lg border border-stone-200 bg-stone-50 p-3 space-y-2">
-                  <span className="font-medium text-stone-800 block">Book PT for a member</span>
+                  <span className="font-medium text-stone-800 block">Book slot for a member</span>
                   <p className="text-xs text-stone-600 leading-snug">
-                    Opens the full admin booking page — search any member, use credits, pay on arrival, or add to cart (same as Master schedule).
+                    PT (1-on-1) or Small-Group PT — credits, pay on arrival, cart, or reserve a group with an invite link.
                   </p>
                   <Link
                     href={`/admin/book-pt-for-member?block=${selectedSlot.item.blockId}&date=${selectedSlot.date}&time=${encodeURIComponent(selectedSlot.timeStr)}`}
