@@ -2,6 +2,7 @@ import nodemailer from "nodemailer";
 import { getDb } from "@/lib/db";
 import { formatDateOnlyInAppTz } from "@/lib/app-timezone";
 import { BRAND } from "@/lib/branding";
+import { getEmailInstallTemplateVars } from "@/lib/ios-app-store";
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -549,7 +550,7 @@ export async function sendPostPurchaseEmail(params: {
   };
 }): Promise<{ ok: boolean; error?: string }> {
   const origin = params.origin.replace(/\/$/, "");
-  const installUrl = `${origin}/install`;
+  const installVars = getEmailInstallTemplateVars(origin);
   const memberId = params.member_id.trim();
   const setPasswordUrl = `${origin}/set-password?member_id=${encodeURIComponent(memberId)}&email=${encodeURIComponent(params.to)}`;
   let receiptBlock = "";
@@ -565,7 +566,7 @@ export async function sendPostPurchaseEmail(params: {
     member_id: memberId,
     email: params.to,
     origin,
-    install_url: installUrl,
+    ...installVars,
     set_password_url: setPasswordUrl,
     receipt: receiptBlock,
   };
@@ -578,8 +579,8 @@ export async function sendPostPurchaseEmail(params: {
 
 Thanks for your purchase. You can view your membership and bookings in the app.
 
-Download the app (open on your phone to add to home screen):
-${installUrl}
+Get the app:
+${installVars.install_instructions}
 
 Your Member ID: ${memberId}
 
@@ -601,7 +602,7 @@ export async function sendAppDownloadInviteEmail(params: {
   member_id: string;
 }): Promise<{ ok: boolean; error?: string }> {
   const origin = params.origin.replace(/\/$/, "");
-  const installUrl = `${origin}/install`;
+  const installVars = getEmailInstallTemplateVars(origin);
   const memberId = params.member_id.trim();
   const setPasswordUrl = `${origin}/set-password?member_id=${encodeURIComponent(memberId)}&email=${encodeURIComponent(params.to)}`;
   const vars = {
@@ -609,7 +610,7 @@ export async function sendAppDownloadInviteEmail(params: {
     member_id: memberId,
     email: params.to,
     origin,
-    install_url: installUrl,
+    ...installVars,
     set_password_url: setPasswordUrl,
   };
   const customSubject = getEmailSetting("email_app_download_subject");
@@ -621,9 +622,9 @@ export async function sendAppDownloadInviteEmail(params: {
 
 We are launching our new app for the gym, which we built ourselves!  We are pretty stoked on it, especially because it helps you track your macros and your workouts for free, and your data goes absolutely nowhere because it's OUR app!
 
-Click the link below to register and install, or just register and read the waiver.  Kisi will still work, if that's what you prefer, but you must at least read and sign the liability waiver to get continued access.  Let us know if you have any questions!
+Click the link below to get the app and set your password, or just register and read the waiver.  Let us know if you have any questions!
 
-${installUrl}
+${installVars.install_instructions}
 
 Your Member ID: ${memberId}
 

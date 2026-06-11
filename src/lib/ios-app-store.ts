@@ -16,3 +16,18 @@ export function getIosAppStoreUrl(): string | null {
     return null;
   }
 }
+
+/** Placeholders for welcome / post-purchase emails (`{{install_url}}`, `{{ios_app_store_url}}`, `{{install_instructions}}`). */
+export function getEmailInstallTemplateVars(origin: string): {
+  install_url: string;
+  ios_app_store_url: string;
+  install_instructions: string;
+} {
+  const originClean = origin.replace(/\/$/, "");
+  const install_url = `${originClean}/install`;
+  const ios_app_store_url = getIosAppStoreUrl() ?? "";
+  const install_instructions = ios_app_store_url
+    ? `iPhone/iPad — download from the App Store:\n${ios_app_store_url}\n\nAndroid or add-to-home-screen help:\n${install_url}`
+    : `Open on your phone to install:\n${install_url}`;
+  return { install_url, ios_app_store_url, install_instructions };
+}

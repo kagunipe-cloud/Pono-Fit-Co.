@@ -93,6 +93,7 @@ Do **not** commit these values; only set them in Railway.
 
 - [ ] All env vars set on the host (no `.env.local` in the repo).
 - [ ] `NEXT_PUBLIC_APP_URL` = your real app URL (for Stripe redirects, emails, etc.).
+- [ ] `NEXT_PUBLIC_IOS_APP_STORE_URL` = your live App Store link (e.g. `https://apps.apple.com/us/app/pono-fit-co/id6762172274`) so iPhone users see **App Store** on `/install` and in welcome emails — **redeploy after adding** (`NEXT_PUBLIC_*` is baked in at build time).
 - [ ] Stripe: use **test** keys for testing; switch to **live** keys when you’re ready for real payments.
 - [ ] `SESSION_SECRET` is a long random string (different from local).
 - [ ] Persistent volume/disk attached so `data/the-fox-says.db` is not lost on redeploy.

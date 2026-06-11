@@ -41,6 +41,7 @@ Run **`npm run cap:sync`** after changing Capacitor config, plugins, or `www/`.
 Set one of these in **`.env.local`** (same as Next):
 
 - **`NEXT_PUBLIC_APP_URL`** — e.g. `https://app.beponofitco.com` (used for Capacitor if set)
+- **`NEXT_PUBLIC_IOS_APP_STORE_URL`** — e.g. `https://apps.apple.com/us/app/pono-fit-co/id6762172274` (iPhone `/install` + welcome emails; redeploy after changing)
 - or **`CAPACITOR_SERVER_URL`** — overrides for the native shell only (e.g. local dev)
 
 Then run:

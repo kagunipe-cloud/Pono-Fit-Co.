@@ -295,7 +295,7 @@ export default function EmailsDocumentsPage() {
           <section className="space-y-6">
             <h2 className="text-lg font-semibold text-stone-800">Email Templates</h2>
             <p className="text-sm text-stone-500">
-              Common placeholders: {"{{first_name}}"}, {"{{member_id}}"}, {"{{email}}"}, {"{{origin}}"}, {"{{install_url}}"}, {"{{set_password_url}}"}, {"{{expiry_date}}"}, {"{{waiver_url}}"}, {"{{app_url}}"} (site base URL from env), {"{{card_message}}"} (full paragraph — only if you still use it in the membership body; prefer the editable fragments below). Money owed: {"{{pay_url}}"}, {"{{member_name}}"}, {"{{plan_name}}"}, {"{{amount_formatted}}"}. Booking emails: {"{{session_title}}"}, {"{{kind_label}}"}, {"{{date}}"}, {"{{time}}"}, {"{{trainer}}"}, {"{{brand_short}}"}, {"{{brand_name}}"}.
+              Common placeholders: {"{{first_name}}"}, {"{{member_id}}"}, {"{{email}}"}, {"{{origin}}"}, {"{{install_url}}"}, {"{{ios_app_store_url}}"}, {"{{install_instructions}}"}, {"{{set_password_url}}"}, {"{{expiry_date}}"}, {"{{waiver_url}}"}, {"{{app_url}}"} (site base URL from env), {"{{card_message}}"} (full paragraph — only if you still use it in the membership body; prefer the editable fragments below). Money owed: {"{{pay_url}}"}, {"{{member_name}}"}, {"{{plan_name}}"}, {"{{amount_formatted}}"}. Booking emails: {"{{session_title}}"}, {"{{kind_label}}"}, {"{{date}}"}, {"{{time}}"}, {"{{trainer}}"}, {"{{brand_short}}"}, {"{{brand_name}}"}.
             </p>
 
             <div className="border border-brand-100 rounded-xl p-4 space-y-4 bg-brand-50/40">

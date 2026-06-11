@@ -60,8 +60,8 @@ const DEFAULTS: Record<string, string> = {
 
 Thanks for your purchase. You can view your membership and bookings in the app.
 
-Download the app (open on your phone to add to home screen):
-{{install_url}}
+Get the app:
+{{install_instructions}}
 
 Your Member ID: {{member_id}}
 
@@ -122,9 +122,9 @@ Bekah & Perry`,
 
 We are launching our new app for the gym, which we built ourselves!  We are pretty stoked on it, especially because it helps you track your macros and your workouts for free, and your data goes absolutely nowhere because it's OUR app!
 
-Click the link below to register and install, or just register and read the waiver.  Kisi will still work, if that's what you prefer, but you must at least read and sign the liability waiver to get continued access.  Let us know if you have any questions!
+Get the app and set your password (links below). Let us know if you have any questions!
 
-{{install_url}}
+{{install_instructions}}
 
 Your Member ID: {{member_id}}
 
