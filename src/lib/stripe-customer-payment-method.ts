@@ -50,10 +50,29 @@ export async function resolveStripeCustomerCardPaymentMethodId(
  * @returns a human-readable blocker to store in `payment_failures`, or `null` to allow create
  *          (e.g. legacy `default_source` only, or single-card case resolve missed in edge cases).
  */
+function customerHasStripeBillingDefault(customer: Stripe.Customer): boolean {
+  const inv = customer.invoice_settings?.default_payment_method;
+  if (inv) {
+    const id = typeof inv === "string" ? inv : inv.id;
+    if (id?.trim()) return true;
+  }
+  return !!customer.default_source;
+}
+
 export async function getOffSessionRenewalBlockerIfResolvedPmIsNull(
   stripe: Stripe,
   customerId: string
 ): Promise<{ message: string; code: string } | null> {
+  const customer = await stripe.customers.retrieve(customerId, {
+    expand: ["default_source", "invoice_settings.default_payment_method"],
+  });
+  if (typeof customer === "string" || customer.deleted) {
+    return { message: "Stripe customer is missing or was deleted.", code: "customer_invalid" };
+  }
+  if (customerHasStripeBillingDefault(customer)) {
+    return null;
+  }
+
   const list = await stripe.paymentMethods.list({ customer: customerId, type: "card", limit: 100 });
   if (list.data.length >= 2) {
     return {
@@ -64,20 +83,6 @@ export async function getOffSessionRenewalBlockerIfResolvedPmIsNull(
   }
   if (list.data.length === 1) {
     // resolve() should have returned that pm_ — if not, still avoid blocking; PI create may work.
-    return null;
-  }
-  const customer = await stripe.customers.retrieve(customerId, {
-    expand: ["default_source", "invoice_settings.default_payment_method"],
-  });
-  if (typeof customer === "string" || customer.deleted) {
-    return { message: "Stripe customer is missing or was deleted.", code: "customer_invalid" };
-  }
-  const inv = customer.invoice_settings?.default_payment_method;
-  if (inv) {
-    const id = typeof inv === "string" ? inv : inv.id;
-    if (id.startsWith("pm_")) return null;
-  }
-  if (customer.default_source) {
     return null;
   }
   return {
