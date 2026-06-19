@@ -8,8 +8,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isEmbed = pathname?.startsWith("/embed");
   const isLanding = pathname === "/small-group-training";
+  const isBoardTv = pathname?.startsWith("/admin/the-board/tv");
+  const isPublicBoard = pathname === "/board" || pathname?.startsWith("/board/");
 
-  if (isEmbed || isLanding) {
+  if (isEmbed || isLanding || isBoardTv || isPublicBoard) {
     return <>{children}</>;
   }
 

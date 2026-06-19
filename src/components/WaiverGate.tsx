@@ -14,6 +14,7 @@ const BYPASS_PATHS = [
   "/set-password",
   "/embed",
   "/small-group-training",
+  "/board",
 ];
 
 const CACHE_KEY = "waiver_gate_ok";

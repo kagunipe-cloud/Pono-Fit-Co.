@@ -25,6 +25,13 @@ export function TheBoardTabs({ active }: { active: TheBoardTab }) {
           {tab.label}
         </Link>
       ))}
+      <Link
+        href="/admin/the-board/tv"
+        target="_blank"
+        className="rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800 transition-colors hover:bg-stone-50"
+      >
+        TV Display ↗
+      </Link>
     </div>
   );
 }

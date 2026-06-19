@@ -1,95 +1,18 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { GymRecordsAgeBand } from "@/components/gym-records/GymRecordsAgeBand";
 import {
   GYM_RECORD_AGE_BRACKETS,
-  GYM_RECORD_EVENTS,
   type GymRecordAgeBracket,
   type GymRecordGender,
   type GymRecordEventKey,
   type GymRecordsGrid,
   emptyGymRecordsGrid,
 } from "@/lib/gym-records";
-
-function formatRecordLine(name: string, value: string): string {
-  const n = name.trim();
-  const v = value.trim();
-  if (!n && !v) return "—";
-  if (!n) return v;
-  if (!v) return n;
-  return `${n} - ${v}`;
-}
-
-function AgeBandSection({
-  age,
-  index,
-  records,
-  editing,
-  draft,
-  onDraftChange,
-}: {
-  age: GymRecordAgeBracket;
-  index: number;
-  records: GymRecordsGrid;
-  editing: boolean;
-  draft: GymRecordsGrid;
-  onDraftChange: (age: GymRecordAgeBracket, gender: GymRecordGender, eventKey: GymRecordEventKey, field: "holder_name" | "record_value", value: string) => void;
-}) {
-  const dark = index % 2 === 1;
-  const bg = dark ? "bg-black text-[#9ef6b2]" : "bg-[#9ef6b2] text-stone-950";
-  const labelMuted = dark ? "text-stone-300" : "text-stone-700";
-  const grid = editing ? draft : records;
-
-  return (
-    <div className={`${bg} px-4 py-6 sm:px-8`}>
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(7rem,0.55fr)_1fr_1fr] gap-6">
-        <div className="flex items-start">
-          <span className="text-3xl font-black tracking-tight sm:text-4xl">{age}</span>
-        </div>
-
-        {(["men", "women"] as GymRecordGender[]).map((gender) => (
-          <div key={gender}>
-            <h3 className="mb-4 text-center text-sm font-black uppercase tracking-wide sm:text-base">
-              {gender === "men" ? "Men" : "Women"} {age}
-            </h3>
-            <div className="space-y-3">
-              {GYM_RECORD_EVENTS.map((ev) => {
-                const cell = grid[age][gender][ev.key];
-                return (
-                  <div key={ev.key} className="grid grid-cols-[minmax(5.5rem,6.5rem)_1fr] gap-2 items-start text-xs sm:text-sm">
-                    <span className={`font-black uppercase leading-tight pt-0.5 ${labelMuted}`}>{ev.label}</span>
-                    {editing ? (
-                      <div className="flex flex-col gap-1">
-                        <input
-                          type="text"
-                          value={cell.holder_name}
-                          onChange={(e) => onDraftChange(age, gender, ev.key, "holder_name", e.target.value)}
-                          placeholder="Name"
-                          className={`rounded border px-2 py-1 text-xs sm:text-sm ${dark ? "border-stone-600 bg-stone-900 text-white placeholder:text-stone-500" : "border-stone-400 bg-white text-stone-900"}`}
-                        />
-                        <input
-                          type="text"
-                          value={cell.record_value}
-                          onChange={(e) => onDraftChange(age, gender, ev.key, "record_value", e.target.value)}
-                          placeholder="Record (e.g. 265LBS, 5:12)"
-                          className={`rounded border px-2 py-1 text-xs sm:text-sm ${dark ? "border-stone-600 bg-stone-900 text-white placeholder:text-stone-500" : "border-stone-400 bg-white text-stone-900"}`}
-                        />
-                      </div>
-                    ) : (
-                      <p className="font-bold uppercase leading-snug">{formatRecordLine(cell.holder_name, cell.record_value)}</p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export default function GymRecordsBoard() {
   const router = useRouter();
@@ -134,22 +57,24 @@ export default function GymRecordsBoard() {
     age: GymRecordAgeBracket,
     gender: GymRecordGender,
     eventKey: GymRecordEventKey,
+    placeIndex: number,
     field: "holder_name" | "record_value",
     value: string
   ) {
-    setDraft((prev) => ({
-      ...prev,
-      [age]: {
-        ...prev[age],
-        [gender]: {
-          ...prev[age][gender],
-          [eventKey]: {
-            ...prev[age][gender][eventKey],
-            [field]: value,
+    setDraft((prev) => {
+      const places = [...prev[age][gender][eventKey]];
+      places[placeIndex] = { ...places[placeIndex]!, [field]: value };
+      return {
+        ...prev,
+        [age]: {
+          ...prev[age],
+          [gender]: {
+            ...prev[age][gender],
+            [eventKey]: places,
           },
         },
-      },
-    }));
+      };
+    });
   }
 
   async function saveRecords() {
@@ -218,7 +143,16 @@ export default function GymRecordsBoard() {
             </button>
           </>
         )}
-        <p className="text-sm text-stone-600">Admin-edited only — does not auto-update from workouts.</p>
+        <Link
+          href="/admin/the-board/tv"
+          target="_blank"
+          className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-semibold text-stone-800 hover:bg-stone-50"
+        >
+          Open TV display ↗
+        </Link>
+        <p className="text-sm text-stone-600">
+          1st / 2nd / 3rd per lift · each card shows Men (top) + Women (bottom) · TV ends on Weekly Goals top 10
+        </p>
       </div>
 
       {error && <p className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
@@ -233,7 +167,7 @@ export default function GymRecordsBoard() {
         </div>
 
         {GYM_RECORD_AGE_BRACKETS.map((age, index) => (
-          <AgeBandSection
+          <GymRecordsAgeBand
             key={age}
             age={age}
             index={index}
@@ -244,7 +178,7 @@ export default function GymRecordsBoard() {
           />
         ))}
 
-        <div className="bg-stone-700 px-6 py-10 flex justify-center">
+        <div className="flex justify-center bg-stone-700 px-6 py-10">
           <Image src="/Lei_Logos.png" alt="" width={220} height={56} className="h-14 w-auto opacity-95" />
         </div>
       </div>

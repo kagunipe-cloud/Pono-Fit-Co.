@@ -5,6 +5,8 @@ import {
   GYM_RECORD_AGE_BRACKETS,
   GYM_RECORD_EVENTS,
   GYM_RECORD_GENDERS,
+  GYM_RECORD_PLACES,
+  GYM_RECORD_TV_PAGES,
   getGymRecordsGrid,
   gridToCells,
   saveGymRecords,
@@ -26,6 +28,8 @@ export async function GET(request: NextRequest) {
       age_brackets: GYM_RECORD_AGE_BRACKETS,
       genders: GYM_RECORD_GENDERS,
       events: GYM_RECORD_EVENTS,
+      places: GYM_RECORD_PLACES,
+      tv_pages: GYM_RECORD_TV_PAGES,
       records,
     });
   } catch (err) {
