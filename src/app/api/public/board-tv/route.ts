@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAppTimezone, getDb } from "@/lib/db";
 import { boardWeekBounds, todayInAppTz } from "@/lib/app-timezone";
 import { buildGoalBoard } from "@/lib/goal-board";
-import { getGymRecordsGrid } from "@/lib/gym-records";
+import { getGymRecordsGrid, getGymSpecialRecordsGrid } from "@/lib/gym-records";
 
 export const dynamic = "force-dynamic";
 
@@ -28,12 +28,14 @@ export async function GET(request: NextRequest) {
     const { weekStart } = boardWeekBounds(tz, today);
 
     const records = getGymRecordsGrid(db);
+    const special = getGymSpecialRecordsGrid(db);
     const board = buildGoalBoard(db, tz, weekStart, today);
     db.close();
 
     return NextResponse.json({
       timezone: tz,
       records,
+      special,
       goalRows: board.rows.slice(0, 10),
     });
   } catch (err) {

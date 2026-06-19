@@ -224,3 +224,111 @@ export function formatGymRecordLine(name: string, value: string): string {
   if (!v) return n;
   return `${n} - ${v}`;
 }
+
+/* ----------------------------- Special records ----------------------------- */
+/** Standalone records with no age/gender split — just 1st/2nd/3rd (e.g. Fish Game). */
+export const GYM_SPECIAL_RECORDS = [{ key: "fish_game", label: "FISH GAME" }] as const;
+
+export type GymSpecialRecordKey = (typeof GYM_SPECIAL_RECORDS)[number]["key"];
+
+export type GymSpecialRecordsGrid = Record<GymSpecialRecordKey, GymRecordPlaceCell[]>;
+
+export type GymSpecialRecordCell = {
+  record_key: GymSpecialRecordKey;
+  place: GymRecordPlace;
+  holder_name: string;
+  record_value: string;
+};
+
+function isSpecialKey(v: string): v is GymSpecialRecordKey {
+  return GYM_SPECIAL_RECORDS.some((r) => r.key === v);
+}
+
+export function emptyGymSpecialRecordsGrid(): GymSpecialRecordsGrid {
+  const grid = {} as GymSpecialRecordsGrid;
+  for (const r of GYM_SPECIAL_RECORDS) {
+    grid[r.key] = emptyEventPlaces();
+  }
+  return grid;
+}
+
+export function ensureGymSpecialRecordsTable(db: Db): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS gym_special_records (
+      record_key TEXT NOT NULL,
+      place INTEGER NOT NULL DEFAULT 1,
+      holder_name TEXT NOT NULL DEFAULT '',
+      record_value TEXT NOT NULL DEFAULT '',
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (record_key, place)
+    );
+  `);
+}
+
+export function getGymSpecialRecordsGrid(db: Db): GymSpecialRecordsGrid {
+  ensureGymSpecialRecordsTable(db);
+  const grid = emptyGymSpecialRecordsGrid();
+  const rows = db
+    .prepare(`SELECT record_key, place, holder_name, record_value FROM gym_special_records`)
+    .all() as {
+      record_key: string;
+      place: number;
+      holder_name: string | null;
+      record_value: string | null;
+    }[];
+
+  for (const row of rows) {
+    const key = String(row.record_key ?? "");
+    const place = Number(row.place) || 1;
+    if (!isSpecialKey(key) || !isPlace(place)) continue;
+    grid[key][placeToIndex(place)] = {
+      holder_name: String(row.holder_name ?? "").trim(),
+      record_value: String(row.record_value ?? "").trim(),
+    };
+  }
+  return grid;
+}
+
+export function saveGymSpecialRecords(db: Db, cells: GymSpecialRecordCell[]): void {
+  ensureGymSpecialRecordsTable(db);
+  const upsert = db.prepare(
+    `INSERT INTO gym_special_records (record_key, place, holder_name, record_value, updated_at)
+     VALUES (?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(record_key, place) DO UPDATE SET
+       holder_name = excluded.holder_name,
+       record_value = excluded.record_value,
+       updated_at = datetime('now')`
+  );
+  const tx = db.transaction((items: GymSpecialRecordCell[]) => {
+    for (const cell of items) {
+      if (!isSpecialKey(cell.record_key) || !isPlace(cell.place)) {
+        throw new Error("Invalid special record cell.");
+      }
+      upsert.run(
+        cell.record_key,
+        cell.place,
+        String(cell.holder_name ?? "").trim(),
+        String(cell.record_value ?? "").trim()
+      );
+    }
+  });
+  tx(cells);
+}
+
+export function specialGridToCells(grid: GymSpecialRecordsGrid): GymSpecialRecordCell[] {
+  const out: GymSpecialRecordCell[] = [];
+  for (const r of GYM_SPECIAL_RECORDS) {
+    const places = grid[r.key];
+    for (let i = 0; i < GYM_RECORD_PLACES.length; i++) {
+      const place = GYM_RECORD_PLACES[i]!;
+      const cell = places[i] ?? emptyPlaceCell();
+      out.push({
+        record_key: r.key,
+        place,
+        holder_name: cell.holder_name,
+        record_value: cell.record_value,
+      });
+    }
+  }
+  return out;
+}

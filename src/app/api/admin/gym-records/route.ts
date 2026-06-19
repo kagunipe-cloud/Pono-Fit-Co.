@@ -7,11 +7,16 @@ import {
   GYM_RECORD_GENDERS,
   GYM_RECORD_PLACES,
   GYM_RECORD_TV_PAGES,
+  GYM_SPECIAL_RECORDS,
   getGymRecordsGrid,
+  getGymSpecialRecordsGrid,
   gridToCells,
   saveGymRecords,
+  saveGymSpecialRecords,
+  specialGridToCells,
   type GymRecordCell,
   type GymRecordsGrid,
+  type GymSpecialRecordsGrid,
 } from "@/lib/gym-records";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +28,7 @@ export async function GET(request: NextRequest) {
   try {
     const db = getDb();
     const records = getGymRecordsGrid(db);
+    const special = getGymSpecialRecordsGrid(db);
     db.close();
     return NextResponse.json({
       age_brackets: GYM_RECORD_AGE_BRACKETS,
@@ -30,7 +36,9 @@ export async function GET(request: NextRequest) {
       events: GYM_RECORD_EVENTS,
       places: GYM_RECORD_PLACES,
       tv_pages: GYM_RECORD_TV_PAGES,
+      special_records: GYM_SPECIAL_RECORDS,
       records,
+      special,
     });
   } catch (err) {
     console.error("[admin/gym-records GET]", err);
@@ -46,21 +54,32 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const db = getDb();
 
-    let cells: GymRecordCell[] = [];
-    if (body.records && typeof body.records === "object" && !Array.isArray(body.records)) {
-      cells = gridToCells(body.records as GymRecordsGrid);
-    } else if (Array.isArray(body.cells)) {
-      cells = body.cells as GymRecordCell[];
-    } else {
+    const hasRecords = body.records && typeof body.records === "object" && !Array.isArray(body.records);
+    const hasCells = Array.isArray(body.cells);
+    const hasSpecial = body.special && typeof body.special === "object" && !Array.isArray(body.special);
+
+    if (!hasRecords && !hasCells && !hasSpecial) {
       db.close();
-      return NextResponse.json({ error: "Send { records: grid } or { cells: [...] }." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Send { records: grid }, { cells: [...] }, and/or { special: grid }." },
+        { status: 400 }
+      );
     }
 
-    saveGymRecords(db, cells);
+    if (hasRecords) {
+      saveGymRecords(db, gridToCells(body.records as GymRecordsGrid));
+    } else if (hasCells) {
+      saveGymRecords(db, body.cells as GymRecordCell[]);
+    }
+    if (hasSpecial) {
+      saveGymSpecialRecords(db, specialGridToCells(body.special as GymSpecialRecordsGrid));
+    }
+
     const records = getGymRecordsGrid(db);
+    const special = getGymSpecialRecordsGrid(db);
     db.close();
 
-    return NextResponse.json({ ok: true, records });
+    return NextResponse.json({ ok: true, records, special });
   } catch (err) {
     console.error("[admin/gym-records PATCH]", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to save gym records." }, { status: 500 });

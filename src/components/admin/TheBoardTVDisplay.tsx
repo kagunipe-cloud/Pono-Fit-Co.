@@ -4,22 +4,28 @@ import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { GymRecordsAgeBand } from "@/components/gym-records/GymRecordsAgeBand";
+import { GymSpecialRecordCard } from "@/components/gym-records/GymSpecialRecordCard";
 import { GoalBoardRowView, type GoalBoardRowData } from "@/components/goal-board/GoalBoardUI";
 import {
   GYM_RECORD_TV_PAGES,
+  GYM_SPECIAL_RECORDS,
   emptyGymRecordsGrid,
+  emptyGymSpecialRecordsGrid,
   type GymRecordAgeBracket,
   type GymRecordsGrid,
+  type GymSpecialRecordsGrid,
 } from "@/lib/gym-records";
 
 const ROTATE_MS = 28_000;
 
 type TvPage =
   | { kind: "records"; ages: readonly GymRecordAgeBracket[] }
+  | { kind: "special" }
   | { kind: "goals" };
 
 const TV_PAGES: TvPage[] = [
   ...GYM_RECORD_TV_PAGES.map((ages) => ({ kind: "records" as const, ages })),
+  { kind: "special" as const },
   { kind: "goals" as const },
 ];
 
@@ -30,6 +36,7 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
   const pauseRotation = manualPage !== null;
 
   const [records, setRecords] = useState<GymRecordsGrid>(emptyGymRecordsGrid());
+  const [special, setSpecial] = useState<GymSpecialRecordsGrid>(emptyGymSpecialRecordsGrid());
   const [goalRows, setGoalRows] = useState<GoalBoardRowData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +59,7 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
             return;
           }
           setRecords(json.records as GymRecordsGrid);
+          if (json.special) setSpecial(json.special as GymSpecialRecordsGrid);
           setGoalRows(((json.goalRows ?? []) as GoalBoardRowData[]).slice(0, 10));
         })
         .catch(() => setError("Could not load The Board."))
@@ -71,8 +79,12 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
     ])
       .then(([recordsJson, goalsJson]) => {
         if (recordsJson) {
-          if (recordsJson.error) setError(recordsJson.error);
-          else setRecords(recordsJson.records as GymRecordsGrid);
+          if (recordsJson.error) {
+            setError(recordsJson.error);
+          } else {
+            setRecords(recordsJson.records as GymRecordsGrid);
+            if (recordsJson.special) setSpecial(recordsJson.special as GymSpecialRecordsGrid);
+          }
         }
         if (goalsJson && !goalsJson.error) {
           const rows = (goalsJson.current?.rows ?? []) as GoalBoardRowData[];
@@ -149,7 +161,14 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
     );
   }
 
-  const isGoals = page.kind === "goals";
+  const title =
+    page.kind === "goals" ? "Weekly Goals" : page.kind === "special" ? "Fish Game" : "Gym Records";
+  const subtitle =
+    page.kind === "goals"
+      ? "Top 10 This Week"
+      : page.kind === "special"
+        ? "Hall of Fame"
+        : `Page ${pageIndex + 1} of ${TV_PAGES.length}`;
 
   return (
     <div className="min-h-[100dvh] bg-stone-950 text-white">
@@ -158,12 +177,8 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
           <div className="mb-3 flex justify-center">
             <Image src="/Lei_Logos.png" alt="Pono Fit Co." width={220} height={56} className="h-11 w-auto" priority />
           </div>
-          <h1 className="text-4xl font-black uppercase tracking-tight text-white sm:text-5xl">
-            {isGoals ? "Weekly Goals" : "Gym Records"}
-          </h1>
-          <p className="mt-2 text-xs font-bold uppercase tracking-[0.25em] text-[#9ef6b2]">
-            {isGoals ? "Top 10 This Week" : `Page ${pageIndex + 1} of ${TV_PAGES.length}`}
-          </p>
+          <h1 className="text-4xl font-black uppercase tracking-tight text-white sm:text-5xl">{title}</h1>
+          <p className="mt-2 text-xs font-bold uppercase tracking-[0.25em] text-[#9ef6b2]">{subtitle}</p>
         </header>
 
         <div className="flex-1 overflow-y-auto">
@@ -178,6 +193,14 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
                 compact={page.ages.length > 1}
               />
             ))
+          ) : page.kind === "special" ? (
+            <div className="flex min-h-full flex-col items-center justify-center gap-6 bg-stone-950 px-6 py-10">
+              {GYM_SPECIAL_RECORDS.map((rec) => (
+                <div key={rec.key} className="w-full max-w-xl">
+                  <GymSpecialRecordCard label={rec.label} places={special[rec.key]} variant="tv" />
+                </div>
+              ))}
+            </div>
           ) : goalRows.length === 0 ? (
             <div className="flex h-full items-center justify-center bg-[#9ef6b2] px-6 py-16 text-center font-black uppercase text-stone-900">
               No goal data yet this week.
@@ -197,7 +220,7 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
               <span
                 key={i}
                 className={`rounded-full ${
-                  p.kind === "goals" ? "h-2.5 w-5" : "h-2.5 w-2.5"
+                  p.kind === "records" ? "h-2.5 w-2.5" : "h-2.5 w-5"
                 } ${i === pageIndex ? "bg-[#9ef6b2]" : "bg-stone-500"}`}
                 aria-hidden
               />

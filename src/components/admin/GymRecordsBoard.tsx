@@ -5,19 +5,26 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { GymRecordsAgeBand } from "@/components/gym-records/GymRecordsAgeBand";
+import { GymSpecialRecordCard } from "@/components/gym-records/GymSpecialRecordCard";
 import {
   GYM_RECORD_AGE_BRACKETS,
+  GYM_SPECIAL_RECORDS,
   type GymRecordAgeBracket,
   type GymRecordGender,
   type GymRecordEventKey,
   type GymRecordsGrid,
+  type GymSpecialRecordKey,
+  type GymSpecialRecordsGrid,
   emptyGymRecordsGrid,
+  emptyGymSpecialRecordsGrid,
 } from "@/lib/gym-records";
 
 export default function GymRecordsBoard() {
   const router = useRouter();
   const [records, setRecords] = useState<GymRecordsGrid>(emptyGymRecordsGrid());
   const [draft, setDraft] = useState<GymRecordsGrid>(emptyGymRecordsGrid());
+  const [special, setSpecial] = useState<GymSpecialRecordsGrid>(emptyGymSpecialRecordsGrid());
+  const [specialDraft, setSpecialDraft] = useState<GymSpecialRecordsGrid>(emptyGymSpecialRecordsGrid());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -44,6 +51,9 @@ export default function GymRecordsBoard() {
         const grid = json.records as GymRecordsGrid;
         setRecords(grid);
         setDraft(JSON.parse(JSON.stringify(grid)) as GymRecordsGrid);
+        const specialGrid = (json.special as GymSpecialRecordsGrid) ?? emptyGymSpecialRecordsGrid();
+        setSpecial(specialGrid);
+        setSpecialDraft(JSON.parse(JSON.stringify(specialGrid)) as GymSpecialRecordsGrid);
       })
       .catch(() => setError("Could not load gym records."))
       .finally(() => setLoading(false));
@@ -77,6 +87,19 @@ export default function GymRecordsBoard() {
     });
   }
 
+  function onSpecialDraftChange(
+    recordKey: GymSpecialRecordKey,
+    placeIndex: number,
+    field: "holder_name" | "record_value",
+    value: string
+  ) {
+    setSpecialDraft((prev) => {
+      const places = [...prev[recordKey]];
+      places[placeIndex] = { ...places[placeIndex]!, [field]: value };
+      return { ...prev, [recordKey]: places };
+    });
+  }
+
   async function saveRecords() {
     setSaving(true);
     setError(null);
@@ -85,7 +108,7 @@ export default function GymRecordsBoard() {
       const res = await fetch("/api/admin/gym-records", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ records: draft }),
+        body: JSON.stringify({ records: draft, special: specialDraft }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -95,6 +118,9 @@ export default function GymRecordsBoard() {
       const grid = json.records as GymRecordsGrid;
       setRecords(grid);
       setDraft(JSON.parse(JSON.stringify(grid)) as GymRecordsGrid);
+      const specialGrid = (json.special as GymSpecialRecordsGrid) ?? emptyGymSpecialRecordsGrid();
+      setSpecial(specialGrid);
+      setSpecialDraft(JSON.parse(JSON.stringify(specialGrid)) as GymSpecialRecordsGrid);
       setEditing(false);
       setMessage("Gym records saved.");
     } catch {
@@ -106,6 +132,7 @@ export default function GymRecordsBoard() {
 
   function cancelEdit() {
     setDraft(JSON.parse(JSON.stringify(records)) as GymRecordsGrid);
+    setSpecialDraft(JSON.parse(JSON.stringify(special)) as GymSpecialRecordsGrid);
     setEditing(false);
     setError(null);
   }
@@ -164,6 +191,22 @@ export default function GymRecordsBoard() {
             <Image src="/Lei_Logos.png" alt="Pono Fit Co." width={180} height={48} className="h-10 w-auto" />
           </div>
           <h2 className="text-4xl font-black uppercase tracking-tight sm:text-5xl md:text-6xl">Gym Records</h2>
+        </div>
+
+        <div className="bg-stone-900 px-4 py-6 sm:px-8">
+          <div className="mx-auto grid max-w-3xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {GYM_SPECIAL_RECORDS.map((rec) => (
+              <GymSpecialRecordCard
+                key={rec.key}
+                label={rec.label}
+                places={(editing ? specialDraft : special)[rec.key]}
+                editing={editing}
+                onChange={(placeIndex, field, value) =>
+                  onSpecialDraftChange(rec.key, placeIndex, field, value)
+                }
+              />
+            ))}
+          </div>
         </div>
 
         {GYM_RECORD_AGE_BRACKETS.map((age, index) => (
