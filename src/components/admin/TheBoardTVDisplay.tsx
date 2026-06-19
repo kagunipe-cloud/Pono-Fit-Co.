@@ -35,6 +35,17 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
   const manualPage = searchParams.get("page");
   const pauseRotation = manualPage !== null;
 
+  // Optional on-screen rotation for TVs mounted sideways (Fire TV can't rotate itself).
+  // ?rotate=cw (90° clockwise) or ?rotate=ccw (90° counter-clockwise).
+  const rotateParam = (searchParams.get("rotate") ?? "").toLowerCase();
+  const rotation =
+    rotateParam === "cw" || rotateParam === "90" || rotateParam === "right"
+      ? 90
+      : rotateParam === "ccw" || rotateParam === "270" || rotateParam === "left"
+        ? -90
+        : 0;
+  const rootSize = rotation ? "h-full w-full" : "min-h-[100dvh]";
+
   const [records, setRecords] = useState<GymRecordsGrid>(emptyGymRecordsGrid());
   const [special, setSpecial] = useState<GymSpecialRecordsGrid>(emptyGymSpecialRecordsGrid());
   const [goalRows, setGoalRows] = useState<GoalBoardRowData[]>([]);
@@ -170,9 +181,9 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
         ? "Hall of Fame"
         : `Page ${pageIndex + 1} of ${TV_PAGES.length}`;
 
-  return (
-    <div className="min-h-[100dvh] bg-stone-950 text-white">
-      <div className="mx-auto flex min-h-[100dvh] w-full max-w-[1080px] flex-col">
+  const body = (
+    <div className={`${rootSize} bg-stone-950 text-white`}>
+      <div className={`mx-auto flex ${rotation ? "h-full" : "min-h-[100dvh]"} w-full max-w-[1080px] flex-col`}>
         <header className="shrink-0 border-b border-stone-700 bg-gradient-to-b from-stone-800 to-stone-900 px-5 py-6 text-center">
           <div className="mb-3 flex justify-center">
             <Image src="/Lei_Logos.png" alt="Pono Fit Co." width={220} height={56} className="h-11 w-auto" priority />
@@ -230,6 +241,25 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
             <Image src="/Lei_Logos.png" alt="" width={160} height={40} className="h-8 w-auto opacity-90" />
           </div>
         </footer>
+      </div>
+    </div>
+  );
+
+  if (!rotation) return body;
+
+  // Rotate the whole portrait layout to fit a physically sideways-mounted TV.
+  return (
+    <div className="fixed inset-0 overflow-hidden bg-stone-950">
+      <div
+        className="absolute left-1/2 top-1/2"
+        style={{
+          width: "100vh",
+          height: "100vw",
+          transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+          transformOrigin: "center center",
+        }}
+      >
+        {body}
       </div>
     </div>
   );
