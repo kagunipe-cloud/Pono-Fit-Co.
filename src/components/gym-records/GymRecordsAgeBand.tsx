@@ -9,67 +9,70 @@ import {
 } from "@/lib/gym-records";
 
 const PLACE_LABELS = ["1st", "2nd", "3rd"] as const;
-const PLACE_MEDAL_CLASS = ["text-amber-300", "text-stone-300", "text-amber-600/90"] as const;
+// Bright gold / silver / bronze — high contrast on the solid black card body.
+const PLACE_MEDAL_CLASS = ["text-amber-300", "text-stone-100", "text-orange-300"] as const;
 
+// Solid black card bodies + vivid header banners so white text reads from across a glary,
+// small TV. Bright borders separate each card from the age-band background.
 const LIFT_THEMES: Record<
   GymRecordEventKey,
   { card: string; header: string; border: string; accent: string; divider: string }
 > = {
   bench_press: {
-    card: "bg-stone-950/95",
-    header: "bg-red-950 text-red-50",
-    border: "border-red-700/80",
-    accent: "text-red-300",
-    divider: "border-red-900/60",
+    card: "bg-black",
+    header: "bg-red-600 text-white",
+    border: "border-red-400",
+    accent: "text-red-200",
+    divider: "divide-stone-600",
   },
   squat: {
-    card: "bg-stone-950/95",
-    header: "bg-blue-950 text-blue-50",
-    border: "border-blue-600/80",
-    accent: "text-blue-300",
-    divider: "border-blue-900/60",
+    card: "bg-black",
+    header: "bg-blue-600 text-white",
+    border: "border-blue-400",
+    accent: "text-blue-200",
+    divider: "divide-stone-600",
   },
   deadlift: {
-    card: "bg-stone-950/95",
-    header: "bg-violet-950 text-violet-50",
-    border: "border-violet-600/80",
-    accent: "text-violet-300",
-    divider: "border-violet-900/60",
+    card: "bg-black",
+    header: "bg-violet-600 text-white",
+    border: "border-violet-400",
+    accent: "text-violet-200",
+    divider: "divide-stone-600",
   },
   mile_run: {
-    card: "bg-stone-950/95",
-    header: "bg-sky-950 text-sky-50",
-    border: "border-sky-600/80",
-    accent: "text-sky-300",
-    divider: "border-sky-900/60",
+    card: "bg-black",
+    header: "bg-sky-600 text-white",
+    border: "border-sky-400",
+    accent: "text-sky-200",
+    divider: "divide-stone-600",
   },
   row_2000m: {
-    card: "bg-stone-950/95",
-    header: "bg-cyan-950 text-cyan-50",
-    border: "border-cyan-600/80",
-    accent: "text-cyan-300",
-    divider: "border-cyan-900/60",
+    card: "bg-black",
+    header: "bg-cyan-600 text-white",
+    border: "border-cyan-400",
+    accent: "text-cyan-200",
+    divider: "divide-stone-600",
   },
   pullups: {
-    card: "bg-stone-950/95",
-    header: "bg-amber-950 text-amber-50",
-    border: "border-amber-600/80",
-    accent: "text-amber-300",
-    divider: "border-amber-900/60",
+    card: "bg-black",
+    header: "bg-amber-400 text-stone-950",
+    border: "border-amber-300",
+    accent: "text-amber-200",
+    divider: "divide-stone-600",
   },
   plank: {
-    card: "bg-stone-950/95",
-    header: "bg-orange-950 text-orange-50",
-    border: "border-orange-600/80",
-    accent: "text-orange-300",
-    divider: "border-orange-900/60",
+    card: "bg-black",
+    header: "bg-orange-500 text-stone-950",
+    border: "border-orange-300",
+    accent: "text-orange-200",
+    divider: "divide-stone-600",
   },
   wall_sit: {
-    card: "bg-stone-950/95",
-    header: "bg-rose-950 text-rose-50",
-    border: "border-rose-600/80",
-    accent: "text-rose-300",
-    divider: "border-rose-900/60",
+    card: "bg-black",
+    header: "bg-rose-600 text-white",
+    border: "border-rose-400",
+    accent: "text-rose-200",
+    divider: "divide-stone-600",
   },
 };
 
@@ -166,7 +169,7 @@ function GenderHalf({
           return (
             <p
               key={placeNum}
-              className={`font-bold uppercase leading-snug text-white ${
+              className={`font-black uppercase leading-snug text-white ${
                 isTv
                   ? compact
                     ? "text-xs"
@@ -174,10 +177,10 @@ function GenderHalf({
                   : "text-[0.7rem] sm:text-xs"
               } ${empty ? "opacity-40" : ""}`}
             >
-              <span className={`mr-1.5 inline-block min-w-[1.75rem] font-black ${medalClass}`}>
+              <span className={`mr-1.5 inline-block min-w-[1.75rem] ${medalClass}`}>
                 {placeLabel}
               </span>
-              <span className={empty ? "text-stone-500" : ""}>{line}</span>
+              <span className={empty ? "text-stone-500" : "text-white"}>{line}</span>
             </p>
           );
         })}

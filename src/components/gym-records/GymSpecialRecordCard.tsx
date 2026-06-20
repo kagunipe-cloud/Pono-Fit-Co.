@@ -1,7 +1,7 @@
 import { GYM_RECORD_PLACES, formatGymRecordLine, type GymRecordPlaceCell } from "@/lib/gym-records";
 
 const PLACE_LABELS = ["1st", "2nd", "3rd"] as const;
-const PLACE_MEDAL_CLASS = ["text-amber-300", "text-stone-200", "text-amber-600"] as const;
+const PLACE_MEDAL_CLASS = ["text-amber-300", "text-stone-100", "text-orange-300"] as const;
 
 /** A standalone record card (no age/gender split) — just 1st / 2nd / 3rd. */
 export function GymSpecialRecordCard({
@@ -20,7 +20,7 @@ export function GymSpecialRecordCard({
   const isTv = variant === "tv";
 
   return (
-    <article className="overflow-hidden rounded-2xl border-2 border-amber-400/80 bg-gradient-to-b from-amber-950/70 to-stone-950 shadow-2xl">
+    <article className="overflow-hidden rounded-2xl border-2 border-amber-300 bg-black shadow-2xl">
       <header
         className={`border-b-2 border-amber-400/70 bg-amber-500 text-center font-black uppercase tracking-[0.2em] text-stone-950 ${
           isTv ? "px-5 py-4 text-3xl sm:text-4xl" : "px-4 py-2.5 text-base sm:text-lg"

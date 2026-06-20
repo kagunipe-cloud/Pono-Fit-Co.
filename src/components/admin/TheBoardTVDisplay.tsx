@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { GymRecordsAgeBand } from "@/components/gym-records/GymRecordsAgeBand";
 import { GymSpecialRecordCard } from "@/components/gym-records/GymSpecialRecordCard";
@@ -17,6 +17,10 @@ import {
 } from "@/lib/gym-records";
 
 const ROTATE_MS = 28_000;
+
+/** Fixed portrait canvas width the board lays out at; the stage scales it to fit any screen. */
+const DESIGN_WIDTH = 1080;
+const MAX_SCALE = 4;
 
 type TvPage =
   | { kind: "records"; ages: readonly GymRecordAgeBracket[] }
@@ -44,7 +48,10 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
       : rotateParam === "ccw" || rotateParam === "270" || rotateParam === "left"
         ? -90
         : 0;
-  const rootSize = rotation ? "h-full w-full" : "min-h-[100dvh]";
+
+  const stageRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
 
   const [records, setRecords] = useState<GymRecordsGrid>(emptyGymRecordsGrid());
   const [special, setSpecial] = useState<GymSpecialRecordsGrid>(emptyGymSpecialRecordsGrid());
@@ -154,6 +161,34 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
     return () => window.clearInterval(timer);
   }, [pauseRotation]);
 
+  // Auto-fit: scale the fixed-width board so the whole page always fills the screen
+  // without scrolling, on any TV size / browser, and accounting for rotation.
+  useLayoutEffect(() => {
+    const recompute = () => {
+      const content = contentRef.current;
+      if (!content) return;
+      const cw = content.offsetWidth;
+      const ch = content.offsetHeight;
+      if (!cw || !ch) return;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      // When rotated 90°, the content's width axis spans the screen's height and vice versa.
+      const availForWidth = rotation ? vh : vw;
+      const availForHeight = rotation ? vw : vh;
+      const next = Math.min(availForWidth / cw, availForHeight / ch, MAX_SCALE);
+      if (next > 0 && Number.isFinite(next)) setScale(next);
+    };
+
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    if (contentRef.current) ro.observe(contentRef.current);
+    window.addEventListener("resize", recompute);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", recompute);
+    };
+  }, [rotation, pageIndex, loading, records, special, goalRows]);
+
   const page = useMemo(() => TV_PAGES[pageIndex] ?? TV_PAGES[0]!, [pageIndex]);
 
   if (loading) {
@@ -182,8 +217,8 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
         : `Page ${pageIndex + 1} of ${TV_PAGES.length}`;
 
   const body = (
-    <div className={`${rootSize} bg-stone-950 text-white`}>
-      <div className={`mx-auto flex ${rotation ? "h-full" : "min-h-[100dvh]"} w-full max-w-[1080px] flex-col`}>
+    <div className="bg-stone-950 text-white">
+      <div className="flex w-full flex-col">
         <header className="shrink-0 border-b border-stone-700 bg-gradient-to-b from-stone-800 to-stone-900 px-5 py-6 text-center">
           <div className="mb-3 flex justify-center">
             <Image src="/Lei_Logos.png" alt="Pono Fit Co." width={220} height={56} className="h-11 w-auto" priority />
@@ -192,7 +227,7 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
           <p className="mt-2 text-xs font-bold uppercase tracking-[0.25em] text-[#9ef6b2]">{subtitle}</p>
         </header>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1">
           {page.kind === "records" ? (
             page.ages.map((age, index) => (
               <GymRecordsAgeBand
@@ -245,21 +280,19 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
     </div>
   );
 
-  if (!rotation) return body;
-
-  // Rotate the whole portrait layout to fit a physically sideways-mounted TV.
+  // Stage: center the fixed-width board, rotate for sideways TVs, and scale to fill the screen.
   return (
-    <div className="fixed inset-0 overflow-hidden bg-stone-950">
+    <div ref={stageRef} className="fixed inset-0 overflow-hidden bg-stone-950">
       <div
         className="absolute left-1/2 top-1/2"
         style={{
-          width: "100vh",
-          height: "100vw",
-          transform: `translate(-50%, -50%) rotate(${rotation}deg)`,
+          transform: `translate(-50%, -50%) rotate(${rotation}deg) scale(${scale})`,
           transformOrigin: "center center",
         }}
       >
-        {body}
+        <div ref={contentRef} style={{ width: DESIGN_WIDTH }}>
+          {body}
+        </div>
       </div>
     </div>
   );
