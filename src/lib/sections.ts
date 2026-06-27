@@ -181,6 +181,7 @@ export const BOOKINGS_EXTRA_LINKS: { href: string; title: string }[] = [{ href: 
 /** Extra Reports dropdown links (not `[section]` data tables). */
 export const REPORT_EXTRA_LINKS: { href: string; title: string }[] = [
   { href: "/members-expiry", title: "Membership expiry" },
+  { href: "/admin/reports/membership-flow", title: "Membership flow" },
   { href: "/admin/the-board", title: "The Board" },
   { href: "/admin/reports/member-unlocks", title: "Member unlocks" },
   { href: "/admin/reports/insurance", title: "Insurance report" },

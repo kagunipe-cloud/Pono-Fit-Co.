@@ -14,6 +14,7 @@ import {
 import { isPassPackPlan, passCreditsForPurchase } from "../../../../lib/pass-packs";
 import { ensureDayPassCreditLedger } from "../../../../lib/day-pass-credits";
 import { ensureCartTables } from "../../../../lib/cart";
+import { setMemberAutoRenew } from "../../../../lib/auto-renew-events";
 import { getEffectiveUnitPriceString } from "../../../../lib/cart-line-prices";
 import {
   sendPostPurchaseEmail,
@@ -162,11 +163,13 @@ export async function POST(request: NextRequest) {
         if (autoRenew === null) {
           dbStripe.prepare("UPDATE members SET stripe_customer_id = ? WHERE member_id = ?").run(cidApi, member_id);
         } else {
-          dbStripe.prepare("UPDATE members SET stripe_customer_id = ?, auto_renew = ? WHERE member_id = ?").run(
-            cidApi,
-            autoRenew,
-            member_id
-          );
+          dbStripe.prepare("UPDATE members SET stripe_customer_id = ? WHERE member_id = ?").run(cidApi, member_id);
+          setMemberAutoRenew(dbStripe, {
+            memberId: member_id,
+            enabled: autoRenew === 1,
+            changedByMemberId: member_id,
+            source: "checkout",
+          });
         }
         dbStripe.close();
       }
@@ -181,11 +184,13 @@ export async function POST(request: NextRequest) {
       if (autoRenew === null) {
         dbStripe.prepare("UPDATE members SET stripe_customer_id = ? WHERE member_id = ?").run(termApi, member_id);
       } else {
-        dbStripe.prepare("UPDATE members SET stripe_customer_id = ?, auto_renew = ? WHERE member_id = ?").run(
-          termApi,
-          autoRenew,
-          member_id
-        );
+        dbStripe.prepare("UPDATE members SET stripe_customer_id = ? WHERE member_id = ?").run(termApi, member_id);
+        setMemberAutoRenew(dbStripe, {
+          memberId: member_id,
+          enabled: autoRenew === 1,
+          changedByMemberId: member_id,
+          source: "checkout",
+        });
       }
       dbStripe.close();
     }

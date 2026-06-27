@@ -19,6 +19,7 @@ import {
   parsePriceToCents,
 } from "@/lib/money-owed-renewal-load";
 import { computeCcFee } from "@/lib/cc-fees";
+import { setMemberAutoRenew } from "@/lib/auto-renew-events";
 import { stripeCustomerIdForApi } from "@/lib/stripe-customer";
 import {
   resolveStripeCustomerCardPaymentMethodId,
@@ -128,7 +129,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         saleType: "complimentary",
       });
       if (enableAutoRenew) {
-        db.prepare("UPDATE members SET auto_renew = 1 WHERE member_id = ?").run(memberId);
+        setMemberAutoRenew(db, {
+          memberId,
+          enabled: true,
+          changedByMemberId: adminId,
+          source: "reactivate",
+        });
       }
       db.close();
       return NextResponse.json({
@@ -250,7 +256,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
 
     if (enableAutoRenew) {
-      db.prepare("UPDATE members SET auto_renew = 1 WHERE member_id = ?").run(memberId);
+      setMemberAutoRenew(db, {
+        memberId,
+        enabled: true,
+        changedByMemberId: adminId,
+        source: "reactivate",
+      });
     }
 
     db.close();

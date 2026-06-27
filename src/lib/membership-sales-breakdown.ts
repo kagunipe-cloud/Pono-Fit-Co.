@@ -42,7 +42,7 @@ function hasPassCredits(sub: { pass_credits_remaining?: unknown }): boolean {
   return pc != null && String(pc).trim() !== "";
 }
 
-function classifyPlanMembershipSubcategory(
+export function classifyPlanMembershipSubcategory(
   plan: { unit?: string | null; category?: string | null },
   saleType: string,
   memberAutoRenew: number,

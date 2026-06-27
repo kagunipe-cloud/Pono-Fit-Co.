@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, ensureMembersAutoRenewColumn } from "../../../../../lib/db";
 import { getAdminMemberId } from "../../../../../lib/admin";
+import { setMemberAutoRenew } from "../../../../../lib/auto-renew-events";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +28,13 @@ export async function PATCH(
     db.close();
     return NextResponse.json({ error: "Member not found" }, { status: 404 });
   }
-  db.prepare("UPDATE members SET auto_renew = ? WHERE member_id = ?").run(enabled ? 1 : 0, member.member_id);
+  const { autoRenew } = setMemberAutoRenew(db, {
+    memberId: member.member_id,
+    enabled,
+    changedByMemberId: adminId,
+    source: "admin",
+  });
   db.close();
 
-  return NextResponse.json({ ok: true, auto_renew: enabled });
+  return NextResponse.json({ ok: true, auto_renew: autoRenew === 1 });
 }

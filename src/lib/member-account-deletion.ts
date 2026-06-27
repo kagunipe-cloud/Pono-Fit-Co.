@@ -1,5 +1,6 @@
-import { getDb, ensureMembersDoorAccessWaiverExemptColumn } from "./db";
+import { getDb, ensureMembersDoorAccessWaiverExemptColumn, ensureMembersAutoRenewColumn } from "./db";
 import { ensurePTSlotTables } from "./pt-slots";
+import { setMemberAutoRenew } from "./auto-renew-events";
 import { randomBytes } from "crypto";
 import { hashPassword } from "./password";
 import { deleteKisiUserBestEffort } from "./kisi";
@@ -58,6 +59,18 @@ export async function softDeleteAnonymizeMember(db: Db, internalId: number, memb
   const junkEmail = `removed-${memberId}-${randomBytes(6).toString("hex")}@account-closed.invalid`;
   const deadHash = hashPassword(randomBytes(32).toString("hex"));
   const now = new Date().toISOString();
+
+  ensureMembersAutoRenewColumn(db);
+  try {
+    setMemberAutoRenew(db, {
+      memberId,
+      enabled: false,
+      changedByMemberId: memberId,
+      source: "account_deletion",
+    });
+  } catch {
+    /* member row may already be inconsistent */
+  }
 
   db.prepare(
     `UPDATE members SET

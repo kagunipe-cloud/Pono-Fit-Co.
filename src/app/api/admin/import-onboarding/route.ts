@@ -12,6 +12,7 @@ import {
   ensureSubscriptionRenewalDiscountPercentColumn,
 } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
+import { recordAutoRenewChange, setMemberAutoRenew } from "@/lib/auto-renew-events";
 import { normalizeDateToYMD, formatDateForStorage } from "@/lib/app-timezone";
 import { computeRenewalChargePrice } from "@/lib/renewal-pricing";
 
@@ -145,7 +146,7 @@ export async function POST(request: NextRequest) {
   );
   const updateMember = db.prepare(
     `UPDATE members SET first_name = ?, last_name = ?, join_date = ?, exp_next_payment_date = ?, phone = ?,
-     stripe_customer_id = COALESCE(?, stripe_customer_id), auto_renew = ?
+     stripe_customer_id = COALESCE(?, stripe_customer_id)
      WHERE member_id = ?`
   );
   const insertMember = db.prepare(
@@ -470,9 +471,14 @@ export async function POST(request: NextRequest) {
           expForMember,
           phone,
           stripeCustomerId,
-          autoRenew,
           memberId
         );
+        setMemberAutoRenew(db, {
+          memberId,
+          enabled: autoRenew === 1,
+          changedByMemberId: adminId,
+          source: "import",
+        });
         didUpdate = true;
       } else {
         memberId = randomUUID().slice(0, 8);
@@ -487,6 +493,15 @@ export async function POST(request: NextRequest) {
           stripeCustomerId,
           autoRenew
         );
+        if (autoRenew === 1) {
+          recordAutoRenewChange(db, {
+            memberId,
+            enabled: true,
+            previousEnabled: 0,
+            changedByMemberId: adminId,
+            source: "import",
+          });
+        }
         didCreate = true;
       }
 

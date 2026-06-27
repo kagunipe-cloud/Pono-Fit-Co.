@@ -10,6 +10,9 @@ const REPORT_DESCRIPTIONS: Record<string, string> = {
   "/admin/reports/member-unlocks": "Door unlock history by member and date range.",
   "/admin/reports/insurance": "Billable insurance visit-day counts by program.",
   "/admin/reports/workout-volume": "Finished workout volume by member and date range.",
+  "/admin/reports/auto-renew-changes": "When members turn auto-renew on or off, by date range.",
+  "/admin/reports/membership-flow":
+    "New members, plan changes, renewals, and auto-renew toggles by membership type.",
   "/admin/usage": "Check-ins and usage activity from unlocks and manual entries.",
 };
 
