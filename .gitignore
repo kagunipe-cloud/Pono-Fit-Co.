@@ -43,3 +43,4 @@ gym-exercises-export.json
 
 # typescript
 next-env.d.ts
+tsconfig.tsbuildinfo
