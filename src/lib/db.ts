@@ -99,26 +99,12 @@ const DEFAULT_OPEN_HOUR_MIN = 6;
 const DEFAULT_OPEN_HOUR_MAX = 22;
 
 function ensureAppSettingsDefaults(db: Database.Database) {
-  const row = db.prepare("SELECT 1 FROM app_settings WHERE key = ?").get("timezone");
-  if (!row) {
-    db.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?)").run("timezone", DEFAULT_TIMEZONE);
-  }
-  const openMin = db.prepare("SELECT 1 FROM app_settings WHERE key = ?").get("open_hour_min");
-  if (!openMin) {
-    db.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?)").run("open_hour_min", String(DEFAULT_OPEN_HOUR_MIN));
-  }
-  const openMax = db.prepare("SELECT 1 FROM app_settings WHERE key = ?").get("open_hour_max");
-  if (!openMax) {
-    db.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?)").run("open_hour_max", String(DEFAULT_OPEN_HOUR_MAX));
-  }
-  const retailGate = db.prepare("SELECT 1 FROM app_settings WHERE key = ?").get(MEMBER_RETAIL_SELF_CHECKOUT_KEY);
-  if (!retailGate) {
-    db.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?)").run(MEMBER_RETAIL_SELF_CHECKOUT_KEY, "0");
-  }
-  const retailAllowOos = db.prepare("SELECT 1 FROM app_settings WHERE key = ?").get(MEMBER_RETAIL_ALLOW_PURCHASE_WHEN_OUT_OF_STOCK_KEY);
-  if (!retailAllowOos) {
-    db.prepare("INSERT INTO app_settings (key, value) VALUES (?, ?)").run(MEMBER_RETAIL_ALLOW_PURCHASE_WHEN_OUT_OF_STOCK_KEY, "0");
-  }
+  const insert = db.prepare("INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)");
+  insert.run("timezone", DEFAULT_TIMEZONE);
+  insert.run("open_hour_min", String(DEFAULT_OPEN_HOUR_MIN));
+  insert.run("open_hour_max", String(DEFAULT_OPEN_HOUR_MAX));
+  insert.run(MEMBER_RETAIL_SELF_CHECKOUT_KEY, "0");
+  insert.run(MEMBER_RETAIL_ALLOW_PURCHASE_WHEN_OUT_OF_STOCK_KEY, "0");
 }
 
 /** Get open hours (0–23). Default 6–22. */
