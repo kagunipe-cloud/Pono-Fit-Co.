@@ -10,9 +10,9 @@ import {
   FLOW_KIND_LABELS,
   MEMBERSHIP_FLOW_TABS,
   type MembershipFlowKind,
+  type MembershipFlowRow,
   type MembershipFlowTab,
-} from "@/lib/membership-flow";
-import type { MembershipFlowRow } from "@/app/api/admin/reports/membership-flow/route";
+} from "@/lib/membership-flow-shared";
 
 type Summary = Record<MembershipFlowKind, number>;
 
