@@ -122,6 +122,9 @@ export function buildMembershipFlowReport(
   const toSql = endOfDayInTz(to, tz).replace("T", " ").slice(0, 19);
 
   const events: MembershipFlowRow[] = [];
+  const seenSaleIds = new Set<string>();
+
+  const planJoinOnSub = MEMBERSHIP_PLAN_JOIN_SQL.replace(/s\./g, "sub.");
 
   const saleRows = db
     .prepare(
@@ -132,10 +135,11 @@ export function buildMembershipFlowReport(
               p.plan_name, p.unit, p.category
        FROM sales s
        INNER JOIN subscriptions sub ON sub.sales_id = s.sales_id
-       LEFT JOIN membership_plans p ON ${MEMBERSHIP_PLAN_JOIN_SQL.replace(/s\./g, "sub.")}
+       LEFT JOIN membership_plans p ON ${planJoinOnSub}
        INNER JOIN members m ON m.member_id = s.member_id
        WHERE s.status != 'Refunded'
-         AND s.sale_date >= ? AND s.sale_date <= ?`
+         AND s.sale_date >= ? AND s.sale_date <= ?
+         AND LOWER(TRIM(COALESCE(s.sale_type, ''))) != 'renewal'`
     )
     .all(from, to) as {
     sales_id: string;
@@ -192,6 +196,74 @@ export function buildMembershipFlowReport(
       detail,
       sort_priority: FLOW_KIND_SORT[flowKind],
     });
+    seenSaleIds.add(r.sales_id);
+  }
+
+  /** Cron/admin renewals create new sales rows; subscription.sales_id stays on the original purchase. */
+  const renewalSaleRows = db
+    .prepare(
+      `SELECT s.sales_id, s.member_id, s.date_time, s.sale_date, s.sale_type,
+              CAST(s.grand_total AS REAL) AS grand_total,
+              m.first_name, m.last_name, m.email, COALESCE(m.auto_renew, 0) AS auto_renew,
+              sub.subscription_id, sub.product_id, sub.start_date, sub.pass_credits_remaining,
+              p.plan_name, p.unit, p.category
+       FROM sales s
+       INNER JOIN members m ON m.member_id = s.member_id
+       LEFT JOIN subscriptions sub ON sub.subscription_id = (
+         SELECT s2.subscription_id FROM subscriptions s2
+         WHERE s2.member_id = s.member_id
+           AND LOWER(TRIM(COALESCE(s2.status, ''))) = 'active'
+         ORDER BY s2.start_date DESC
+         LIMIT 1
+       )
+       LEFT JOIN membership_plans p ON ${planJoinOnSub}
+       WHERE s.status != 'Refunded'
+         AND s.sale_date >= ? AND s.sale_date <= ?
+         AND (
+           LOWER(TRIM(COALESCE(s.sale_type, ''))) = 'renewal'
+           OR (
+             LOWER(TRIM(COALESCE(s.sale_type, ''))) = 'complimentary'
+             AND NOT EXISTS (SELECT 1 FROM subscriptions sub2 WHERE sub2.sales_id = s.sales_id)
+             AND EXISTS (
+               SELECT 1 FROM subscriptions s3
+               WHERE s3.member_id = s.member_id
+                 AND TRIM(COALESCE(s3.start_date, '')) != ''
+                 AND s3.start_date < s.sale_date
+             )
+           )
+         )`
+    )
+    .all(from, to) as typeof saleRows;
+
+  for (const r of renewalSaleRows) {
+    if (seenSaleIds.has(r.sales_id)) continue;
+    const membershipKind =
+      classifyPlanMembershipSubcategory(
+        { unit: r.unit, category: r.category },
+        "renewal",
+        r.auto_renew,
+        hasPassCredits(r)
+      ) ?? "Monthly recurring";
+    const happenedAt = eventTimestamp(r.date_time, r.sale_date, r.start_date);
+    const detail =
+      String(r.sale_type ?? "").trim().toLowerCase() === "complimentary" ? "Complimentary renewal" : null;
+
+    events.push({
+      id: `renewal-${r.sales_id}`,
+      happened_at: happenedAt,
+      member_id: r.member_id,
+      member_name: memberName(r.first_name, r.last_name, r.member_id),
+      email: r.email,
+      flow_kind: "renewal",
+      membership_kind: membershipKind,
+      plan_name: r.plan_name?.trim() || null,
+      previous_plan_name: null,
+      auto_renew: r.auto_renew,
+      amount: parseNum(r.grand_total) || null,
+      detail,
+      sort_priority: FLOW_KIND_SORT.renewal,
+    });
+    seenSaleIds.add(r.sales_id);
   }
 
   const passPackSales = db

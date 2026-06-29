@@ -98,7 +98,8 @@ export default function MembershipFlowReportPage() {
         changes and renewals.
       </p>
       <p className="text-stone-500 text-xs mb-6">
-        Auto-renew history starts when that tracking was added; membership purchases use sales and subscription dates.
+        Auto-renew on/off only logs from when that tracking was added (not backfilled). Renewals come from renewal
+        sales in Transactions.
       </p>
 
       <div className="flex flex-wrap items-end gap-3 mb-4">
