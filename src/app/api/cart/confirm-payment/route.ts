@@ -25,6 +25,7 @@ import {
   sendGiftPassEmail,
 } from "../../../../lib/email";
 import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../lib/kisi";
+import { kisiDoorAccessValidUntilForExpiryYmd } from "../../../../lib/pass-access";
 import { ensureWaiverBeforeKisi } from "../../../../lib/waiver";
 import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
 import { isOpenGroupSessionKind } from "../../../../lib/open-group-pt";
@@ -253,7 +254,7 @@ export async function POST(request: NextRequest) {
       first_name: string | null;
       last_name: string | null;
     } | undefined;
-    const kisiGrants: { valid_until: Date }[] = [];
+    const kisiGrants: { expiry_ymd: string }[] = [];
 
     const classBookingEvents: {
       member_id: string;
@@ -369,7 +370,7 @@ export async function POST(request: NextRequest) {
               renewalDiscountToStore
             );
             db.prepare("UPDATE members SET exp_next_payment_date = ? WHERE member_id = ?").run(expiryStr, member_id);
-            kisiGrants.push({ valid_until: expiry_date });
+            kisiGrants.push({ expiry_ymd: expiryStr });
           }
         } else if (it.product_type === "pt_session") {
           ensurePTSlotTables(db);
@@ -646,7 +647,10 @@ export async function POST(request: NextRequest) {
               }
             }
             if (kisiId) {
-              await kisiGrantAccess(kisiId, g.valid_until);
+              const until = kisiDoorAccessValidUntilForExpiryYmd(g.expiry_ymd, tz);
+              if (until) {
+                await kisiGrantAccess(kisiId, until);
+              }
             }
           } catch (e) {
             console.error("[Kisi] grant failed for member:", member_id, e);

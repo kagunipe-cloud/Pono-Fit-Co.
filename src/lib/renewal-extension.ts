@@ -16,6 +16,7 @@ import {
 import { formatDateTimeInAppTz, todayInAppTz, formatDateForStorage } from "./app-timezone";
 import { computeRenewalChargePrice } from "./renewal-pricing";
 import { grantAccess as kisiGrantAccess } from "./kisi";
+import { kisiDoorAccessValidUntilForExpiryYmd } from "./pass-access";
 import { ensureWaiverBeforeKisi } from "./waiver";
 
 type AppDb = ReturnType<typeof getDb>;
@@ -212,10 +213,13 @@ export async function extendSubscriptionAfterRenewal(
   if (waiver.shouldGrantKisi) {
     const kisiId = db.prepare("SELECT kisi_id FROM members WHERE member_id = ?").get(sub.member_id) as { kisi_id: string | null } | undefined;
     if (kisiId?.kisi_id) {
-      try {
-        await kisiGrantAccess(kisiId.kisi_id, expiryDate);
-      } catch (e) {
-        console.error("[renewal-extension] Kisi grant failed for member:", sub.member_id, e);
+      const kisiValidUntil = kisiDoorAccessValidUntilForExpiryYmd(expiryStr, tz);
+      if (kisiValidUntil) {
+        try {
+          await kisiGrantAccess(kisiId.kisi_id, kisiValidUntil);
+        } catch (e) {
+          console.error("[renewal-extension] Kisi grant failed for member:", sub.member_id, e);
+        }
       }
     }
   }

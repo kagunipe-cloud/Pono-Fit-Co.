@@ -3,18 +3,9 @@ import { getDb, getAppTimezone } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
 import { calendarDaysUntilExpiryYmd, normalizeDateToYMD, todayInAppTz } from "@/lib/app-timezone";
 import { grantAccess as kisiGrantAccess } from "@/lib/kisi";
+import { kisiDoorAccessValidUntilForExpiryYmd } from "@/lib/pass-access";
 
 export const dynamic = "force-dynamic";
-
-function ymdToLocalNoon(ymd: string): Date | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd.trim());
-  if (!m) return null;
-  const y = Number(m[1]);
-  const mo = Number(m[2]) - 1;
-  const d = Number(m[3]);
-  if (!y || mo < 0 || d < 1) return null;
-  return new Date(y, mo, d, 12, 0, 0, 0);
-}
 
 /**
  * POST — Admin: set a subscription’s period end (`expiry_date`) to a specific calendar day (gym timezone dates).
@@ -104,7 +95,7 @@ export async function POST(request: NextRequest) {
 
     let kisi_warning: string | undefined;
     if (kid) {
-      const until = ymdToLocalNoon(expiryNorm);
+      const until = kisiDoorAccessValidUntilForExpiryYmd(expiryNorm, tz);
       if (until) {
         try {
           await kisiGrantAccess(kid, until);

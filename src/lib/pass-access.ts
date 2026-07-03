@@ -52,6 +52,16 @@ export function listMemberIdsWithDoorAccessToday(db: ReturnType<typeof getDb>, t
   return rows.map((r) => r.member_id).filter((id) => id != null && String(id).trim() !== "");
 }
 
+/** Kisi `valid_until` for a stored period-end YYYY-MM-DD — end of that calendar day in app TZ. */
+export function kisiDoorAccessValidUntilForExpiryYmd(
+  expiryYmd: string | null | undefined,
+  timeZone: string
+): Date | null {
+  const ymd = normalizeDateToYMD(expiryYmd);
+  if (!ymd) return null;
+  return endOfCalendarDayInTimeZone(ymd, timeZone);
+}
+
 /** Last instant (UTC) that still falls on `ymd` in the given IANA timezone. */
 export function endOfCalendarDayInTimeZone(ymd: string, timeZone: string): Date {
   const parts = ymd.trim().split("-").map(Number);
@@ -162,4 +172,27 @@ export function kisiDayPassValidUntilIfUnlockShouldSync(
     return endOfCalendarDayInTimeZone(today, tz);
   }
   return null;
+}
+
+/**
+ * On unlock: monthly subscription period ends today (UI shows 0 days left) — refresh Kisi.
+ * Older grants used noon UTC of expiry (~2 AM Hawaii), so door access often died before the 2 AM renewal cron.
+ */
+export function kisiMonthlyExpiryDayValidUntilIfUnlockShouldSync(
+  db: ReturnType<typeof getDb>,
+  memberId: string,
+  tz: string
+): Date | null {
+  const today = todayInAppTz(tz);
+  const row = db
+    .prepare(
+      `SELECT 1 FROM subscriptions
+       WHERE member_id = ? AND status = 'Active' AND pass_credits_remaining IS NULL
+         AND TRIM(COALESCE(subscription_pause_started, '')) = ''
+         AND expiry_date = ?
+       LIMIT 1`
+    )
+    .get(memberId, today);
+  if (!row) return null;
+  return endOfCalendarDayInTimeZone(today, tz);
 }

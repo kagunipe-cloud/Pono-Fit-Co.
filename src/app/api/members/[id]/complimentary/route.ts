@@ -5,6 +5,7 @@ import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
 import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz, formatDateForStorage } from "../../../../../lib/app-timezone";
 import { getAdminMemberId } from "../../../../../lib/admin";
 import { grantAccess as kisiGrantAccess, ensureKisiUser } from "../../../../../lib/kisi";
+import { kisiDoorAccessValidUntilForExpiryYmd } from "../../../../../lib/pass-access";
 import { sendAppDownloadInviteEmail } from "../../../../../lib/email";
 import { ensureWaiverBeforeKisi } from "../../../../../lib/waiver";
 import { randomUUID } from "crypto";
@@ -90,9 +91,9 @@ export async function POST(
       const start_date = new Date();
       const monthsToAdd = free_months != null && free_months >= 0 ? free_months : parseInt(plan.length || "1", 10);
       const expiry_date = addDuration(start_date, String(monthsToAdd), plan.unit === "Month" ? "Month" : plan.unit || "Month");
-      kisiValidUntil = expiry_date;
       const startStr = formatDateForStorage(start_date, tz);
       const expiryStr = formatDateForStorage(expiry_date, tz);
+      kisiValidUntil = kisiDoorAccessValidUntilForExpiryYmd(expiryStr, tz);
       const daysRemaining = Math.ceil((expiry_date.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
       const sub_id = randomUUID().slice(0, 8);
       db.prepare(`

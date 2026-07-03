@@ -6,6 +6,7 @@ import { isPassPackPlan, passCreditsForPurchase } from "@/lib/pass-packs";
 import { getMemberIdFromSession } from "@/lib/session";
 import { formatDateForStorage } from "@/lib/app-timezone";
 import { grantAccess as kisiGrantAccess, ensureKisiUser } from "@/lib/kisi";
+import { kisiDoorAccessValidUntilForExpiryYmd } from "@/lib/pass-access";
 import { ensureWaiverBeforeKisi } from "@/lib/waiver";
 
 export const dynamic = "force-dynamic";
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
     } else {
       const expiry_date = addDuration(start_date, plan.length || "1", plan.unit || "Month");
       expiryStr = formatDateForStorage(expiry_date, tz);
-      expiryDateForKisi = expiry_date;
+      expiryDateForKisi = kisiDoorAccessValidUntilForExpiryYmd(expiryStr, tz);
       const daysRemaining = Math.ceil((expiry_date.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
       db.prepare(
         `INSERT INTO subscriptions (subscription_id, member_id, product_id, status, start_date, expiry_date, days_remaining, price, sales_id, quantity, promo_renewals_remaining, renewal_price_indefinite)

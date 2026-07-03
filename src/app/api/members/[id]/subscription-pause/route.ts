@@ -8,20 +8,10 @@ import {
   pausedCalendarDaysCreditedTowardExpiry,
   todayInAppTz,
 } from "@/lib/app-timezone";
-import { memberHasDoorAccessToday } from "@/lib/pass-access";
+import { memberHasDoorAccessToday, kisiDoorAccessValidUntilForExpiryYmd } from "@/lib/pass-access";
 import { grantAccess as kisiGrantAccess, revokeAccess as kisiRevokeAccess } from "@/lib/kisi";
 
 export const dynamic = "force-dynamic";
-
-function ymdToLocalNoon(ymd: string): Date | null {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd.trim());
-  if (!m) return null;
-  const y = Number(m[1]);
-  const mo = Number(m[2]) - 1;
-  const d = Number(m[3]);
-  if (!y || mo < 0 || d < 1) return null;
-  return new Date(y, mo, d, 12, 0, 0, 0);
-}
 
 function resolveRouteMember(db: ReturnType<typeof getDb>, routeParam: string): string | null {
   const isPurelyNumeric = /^\d+$/.test(routeParam);
@@ -210,7 +200,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const kid = kisiRow?.kisi_id?.trim();
     let kisi_warning: string | undefined;
     if (kid && newExpiryNorm >= todayYmd) {
-      const until = ymdToLocalNoon(newExpiryNorm);
+      const until = kisiDoorAccessValidUntilForExpiryYmd(newExpiryNorm, tz);
       if (until) {
         try {
           await kisiGrantAccess(kid, until);

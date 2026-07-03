@@ -7,7 +7,7 @@ import {
   grantAccess,
   unlockWithUserSecret,
 } from "../../../../lib/kisi";
-import { getSubscriptionDoorAccessValidUntil, kisiDayPassValidUntilIfUnlockShouldSync } from "../../../../lib/pass-access";
+import { getSubscriptionDoorAccessValidUntil, kisiDayPassValidUntilIfUnlockShouldSync, kisiMonthlyExpiryDayValidUntilIfUnlockShouldSync } from "../../../../lib/pass-access";
 import { addOccupancyEntry, ensureOccupancyTable } from "../../../../lib/occupancy";
 
 export const dynamic = "force-dynamic";
@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
     }
     const tzUnlock = getAppTimezone(db);
     const dayPassValidUntil = kisiDayPassValidUntilIfUnlockShouldSync(db, member_id, tzUnlock);
+    const monthlyExpiryDayUntil = kisiMonthlyExpiryDayValidUntilIfUnlockShouldSync(db, member_id, tzUnlock);
 
     // One-time grant when we first attach kisi_id. Day-pass-only: re-grant here if activation didn't (or failed).
     if (needsInitialKisiGrant) {
@@ -87,6 +88,12 @@ export async function POST(request: NextRequest) {
         await grantAccess(kisiId, dayPassValidUntil);
       } catch (e) {
         console.warn("[Kisi unlock] day-pass Kisi sync failed:", e);
+      }
+    } else if (monthlyExpiryDayUntil && monthlyExpiryDayUntil.getTime() > Date.now()) {
+      try {
+        await grantAccess(kisiId, monthlyExpiryDayUntil);
+      } catch (e) {
+        console.warn("[Kisi unlock] monthly expiry-day Kisi sync failed:", e);
       }
     }
 
