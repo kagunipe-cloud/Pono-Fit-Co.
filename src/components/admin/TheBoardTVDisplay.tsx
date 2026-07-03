@@ -18,9 +18,12 @@ import {
 
 const ROTATE_MS = 28_000;
 
-/** Fixed portrait canvas width the board lays out at; the stage scales it to fit any screen. */
-const DESIGN_WIDTH = 1080;
-const MAX_SCALE = 4;
+/**
+ * High-res portrait canvas (2× 1080p). The stage only scales *down* to fit the screen so
+ * Fire TV / kiosk WebViews stay sharp instead of upscaling a 1080 layout.
+ */
+const DESIGN_WIDTH = 1920;
+const MAX_SCALE = 1;
 
 type TvPage =
   | { kind: "records"; ages: readonly GymRecordAgeBracket[] }
@@ -214,17 +217,29 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
       ? "Top 10 This Week"
       : page.kind === "special"
         ? "Hall of Fame"
-        : `Page ${pageIndex + 1} of ${TV_PAGES.length}`;
+        : page.kind === "records"
+          ? `Ages ${page.ages.join(" · ")}`
+          : `Page ${pageIndex + 1} of ${TV_PAGES.length}`;
 
   const body = (
     <div className="bg-stone-950 text-white">
       <div className="flex w-full flex-col">
-        <header className="shrink-0 border-b border-stone-700 bg-gradient-to-b from-stone-800 to-stone-900 px-5 py-6 text-center">
-          <div className="mb-3 flex justify-center">
-            <Image src="/Lei_Logos.png" alt="Pono Fit Co." width={220} height={56} className="h-11 w-auto" priority />
+        <header className="shrink-0 border-b border-stone-700 bg-gradient-to-b from-stone-800 to-stone-900 px-8 py-8 text-center">
+          <div className="mb-4 flex justify-center">
+            <Image
+              src="/Lei_Logos.png"
+              alt="Pono Fit Co."
+              width={440}
+              height={112}
+              className="h-[4.5rem] w-auto"
+              priority
+              unoptimized
+            />
           </div>
-          <h1 className="text-4xl font-black uppercase tracking-tight text-white sm:text-5xl">{title}</h1>
-          <p className="mt-2 text-xs font-bold uppercase tracking-[0.25em] text-[#9ef6b2]">{subtitle}</p>
+          <h1 className="text-5xl font-black uppercase tracking-tight text-white sm:text-6xl">{title}</h1>
+          <p className="mt-3 text-sm font-bold uppercase tracking-[0.25em] text-[#9ef6b2] sm:text-base">
+            {subtitle}
+          </p>
         </header>
 
         <div className="flex-1">
@@ -236,7 +251,7 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
                 index={index}
                 records={records}
                 variant="tv"
-                compact={page.ages.length > 1}
+                compact={false}
               />
             ))
           ) : page.kind === "special" ? (
@@ -260,20 +275,27 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
           )}
         </div>
 
-        <footer className="shrink-0 border-t border-stone-700 bg-stone-900 px-5 py-4">
-          <div className="flex items-center justify-center gap-2">
+        <footer className="shrink-0 border-t border-stone-700 bg-stone-900 px-8 py-5">
+          <div className="flex items-center justify-center gap-2.5">
             {TV_PAGES.map((p, i) => (
               <span
                 key={i}
                 className={`rounded-full ${
-                  p.kind === "records" ? "h-2.5 w-2.5" : "h-2.5 w-5"
+                  p.kind === "records" ? "h-3 w-3" : "h-3 w-6"
                 } ${i === pageIndex ? "bg-[#9ef6b2]" : "bg-stone-500"}`}
                 aria-hidden
               />
             ))}
           </div>
-          <div className="mt-3 flex justify-center">
-            <Image src="/Lei_Logos.png" alt="" width={160} height={40} className="h-8 w-auto opacity-90" />
+          <div className="mt-4 flex justify-center">
+            <Image
+              src="/Lei_Logos.png"
+              alt=""
+              width={320}
+              height={80}
+              className="h-10 w-auto opacity-90"
+              unoptimized
+            />
           </div>
         </footer>
       </div>
@@ -284,13 +306,13 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
   return (
     <div ref={stageRef} className="fixed inset-0 overflow-hidden bg-stone-950">
       <div
-        className="absolute left-1/2 top-1/2"
+        className="absolute left-1/2 top-1/2 antialiased subpixel-antialiased"
         style={{
-          transform: `translate(-50%, -50%) rotate(${rotation}deg) scale(${scale})`,
+          transform: `translate3d(-50%, -50%, 0) rotate(${rotation}deg) scale(${scale})`,
           transformOrigin: "center center",
         }}
       >
-        <div ref={contentRef} style={{ width: DESIGN_WIDTH }}>
+        <div ref={contentRef} className="[text-rendering:optimizeLegibility]" style={{ width: DESIGN_WIDTH }}>
           {body}
         </div>
       </div>

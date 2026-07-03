@@ -113,10 +113,10 @@ function GenderHalf({
   const genderLabel = gender === "men" ? "Men" : "Women";
 
   return (
-    <div className={compact ? "px-2.5 py-2" : isTv ? "px-3.5 py-2.5" : "px-2.5 py-2"}>
+    <div className={compact ? "px-2.5 py-2" : isTv ? "px-4 py-3" : "px-2.5 py-2"}>
       <p
-        className={`mb-1.5 text-center font-black uppercase tracking-[0.15em] ${theme.accent} ${
-          isTv ? (compact ? "text-[0.65rem]" : "text-xs") : "text-[0.65rem]"
+        className={`mb-2 text-center font-black uppercase tracking-[0.15em] ${theme.accent} ${
+          isTv ? (compact ? "text-[0.65rem]" : "text-sm") : "text-[0.65rem]"
         }`}
       >
         {genderLabel}
@@ -173,7 +173,7 @@ function GenderHalf({
                 isTv
                   ? compact
                     ? "text-xs"
-                    : "text-sm sm:text-base"
+                    : "text-lg sm:text-xl"
                   : "text-[0.7rem] sm:text-xs"
               } ${empty ? "opacity-40" : ""}`}
             >
@@ -221,8 +221,8 @@ function UnifiedLiftCard({
       className={`flex h-full flex-col overflow-hidden rounded-xl border-2 shadow-lg ${theme.card} ${theme.border}`}
     >
       <header
-        className={`shrink-0 border-b px-3 py-2 text-center font-black uppercase tracking-wide ${theme.header} ${
-          isTv ? (compact ? "text-xs" : "text-sm") : "text-xs"
+        className={`shrink-0 border-b px-4 py-3 text-center font-black uppercase tracking-wide ${theme.header} ${
+          isTv ? (compact ? "text-xs" : "text-base sm:text-lg") : "text-xs"
         }`}
       >
         {label}
@@ -284,19 +284,19 @@ export function GymRecordsAgeBand({
   return (
     <div
       className={`${bg} ${
-        isTv ? (compact ? "px-3 py-3" : "px-4 py-4") : "px-4 py-6 sm:px-8"
+        isTv ? (compact ? "px-3 py-3" : "px-6 py-6") : "px-4 py-6 sm:px-8"
       }`}
     >
       <div
         className={`text-center font-black uppercase tracking-tight ${
           dark ? "text-white" : "text-stone-900"
-        } ${isTv ? (compact ? "mb-2 text-2xl" : "mb-3 text-3xl sm:text-4xl") : "mb-4 text-3xl sm:text-4xl"}`}
+        } ${isTv ? (compact ? "mb-2 text-2xl" : "mb-4 text-5xl sm:text-6xl") : "mb-4 text-3xl sm:text-4xl"}`}
       >
         {age}
       </div>
 
       <div
-        className={`grid gap-2.5 ${
+        className={`grid gap-3 ${
           isTv ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4"
         }`}
       >

@@ -24,11 +24,9 @@ export const GYM_RECORD_EVENTS = [
 
 export type GymRecordEventKey = (typeof GYM_RECORD_EVENTS)[number]["key"];
 
-/** Portrait TV: men/women side-by-side → 2 age groups page 1, 3 on page 2. */
-export const GYM_RECORD_TV_PAGES: readonly (readonly GymRecordAgeBracket[])[] = [
-  ["18-39", "40-49"],
-  ["50-59", "60-69", "70+"],
-] as const;
+/** Portrait TV: one age bracket per page so lifts stay large and readable on a wall display. */
+export const GYM_RECORD_TV_PAGES: readonly (readonly GymRecordAgeBracket[])[] =
+  GYM_RECORD_AGE_BRACKETS.map((age) => [age]);
 
 export type GymRecordPlaceCell = {
   holder_name: string;
