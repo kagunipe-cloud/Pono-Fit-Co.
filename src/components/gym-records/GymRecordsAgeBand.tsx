@@ -113,10 +113,10 @@ function GenderHalf({
   const genderLabel = gender === "men" ? "Men" : "Women";
 
   return (
-    <div className={compact ? "px-2.5 py-2" : isTv ? "px-4 py-3" : "px-2.5 py-2"}>
+    <div className={compact ? "px-2.5 py-2" : isTv ? "px-8 py-6" : "px-2.5 py-2"}>
       <p
-        className={`mb-2 text-center font-black uppercase tracking-[0.15em] ${theme.accent} ${
-          isTv ? (compact ? "text-[0.65rem]" : "text-sm") : "text-[0.65rem]"
+        className={`mb-3 text-center font-black uppercase tracking-[0.15em] ${theme.accent} ${
+          isTv ? (compact ? "text-[0.65rem]" : "text-5xl") : "text-[0.65rem]"
         }`}
       >
         {genderLabel}
@@ -173,11 +173,13 @@ function GenderHalf({
                 isTv
                   ? compact
                     ? "text-xs"
-                    : "text-lg sm:text-xl"
+                    : "text-[5rem]"
                   : "text-[0.7rem] sm:text-xs"
               } ${empty ? "opacity-40" : ""}`}
             >
-              <span className={`mr-1.5 inline-block min-w-[1.75rem] ${medalClass}`}>
+              <span
+                className={`${isTv && !compact ? "mr-4 min-w-20" : "mr-1.5 min-w-[1.75rem]"} inline-block ${medalClass}`}
+              >
                 {placeLabel}
               </span>
               <span className={empty ? "text-stone-500" : "text-white"}>{line}</span>
@@ -218,17 +220,21 @@ function UnifiedLiftCard({
 
   return (
     <article
-      className={`flex h-full flex-col overflow-hidden rounded-xl border-2 shadow-lg ${theme.card} ${theme.border}`}
+      className={`flex h-full flex-col overflow-hidden shadow-2xl ${theme.card} ${theme.border} ${
+        isTv && !compact ? "rounded-[2rem] border-[6px]" : "rounded-xl border-2"
+      }`}
     >
       <header
-        className={`shrink-0 border-b px-4 py-3 text-center font-black uppercase tracking-wide ${theme.header} ${
-          isTv ? (compact ? "text-xs" : "text-base sm:text-lg") : "text-xs"
+        className={`shrink-0 text-center font-black uppercase tracking-wide ${theme.header} ${
+          isTv && !compact ? "border-b-[6px] px-8 py-6" : "border-b px-3 py-2"
+        } ${
+          isTv ? (compact ? "text-xs" : "text-7xl") : "text-xs"
         }`}
       >
         {label}
       </header>
 
-      <div className={`grid flex-1 grid-cols-2 divide-x-2 ${theme.divider}`}>
+      <div className={`grid flex-1 grid-cols-2 ${isTv && !compact ? "divide-x-[6px]" : "divide-x-2"} ${theme.divider}`}>
         <GenderHalf
           gender="women"
           places={grid[age].women[eventKey]}
@@ -284,20 +290,20 @@ export function GymRecordsAgeBand({
   return (
     <div
       className={`${bg} ${
-        isTv ? (compact ? "px-3 py-3" : "px-6 py-6") : "px-4 py-6 sm:px-8"
+        isTv ? (compact ? "px-3 py-3" : "flex h-full flex-col px-14 py-12") : "px-4 py-6 sm:px-8"
       }`}
     >
       <div
         className={`text-center font-black uppercase tracking-tight ${
           dark ? "text-white" : "text-stone-900"
-        } ${isTv ? (compact ? "mb-2 text-2xl" : "mb-4 text-5xl sm:text-6xl") : "mb-4 text-3xl sm:text-4xl"}`}
+        } ${isTv ? (compact ? "mb-2 text-2xl" : "mb-10 text-9xl") : "mb-4 text-3xl sm:text-4xl"}`}
       >
         {age}
       </div>
 
       <div
-        className={`grid gap-3 ${
-          isTv ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4"
+        className={`grid ${isTv && !compact ? "gap-8" : "gap-2.5"} ${
+          isTv ? (compact ? "grid-cols-2" : "min-h-0 flex-1 grid-cols-2 grid-rows-4") : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4"
         }`}
       >
         {GYM_RECORD_EVENTS.map((ev) => (

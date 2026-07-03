@@ -19,11 +19,11 @@ import {
 const ROTATE_MS = 28_000;
 
 /**
- * High-res portrait canvas (2× 1080p). The stage only scales *down* to fit the screen so
- * Fire TV / kiosk WebViews stay sharp instead of upscaling a 1080 layout.
+ * Render the board at 2x the current TV viewport, then scale it down exactly.
+ * This keeps rotated Fire TV WebViews crisp and makes the canvas fill both axes.
  */
-const DESIGN_WIDTH = 1920;
-const MAX_SCALE = 1;
+const RENDER_SCALE = 2;
+const DEFAULT_CANVAS = { width: 2160, height: 3840 };
 
 type TvPage =
   | { kind: "records"; ages: readonly GymRecordAgeBracket[] }
@@ -43,18 +43,21 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
   const pauseRotation = manualPage !== null;
 
   // Optional on-screen rotation for TVs mounted sideways (Fire TV can't rotate itself).
-  // ?rotate=cw (90° clockwise) or ?rotate=ccw (90° counter-clockwise).
+  // ?rotate=cw (90° clockwise), ?rotate=ccw (90° counter-clockwise), or ?rotate=180.
   const rotateParam = (searchParams.get("rotate") ?? "").toLowerCase();
   const rotation =
     rotateParam === "cw" || rotateParam === "90" || rotateParam === "right"
       ? 90
       : rotateParam === "ccw" || rotateParam === "270" || rotateParam === "left"
         ? -90
+        : rotateParam === "180" || rotateParam === "flip" || rotateParam === "upside-down"
+          ? 180
         : 0;
+  const rotatesSideways = Math.abs(rotation) === 90 || Math.abs(rotation) === 270;
 
-  const stageRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [scale, setScale] = useState(1 / RENDER_SCALE);
+  const [canvas, setCanvas] = useState(DEFAULT_CANVAS);
 
   const [records, setRecords] = useState<GymRecordsGrid>(emptyGymRecordsGrid());
   const [special, setSpecial] = useState<GymSpecialRecordsGrid>(emptyGymSpecialRecordsGrid());
@@ -164,33 +167,29 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
     return () => window.clearInterval(timer);
   }, [pauseRotation]);
 
-  // Auto-fit: scale the fixed-width board so the whole page always fills the screen
-  // without scrolling, on any TV size / browser, and accounting for rotation.
+  // Size the design canvas to the physical screen axes. With 90° rotation the canvas
+  // width maps to screen height and canvas height maps to screen width.
   useLayoutEffect(() => {
     const recompute = () => {
-      const content = contentRef.current;
-      if (!content) return;
-      const cw = content.offsetWidth;
-      const ch = content.offsetHeight;
-      if (!cw || !ch) return;
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      // When rotated 90°, the content's width axis spans the screen's height and vice versa.
-      const availForWidth = rotation ? vh : vw;
-      const availForHeight = rotation ? vw : vh;
-      const next = Math.min(availForWidth / cw, availForHeight / ch, MAX_SCALE);
-      if (next > 0 && Number.isFinite(next)) setScale(next);
+      if (!vw || !vh) return;
+
+      const availForWidth = rotatesSideways ? vh : vw;
+      const availForHeight = rotatesSideways ? vw : vh;
+      setCanvas({
+        width: Math.round(availForWidth * RENDER_SCALE),
+        height: Math.round(availForHeight * RENDER_SCALE),
+      });
+      setScale(1 / RENDER_SCALE);
     };
 
     recompute();
-    const ro = new ResizeObserver(recompute);
-    if (contentRef.current) ro.observe(contentRef.current);
     window.addEventListener("resize", recompute);
     return () => {
-      ro.disconnect();
       window.removeEventListener("resize", recompute);
     };
-  }, [rotation, pageIndex, loading, records, special, goalRows]);
+  }, [rotatesSideways]);
 
   const page = useMemo(() => TV_PAGES[pageIndex] ?? TV_PAGES[0]!, [pageIndex]);
 
@@ -222,27 +221,27 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
           : `Page ${pageIndex + 1} of ${TV_PAGES.length}`;
 
   const body = (
-    <div className="bg-stone-950 text-white">
-      <div className="flex w-full flex-col">
-        <header className="shrink-0 border-b border-stone-700 bg-gradient-to-b from-stone-800 to-stone-900 px-8 py-8 text-center">
-          <div className="mb-4 flex justify-center">
+    <div className="h-full bg-stone-950 text-white">
+      <div className="flex h-full w-full flex-col">
+        <header className="shrink-0 border-b-4 border-stone-700 bg-gradient-to-b from-stone-800 to-stone-900 px-16 py-12 text-center">
+          <div className="mb-6 flex justify-center">
             <Image
               src="/Lei_Logos.png"
               alt="Pono Fit Co."
               width={440}
               height={112}
-              className="h-[4.5rem] w-auto"
+              className="h-28 w-auto"
               priority
               unoptimized
             />
           </div>
-          <h1 className="text-5xl font-black uppercase tracking-tight text-white sm:text-6xl">{title}</h1>
-          <p className="mt-3 text-sm font-bold uppercase tracking-[0.25em] text-[#9ef6b2] sm:text-base">
+          <h1 className="text-8xl font-black uppercase tracking-tight text-white">{title}</h1>
+          <p className="mt-5 text-3xl font-bold uppercase tracking-[0.25em] text-[#9ef6b2]">
             {subtitle}
           </p>
         </header>
 
-        <div className="flex-1">
+        <div className="min-h-0 flex-1">
           {page.kind === "records" ? (
             page.ages.map((age, index) => (
               <GymRecordsAgeBand
@@ -255,45 +254,45 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
               />
             ))
           ) : page.kind === "special" ? (
-            <div className="flex min-h-full flex-col items-center justify-center gap-6 bg-stone-950 px-6 py-10">
+            <div className="flex h-full flex-col items-stretch justify-center bg-stone-950 px-24 py-24">
               {GYM_SPECIAL_RECORDS.map((rec) => (
-                <div key={rec.key} className="w-full max-w-xl">
+                <div key={rec.key} className="min-h-0 flex-1">
                   <GymSpecialRecordCard label={rec.label} places={special[rec.key]} variant="tv" />
                 </div>
               ))}
             </div>
           ) : goalRows.length === 0 ? (
-            <div className="flex h-full items-center justify-center bg-[#9ef6b2] px-6 py-16 text-center font-black uppercase text-stone-900">
+            <div className="flex h-full items-center justify-center bg-[#9ef6b2] px-20 py-24 text-center text-7xl font-black uppercase text-stone-900">
               No goal data yet this week.
             </div>
           ) : (
-            <div>
+            <div className="flex h-full flex-col">
               {goalRows.map((row, index) => (
-                <GoalBoardRowView key={row.member_id} row={row} index={index} compact />
+                <GoalBoardRowView key={row.member_id} row={row} index={index} variant="tv" />
               ))}
             </div>
           )}
         </div>
 
-        <footer className="shrink-0 border-t border-stone-700 bg-stone-900 px-8 py-5">
-          <div className="flex items-center justify-center gap-2.5">
+        <footer className="shrink-0 border-t-4 border-stone-700 bg-stone-900 px-16 py-8">
+          <div className="flex items-center justify-center gap-5">
             {TV_PAGES.map((p, i) => (
               <span
                 key={i}
                 className={`rounded-full ${
-                  p.kind === "records" ? "h-3 w-3" : "h-3 w-6"
+                  p.kind === "records" ? "h-6 w-6" : "h-6 w-12"
                 } ${i === pageIndex ? "bg-[#9ef6b2]" : "bg-stone-500"}`}
                 aria-hidden
               />
             ))}
           </div>
-          <div className="mt-4 flex justify-center">
+          <div className="mt-6 flex justify-center">
             <Image
               src="/Lei_Logos.png"
               alt=""
               width={320}
               height={80}
-              className="h-10 w-auto opacity-90"
+              className="h-16 w-auto opacity-90"
               unoptimized
             />
           </div>
@@ -304,7 +303,7 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
 
   // Stage: center the fixed-width board, rotate for sideways TVs, and scale to fill the screen.
   return (
-    <div ref={stageRef} className="fixed inset-0 overflow-hidden bg-stone-950">
+    <div className="fixed inset-0 overflow-hidden bg-stone-950">
       <div
         className="absolute left-1/2 top-1/2 antialiased subpixel-antialiased"
         style={{
@@ -312,7 +311,11 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
           transformOrigin: "center center",
         }}
       >
-        <div ref={contentRef} className="[text-rendering:optimizeLegibility]" style={{ width: DESIGN_WIDTH }}>
+        <div
+          ref={contentRef}
+          className="[text-rendering:optimizeLegibility]"
+          style={{ width: canvas.width, height: canvas.height }}
+        >
           {body}
         </div>
       </div>

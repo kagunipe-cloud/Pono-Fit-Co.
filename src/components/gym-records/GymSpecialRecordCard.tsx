@@ -20,15 +20,19 @@ export function GymSpecialRecordCard({
   const isTv = variant === "tv";
 
   return (
-    <article className="overflow-hidden rounded-2xl border-2 border-amber-300 bg-black shadow-2xl">
+    <article
+      className={`flex overflow-hidden bg-black shadow-2xl ${
+        isTv ? "h-full flex-col rounded-[3rem] border-[8px] border-amber-300" : "rounded-2xl border-2 border-amber-300"
+      }`}
+    >
       <header
-        className={`border-b-2 border-amber-400/70 bg-amber-500 text-center font-black uppercase tracking-[0.2em] text-stone-950 ${
-          isTv ? "px-5 py-4 text-3xl sm:text-4xl" : "px-4 py-2.5 text-base sm:text-lg"
+        className={`border-amber-400/70 bg-amber-500 text-center font-black uppercase tracking-[0.2em] text-stone-950 ${
+          isTv ? "border-b-[8px] px-12 py-12 text-8xl" : "border-b-2 px-4 py-2.5 text-base sm:text-lg"
         }`}
       >
         {label}
       </header>
-      <div className={isTv ? "space-y-3 px-6 py-6" : "space-y-2 px-4 py-4"}>
+      <div className={isTv ? "flex flex-1 flex-col justify-center gap-16 px-20 py-20" : "space-y-2 px-4 py-4"}>
         {GYM_RECORD_PLACES.map((placeNum, placeIndex) => {
           const cell = places[placeIndex] ?? { holder_name: "", record_value: "" };
           const placeLabel = PLACE_LABELS[placeIndex] ?? String(placeNum);
@@ -65,10 +69,12 @@ export function GymSpecialRecordCard({
             <p
               key={placeNum}
               className={`font-black uppercase leading-snug text-white ${
-                isTv ? "text-2xl sm:text-3xl" : "text-base sm:text-lg"
+                isTv ? "text-8xl" : "text-base sm:text-lg"
               } ${empty ? "opacity-40" : ""}`}
             >
-              <span className={`mr-3 inline-block min-w-[2.5rem] ${medalClass}`}>{placeLabel}</span>
+              <span className={`${isTv ? "mr-10 min-w-40" : "mr-3 min-w-[2.5rem]"} inline-block ${medalClass}`}>
+                {placeLabel}
+              </span>
               <span className={empty ? "text-stone-500" : ""}>{line}</span>
             </p>
           );

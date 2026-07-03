@@ -33,23 +33,26 @@ export function GoalBoardProgressRing({
   subtext,
   dark,
   compact = false,
+  variant = "admin",
 }: {
   label: string;
   value: number | null;
   subtext: string;
   dark: boolean;
   compact?: boolean;
+  variant?: "admin" | "tv";
 }) {
+  const isTv = variant === "tv";
   const pct = value == null ? 0 : Math.min(100, Math.max(0, value));
   const progressColor = value == null ? "#888" : "#98f8b1";
   const trackColor = dark ? "#737373" : "#777";
   const progressOutlineColor = "#555";
-  const sizeClass = compact ? "h-14 w-14" : "h-20 w-20";
-  const insetClass = compact ? "inset-2" : "inset-3";
-  const percentClass = compact ? "text-sm" : "text-lg";
-  const subtextClass = compact ? "text-[0.5rem]" : "text-[0.58rem]";
-  const labelClass = compact ? "text-[0.55rem]" : "text-[0.65rem]";
-  const strokeWidth = compact ? 7 : 9;
+  const sizeClass = isTv ? "h-44 w-44" : compact ? "h-14 w-14" : "h-20 w-20";
+  const insetClass = isTv ? "inset-7" : compact ? "inset-2" : "inset-3";
+  const percentClass = isTv ? "text-4xl" : compact ? "text-sm" : "text-lg";
+  const subtextClass = isTv ? "text-lg" : compact ? "text-[0.5rem]" : "text-[0.58rem]";
+  const labelClass = isTv ? "text-2xl" : compact ? "text-[0.55rem]" : "text-[0.65rem]";
+  const strokeWidth = isTv ? 10 : compact ? 7 : 9;
   const outlineWidth = strokeWidth + 2;
   const radius = 50 - strokeWidth / 2 - 1;
   const circumference = 2 * Math.PI * radius;
@@ -57,7 +60,7 @@ export function GoalBoardProgressRing({
   const showProgress = value != null && pct > 0;
 
   return (
-    <div className="flex flex-col items-center gap-1.5">
+    <div className={`flex flex-col items-center ${isTv ? "gap-4" : "gap-1.5"}`}>
       <div
         className={`text-center ${labelClass} font-black uppercase leading-none tracking-wide ${dark ? "text-[#9ef6b2]" : "text-stone-950"}`}
       >
@@ -121,21 +124,28 @@ export function GoalBoardRowView({
   index,
   compact = false,
   hideName = false,
+  variant = "admin",
 }: {
   row: GoalBoardRowData;
   index: number;
   compact?: boolean;
   hideName?: boolean;
+  variant?: "admin" | "tv";
 }) {
+  const isTv = variant === "tv";
   const dark = index % 2 === 1;
   const rankLabel = row.rank > 0 ? `${row.rank}.` : "—";
-  const paddingClass = compact ? "px-3 py-4 sm:px-4" : "px-5 py-7";
-  const nameClass = compact ? "text-base sm:text-lg" : "text-lg";
+  const paddingClass = isTv ? "flex-1 px-12 py-6" : compact ? "px-3 py-4 sm:px-4" : "px-5 py-7";
+  const nameClass = isTv ? "text-5xl" : compact ? "text-base sm:text-lg" : "text-lg";
   const gridClass = hideName
-    ? compact
+    ? isTv
+      ? "grid h-full grid-cols-4 items-center justify-items-center gap-10"
+      : compact
       ? "grid grid-cols-2 sm:grid-cols-4 items-center justify-items-center gap-3 sm:gap-4"
       : "grid grid-cols-2 sm:grid-cols-4 items-center justify-items-center gap-6"
-    : compact
+    : isTv
+      ? "grid h-full grid-cols-[minmax(22rem,1.25fr)_repeat(4,minmax(11rem,0.8fr))] items-center gap-8"
+      : compact
       ? "grid grid-cols-[minmax(5rem,1fr)_repeat(4,minmax(3.25rem,0.75fr))] items-center gap-2 sm:gap-3"
       : "grid grid-cols-[minmax(8rem,1.2fr)_repeat(4,minmax(4.5rem,0.8fr))] items-center gap-4";
 
@@ -156,6 +166,7 @@ export function GoalBoardRowView({
           subtext={goalMetricSubtext(row.workouts)}
           dark={dark}
           compact={compact}
+          variant={variant}
         />
         <GoalBoardProgressRing
           label="Macros"
@@ -163,6 +174,7 @@ export function GoalBoardRowView({
           subtext={goalMetricSubtext(row.macros)}
           dark={dark}
           compact={compact}
+          variant={variant}
         />
         <GoalBoardProgressRing
           label={compact ? "Personal" : "Personal Goal"}
@@ -170,6 +182,7 @@ export function GoalBoardRowView({
           subtext={goalMetricSubtext(row.personal_goal)}
           dark={dark}
           compact={compact}
+          variant={variant}
         />
         <GoalBoardProgressRing
           label={compact ? "Overall" : "Overall Score"}
@@ -177,6 +190,7 @@ export function GoalBoardRowView({
           subtext="Avg"
           dark={dark}
           compact={compact}
+          variant={variant}
         />
       </div>
     </div>
