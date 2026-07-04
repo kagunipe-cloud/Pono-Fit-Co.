@@ -229,10 +229,16 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
     page.kind === "goals"
       ? "Top 10 This Week"
       : page.kind === "special"
-        ? "Hall of Fame"
+        ? "Scores to Beat"
         : page.kind === "records"
-          ? `Ages ${page.age} · ${page.gender === "men" ? "Men" : "Women"}`
+          ? `${page.gender === "men" ? "Men" : "Women"} - Ages ${page.age}`
           : `Page ${pageIndex + 1} of ${TV_PAGES.length}`;
+  const subtitleClass =
+    page.kind === "records"
+      ? "mt-4 text-6xl font-black uppercase tracking-[0.12em] text-[#9ef6b2]"
+      : page.kind === "special"
+        ? "mt-3 text-4xl font-black uppercase tracking-[0.2em] text-[#9ef6b2]"
+        : "mt-3 text-2xl font-bold uppercase tracking-[0.25em] text-[#9ef6b2]";
 
   const body = (
     <div className="h-full bg-stone-950 text-white">
@@ -250,9 +256,7 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
             />
           </div>
           <h1 className="text-7xl font-black uppercase tracking-tight text-white">{title}</h1>
-          <p className="mt-3 text-2xl font-bold uppercase tracking-[0.25em] text-[#9ef6b2]">
-            {subtitle}
-          </p>
+          <p className={subtitleClass}>{subtitle}</p>
         </header>
 
         <div className="min-h-0 flex-1">

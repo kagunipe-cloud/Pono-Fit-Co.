@@ -96,6 +96,7 @@ function GenderHalf({
   dark,
   isTv,
   compact,
+  hideGenderLabel = false,
   onDraftChange,
   theme,
 }: {
@@ -107,20 +108,33 @@ function GenderHalf({
   dark: boolean;
   isTv: boolean;
   compact: boolean;
+  hideGenderLabel?: boolean;
   onDraftChange?: OnDraftChange;
   theme: (typeof LIFT_THEMES)[GymRecordEventKey];
 }) {
   const genderLabel = gender === "men" ? "Men" : "Women";
 
   return (
-    <div className={compact ? "px-2.5 py-2" : isTv ? "grid h-full min-h-0 grid-rows-[auto_1fr] px-6 py-2" : "px-2.5 py-2"}>
-      <p
-        className={`text-center font-black uppercase tracking-[0.15em] ${theme.accent} ${
-          isTv ? (compact ? "mb-1.5 text-[0.65rem]" : "mb-1 text-2xl") : "mb-1.5 text-[0.65rem]"
-        }`}
-      >
-        {genderLabel}
-      </p>
+    <div
+      className={
+        compact
+          ? "px-2.5 py-2"
+          : isTv
+            ? hideGenderLabel
+              ? "grid h-full min-h-0 grid-rows-1 px-6 py-2"
+              : "grid h-full min-h-0 grid-rows-[auto_1fr] px-6 py-2"
+            : "px-2.5 py-2"
+      }
+    >
+      {!hideGenderLabel ? (
+        <p
+          className={`text-center font-black uppercase tracking-[0.15em] ${theme.accent} ${
+            isTv ? (compact ? "mb-1.5 text-[0.65rem]" : "mb-1 text-2xl") : "mb-1.5 text-[0.65rem]"
+          }`}
+        >
+          {genderLabel}
+        </p>
+      ) : null}
       <div className={compact ? "space-y-0.5" : isTv ? "grid min-h-0 grid-rows-3 gap-0.5" : "space-y-1"}>
         {GYM_RECORD_PLACES.map((placeNum, placeIndex) => {
           const cell = places[placeIndex] ?? { holder_name: "", record_value: "" };
@@ -253,6 +267,7 @@ function UnifiedLiftCard({
             dark={dark}
             isTv={isTv}
             compact={compact}
+            hideGenderLabel={isTv && !!genderFilter}
             onDraftChange={onDraftChange}
             theme={theme}
           />
@@ -286,20 +301,29 @@ export function GymRecordsAgeBand({
   const dark = index % 2 === 1;
   const bg = dark ? "bg-black text-[#9ef6b2]" : "bg-[#9ef6b2] text-stone-950";
   const isTv = variant === "tv";
+  const tvSingleGender = isTv && !!genderFilter;
 
   return (
     <div
       className={`${bg} ${
-        isTv ? (compact ? "px-3 py-3" : "flex h-full flex-col px-14 py-12") : "px-4 py-6 sm:px-8"
+        isTv
+          ? compact
+            ? "px-3 py-3"
+            : tvSingleGender
+              ? "flex h-full flex-col px-14 py-4"
+              : "flex h-full flex-col px-14 py-12"
+          : "px-4 py-6 sm:px-8"
       }`}
     >
-      <div
-        className={`text-center font-black uppercase tracking-tight ${
-          dark ? "text-white" : "text-stone-900"
-        } ${isTv ? (compact ? "mb-2 text-2xl" : "mb-4 text-6xl") : "mb-4 text-3xl sm:text-4xl"}`}
-      >
-        {age}
-      </div>
+      {!tvSingleGender ? (
+        <div
+          className={`text-center font-black uppercase tracking-tight ${
+            dark ? "text-white" : "text-stone-900"
+          } ${isTv ? (compact ? "mb-2 text-2xl" : "mb-4 text-6xl") : "mb-4 text-3xl sm:text-4xl"}`}
+        >
+          {age}
+        </div>
+      ) : null}
 
       <div
         className={`grid ${isTv && !compact ? "gap-4" : "gap-2.5"} ${

@@ -32,7 +32,14 @@ export function GymSpecialRecordCard({
       >
         {label}
       </header>
-      <div className={isTv ? "flex flex-1 flex-col justify-center gap-16 px-20 py-20" : "space-y-2 px-4 py-4"}>
+      <div className={isTv ? "flex flex-1 flex-col justify-center gap-12 px-16 py-12" : "space-y-2 px-4 py-4"}>
+        {isTv && !editing ? (
+          <div className="grid grid-cols-[minmax(6rem,auto)_1fr_minmax(10rem,auto)] items-end gap-x-10 gap-y-2 px-4 pb-2 text-3xl font-black uppercase tracking-[0.2em] text-amber-200/80">
+            <span />
+            <span>Name</span>
+            <span className="text-right">Score</span>
+          </div>
+        ) : null}
         {GYM_RECORD_PLACES.map((placeNum, placeIndex) => {
           const cell = places[placeIndex] ?? { holder_name: "", record_value: "" };
           const placeLabel = PLACE_LABELS[placeIndex] ?? String(placeNum);
@@ -64,6 +71,35 @@ export function GymSpecialRecordCard({
 
           const line = formatGymRecordLine(cell.holder_name, cell.record_value);
           const empty = line === "—";
+          const name = cell.holder_name.trim();
+          const score = cell.record_value.trim();
+
+          if (isTv) {
+            return (
+              <div
+                key={placeNum}
+                className={`grid grid-cols-[minmax(6rem,auto)_1fr_minmax(10rem,auto)] items-center gap-x-10 ${
+                  empty ? "opacity-40" : ""
+                }`}
+              >
+                <span className={`text-7xl font-black uppercase ${medalClass}`}>{placeLabel}</span>
+                <span
+                  className={`truncate text-6xl font-black uppercase leading-none ${
+                    name ? "text-white" : "text-stone-500"
+                  }`}
+                >
+                  {name || "—"}
+                </span>
+                <span
+                  className={`text-right text-8xl font-black tabular-nums leading-none ${
+                    score ? "text-amber-300" : "text-stone-500"
+                  }`}
+                >
+                  {score || "—"}
+                </span>
+              </div>
+            );
+          }
 
           return (
             <p
