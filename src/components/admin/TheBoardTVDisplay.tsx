@@ -177,11 +177,19 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
 
       const availForWidth = rotatesSideways ? vh : vw;
       const availForHeight = rotatesSideways ? vw : vh;
+      const portraitWidth = Math.min(availForWidth, availForHeight);
+      const portraitHeight = Math.max(availForWidth, availForHeight);
+      const nextCanvas = {
+        width: Math.round(portraitWidth * RENDER_SCALE),
+        height: Math.round(portraitHeight * RENDER_SCALE),
+      };
+      const nextScale = Math.min(availForWidth / nextCanvas.width, availForHeight / nextCanvas.height);
+
       setCanvas({
-        width: Math.round(availForWidth * RENDER_SCALE),
-        height: Math.round(availForHeight * RENDER_SCALE),
+        width: nextCanvas.width,
+        height: nextCanvas.height,
       });
-      setScale(1 / RENDER_SCALE);
+      setScale(nextScale);
     };
 
     recompute();
@@ -223,20 +231,20 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
   const body = (
     <div className="h-full bg-stone-950 text-white">
       <div className="flex h-full w-full flex-col">
-        <header className="shrink-0 border-b-4 border-stone-700 bg-gradient-to-b from-stone-800 to-stone-900 px-16 py-12 text-center">
-          <div className="mb-6 flex justify-center">
+        <header className="shrink-0 border-b-4 border-stone-700 bg-gradient-to-b from-stone-800 to-stone-900 px-12 py-8 text-center">
+          <div className="mb-4 flex justify-center">
             <Image
               src="/Lei_Logos.png"
               alt="Pono Fit Co."
               width={440}
               height={112}
-              className="h-28 w-auto"
+              className="h-20 w-auto"
               priority
               unoptimized
             />
           </div>
-          <h1 className="text-8xl font-black uppercase tracking-tight text-white">{title}</h1>
-          <p className="mt-5 text-3xl font-bold uppercase tracking-[0.25em] text-[#9ef6b2]">
+          <h1 className="text-7xl font-black uppercase tracking-tight text-white">{title}</h1>
+          <p className="mt-3 text-2xl font-bold uppercase tracking-[0.25em] text-[#9ef6b2]">
             {subtitle}
           </p>
         </header>
@@ -274,25 +282,25 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
           )}
         </div>
 
-        <footer className="shrink-0 border-t-4 border-stone-700 bg-stone-900 px-16 py-8">
-          <div className="flex items-center justify-center gap-5">
+        <footer className="shrink-0 border-t-4 border-stone-700 bg-stone-900 px-12 py-5">
+          <div className="flex items-center justify-center gap-4">
             {TV_PAGES.map((p, i) => (
               <span
                 key={i}
                 className={`rounded-full ${
-                  p.kind === "records" ? "h-6 w-6" : "h-6 w-12"
+                  p.kind === "records" ? "h-5 w-5" : "h-5 w-10"
                 } ${i === pageIndex ? "bg-[#9ef6b2]" : "bg-stone-500"}`}
                 aria-hidden
               />
             ))}
           </div>
-          <div className="mt-6 flex justify-center">
+          <div className="mt-4 flex justify-center">
             <Image
               src="/Lei_Logos.png"
               alt=""
               width={320}
               height={80}
-              className="h-16 w-auto opacity-90"
+              className="h-10 w-auto opacity-90"
               unoptimized
             />
           </div>

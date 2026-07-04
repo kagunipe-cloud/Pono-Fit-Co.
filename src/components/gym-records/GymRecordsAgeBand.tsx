@@ -113,15 +113,15 @@ function GenderHalf({
   const genderLabel = gender === "men" ? "Men" : "Women";
 
   return (
-    <div className={compact ? "px-2.5 py-2" : isTv ? "px-8 py-6" : "px-2.5 py-2"}>
+    <div className={compact ? "px-2.5 py-2" : isTv ? "grid h-full min-h-0 grid-rows-[auto_1fr] px-4 py-2" : "px-2.5 py-2"}>
       <p
-        className={`mb-3 text-center font-black uppercase tracking-[0.15em] ${theme.accent} ${
-          isTv ? (compact ? "text-[0.65rem]" : "text-5xl") : "text-[0.65rem]"
+        className={`text-center font-black uppercase tracking-[0.15em] ${theme.accent} ${
+          isTv ? (compact ? "mb-1.5 text-[0.65rem]" : "mb-1 text-xl") : "mb-1.5 text-[0.65rem]"
         }`}
       >
         {genderLabel}
       </p>
-      <div className={compact ? "space-y-0.5" : "space-y-1"}>
+      <div className={compact ? "space-y-0.5" : isTv ? "grid min-h-0 grid-rows-3 gap-0.5" : "space-y-1"}>
         {GYM_RECORD_PLACES.map((placeNum, placeIndex) => {
           const cell = places[placeIndex] ?? { holder_name: "", record_value: "" };
           const placeLabel = PLACE_LABELS[placeIndex] ?? String(placeNum);
@@ -169,20 +169,20 @@ function GenderHalf({
           return (
             <p
               key={placeNum}
-              className={`font-black uppercase leading-snug text-white ${
+              className={`min-w-0 overflow-hidden font-black uppercase leading-none text-white ${
                 isTv
                   ? compact
                     ? "text-xs"
-                    : "text-[5rem]"
+                    : "flex items-center text-[1.65rem]"
                   : "text-[0.7rem] sm:text-xs"
               } ${empty ? "opacity-40" : ""}`}
             >
               <span
-                className={`${isTv && !compact ? "mr-4 min-w-20" : "mr-1.5 min-w-[1.75rem]"} inline-block ${medalClass}`}
+                className={`${isTv && !compact ? "mr-2 min-w-12" : "mr-1.5 min-w-[1.75rem]"} inline-block shrink-0 ${medalClass}`}
               >
                 {placeLabel}
               </span>
-              <span className={empty ? "text-stone-500" : "text-white"}>{line}</span>
+              <span className={`${empty ? "text-stone-500" : "text-white"} truncate`}>{line}</span>
             </p>
           );
         })}
@@ -221,20 +221,20 @@ function UnifiedLiftCard({
   return (
     <article
       className={`flex h-full flex-col overflow-hidden shadow-2xl ${theme.card} ${theme.border} ${
-        isTv && !compact ? "rounded-[2rem] border-[6px]" : "rounded-xl border-2"
+        isTv && !compact ? "rounded-[1.75rem] border-[5px]" : "rounded-xl border-2"
       }`}
     >
       <header
         className={`shrink-0 text-center font-black uppercase tracking-wide ${theme.header} ${
-          isTv && !compact ? "border-b-[6px] px-8 py-6" : "border-b px-3 py-2"
+          isTv && !compact ? "border-b-[5px] px-5 py-2.5" : "border-b px-3 py-2"
         } ${
-          isTv ? (compact ? "text-xs" : "text-7xl") : "text-xs"
+          isTv ? (compact ? "text-xs" : "text-3xl") : "text-xs"
         }`}
       >
         {label}
       </header>
 
-      <div className={`grid flex-1 grid-cols-2 ${isTv && !compact ? "divide-x-[6px]" : "divide-x-2"} ${theme.divider}`}>
+      <div className={`grid min-h-0 flex-1 grid-cols-2 ${isTv && !compact ? "divide-x-[5px]" : "divide-x-2"} ${theme.divider}`}>
         <GenderHalf
           gender="women"
           places={grid[age].women[eventKey]}
@@ -296,13 +296,13 @@ export function GymRecordsAgeBand({
       <div
         className={`text-center font-black uppercase tracking-tight ${
           dark ? "text-white" : "text-stone-900"
-        } ${isTv ? (compact ? "mb-2 text-2xl" : "mb-10 text-9xl") : "mb-4 text-3xl sm:text-4xl"}`}
+        } ${isTv ? (compact ? "mb-2 text-2xl" : "mb-4 text-6xl") : "mb-4 text-3xl sm:text-4xl"}`}
       >
         {age}
       </div>
 
       <div
-        className={`grid ${isTv && !compact ? "gap-8" : "gap-2.5"} ${
+        className={`grid ${isTv && !compact ? "gap-5" : "gap-2.5"} ${
           isTv ? (compact ? "grid-cols-2" : "min-h-0 flex-1 grid-cols-2 grid-rows-4") : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4"
         }`}
       >
