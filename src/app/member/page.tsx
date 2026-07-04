@@ -13,7 +13,6 @@ import { toTitleCase } from "@/lib/format";
 import { formatDateForDisplay } from "@/lib/app-timezone";
 
 import OccupancyCount from "@/components/OccupancyCount";
-
 import MemberGoalBoardPreview from "@/components/member/MemberGoalBoardPreview";
 
 
@@ -213,10 +212,7 @@ export default function MemberHomePage() {
       )}
 
 
-
       <MemberGoalBoardPreview />
-
-
 
       <div className="mb-8 flex flex-col sm:flex-row sm:items-start gap-6">
 

@@ -113,10 +113,10 @@ function GenderHalf({
   const genderLabel = gender === "men" ? "Men" : "Women";
 
   return (
-    <div className={compact ? "px-2.5 py-2" : isTv ? "grid h-full min-h-0 grid-rows-[auto_1fr] px-4 py-2" : "px-2.5 py-2"}>
+    <div className={compact ? "px-2.5 py-2" : isTv ? "grid h-full min-h-0 grid-rows-[auto_1fr] px-6 py-2" : "px-2.5 py-2"}>
       <p
         className={`text-center font-black uppercase tracking-[0.15em] ${theme.accent} ${
-          isTv ? (compact ? "mb-1.5 text-[0.65rem]" : "mb-1 text-xl") : "mb-1.5 text-[0.65rem]"
+          isTv ? (compact ? "mb-1.5 text-[0.65rem]" : "mb-1 text-2xl") : "mb-1.5 text-[0.65rem]"
         }`}
       >
         {genderLabel}
@@ -173,12 +173,12 @@ function GenderHalf({
                 isTv
                   ? compact
                     ? "text-xs"
-                    : "flex items-center text-[1.65rem]"
+                    : "flex items-center text-[2rem]"
                   : "text-[0.7rem] sm:text-xs"
               } ${empty ? "opacity-40" : ""}`}
             >
               <span
-                className={`${isTv && !compact ? "mr-2 min-w-12" : "mr-1.5 min-w-[1.75rem]"} inline-block shrink-0 ${medalClass}`}
+                className={`${isTv && !compact ? "mr-3 min-w-16" : "mr-1.5 min-w-[1.75rem]"} inline-block shrink-0 ${medalClass}`}
               >
                 {placeLabel}
               </span>
@@ -203,6 +203,7 @@ function UnifiedLiftCard({
   dark,
   isTv,
   compact,
+  genderFilter,
 }: {
   eventKey: GymRecordEventKey;
   label: string;
@@ -214,9 +215,11 @@ function UnifiedLiftCard({
   dark: boolean;
   isTv: boolean;
   compact: boolean;
+  genderFilter?: GymRecordGender;
 }) {
   const theme = LIFT_THEMES[eventKey];
   const grid = editing && draft ? draft : records;
+  const genders: GymRecordGender[] = genderFilter ? [genderFilter] : ["women", "men"];
 
   return (
     <article
@@ -234,31 +237,26 @@ function UnifiedLiftCard({
         {label}
       </header>
 
-      <div className={`grid min-h-0 flex-1 grid-cols-2 ${isTv && !compact ? "divide-x-[5px]" : "divide-x-2"} ${theme.divider}`}>
-        <GenderHalf
-          gender="women"
-          places={grid[age].women[eventKey]}
-          eventKey={eventKey}
-          age={age}
-          editing={editing}
-          dark={dark}
-          isTv={isTv}
-          compact={compact}
-          onDraftChange={onDraftChange}
-          theme={theme}
-        />
-        <GenderHalf
-          gender="men"
-          places={grid[age].men[eventKey]}
-          eventKey={eventKey}
-          age={age}
-          editing={editing}
-          dark={dark}
-          isTv={isTv}
-          compact={compact}
-          onDraftChange={onDraftChange}
-          theme={theme}
-        />
+      <div
+        className={`grid min-h-0 flex-1 ${genderFilter ? "grid-cols-1" : "grid-cols-2"} ${
+          isTv && !compact && !genderFilter ? "divide-x-[5px]" : !genderFilter ? "divide-x-2" : ""
+        } ${theme.divider}`}
+      >
+        {genders.map((gender) => (
+          <GenderHalf
+            key={gender}
+            gender={gender}
+            places={grid[age][gender][eventKey]}
+            eventKey={eventKey}
+            age={age}
+            editing={editing}
+            dark={dark}
+            isTv={isTv}
+            compact={compact}
+            onDraftChange={onDraftChange}
+            theme={theme}
+          />
+        ))}
       </div>
     </article>
   );
@@ -273,6 +271,7 @@ export function GymRecordsAgeBand({
   onDraftChange,
   variant = "admin",
   compact = false,
+  genderFilter,
 }: {
   age: GymRecordAgeBracket;
   index: number;
@@ -282,6 +281,7 @@ export function GymRecordsAgeBand({
   onDraftChange?: OnDraftChange;
   variant?: "admin" | "tv";
   compact?: boolean;
+  genderFilter?: GymRecordGender;
 }) {
   const dark = index % 2 === 1;
   const bg = dark ? "bg-black text-[#9ef6b2]" : "bg-[#9ef6b2] text-stone-950";
@@ -319,6 +319,7 @@ export function GymRecordsAgeBand({
             dark={dark}
             isTv={isTv}
             compact={compact}
+            genderFilter={genderFilter}
           />
         ))}
       </div>

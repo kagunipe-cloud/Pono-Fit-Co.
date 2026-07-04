@@ -12,6 +12,7 @@ import {
   emptyGymRecordsGrid,
   emptyGymSpecialRecordsGrid,
   type GymRecordAgeBracket,
+  type GymRecordGender,
   type GymRecordsGrid,
   type GymSpecialRecordsGrid,
 } from "@/lib/gym-records";
@@ -26,12 +27,17 @@ const RENDER_SCALE = 2;
 const DEFAULT_CANVAS = { width: 2160, height: 3840 };
 
 type TvPage =
-  | { kind: "records"; ages: readonly GymRecordAgeBracket[] }
+  | { kind: "records"; age: GymRecordAgeBracket; gender: GymRecordGender }
   | { kind: "special" }
   | { kind: "goals" };
 
 const TV_PAGES: TvPage[] = [
-  ...GYM_RECORD_TV_PAGES.map((ages) => ({ kind: "records" as const, ages })),
+  ...GYM_RECORD_TV_PAGES.flatMap((ages) =>
+    ages.flatMap((age) => [
+      { kind: "records" as const, age, gender: "women" as const },
+      { kind: "records" as const, age, gender: "men" as const },
+    ])
+  ),
   { kind: "special" as const },
   { kind: "goals" as const },
 ];
@@ -225,7 +231,7 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
       : page.kind === "special"
         ? "Hall of Fame"
         : page.kind === "records"
-          ? `Ages ${page.ages.join(" · ")}`
+          ? `Ages ${page.age} · ${page.gender === "men" ? "Men" : "Women"}`
           : `Page ${pageIndex + 1} of ${TV_PAGES.length}`;
 
   const body = (
@@ -251,16 +257,15 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
 
         <div className="min-h-0 flex-1">
           {page.kind === "records" ? (
-            page.ages.map((age, index) => (
-              <GymRecordsAgeBand
-                key={age}
-                age={age}
-                index={index}
-                records={records}
-                variant="tv"
-                compact={false}
-              />
-            ))
+            <GymRecordsAgeBand
+              key={`${page.age}-${page.gender}`}
+              age={page.age}
+              index={page.gender === "men" ? 1 : 0}
+              records={records}
+              variant="tv"
+              compact={false}
+              genderFilter={page.gender}
+            />
           ) : page.kind === "special" ? (
             <div className="flex h-full flex-col items-stretch justify-center bg-stone-950 px-24 py-24">
               {GYM_SPECIAL_RECORDS.map((rec) => (

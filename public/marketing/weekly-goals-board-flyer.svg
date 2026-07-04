@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350" role="img" aria-labelledby="title desc">
+  <title id="title">Weekly Goals Board</title>
+  <desc id="desc">Pono Fit Co. flyer advertising the Weekly Goals Board add-on.</desc>
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#000000" flood-opacity="0.14"/>
+    </filter>
+  </defs>
+
+  <rect width="1080" height="1350" fill="#ffffff"/>
+  <rect x="42" y="42" width="996" height="1266" rx="48" fill="none" stroke="#11100f" stroke-width="5"/>
+  <rect x="70" y="70" width="940" height="1210" rx="38" fill="none" stroke="#7dd3fc" stroke-width="4"/>
+
+  <text x="540" y="170" text-anchor="middle" fill="#0369a1" font-family="Arial Black, Impact, sans-serif" font-size="40" font-weight="900" letter-spacing="4">
+    PONO FIT CO.
+  </text>
+  <text x="540" y="285" text-anchor="middle" fill="#11100f" font-family="Arial Black, Impact, sans-serif" font-size="88" font-weight="900" letter-spacing="-2">
+    WEEKLY GOALS
+  </text>
+  <text x="540" y="370" text-anchor="middle" fill="#11100f" font-family="Arial Black, Impact, sans-serif" font-size="72" font-weight="900" letter-spacing="2">
+    BOARD
+  </text>
+
+  <rect x="120" y="420" width="840" height="120" rx="48" fill="#c4b5fd" stroke="#11100f" stroke-width="4"/>
+  <text x="540" y="470" text-anchor="middle" fill="#11100f" font-family="Arial Black, Impact, sans-serif" font-size="38" font-weight="900" letter-spacing="0.5">
+    $10/MONTH
+  </text>
+  <text x="540" y="512" text-anchor="middle" fill="#11100f" font-family="Arial Black, Impact, sans-serif" font-size="27" font-weight="900" letter-spacing="0.25">
+    FREE FOR PT CLIENTS (MIN 1 SESSION/MONTH)
+  </text>
+
+  <g filter="url(#shadow)">
+    <rect x="110" y="585" width="860" height="170" rx="28" fill="#ffffff" stroke="#11100f" stroke-width="4"/>
+    <circle cx="168" cy="670" r="34" fill="#7dd3fc" stroke="#11100f" stroke-width="3"/>
+    <text x="168" y="682" text-anchor="middle" fill="#11100f" font-family="Arial Black, Impact, sans-serif" font-size="34" font-weight="900">1</text>
+    <text x="230" y="650" fill="#11100f" font-family="Arial Black, Impact, sans-serif" font-size="40" font-weight="900">SET YOUR GOALS</text>
+    <text x="230" y="704" fill="#11100f" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700">Workouts, macros, and personal weekly targets.</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="110" y="805" width="860" height="170" rx="28" fill="#f0f9ff" stroke="#11100f" stroke-width="4"/>
+    <circle cx="168" cy="890" r="34" fill="#c4b5fd" stroke="#11100f" stroke-width="3"/>
+    <text x="168" y="902" text-anchor="middle" fill="#11100f" font-family="Arial Black, Impact, sans-serif" font-size="34" font-weight="900">2</text>
+    <text x="230" y="870" fill="#11100f" font-family="Arial Black, Impact, sans-serif" font-size="40" font-weight="900">TRACK THE WEEK</text>
+    <text x="230" y="924" fill="#11100f" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700">Log your work and watch your score update.</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="110" y="1025" width="860" height="170" rx="28" fill="#ffffff" stroke="#11100f" stroke-width="4"/>
+    <circle cx="168" cy="1110" r="34" fill="#7dd3fc" stroke="#11100f" stroke-width="3"/>
+    <text x="168" y="1122" text-anchor="middle" fill="#11100f" font-family="Arial Black, Impact, sans-serif" font-size="34" font-weight="900">3</text>
+    <text x="230" y="1090" fill="#11100f" font-family="Arial Black, Impact, sans-serif" font-size="40" font-weight="900">GET ON THE TV BOARD</text>
+    <text x="230" y="1144" fill="#11100f" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700">Top 10 weekly scores rotate on the gym display.</text>
+  </g>
+
+  <text x="540" y="1288" text-anchor="middle" fill="#11100f" font-family="Arial Black, Impact, sans-serif" font-size="30" font-weight="900" letter-spacing="1.5">
+    LIGHT HEARTS. HEAVY WEIGHTS.
+  </text>
+</svg>
