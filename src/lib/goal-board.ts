@@ -96,8 +96,12 @@ function pct(hit: number, target: number): number | null {
   return Math.min(100, Math.max(0, Math.round((hit / target) * 100)));
 }
 
+/** First name only on the public board until members opt in to full names. */
 function displayName(m: Pick<MemberRow, "member_id" | "first_name" | "last_name">): string {
-  return [m.first_name, m.last_name].filter(Boolean).join(" ").trim() || m.member_id;
+  const first = m.first_name?.trim();
+  if (first) return first;
+  const full = [m.first_name, m.last_name].filter(Boolean).join(" ").trim();
+  return full || m.member_id;
 }
 
 function sqlBoundsForWeek(weekStart: string, weekEnd: string, tz: string): { fromSql: string; toSql: string } {
