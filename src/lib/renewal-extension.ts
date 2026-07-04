@@ -12,6 +12,7 @@ import {
   ensureSubscriptionComplimentaryColumns,
   ensureSubscriptionRenewalDiscountPercentColumn,
   getDb,
+  WEEKLY_GOALS_BOARD_ACCESS_LEVEL,
 } from "./db";
 import { formatDateTimeInAppTz, todayInAppTz, formatDateForStorage } from "./app-timezone";
 import { computeRenewalChargePrice } from "./renewal-pricing";
@@ -37,6 +38,7 @@ export type RenewalSubRow = {
   plan_price: string;
   length: string;
   unit: string;
+  access_level?: string | null;
 };
 
 export type RenewalMemberRow = {
@@ -192,7 +194,10 @@ export async function extendSubscriptionAfterRenewal(
       financials.saleType,
       stripePi
     );
-    db.prepare("UPDATE members SET exp_next_payment_date = ? WHERE member_id = ?").run(expiryStr, sub.member_id);
+    const grantsDoorAccess = String(sub.access_level ?? "").trim() !== WEEKLY_GOALS_BOARD_ACCESS_LEVEL;
+    if (grantsDoorAccess) {
+      db.prepare("UPDATE members SET exp_next_payment_date = ? WHERE member_id = ?").run(expiryStr, sub.member_id);
+    }
     db.exec("COMMIT");
   } catch (e) {
     db.exec("ROLLBACK");
@@ -210,7 +215,8 @@ export async function extendSubscriptionAfterRenewal(
     email: memberRow.email ?? null,
     first_name: memberRow.first_name ?? null,
   }, origin);
-  if (waiver.shouldGrantKisi) {
+  const grantsDoorAccess = String(sub.access_level ?? "").trim() !== WEEKLY_GOALS_BOARD_ACCESS_LEVEL;
+  if (grantsDoorAccess && waiver.shouldGrantKisi) {
     const kisiId = db.prepare("SELECT kisi_id FROM members WHERE member_id = ?").get(sub.member_id) as { kisi_id: string | null } | undefined;
     if (kisiId?.kisi_id) {
       const kisiValidUntil = kisiDoorAccessValidUntilForExpiryYmd(expiryStr, tz);

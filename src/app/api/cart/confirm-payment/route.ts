@@ -10,6 +10,7 @@ import {
   ensureSubscriptionRenewalPromoColumns,
   ensureSubscriptionRenewalDiscountPercentColumn,
   ensureGiftPassesTable,
+  WEEKLY_GOALS_BOARD_ACCESS_LEVEL,
 } from "../../../../lib/db";
 import { isPassPackPlan, passCreditsForPurchase } from "../../../../lib/pass-packs";
 import { ensureDayPassCreditLedger } from "../../../../lib/day-pass-credits";
@@ -289,7 +290,7 @@ export async function POST(request: NextRequest) {
 
       for (const it of items) {
         if (it.product_type === "membership_plan") {
-          const plan = db.prepare("SELECT * FROM membership_plans WHERE id = ?").get(it.product_id) as { plan_name: string; price: string; length: string; unit: string; product_id: string } | undefined;
+          const plan = db.prepare("SELECT * FROM membership_plans WHERE id = ?").get(it.product_id) as { plan_name: string; price: string; length: string; unit: string; product_id: string; access_level?: string | null } | undefined;
           if (plan) {
             const effUnit = getEffectiveUnitPriceString(db, it);
             const unitNum = parsePrice(effUnit);
@@ -369,8 +370,11 @@ export async function POST(request: NextRequest) {
               renewalIndef,
               renewalDiscountToStore
             );
-            db.prepare("UPDATE members SET exp_next_payment_date = ? WHERE member_id = ?").run(expiryStr, member_id);
-            kisiGrants.push({ expiry_ymd: expiryStr });
+            const grantsDoorAccess = String(plan.access_level ?? "").trim() !== WEEKLY_GOALS_BOARD_ACCESS_LEVEL;
+            if (grantsDoorAccess) {
+              db.prepare("UPDATE members SET exp_next_payment_date = ? WHERE member_id = ?").run(expiryStr, member_id);
+              kisiGrants.push({ expiry_ymd: expiryStr });
+            }
           }
         } else if (it.product_type === "pt_session") {
           ensurePTSlotTables(db);

@@ -302,8 +302,8 @@ export function GymRecordsAgeBand({
       </div>
 
       <div
-        className={`grid ${isTv && !compact ? "gap-5" : "gap-2.5"} ${
-          isTv ? (compact ? "grid-cols-2" : "min-h-0 flex-1 grid-cols-2 grid-rows-4") : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4"
+        className={`grid ${isTv && !compact ? "gap-4" : "gap-2.5"} ${
+          isTv ? (compact ? "grid-cols-2" : "min-h-0 flex-1 grid-cols-1 grid-rows-8") : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-4"
         }`}
       >
         {GYM_RECORD_EVENTS.map((ev) => (

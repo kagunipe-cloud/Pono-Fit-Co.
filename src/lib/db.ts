@@ -15,6 +15,9 @@ import { MEMBER_RETAIL_ALLOW_PURCHASE_WHEN_OUT_OF_STOCK_KEY, MEMBER_RETAIL_SELF_
 const dbPath = DATABASE_FILE_PATH;
 const restorePendingPath = path.join(process.cwd(), "data", "restore-pending.db");
 
+export const WEEKLY_GOALS_BOARD_PRODUCT_ID = "weekly-goals-board";
+export const WEEKLY_GOALS_BOARD_ACCESS_LEVEL = "goal_board";
+
 let restoreApplied = false;
 /** On first getDb() after deploy, replace DB with restore-pending.db if present (from admin restore). */
 function applyPendingRestore() {
@@ -168,6 +171,7 @@ export function getDb() {
   ensurePaymentFailuresTable(db);
   ensureGiftPassesTable(db);
   ensureMembershipPackPlans(db);
+  ensureWeeklyGoalsBoardPlan(db);
   ensureSubscriptionPassPackColumns(db);
   ensureMembersMemberIdUnique(db);
   ensureGymIdColumns(db);
@@ -741,6 +745,47 @@ export function ensureMembershipPackPlans(db: ReturnType<typeof getDb>) {
     }
   } catch (err) {
     console.error("[db] ensureMembershipPackPlans", err);
+  }
+}
+
+/** Seed the paid Weekly Goals Board add-on ($10/mo) if missing. */
+export function ensureWeeklyGoalsBoardPlan(db: ReturnType<typeof getDb>) {
+  try {
+    const existing = db
+      .prepare("SELECT id FROM membership_plans WHERE product_id = ?")
+      .get(WEEKLY_GOALS_BOARD_PRODUCT_ID);
+    if (existing) {
+      db.prepare(
+        `UPDATE membership_plans
+         SET plan_name = ?, price = ?, length = ?, unit = ?, access_level = ?, category = ?, description = ?
+         WHERE product_id = ?`
+      ).run(
+        "Weekly Goals Board",
+        "$10.00",
+        "1",
+        "Month",
+        WEEKLY_GOALS_BOARD_ACCESS_LEVEL,
+        "Add-ons",
+        "Monthly add-on for Weekly Goals Board scoring and ranking. Complimentary for designated PT clients.",
+        WEEKLY_GOALS_BOARD_PRODUCT_ID
+      );
+      return;
+    }
+    db.prepare(`
+      INSERT INTO membership_plans (product_id, plan_name, price, length, unit, access_level, stripe_link, category, description)
+      VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)
+    `).run(
+      WEEKLY_GOALS_BOARD_PRODUCT_ID,
+      "Weekly Goals Board",
+      "$10.00",
+      "1",
+      "Month",
+      WEEKLY_GOALS_BOARD_ACCESS_LEVEL,
+      "Add-ons",
+      "Monthly add-on for Weekly Goals Board scoring and ranking. Complimentary for designated PT clients."
+    );
+  } catch (err) {
+    console.error("[db] ensureWeeklyGoalsBoardPlan", err);
   }
 }
 

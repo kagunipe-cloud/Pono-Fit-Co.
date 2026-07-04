@@ -10,17 +10,7 @@ type PreviewPayload = {
   total_ranked: number;
   row: GoalBoardRowData;
 };
-
-function ComingSoonBanner() {
-  return (
-    <div className="border-b border-amber-500/40 bg-amber-400 px-4 py-3 text-center">
-      <p className="text-sm font-black uppercase tracking-[0.2em] text-stone-950">Coming Soon</p>
-      <p className="mt-1 text-xs font-semibold leading-snug text-stone-900">
-        Live scoring and rankings are on the way. Set your goals now — you&apos;ll be ready when we flip the switch.
-      </p>
-    </div>
-  );
-}
+type AccessRequired = { requires_subscription: true; plan_id?: number | null };
 
 function WeeklyGoalsHeader({
   weekStart,
@@ -57,12 +47,25 @@ function WeeklyGoalsHeader({
 
 export default function MemberGoalBoardPreview() {
   const [data, setData] = useState<PreviewPayload | null>(null);
+  const [accessRequired, setAccessRequired] = useState<AccessRequired | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch("/api/member/goal-board")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => setData(json))
+      .then(async (r) => {
+        const json = await r.json().catch(() => null);
+        if (!r.ok && json?.requires_subscription) return json as AccessRequired;
+        return r.ok ? (json as PreviewPayload) : null;
+      })
+      .then((json) => {
+        if (json && "requires_subscription" in json) {
+          setAccessRequired(json);
+          setData(null);
+          return;
+        }
+        setAccessRequired(null);
+        setData(json);
+      })
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, []);
@@ -70,7 +73,6 @@ export default function MemberGoalBoardPreview() {
   if (loading) {
     return (
       <div className="mb-6 overflow-hidden rounded-xl bg-stone-700 shadow-lg">
-        <ComingSoonBanner />
         <div className="px-4 py-6 text-center text-sm text-stone-300">Loading your weekly goals…</div>
       </div>
     );
@@ -79,14 +81,24 @@ export default function MemberGoalBoardPreview() {
   if (!data?.row) {
     return (
       <div className="mb-6 overflow-hidden rounded-xl bg-stone-700 shadow-lg">
-        <ComingSoonBanner />
         <WeeklyGoalsHeader />
         <div className="bg-[#9ef6b2] px-4 py-6 text-center text-sm font-bold text-stone-900">
-          Set your weekly goals to get a head start before launch.
+          {accessRequired
+            ? "Weekly Goals Board is a $10/month add-on. PT clients can ask staff to comp it."
+            : "Set your weekly goals to get a head start before launch."}
         </div>
         <div className="bg-stone-800 px-4 py-2.5 text-center">
-          <Link href="/member/weekly-goals" className="text-sm font-semibold text-[#9ef6b2] hover:text-white">
-            Set weekly goals →
+          <Link
+            href={
+              accessRequired?.plan_id
+                ? `/member/memberships?plan=${accessRequired.plan_id}`
+                : accessRequired
+                  ? "/member/memberships"
+                  : "/member/weekly-goals"
+            }
+            className="text-sm font-semibold text-[#9ef6b2] hover:text-white"
+          >
+            {accessRequired ? "Add Weekly Goals Board →" : "Set weekly goals →"}
           </Link>
         </div>
       </div>
@@ -97,7 +109,6 @@ export default function MemberGoalBoardPreview() {
 
   return (
     <div className="mb-6 overflow-hidden rounded-xl bg-stone-700 shadow-lg">
-      <ComingSoonBanner />
       <WeeklyGoalsHeader weekStart={week_start} weekEnd={week_end} rank={row.rank} totalRanked={total_ranked} />
 
       <div className="relative">
@@ -109,7 +120,6 @@ export default function MemberGoalBoardPreview() {
       </div>
 
       <div className="bg-stone-800 px-4 py-2.5 text-center">
-        <p className="mb-1 text-[0.65rem] font-bold uppercase tracking-wide text-stone-400">Preview only</p>
         <Link href="/member/weekly-goals" className="text-sm font-semibold text-[#9ef6b2] hover:text-white">
           Set / review goals →
         </Link>

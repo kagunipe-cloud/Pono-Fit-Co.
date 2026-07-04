@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAppTimezone, getDb } from "@/lib/db";
 import { getMemberIdFromSession } from "@/lib/session";
 import { getMemberGoalBoardPreview } from "@/lib/goal-board";
+import { getGoalBoardPlanId, memberHasGoalBoardAccess } from "@/lib/goal-board-access";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,18 @@ export async function GET() {
 
     const db = getDb();
     const tz = getAppTimezone(db);
+    if (!memberHasGoalBoardAccess(db, memberId, tz)) {
+      const planId = getGoalBoardPlanId(db);
+      db.close();
+      return NextResponse.json(
+        {
+          error: "Weekly Goals Board requires an active subscription.",
+          requires_subscription: true,
+          plan_id: planId,
+        },
+        { status: 403 }
+      );
+    }
     const preview = getMemberGoalBoardPreview(db, memberId, tz);
     db.close();
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensureMembersStripeColumn } from "../../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersStripeColumn, WEEKLY_GOALS_BOARD_ACCESS_LEVEL } from "../../../../../lib/db";
 import { ensureRecurringClassesTables } from "../../../../../lib/recurring-classes";
 import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
 import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz, formatDateForStorage } from "../../../../../lib/app-timezone";
@@ -82,7 +82,7 @@ export async function POST(
   db.exec("BEGIN TRANSACTION");
   try {
     if (product_type === "membership_plan") {
-      const plan = db.prepare("SELECT * FROM membership_plans WHERE id = ?").get(product_id) as { plan_name: string; length: string; unit: string; product_id: string } | undefined;
+      const plan = db.prepare("SELECT * FROM membership_plans WHERE id = ?").get(product_id) as { plan_name: string; length: string; unit: string; product_id: string; access_level?: string | null } | undefined;
       if (!plan) {
         db.exec("ROLLBACK");
         db.close();
@@ -93,14 +93,19 @@ export async function POST(
       const expiry_date = addDuration(start_date, String(monthsToAdd), plan.unit === "Month" ? "Month" : plan.unit || "Month");
       const startStr = formatDateForStorage(start_date, tz);
       const expiryStr = formatDateForStorage(expiry_date, tz);
-      kisiValidUntil = kisiDoorAccessValidUntilForExpiryYmd(expiryStr, tz);
+      const grantsDoorAccess = String(plan.access_level ?? "").trim() !== WEEKLY_GOALS_BOARD_ACCESS_LEVEL;
+      if (grantsDoorAccess) {
+        kisiValidUntil = kisiDoorAccessValidUntilForExpiryYmd(expiryStr, tz);
+      }
       const daysRemaining = Math.ceil((expiry_date.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
       const sub_id = randomUUID().slice(0, 8);
       db.prepare(`
         INSERT INTO subscriptions (subscription_id, member_id, product_id, status, start_date, expiry_date, days_remaining, price, sales_id, quantity)
         VALUES (?, ?, ?, 'Active', ?, ?, ?, '0', ?, ?)
       `).run(sub_id, member_id, plan.product_id, startStr, expiryStr, String(daysRemaining), sales_id, quantity);
-      db.prepare("UPDATE members SET exp_next_payment_date = ? WHERE member_id = ?").run(expiryStr, member_id);
+      if (grantsDoorAccess) {
+        db.prepare("UPDATE members SET exp_next_payment_date = ? WHERE member_id = ?").run(expiryStr, member_id);
+      }
     } else if (product_type === "pt_session") {
       ensurePTSlotTables(db);
       const session = db.prepare("SELECT id, product_id, duration_minutes FROM pt_sessions WHERE id = ?").get(product_id) as {

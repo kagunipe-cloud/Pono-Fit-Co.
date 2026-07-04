@@ -25,6 +25,7 @@ import {
   type MacroGoalRow,
   type MacroTotals,
 } from "./macro-board-scoring";
+import { goalBoardEligibleMemberIds } from "./goal-board-access";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -151,6 +152,7 @@ export function buildGoalBoard(db: Db, tz: string, weekStart?: string, today?: s
     )
     .all() as MemberRow[];
   const memberMap = new Map(members.map((m) => [m.member_id, m]));
+  const eligibleMemberIds = goalBoardEligibleMemberIds(db, tz);
 
   const workoutGoals = new Map<string, number>();
   const workoutGoalRows = db
@@ -224,6 +226,7 @@ export function buildGoalBoard(db: Db, tz: string, weekStart?: string, today?: s
 
   const rows: Omit<GoalBoardRow, "rank">[] = [];
   for (const memberId of candidates) {
+    if (!eligibleMemberIds.has(memberId)) continue;
     const member = memberMap.get(memberId);
     if (!member) continue;
 

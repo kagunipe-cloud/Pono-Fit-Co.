@@ -10,6 +10,7 @@ import {
   ensureSubscriptionRenewalDiscountPercentColumn,
   ensureSubscriptionPassPackColumns,
   ensureSubscriptionPauseStartedColumn,
+  WEEKLY_GOALS_BOARD_ACCESS_LEVEL,
 } from "../../../../lib/db";
 import { computeRenewalChargePrice } from "../../../../lib/renewal-pricing";
 import { revokeAccess } from "../../../../lib/kisi";
@@ -77,6 +78,7 @@ export async function GET(request: NextRequest) {
        JOIN members m ON m.member_id = s.member_id
        JOIN membership_plans p ON p.product_id = s.product_id
          WHERE s.status = 'Active' AND s.expiry_date < ?
+         AND TRIM(COALESCE(p.access_level, '')) != ?
          AND s.pass_credits_remaining IS NULL
          AND TRIM(COALESCE(s.subscription_pause_started, '')) = ''
          AND (
@@ -84,14 +86,21 @@ export async function GET(request: NextRequest) {
            OR (m.auto_renew = 0 OR m.auto_renew IS NULL)
          )`
     )
-    .all(today) as { subscription_id: string; member_id: string }[];
+    .all(today, WEEKLY_GOALS_BOARD_ACCESS_LEVEL) as { subscription_id: string; member_id: string }[];
   let cancelledEndOfPeriod = 0;
   for (const row of endedNoRenew) {
     try {
       db.prepare("UPDATE subscriptions SET status = ? WHERE subscription_id = ?").run("Cancelled", row.subscription_id);
       const anyActive = db
-        .prepare("SELECT 1 FROM subscriptions WHERE member_id = ? AND status = 'Active' LIMIT 1")
-        .get(row.member_id) as { 1?: number } | undefined;
+        .prepare(
+          `SELECT 1
+           FROM subscriptions s
+           JOIN membership_plans p ON p.product_id = s.product_id
+           WHERE s.member_id = ? AND s.status = 'Active'
+             AND TRIM(COALESCE(p.access_level, '')) != ?
+           LIMIT 1`
+        )
+        .get(row.member_id, WEEKLY_GOALS_BOARD_ACCESS_LEVEL) as { 1?: number } | undefined;
       if (!anyActive) {
         await revokeKisiForMember(db, row.member_id);
       }
@@ -121,7 +130,7 @@ export async function GET(request: NextRequest) {
            s.promo_renewals_remaining, s.renewal_price_indefinite,
            s.complimentary, s.complimentary_renewals_remaining,
            s.renewal_discount_percent,
-           p.plan_name, p.price as plan_price, p.length, p.unit
+           p.plan_name, p.price as plan_price, p.length, p.unit, p.access_level
     FROM subscriptions s
     JOIN membership_plans p ON p.product_id = s.product_id
     JOIN members m ON m.member_id = s.member_id
@@ -145,6 +154,7 @@ export async function GET(request: NextRequest) {
     plan_price: string;
     length: string;
     unit: string;
+    access_level: string | null;
   }[];
 
   const stripe = new Stripe(stripeSecret);
@@ -194,14 +204,18 @@ export async function GET(request: NextRequest) {
     if (!stripeCustomerId) {
       results.push({ member_id: sub.member_id, status: "error", message: "No saved card" });
       insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "No Stripe customer", null);
-      await revokeKisiForMember(db, sub.member_id);
+      if (String(sub.access_level ?? "").trim() !== WEEKLY_GOALS_BOARD_ACCESS_LEVEL) {
+        await revokeKisiForMember(db, sub.member_id);
+      }
       continue;
     }
     const itemTotalDollars = amountCents / 100;
     if (itemTotalDollars <= 0) {
       results.push({ member_id: sub.member_id, status: "error", message: "Invalid price" });
       insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "Invalid price", null);
-      await revokeKisiForMember(db, sub.member_id);
+      if (String(sub.access_level ?? "").trim() !== WEEKLY_GOALS_BOARD_ACCESS_LEVEL) {
+        await revokeKisiForMember(db, sub.member_id);
+      }
       continue;
     }
 
@@ -228,7 +242,9 @@ export async function GET(request: NextRequest) {
         if (blocker) {
           results.push({ member_id: sub.member_id, status: "error", message: blocker.message });
           insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, chargeCents, blocker.message, blocker.code);
-          await revokeKisiForMember(db, sub.member_id);
+          if (String(sub.access_level ?? "").trim() !== WEEKLY_GOALS_BOARD_ACCESS_LEVEL) {
+            await revokeKisiForMember(db, sub.member_id);
+          }
           continue;
         }
       }
@@ -257,7 +273,9 @@ export async function GET(request: NextRequest) {
         const reasonText = (lastError?.message ?? "").trim() || statusMsg;
         results.push({ member_id: sub.member_id, status: "error", message: reasonText });
         insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, chargeCents, reasonText, stripeCode);
-        await revokeKisiForMember(db, sub.member_id);
+        if (String(sub.access_level ?? "").trim() !== WEEKLY_GOALS_BOARD_ACCESS_LEVEL) {
+          await revokeKisiForMember(db, sub.member_id);
+        }
         continue;
       }
 
@@ -274,7 +292,9 @@ export async function GET(request: NextRequest) {
       const { message: msg, stripe_error_code: stripeCode } = stripeFailureFieldsFromError(err);
       results.push({ member_id: sub.member_id, status: "error", message: msg });
       insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, chargeCents, msg, stripeCode);
-      await revokeKisiForMember(db, sub.member_id);
+      if (String(sub.access_level ?? "").trim() !== WEEKLY_GOALS_BOARD_ACCESS_LEVEL) {
+        await revokeKisiForMember(db, sub.member_id);
+      }
     }
   }
 

@@ -8,6 +8,7 @@ import {
   type WeighDirection,
 } from "@/lib/weekly-personal-goals";
 import { ensureJournalTables } from "@/lib/journal";
+import { getGoalBoardPlanId, memberHasGoalBoardAccess } from "@/lib/goal-board-access";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,18 @@ export async function GET() {
     const db = getDb();
     const tz = getAppTimezone(db);
     ensureJournalTables(db);
+    if (!memberHasGoalBoardAccess(db, memberId, tz)) {
+      const planId = getGoalBoardPlanId(db);
+      db.close();
+      return NextResponse.json(
+        {
+          error: "Weekly Goals Board requires an active subscription.",
+          requires_subscription: true,
+          plan_id: planId,
+        },
+        { status: 403 }
+      );
+    }
 
     const workouts_per_week = getMemberWorkoutGoal(db, memberId);
     const personal = getMemberWeeklyPersonalGoalProgress(db, memberId, tz);
@@ -53,6 +66,18 @@ export async function PATCH(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const db = getDb();
     const tz = getAppTimezone(db);
+    if (!memberHasGoalBoardAccess(db, memberId, tz)) {
+      const planId = getGoalBoardPlanId(db);
+      db.close();
+      return NextResponse.json(
+        {
+          error: "Weekly Goals Board requires an active subscription.",
+          requires_subscription: true,
+          plan_id: planId,
+        },
+        { status: 403 }
+      );
+    }
 
     const weighDirRaw = body.weigh_direction;
     const weighDirection: WeighDirection | null | undefined =

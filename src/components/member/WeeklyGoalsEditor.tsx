@@ -44,9 +44,11 @@ type WeeklyGoalsData = {
 };
 
 type LiftOption = { id: number; name: string };
+type AccessRequired = { requires_subscription: true; plan_id?: number | null; error?: string };
 
 export default function WeeklyGoalsEditor() {
   const [weeklyGoals, setWeeklyGoals] = useState<WeeklyGoalsData | null>(null);
+  const [accessRequired, setAccessRequired] = useState<AccessRequired | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,8 +66,18 @@ export default function WeeklyGoalsEditor() {
   useEffect(() => {
     setLoading(true);
     fetch("/api/member/weekly-goals")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json: WeeklyGoalsData | null) => {
+      .then(async (r) => {
+        const json = await r.json().catch(() => null);
+        if (!r.ok && json?.requires_subscription) return json as AccessRequired;
+        return r.ok ? (json as WeeklyGoalsData) : null;
+      })
+      .then((json: WeeklyGoalsData | AccessRequired | null) => {
+        if (json && "requires_subscription" in json) {
+          setAccessRequired(json);
+          setWeeklyGoals(null);
+          return;
+        }
+        setAccessRequired(null);
         if (!json?.personal) {
           setWeeklyGoals(null);
           return;
@@ -256,6 +268,20 @@ export default function WeeklyGoalsEditor() {
   return (
     <div className="p-5 rounded-xl border-2 border-brand-200 bg-gradient-to-br from-brand-50 to-white shadow-sm">
       <h2 className="text-lg font-bold text-stone-800 mb-1">Set weekly goals</h2>
+      {accessRequired ? (
+        <div className="mt-4 rounded-xl border border-emerald-200 bg-white p-4">
+          <p className="text-sm font-semibold text-stone-800">Weekly Goals Board is a $10/month add-on.</p>
+          <p className="mt-1 text-sm text-stone-600">
+            Subscribe to set goals, track your weekly score, and appear on The Board. PT clients can ask staff to comp it.
+          </p>
+          <Link
+            href={accessRequired.plan_id ? `/member/memberships?plan=${accessRequired.plan_id}` : "/member/memberships"}
+            className="mt-3 inline-block rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+          >
+            Add Weekly Goals Board →
+          </Link>
+        </div>
+      ) : null}
       <p className="text-sm text-stone-600 mb-4">
         These feed The Board. Workouts and macros use your existing pages; personal goals are set here for this board week
         {weeklyGoals?.week_start && weeklyGoals?.week_end
@@ -263,7 +289,7 @@ export default function WeeklyGoalsEditor() {
           : ""}.
       </p>
 
-      <div className="grid gap-4 sm:grid-cols-2 mb-5">
+      {!accessRequired && <div className="grid gap-4 sm:grid-cols-2 mb-5">
         <Link
           href="/member/workouts"
           className="block p-4 rounded-lg border border-stone-200 bg-white hover:border-brand-300 transition-colors"
@@ -294,9 +320,9 @@ export default function WeeklyGoalsEditor() {
           </p>
           <span className="text-sm text-brand-700 font-medium mt-2 inline-block">Open My Macros →</span>
         </Link>
-      </div>
+      </div>}
 
-      {loading ? (
+      {accessRequired ? null : loading ? (
         <p className="text-sm text-stone-500">Loading personal goals…</p>
       ) : (
         <div className="space-y-4 border-t border-stone-200 pt-4">
