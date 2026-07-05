@@ -47,12 +47,12 @@ export function GoalBoardProgressRing({
   const progressColor = value == null ? "#888" : "#98f8b1";
   const trackColor = dark ? "#737373" : "#777";
   const progressOutlineColor = "#555";
-  const sizeClass = isTv ? "h-44 w-44" : compact ? "h-14 w-14" : "h-20 w-20";
-  const insetClass = isTv ? "inset-7" : compact ? "inset-2" : "inset-3";
-  const percentClass = isTv ? "text-4xl" : compact ? "text-sm" : "text-lg";
-  const subtextClass = isTv ? "text-lg" : compact ? "text-[0.5rem]" : "text-[0.58rem]";
-  const labelClass = isTv ? "text-2xl" : compact ? "text-[0.55rem]" : "text-[0.65rem]";
-  const strokeWidth = isTv ? 10 : compact ? 7 : 9;
+  const sizeClass = isTv ? "h-[7.5rem] w-[7.5rem]" : compact ? "h-14 w-14" : "h-20 w-20";
+  const insetClass = isTv ? "inset-4" : compact ? "inset-2" : "inset-3";
+  const percentClass = isTv ? "text-2xl" : compact ? "text-sm" : "text-lg";
+  const subtextClass = isTv ? "text-sm leading-none" : compact ? "text-[0.5rem]" : "text-[0.58rem]";
+  const labelClass = isTv ? "text-lg" : compact ? "text-[0.55rem]" : "text-[0.65rem]";
+  const strokeWidth = isTv ? 8 : compact ? 7 : 9;
   const outlineWidth = strokeWidth + 2;
   const radius = 50 - strokeWidth / 2 - 1;
   const circumference = 2 * Math.PI * radius;
@@ -60,7 +60,7 @@ export function GoalBoardProgressRing({
   const showProgress = value != null && pct > 0;
 
   return (
-    <div className={`flex flex-col items-center ${isTv ? "gap-4" : "gap-1.5"}`}>
+    <div className={`flex flex-col items-center ${isTv ? "gap-1" : "gap-1.5"}`}>
       <div
         className={`text-center ${labelClass} font-black uppercase leading-none tracking-wide ${dark ? "text-[#9ef6b2]" : "text-stone-950"}`}
       >
@@ -135,16 +135,16 @@ export function GoalBoardRowView({
   const isTv = variant === "tv";
   const dark = index % 2 === 1;
   const rankLabel = row.rank > 0 ? `${row.rank}.` : "—";
-  const paddingClass = isTv ? "flex-1 px-12 py-6" : compact ? "px-3 py-4 sm:px-4" : "px-5 py-7";
-  const nameClass = isTv ? "text-5xl" : compact ? "text-base sm:text-lg" : "text-lg";
+  const paddingClass = isTv ? "flex min-h-0 flex-1 items-center px-8 py-1" : compact ? "px-3 py-4 sm:px-4" : "px-5 py-7";
+  const nameClass = isTv ? "text-4xl" : compact ? "text-base sm:text-lg" : "text-lg";
   const gridClass = hideName
     ? isTv
-      ? "grid h-full grid-cols-4 items-center justify-items-center gap-10"
+      ? "grid h-full w-full grid-cols-4 items-center justify-items-center gap-4"
       : compact
       ? "grid grid-cols-2 sm:grid-cols-4 items-center justify-items-center gap-3 sm:gap-4"
       : "grid grid-cols-2 sm:grid-cols-4 items-center justify-items-center gap-6"
     : isTv
-      ? "grid h-full grid-cols-[minmax(22rem,1.25fr)_repeat(4,minmax(11rem,0.8fr))] items-center gap-8"
+      ? "grid h-full w-full grid-cols-[minmax(9rem,0.9fr)_repeat(4,minmax(6.5rem,1fr))] items-center gap-4"
       : compact
       ? "grid grid-cols-[minmax(5rem,1fr)_repeat(4,minmax(3.25rem,0.75fr))] items-center gap-2 sm:gap-3"
       : "grid grid-cols-[minmax(8rem,1.2fr)_repeat(4,minmax(4.5rem,0.8fr))] items-center gap-4";
@@ -177,7 +177,7 @@ export function GoalBoardRowView({
           variant={variant}
         />
         <GoalBoardProgressRing
-          label={compact ? "Personal" : "Personal Goal"}
+          label={compact || isTv ? "Personal" : "Personal Goal"}
           value={row.personal_goal?.percent ?? null}
           subtext={goalMetricSubtext(row.personal_goal)}
           dark={dark}
@@ -185,7 +185,7 @@ export function GoalBoardRowView({
           variant={variant}
         />
         <GoalBoardProgressRing
-          label={compact ? "Overall" : "Overall Score"}
+          label={compact || isTv ? "Overall" : "Overall Score"}
           value={row.overall_percent}
           subtext="Avg"
           dark={dark}

@@ -22,24 +22,17 @@ export function GymSpecialRecordCard({
   return (
     <article
       className={`flex shadow-2xl ${
-        isTv ? "h-full flex-col overflow-visible rounded-[3rem] border-[8px] border-amber-300 bg-black" : "overflow-hidden rounded-2xl border-2 border-amber-300 bg-black"
+        isTv ? "h-full min-h-0 flex-col rounded-[2.5rem] border-[6px] border-amber-300 bg-black" : "overflow-hidden rounded-2xl border-2 border-amber-300 bg-black"
       }`}
     >
       <header
         className={`border-amber-400/70 bg-amber-500 text-center font-black uppercase tracking-[0.2em] text-stone-950 ${
-          isTv ? "shrink-0 border-b-[8px] px-12 py-8 text-7xl" : "border-b-2 px-4 py-2.5 text-base sm:text-lg"
+          isTv ? "shrink-0 border-b-[6px] px-8 py-5 text-5xl" : "border-b-2 px-4 py-2.5 text-base sm:text-lg"
         }`}
       >
         {label}
       </header>
-      <div className={isTv ? "flex flex-1 flex-col justify-center gap-14 px-20 py-10" : "space-y-2 px-4 py-4"}>
-        {isTv && !editing ? (
-          <div className="grid grid-cols-[7rem_minmax(0,1fr)_max-content] items-end gap-x-12 px-2 pb-2 text-3xl font-black uppercase tracking-[0.2em] text-amber-200/80">
-            <span />
-            <span>Name</span>
-            <span className="text-right">Score</span>
-          </div>
-        ) : null}
+      <div className={isTv ? "flex min-h-0 flex-1 flex-col justify-evenly gap-6 py-4" : "space-y-2 px-4 py-4"}>
         {GYM_RECORD_PLACES.map((placeNum, placeIndex) => {
           const cell = places[placeIndex] ?? { holder_name: "", record_value: "" };
           const placeLabel = PLACE_LABELS[placeIndex] ?? String(placeNum);
@@ -78,27 +71,29 @@ export function GymSpecialRecordCard({
             return (
               <div
                 key={placeNum}
-                className={`grid grid-cols-[7rem_minmax(0,1fr)_max-content] items-start gap-x-12 ${
+                className={`rounded-[2rem] border-4 border-amber-300/70 bg-black px-10 py-8 ${
                   empty ? "opacity-40" : ""
                 }`}
               >
-                <span className={`pt-1 text-7xl font-black uppercase leading-none ${medalClass}`}>
-                  {placeLabel}
-                </span>
-                <span
-                  className={`min-w-0 whitespace-normal break-words text-6xl font-black uppercase leading-tight ${
+                <div className="flex items-center justify-between gap-8">
+                  <span className={`text-6xl font-black uppercase leading-none ${medalClass}`}>
+                    {placeLabel}
+                  </span>
+                  <span
+                    className={`shrink-0 text-6xl font-black tabular-nums leading-none ${
+                      score ? "text-amber-300" : "text-stone-500"
+                    }`}
+                  >
+                    {score || "—"}
+                  </span>
+                </div>
+                <p
+                  className={`mt-5 whitespace-normal break-words text-5xl font-black uppercase leading-tight ${
                     name ? "text-white" : "text-stone-500"
                   }`}
                 >
                   {name || "—"}
-                </span>
-                <span
-                  className={`shrink-0 whitespace-nowrap pt-1 text-right text-7xl font-black tabular-nums leading-none ${
-                    score ? "text-amber-300" : "text-stone-500"
-                  }`}
-                >
-                  {score || "—"}
-                </span>
+                </p>
               </div>
             );
           }

@@ -243,19 +243,23 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
   const body = (
     <div className="h-full bg-stone-950 text-white">
       <div className="flex h-full w-full flex-col">
-        <header className="shrink-0 border-b-4 border-stone-700 bg-gradient-to-b from-stone-800 to-stone-900 px-12 py-8 text-center">
-          <div className="mb-4 flex justify-center">
+        <header className={`shrink-0 border-b-4 border-stone-700 bg-gradient-to-b from-stone-800 to-stone-900 text-center ${
+          page.kind === "goals" ? "px-10 py-5" : "px-12 py-8"
+        }`}>
+          <div className={`flex justify-center ${page.kind === "goals" ? "mb-2" : "mb-4"}`}>
             <Image
               src="/Lei_Logos.png"
               alt="Pono Fit Co."
               width={440}
               height={112}
-              className="h-20 w-auto"
+              className={page.kind === "goals" ? "h-14 w-auto" : "h-20 w-auto"}
               priority
               unoptimized
             />
           </div>
-          <h1 className="text-7xl font-black uppercase tracking-tight text-white">{title}</h1>
+          <h1 className={`font-black uppercase tracking-tight text-white ${
+            page.kind === "goals" ? "text-5xl" : "text-7xl"
+          }`}>{title}</h1>
           <p className={subtitleClass}>{subtitle}</p>
         </header>
 
@@ -271,11 +275,9 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
               genderFilter={page.gender}
             />
           ) : page.kind === "special" ? (
-            <div className="flex h-full flex-col items-stretch justify-center bg-stone-950 px-24 py-24">
+            <div className="flex h-full min-h-0 flex-col bg-stone-950 px-16 py-10">
               {GYM_SPECIAL_RECORDS.map((rec) => (
-                <div key={rec.key} className="min-h-0 flex-1">
-                  <GymSpecialRecordCard label={rec.label} places={special[rec.key]} variant="tv" />
-                </div>
+                <GymSpecialRecordCard key={rec.key} label={rec.label} places={special[rec.key]} variant="tv" />
               ))}
             </div>
           ) : goalRows.length === 0 ? (
@@ -283,7 +285,7 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
               No goal data yet this week.
             </div>
           ) : (
-            <div className="flex h-full flex-col">
+            <div className="grid h-full min-h-0 grid-rows-10">
               {goalRows.map((row, index) => (
                 <GoalBoardRowView key={row.member_id} row={row} index={index} variant="tv" />
               ))}
@@ -291,7 +293,9 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
           )}
         </div>
 
-        <footer className="shrink-0 border-t-4 border-stone-700 bg-stone-900 px-12 py-5">
+        <footer className={`shrink-0 border-t-4 border-stone-700 bg-stone-900 px-12 ${
+          page.kind === "goals" ? "py-3" : "py-5"
+        }`}>
           <div className="flex items-center justify-center gap-4">
             {TV_PAGES.map((p, i) => (
               <span
@@ -303,16 +307,18 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
               />
             ))}
           </div>
-          <div className="mt-4 flex justify-center">
-            <Image
-              src="/Lei_Logos.png"
-              alt=""
-              width={320}
-              height={80}
-              className="h-10 w-auto opacity-90"
-              unoptimized
-            />
-          </div>
+          {page.kind !== "goals" ? (
+            <div className="mt-4 flex justify-center">
+              <Image
+                src="/Lei_Logos.png"
+                alt=""
+                width={320}
+                height={80}
+                className="h-10 w-auto opacity-90"
+                unoptimized
+              />
+            </div>
+          ) : null}
         </footer>
       </div>
     </div>
