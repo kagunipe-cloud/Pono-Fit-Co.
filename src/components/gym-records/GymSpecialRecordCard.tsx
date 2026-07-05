@@ -3,6 +3,21 @@ import { GYM_RECORD_PLACES, formatGymRecordLine, type GymRecordPlaceCell } from 
 const PLACE_LABELS = ["1st", "2nd", "3rd"] as const;
 const PLACE_MEDAL_CLASS = ["text-amber-300", "text-stone-100", "text-orange-300"] as const;
 
+function splitHolderName(full: string): { first: string; last: string } {
+  const trimmed = full.trim();
+  if (!trimmed) return { first: "", last: "" };
+  const space = trimmed.indexOf(" ");
+  if (space === -1) return { first: trimmed, last: "" };
+  return { first: trimmed.slice(0, space), last: trimmed.slice(space + 1).trim() };
+}
+
+function joinHolderName(first: string, last: string): string {
+  return [first.trim(), last.trim()].filter(Boolean).join(" ");
+}
+
+const editInputClass =
+  "mt-1 w-full rounded border border-stone-500 bg-stone-950 px-3 py-2 text-sm text-white placeholder:text-stone-500";
+
 /** A standalone record card (no age/gender split) — just 1st / 2nd / 3rd. */
 export function GymSpecialRecordCard({
   label,
@@ -32,31 +47,59 @@ export function GymSpecialRecordCard({
       >
         {label}
       </header>
-      <div className={isTv ? "flex min-h-0 flex-1 flex-col justify-evenly gap-6 py-4" : "space-y-2 px-4 py-4"}>
+      <div className={isTv ? "flex min-h-0 flex-1 flex-col justify-evenly gap-6 py-4" : "space-y-3 px-4 py-4"}>
         {GYM_RECORD_PLACES.map((placeNum, placeIndex) => {
           const cell = places[placeIndex] ?? { holder_name: "", record_value: "" };
           const placeLabel = PLACE_LABELS[placeIndex] ?? String(placeNum);
           const medalClass = PLACE_MEDAL_CLASS[placeIndex] ?? "text-amber-300";
 
           if (editing && onChange) {
+            const { first, last } = splitHolderName(cell.holder_name);
+
             return (
-              <div key={placeNum} className="grid grid-cols-[2.5rem_1fr] items-start gap-2">
-                <span className={`pt-2 font-black ${medalClass}`}>{placeLabel}</span>
-                <div className="flex flex-col gap-1 sm:flex-row">
-                  <input
-                    type="text"
-                    value={cell.holder_name}
-                    onChange={(e) => onChange(placeIndex, "holder_name", e.target.value)}
-                    placeholder="Name"
-                    className="w-full rounded border border-stone-500 bg-stone-900 px-2 py-1 text-sm text-white placeholder:text-stone-500"
-                  />
-                  <input
-                    type="text"
-                    value={cell.record_value}
-                    onChange={(e) => onChange(placeIndex, "record_value", e.target.value)}
-                    placeholder="Record / score"
-                    className="w-full rounded border border-stone-500 bg-stone-900 px-2 py-1 text-sm text-white placeholder:text-stone-500"
-                  />
+              <div key={placeNum} className="rounded-lg border border-stone-600 bg-stone-950/60 p-3">
+                <span className={`text-sm font-black uppercase ${medalClass}`}>{placeLabel}</span>
+                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  <label className="block min-w-0">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+                      First name
+                    </span>
+                    <input
+                      type="text"
+                      value={first}
+                      onChange={(e) =>
+                        onChange(placeIndex, "holder_name", joinHolderName(e.target.value, last))
+                      }
+                      placeholder="First"
+                      className={editInputClass}
+                    />
+                  </label>
+                  <label className="block min-w-0">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+                      Last name
+                    </span>
+                    <input
+                      type="text"
+                      value={last}
+                      onChange={(e) =>
+                        onChange(placeIndex, "holder_name", joinHolderName(first, e.target.value))
+                      }
+                      placeholder="Last"
+                      className={editInputClass}
+                    />
+                  </label>
+                  <label className="block min-w-0">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+                      Score
+                    </span>
+                    <input
+                      type="text"
+                      value={cell.record_value}
+                      onChange={(e) => onChange(placeIndex, "record_value", e.target.value)}
+                      placeholder="Score"
+                      className={editInputClass}
+                    />
+                  </label>
                 </div>
               </div>
             );

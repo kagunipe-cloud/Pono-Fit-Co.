@@ -194,7 +194,7 @@ export default function GymRecordsBoard() {
         </div>
 
         <div className="bg-stone-900 px-4 py-6 sm:px-8">
-          <div className="mx-auto grid max-w-3xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mx-auto max-w-2xl">
             {GYM_SPECIAL_RECORDS.map((rec) => (
               <GymSpecialRecordCard
                 key={rec.key}
