@@ -238,27 +238,27 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
       ? "mt-4 text-6xl font-black uppercase tracking-[0.12em] text-[#9ef6b2]"
       : page.kind === "special"
         ? "mt-3 text-4xl font-black uppercase tracking-[0.2em] text-[#9ef6b2]"
-        : "mt-3 text-2xl font-bold uppercase tracking-[0.25em] text-[#9ef6b2]";
+        : "mt-2 text-xl font-bold uppercase tracking-[0.22em] text-[#9ef6b2]";
 
   const body = (
     <div className="h-full bg-stone-950 text-white">
       <div className="flex h-full w-full flex-col">
         <header className={`shrink-0 border-b-4 border-stone-700 bg-gradient-to-b from-stone-800 to-stone-900 text-center ${
-          page.kind === "goals" ? "px-10 py-5" : "px-12 py-8"
+          page.kind === "goals" ? "px-8 py-3" : "px-12 py-8"
         }`}>
-          <div className={`flex justify-center ${page.kind === "goals" ? "mb-2" : "mb-4"}`}>
+          <div className={`flex justify-center ${page.kind === "goals" ? "mb-1" : "mb-4"}`}>
             <Image
               src="/Lei_Logos.png"
               alt="Pono Fit Co."
               width={440}
               height={112}
-              className={page.kind === "goals" ? "h-14 w-auto" : "h-20 w-auto"}
+              className={page.kind === "goals" ? "h-10 w-auto" : "h-20 w-auto"}
               priority
               unoptimized
             />
           </div>
           <h1 className={`font-black uppercase tracking-tight text-white ${
-            page.kind === "goals" ? "text-5xl" : "text-7xl"
+            page.kind === "goals" ? "text-4xl" : "text-7xl"
           }`}>{title}</h1>
           <p className={subtitleClass}>{subtitle}</p>
         </header>
@@ -294,7 +294,7 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
         </div>
 
         <footer className={`shrink-0 border-t-4 border-stone-700 bg-stone-900 px-12 ${
-          page.kind === "goals" ? "py-3" : "py-5"
+          page.kind === "goals" ? "py-2" : "py-5"
         }`}>
           <div className="flex items-center justify-center gap-4">
             {TV_PAGES.map((p, i) => (
