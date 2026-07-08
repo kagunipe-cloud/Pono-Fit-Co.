@@ -29,7 +29,15 @@ const DEFAULT_CANVAS = { width: 2160, height: 3840 };
 type TvPage =
   | { kind: "records"; age: GymRecordAgeBracket; gender: GymRecordGender }
   | { kind: "special" }
-  | { kind: "goals" };
+  | { kind: "goals" }
+  | { kind: "checkins" };
+
+type CheckInBoardRowData = {
+  rank: number;
+  member_id: string;
+  display_name: string;
+  days_logged: number;
+};
 
 const TV_PAGES: TvPage[] = [
   ...GYM_RECORD_TV_PAGES.flatMap((ages) =>
@@ -40,7 +48,26 @@ const TV_PAGES: TvPage[] = [
   ),
   { kind: "special" as const },
   { kind: "goals" as const },
+  { kind: "checkins" as const },
 ];
+
+function CheckInBoardRowView({ row, index }: { row: CheckInBoardRowData; index: number }) {
+  const dark = index % 2 === 1;
+  return (
+    <div
+      className={`grid min-h-0 flex-1 grid-cols-[9rem_1fr_13rem] items-center gap-8 px-16 ${
+        dark ? "bg-black text-[#9ef6b2]" : "bg-[#9ef6b2] text-stone-950"
+      }`}
+    >
+      <div className="text-6xl font-black tabular-nums">{row.rank}.</div>
+      <div className="min-w-0 truncate text-6xl font-black uppercase tracking-wide">{row.display_name}</div>
+      <div className="text-right">
+        <div className="text-7xl font-black tabular-nums leading-none">{row.days_logged}</div>
+        <div className="mt-1 text-2xl font-black uppercase tracking-[0.16em]">Days</div>
+      </div>
+    </div>
+  );
+}
 
 export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
   const router = useRouter();
@@ -68,6 +95,7 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
   const [records, setRecords] = useState<GymRecordsGrid>(emptyGymRecordsGrid());
   const [special, setSpecial] = useState<GymSpecialRecordsGrid>(emptyGymSpecialRecordsGrid());
   const [goalRows, setGoalRows] = useState<GoalBoardRowData[]>([]);
+  const [checkInRows, setCheckInRows] = useState<CheckInBoardRowData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pageIndex, setPageIndex] = useState(() => {
@@ -91,6 +119,7 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
           setRecords(json.records as GymRecordsGrid);
           if (json.special) setSpecial(json.special as GymSpecialRecordsGrid);
           setGoalRows(((json.goalRows ?? []) as GoalBoardRowData[]).slice(0, 10));
+          setCheckInRows(((json.checkInRows ?? []) as CheckInBoardRowData[]).slice(0, 10));
         })
         .catch(() => setError("Could not load The Board."))
         .finally(() => setLoading(false));
@@ -106,8 +135,9 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
         return res.json();
       }),
       fetch("/api/admin/goal-board").then((res) => (res.ok ? res.json() : null)),
+      fetch("/api/admin/check-in-board").then((res) => (res.ok ? res.json() : null)),
     ])
-      .then(([recordsJson, goalsJson]) => {
+      .then(([recordsJson, goalsJson, checkInsJson]) => {
         if (recordsJson) {
           if (recordsJson.error) {
             setError(recordsJson.error);
@@ -119,6 +149,10 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
         if (goalsJson && !goalsJson.error) {
           const rows = (goalsJson.current?.rows ?? []) as GoalBoardRowData[];
           setGoalRows(rows.slice(0, 10));
+        }
+        if (checkInsJson && !checkInsJson.error) {
+          const rows = (checkInsJson.rows ?? []) as CheckInBoardRowData[];
+          setCheckInRows(rows.slice(0, 10));
         }
       })
       .catch(() => setError("Could not load The Board."))
@@ -224,12 +258,20 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
   }
 
   const title =
-    page.kind === "goals" ? "Weekly Goals" : page.kind === "special" ? "Fish Game" : "Gym Records";
+    page.kind === "goals"
+      ? "Weekly Goals"
+      : page.kind === "special"
+        ? "Fish Game"
+        : page.kind === "checkins"
+          ? "Days Logged"
+          : "Gym Records";
   const subtitle =
     page.kind === "goals"
       ? "Top 10 This Week"
       : page.kind === "special"
         ? "Scores to Beat"
+        : page.kind === "checkins"
+          ? "This Week · 1 Check-In Per Day"
         : page.kind === "records"
           ? `${page.gender === "men" ? "Men" : "Women"} - Ages ${page.age}`
           : `Page ${pageIndex + 1} of ${TV_PAGES.length}`;
@@ -238,6 +280,8 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
       ? "mt-4 text-6xl font-black uppercase tracking-[0.12em] text-[#9ef6b2]"
       : page.kind === "special"
         ? "mt-3 text-4xl font-black uppercase tracking-[0.2em] text-[#9ef6b2]"
+        : page.kind === "checkins"
+          ? "mt-3 text-4xl font-black uppercase tracking-[0.16em] text-[#9ef6b2]"
         : "mt-2 text-xl font-bold uppercase tracking-[0.22em] text-[#9ef6b2]";
 
   const body = (
@@ -278,6 +322,16 @@ export default function TheBoardTVDisplay({ token }: { token?: string } = {}) {
             <div className="flex h-full min-h-0 flex-col bg-stone-950 px-16 py-10">
               {GYM_SPECIAL_RECORDS.map((rec) => (
                 <GymSpecialRecordCard key={rec.key} label={rec.label} places={special[rec.key]} variant="tv" />
+              ))}
+            </div>
+          ) : page.kind === "checkins" && checkInRows.length === 0 ? (
+            <div className="flex h-full items-center justify-center bg-[#9ef6b2] px-20 py-24 text-center text-7xl font-black uppercase text-stone-900">
+              No check-ins yet this week.
+            </div>
+          ) : page.kind === "checkins" ? (
+            <div className="flex h-full min-h-0 flex-col">
+              {checkInRows.map((row, index) => (
+                <CheckInBoardRowView key={row.member_id} row={row} index={index} />
               ))}
             </div>
           ) : goalRows.length === 0 ? (

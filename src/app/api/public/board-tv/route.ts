@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAppTimezone, getDb } from "@/lib/db";
 import { boardWeekBounds, todayInAppTz } from "@/lib/app-timezone";
+import { buildCheckInBoard } from "@/lib/check-in-board";
 import { buildGoalBoard } from "@/lib/goal-board";
 import { getGymRecordsGrid, getGymSpecialRecordsGrid } from "@/lib/gym-records";
 
@@ -30,6 +31,7 @@ export async function GET(request: NextRequest) {
     const records = getGymRecordsGrid(db);
     const special = getGymSpecialRecordsGrid(db);
     const board = buildGoalBoard(db, tz, weekStart, today);
+    const checkIns = buildCheckInBoard(db, tz, weekStart, today);
     db.close();
 
     return NextResponse.json({
@@ -37,6 +39,9 @@ export async function GET(request: NextRequest) {
       records,
       special,
       goalRows: board.rows.slice(0, 10),
+      checkInRows: checkIns.rows.slice(0, 10),
+      checkInWeekStart: checkIns.week_start,
+      checkInWeekEnd: checkIns.week_end,
     });
   } catch (err) {
     console.error("[public/board-tv]", err);
