@@ -298,6 +298,7 @@ function NavList({
       {isAdmin && <li>{link("/admin/trainers", "Trainers")}</li>}
       {isAdmin && <li>{link("/admin/analytics", "Analytics")}</li>}
       {isAdmin && <li>{link("/admin/leads", "Leads")}</li>}
+      {isAdmin && <li>{link("/admin/in-store-marketing", "In-Store Marketing")}</li>}
       {isAdmin && <li>{link("/admin/settings", "Settings")}</li>}
       {isAdmin && member?.show_onboarding_nav !== false && (
         <li>{link("/admin/settings/onboarding", "Onboarding Docs")}</li>
