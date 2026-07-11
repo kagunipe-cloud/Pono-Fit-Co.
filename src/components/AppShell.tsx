@@ -9,9 +9,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const isEmbed = pathname?.startsWith("/embed");
   const isLanding = pathname === "/small-group-training";
   const isBoardTv = pathname?.startsWith("/admin/the-board/tv");
+  const isMarketingTv = pathname?.startsWith("/admin/in-store-marketing/tv");
   const isPublicBoard = pathname === "/board" || pathname?.startsWith("/board/");
+  const isLobbyTv = pathname?.startsWith("/lobby-tv/");
+  const isInStoreMarketingTv = pathname === "/ismtv";
 
-  if (isEmbed || isLanding || isBoardTv || isPublicBoard) {
+  if (isEmbed || isLanding || isBoardTv || isMarketingTv || isPublicBoard || isLobbyTv || isInStoreMarketingTv) {
     return <>{children}</>;
   }
 

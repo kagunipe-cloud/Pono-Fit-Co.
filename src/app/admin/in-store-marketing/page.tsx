@@ -6,7 +6,11 @@ export const metadata = {
   title: "In-Store Marketing | Pono Fit Co.",
 };
 
+const PUBLIC_TV_PATH = "/ismtv";
+
 export default function InStoreMarketingAdminPage() {
+  const publicTvPath = PUBLIC_TV_PATH;
+
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -17,7 +21,7 @@ export default function InStoreMarketingAdminPage() {
           </p>
         </div>
         <Link
-          href="/admin/in-store-marketing/tv"
+          href={publicTvPath}
           target="_blank"
           className="inline-flex items-center justify-center rounded-lg bg-stone-900 px-4 py-2 text-sm font-semibold text-[#9ef6b2] hover:bg-stone-800"
         >
@@ -26,8 +30,17 @@ export default function InStoreMarketingAdminPage() {
       </div>
 
       <div className="mb-8 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-        This display is designed for a 32&quot; landscape Insignia TV. Use browser/full-screen mode and bookmark the TV
-        display link.
+        <p>
+          This display is designed for a 32&quot; landscape Insignia TV. Use browser/full-screen mode and bookmark the
+          TV display link.
+        </p>
+        <p className="mt-2 font-medium">
+          Public TV URL (no login):{" "}
+          <Link href={publicTvPath} target="_blank" className="text-brand-700 underline">
+            https://app.beponofitco.com{publicTvPath}
+          </Link>
+        </p>
+        <p className="mt-2">Each slide shows for 30 seconds.</p>
       </div>
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
@@ -42,7 +55,7 @@ export default function InStoreMarketingAdminPage() {
               <p className="mt-1 text-sm text-stone-600">{slide.description}</p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Link
-                  href={`/admin/in-store-marketing/tv?page=${index + 1}`}
+                  href={`${publicTvPath}?page=${index + 1}`}
                   target="_blank"
                   className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"
                 >
@@ -53,7 +66,7 @@ export default function InStoreMarketingAdminPage() {
                   target="_blank"
                   className="rounded-lg border border-stone-300 px-3 py-1.5 text-sm font-semibold text-stone-700 hover:bg-stone-50"
                 >
-                  Open SVG ↗
+                  Open asset ↗
                 </Link>
               </div>
             </div>

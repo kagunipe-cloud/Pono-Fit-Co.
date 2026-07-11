@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { IN_STORE_MARKETING_SLIDES } from "@/lib/in-store-marketing";
 
-const ROTATE_MS = 20_000;
+const ROTATE_MS = 30_000;
 
 export default function InStoreMarketingTVDisplay() {
   const searchParams = useSearchParams();

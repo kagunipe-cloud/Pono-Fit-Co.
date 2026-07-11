@@ -72,6 +72,7 @@ function isPublicPath(pathname: string): boolean {
     "/terms",
     "/sign-waiver",
     "/small-group-training",
+    "/ismtv",
   ];
   if (publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))) return true;
   if (pathname.startsWith("/rec-leagues")) return true;
