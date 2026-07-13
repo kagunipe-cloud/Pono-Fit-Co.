@@ -34,7 +34,7 @@
     <circle cx="168" cy="670" r="34" fill="#7dd3fc" stroke="#11100f" stroke-width="3"/>
     <text x="168" y="682" text-anchor="middle" fill="#11100f" font-family="Arial Black, Impact, sans-serif" font-size="34" font-weight="900">1</text>
     <text x="230" y="650" fill="#11100f" font-family="Arial Black, Impact, sans-serif" font-size="40" font-weight="900">SET YOUR GOALS</text>
-    <text x="230" y="704" fill="#11100f" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700">Workouts, macros, and personal weekly targets.</text>
+    <text x="230" y="704" fill="#11100f" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700">Workouts &amp; macros stay free. Unlock board scoring.</text>
   </g>
 
   <g filter="url(#shadow)">

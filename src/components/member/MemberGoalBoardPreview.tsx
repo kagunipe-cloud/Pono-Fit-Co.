@@ -31,13 +31,7 @@ const DEMO_ROW: GoalBoardRowData = {
   overall_percent: 76,
 };
 
-function PreviewRings({
-  row,
-  macrosLocked,
-}: {
-  row: GoalBoardRowData;
-  macrosLocked: boolean;
-}) {
+function PreviewRings({ row, showBoardUpsell }: { row: GoalBoardRowData; showBoardUpsell: boolean }) {
   const dark = false;
 
   return (
@@ -50,24 +44,13 @@ function PreviewRings({
           dark={dark}
           compact
         />
-        <div className="relative flex flex-col items-center">
-          <GoalBoardProgressRing
-            label="Macros"
-            value={row.macros.percent}
-            subtext={macrosLocked ? "Board add-on" : goalMetricSubtext(row.macros)}
-            dark={dark}
-            compact
-          />
-          {macrosLocked ? (
-            <span
-              className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-stone-900 text-[10px] text-white"
-              title="Nutrition tracking included with Weekly Goals Board"
-              aria-hidden
-            >
-              🔒
-            </span>
-          ) : null}
-        </div>
+        <GoalBoardProgressRing
+          label="Macros"
+          value={row.macros.percent}
+          subtext="Free to log"
+          dark={dark}
+          compact
+        />
         <GoalBoardProgressRing
           label="Personal"
           value={row.personal_goal?.percent ?? null}
@@ -83,10 +66,10 @@ function PreviewRings({
           compact
         />
       </div>
-      {macrosLocked ? (
+      {showBoardUpsell ? (
         <p className="mt-4 text-center text-xs font-semibold text-stone-700">
-          Workouts are free for every member. Our macro tracker &amp; TV board ranking are part of the
-          Weekly Goals Board.
+          Workouts and macros are free for every member. The Weekly Goals Board add-on unlocks scoring,
+          ranking, and the gym TV leaderboard.
         </p>
       ) : null}
     </div>
@@ -135,7 +118,6 @@ export default function MemberGoalBoardPreview() {
     : "/member/memberships";
 
   const row = access.subscribed && live?.row ? live.row : DEMO_ROW;
-  const macrosLocked = !access.subscribed;
 
   if (loading) {
     return (
@@ -169,7 +151,7 @@ export default function MemberGoalBoardPreview() {
         )}
       </div>
 
-      <PreviewRings row={row} macrosLocked={macrosLocked} />
+      <PreviewRings row={row} showBoardUpsell={!access.subscribed} />
 
       <div className="border-t border-stone-200 bg-stone-50 px-4 py-4 text-center sm:px-6">
         <p className="text-sm font-bold text-stone-800">
@@ -186,6 +168,9 @@ export default function MemberGoalBoardPreview() {
           </Link>
           <Link href="/member/workouts" className="text-sm font-semibold text-brand-700 hover:underline">
             Log workouts (free)
+          </Link>
+          <Link href="/member/macros" className="text-sm font-semibold text-brand-700 hover:underline">
+            Log macros (free)
           </Link>
         </div>
       </div>

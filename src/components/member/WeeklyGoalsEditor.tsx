@@ -272,7 +272,8 @@ export default function WeeklyGoalsEditor() {
         <div className="mt-4 rounded-xl border border-emerald-200 bg-white p-4">
           <p className="text-sm font-semibold text-stone-800">Weekly Goals Board is a $10/month add-on.</p>
           <p className="mt-1 text-sm text-stone-600">
-            Subscribe to set goals, track your weekly score, and appear on The Board. PT clients can ask staff to comp it.
+            Workouts and macros stay free. Subscribe to set board goals, score the week, and appear on the gym TV.
+            PT clients can ask staff to comp it.
           </p>
           <Link
             href={accessRequired.plan_id ? `/member/memberships?plan=${accessRequired.plan_id}` : "/member/memberships"}

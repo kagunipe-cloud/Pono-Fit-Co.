@@ -766,7 +766,7 @@ export function ensureWeeklyGoalsBoardPlan(db: ReturnType<typeof getDb>) {
         "Month",
         WEEKLY_GOALS_BOARD_ACCESS_LEVEL,
         "Add-ons",
-        "Monthly add-on for Weekly Goals Board scoring and ranking. Complimentary for designated PT clients.",
+        "Unlocks Weekly Goals Board scoring, ranking, and the gym TV leaderboard. Workout and macro tracking stay free for everyone. Complimentary for designated PT clients.",
         WEEKLY_GOALS_BOARD_PRODUCT_ID
       );
       return;
@@ -782,7 +782,7 @@ export function ensureWeeklyGoalsBoardPlan(db: ReturnType<typeof getDb>) {
       "Month",
       WEEKLY_GOALS_BOARD_ACCESS_LEVEL,
       "Add-ons",
-      "Monthly add-on for Weekly Goals Board scoring and ranking. Complimentary for designated PT clients."
+      "Unlocks Weekly Goals Board scoring, ranking, and the gym TV leaderboard. Workout and macro tracking stay free for everyone. Complimentary for designated PT clients."
     );
   } catch (err) {
     console.error("[db] ensureWeeklyGoalsBoardPlan", err);
