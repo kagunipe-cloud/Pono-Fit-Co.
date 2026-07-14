@@ -284,6 +284,8 @@ export async function POST(request: NextRequest) {
       sessionMemberId === member_id && !isStaff && getMemberRetailAllowPurchaseWhenOutOfStock(db);
 
     let purchasedDayPassPack = false;
+    /** True when cart activates a gym membership/sub (not gift, pass pack, retail, PT, etc.). */
+    let purchasedMembershipWelcome = false;
     db.exec("BEGIN TRANSACTION");
     try {
       assertRetailStockForCart(db, cart.id, { skipRetailStock: allowMemberRetailOversell });
@@ -332,6 +334,10 @@ export async function POST(request: NextRequest) {
               continue;
             }
             emailLineItems.push({ name: plan.plan_name ?? "Membership", quantity: it.quantity, price: formatPrice(effUnit) });
+            const grantsDoorAccess = String(plan.access_level ?? "").trim() !== WEEKLY_GOALS_BOARD_ACCESS_LEVEL;
+            if (grantsDoorAccess) {
+              purchasedMembershipWelcome = true;
+            }
             const start_date = new Date();
             const expiry_date = addDuration(start_date, plan.length || "1", plan.unit || "Month");
             const startStr = formatDateForStorage(start_date, tz);
@@ -370,7 +376,6 @@ export async function POST(request: NextRequest) {
               renewalIndef,
               renewalDiscountToStore
             );
-            const grantsDoorAccess = String(plan.access_level ?? "").trim() !== WEEKLY_GOALS_BOARD_ACCESS_LEVEL;
             if (grantsDoorAccess) {
               db.prepare("UPDATE members SET exp_next_payment_date = ? WHERE member_id = ?").run(expiryStr, member_id);
               kisiGrants.push({ expiry_ymd: expiryStr });
@@ -662,7 +667,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      if (emailTo) {
+      if (emailTo && purchasedMembershipWelcome) {
         sendPostPurchaseEmail({
           to: emailTo,
           member_id,

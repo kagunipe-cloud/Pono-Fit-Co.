@@ -338,6 +338,9 @@ export default function EmailsDocumentsPage() {
 
             <div className="border border-stone-200 rounded-lg p-4 space-y-3">
               <h3 className="font-semibold text-stone-800">Post-purchase / Welcome</h3>
+              <p className="text-sm text-stone-600">
+                Sent only when someone buys a gym membership that grants door access (not retail, PT, day-pass packs, Weekly Goals Board alone, or gift purchases for someone else).
+              </p>
               <div>
                 <label className="block text-sm font-medium text-stone-700 mb-1">Subject</label>
                 <input

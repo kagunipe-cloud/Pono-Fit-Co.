@@ -536,7 +536,7 @@ export async function sendMembershipExpiryReminder(params: {
   return sendMemberEmail(params.to, subject, text);
 }
 
-/** Post-purchase receipt / confirmation to member. Includes app download and set-password links. */
+/** Membership welcome / receipt after purchasing a gym membership (not retail, PT, packs alone, etc.). */
 export async function sendPostPurchaseEmail(params: {
   to: string;
   member_id: string;
