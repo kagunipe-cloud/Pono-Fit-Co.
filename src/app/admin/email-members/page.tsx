@@ -899,7 +899,7 @@ export default function AdminEmailMembersPage() {
             {(messageKind === "welcome_invite" || messageKind === "waiver_link") && (
               <p className="text-sm text-stone-600 pt-1">
                 {messageKind === "welcome_invite"
-                  ? "Uses the standard welcome email for each recipient (install link, Member ID, set password)."
+                  ? "Uses the standard welcome email for each recipient (one set-password link; install steps appear after they finish)."
                   : "Sends the liability waiver link to the selected member (testing / resend)."}
               </p>
             )}

@@ -577,17 +577,11 @@ export async function sendPostPurchaseEmail(params: {
     ? applyPlaceholders(customBody, vars)
     : `Hi${params.first_name ? ` ${params.first_name}` : ""},
 
-Thanks for your purchase. You can view your membership and bookings in the app.
+Thanks for your purchase. Tap the link below to set your password — right after that we'll show you how to get the app on your phone.
 
-Get the app:
-${installVars.install_instructions}
-
-Your Member ID: ${memberId}
-
-To sign in for the first time, set your password here:
 ${setPasswordUrl}
 
-After that you'll sign in with your email and password.${receiptBlock}
+After that, sign in anytime with your email and password.${receiptBlock}
 
 — Pono Fit Co.`;
   return sendMemberEmail(params.to, subject, text);
@@ -618,18 +612,13 @@ export async function sendAppDownloadInviteEmail(params: {
   const subject = customSubject
     ? applyPlaceholders(customSubject, vars)
     : "new door-unlock system - switch over by 4/15!";
-  const defaultText = `Aloha eeeverybody!
+  const defaultText = `Aloha${params.first_name ? ` ${params.first_name}` : ""},
 
-We are launching our new app for the gym, which we built ourselves!  We are pretty stoked on it, especially because it helps you track your macros and your workouts for free, and your data goes absolutely nowhere because it's OUR app!
+Welcome to our app! Tap the link below to set your password — takes about a minute. Right after that, we'll show you how to get the app on your phone.
 
-Click the link below to get the app and set your password, or just register and read the waiver.  Let us know if you have any questions!
-
-${installVars.install_instructions}
-
-Your Member ID: ${memberId}
-
-To set your app password (first-time sign-in):
 ${setPasswordUrl}
+
+Let us know if you have any questions!
 
 Me Ke Mahalo,
 

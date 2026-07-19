@@ -35,7 +35,9 @@ function InstallContent() {
   const searchParams = useSearchParams();
   const memberId = searchParams.get("member_id") ?? "";
   const email = searchParams.get("email") ?? "";
-  const hasSetPasswordParams = Boolean(memberId && email);
+  const afterWelcome = searchParams.get("welcome") === "1";
+  const welcomeEmail = searchParams.get("email")?.trim() ?? "";
+  const hasSetPasswordParams = Boolean(memberId && email && !afterWelcome);
 
   const [device, setDevice] = useState<Device>("other");
   const pageUrl = usePageUrl();
@@ -148,18 +150,38 @@ function InstallContent() {
     </div>
   );
 
+  const loginHref = welcomeEmail
+    ? `/login?email=${encodeURIComponent(welcomeEmail)}`
+    : "/login";
+
   return (
     <div className="max-w-md mx-auto py-10 px-4">
-      <h1 className="text-2xl font-bold text-stone-800 mb-1">Add {BRAND.name} to your phone</h1>
+      {afterWelcome ? (
+        <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-4">
+          <p className="text-sm font-semibold text-emerald-900">Password set — nice!</p>
+          <p className="mt-1 text-sm text-emerald-800">
+            {device === "other"
+              ? "You're good on this computer. Open this page on your phone when you want the app icon, or sign in below."
+              : "One more step: get the app on your phone using the instructions below."}
+          </p>
+        </div>
+      ) : null}
+
+      <h1 className="text-2xl font-bold text-stone-800 mb-1">
+        {afterWelcome ? `Get ${BRAND.name} on your phone` : `Add ${BRAND.name} to your phone`}
+      </h1>
       <p className="text-stone-500 text-sm mb-8">
-        {device === "other"
-          ? "On a laptop or desktop, just use this site in your browser — bookmark it if you like. Add-to-home-screen is optional and meant for phones."
-          : device === "ios" && iosStoreUrl
-            ? `Download ${BRAND.name} from the App Store, or add this site to your Home Screen in Safari if you prefer.`
-            : "Opens full-screen from your home screen — like a regular app."}
+        {afterWelcome && device === "other"
+          ? "On a laptop or desktop, just sign in in your browser — no install needed."
+          : device === "other"
+            ? "On a laptop or desktop, just use this site in your browser — bookmark it if you like. Add-to-home-screen is optional and meant for phones."
+            : device === "ios" && iosStoreUrl
+              ? `Download ${BRAND.name} from the App Store, or add this site to your Home Screen in Safari if you prefer.`
+              : "Opens full-screen from your home screen — like a regular app."}
       </p>
 
       {/* Send to a friend */}
+      {!afterWelcome ? (
       <div className="mb-10 p-4 rounded-xl border border-brand-200 bg-brand-50">
         <p className="text-sm font-medium text-stone-700 mb-2">Send to a friend</p>
         <p className="text-xs text-stone-600 mb-3">Text them this link. They’ll open it on their phone and follow the steps.</p>
@@ -179,6 +201,7 @@ function InstallContent() {
           </button>
         </div>
       </div>
+      ) : null}
 
       {/* Laptop / desktop — no install walkthrough */}
       {device === "other" && (
@@ -263,7 +286,7 @@ function InstallContent() {
         </section>
       )}
 
-      {hasSetPasswordParams && (
+      {hasSetPasswordParams ? (
         <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-6 mb-8">
           <p className="text-sm font-medium text-stone-700 mb-2">Next: set your password</p>
           <p className="text-xs text-stone-500 mb-3">Create a password once so you can sign in with your email.</p>
@@ -274,11 +297,23 @@ function InstallContent() {
             Set your password
           </Link>
         </div>
-      )}
+      ) : null}
+
+      {afterWelcome ? (
+        <div className="mb-8 rounded-xl border border-stone-200 bg-white p-5 shadow-sm text-center">
+          <p className="text-sm font-medium text-stone-800 mb-3">Ready to sign in?</p>
+          <Link
+            href={loginHref}
+            className="inline-flex w-full items-center justify-center rounded-lg bg-brand-600 px-4 py-3 text-sm font-semibold text-white hover:bg-brand-700"
+          >
+            Sign in →
+          </Link>
+        </div>
+      ) : null}
 
       <p className="text-center">
-        <Link href="/login" className="text-brand-600 hover:underline font-medium text-sm">
-          ← Back to login
+        <Link href={loginHref} className="text-brand-600 hover:underline font-medium text-sm">
+          {afterWelcome ? "Sign in" : "← Back to login"}
         </Link>
       </p>
       <p className="text-center mt-2">

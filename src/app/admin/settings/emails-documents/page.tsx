@@ -339,7 +339,7 @@ export default function EmailsDocumentsPage() {
             <div className="border border-stone-200 rounded-lg p-4 space-y-3">
               <h3 className="font-semibold text-stone-800">Post-purchase / Welcome</h3>
               <p className="text-sm text-stone-600">
-                Sent only when someone buys a gym membership that grants door access (not retail, PT, day-pass packs, Weekly Goals Board alone, or gift purchases for someone else).
+                Sent only when someone buys a gym membership that grants door access (not retail, PT, day-pass packs, Weekly Goals Board alone, or gift purchases for someone else). Default body uses one link: {"{{set_password_url}}"} — members see install steps after they set their password.
               </p>
               <div>
                 <label className="block text-sm font-medium text-stone-700 mb-1">Subject</label>
@@ -528,6 +528,9 @@ export default function EmailsDocumentsPage() {
 
             <div className="border border-stone-200 rounded-lg p-4 space-y-3">
               <h3 className="font-semibold text-stone-800">App download invite</h3>
+              <p className="text-sm text-stone-600">
+                Admin welcome email (Email members). Default body uses one link: {"{{set_password_url}}"} — install steps appear on the next screen after password is set.
+              </p>
               <div>
                 <label className="block text-sm font-medium text-stone-700 mb-1">Subject</label>
                 <input

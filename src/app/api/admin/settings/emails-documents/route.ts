@@ -58,17 +58,11 @@ const DEFAULTS: Record<string, string> = {
   email_post_purchase_subject: "Welcome to our 'Ohana",
   email_post_purchase_body: `Hi{{first_name}},
 
-Thanks for your purchase. You can view your membership and bookings in the app.
+Thanks for your purchase. Tap the link below to set your password — right after that we'll show you how to get the app on your phone.
 
-Get the app:
-{{install_instructions}}
-
-Your Member ID: {{member_id}}
-
-To sign in for the first time, set your password here:
 {{set_password_url}}
 
-After that you'll sign in with your email and password.{{receipt}}
+After that, sign in anytime with your email and password.{{receipt}}
 
 — Pono Fit Co.`,
   email_membership_expiry_subject: "Your membership is expiring soon",
@@ -118,18 +112,13 @@ Me Ke Aloha,
 
 Bekah & Perry`,
   email_app_download_subject: "new door-unlock system - switch over by 4/15!",
-  email_app_download_body: `Aloha eeeverybody!
+  email_app_download_body: `Aloha{{first_name}},
 
-We are launching our new app for the gym, which we built ourselves!  We are pretty stoked on it, especially because it helps you track your macros and your workouts for free, and your data goes absolutely nowhere because it's OUR app!
+Welcome to our app! Tap the link below to set your password — takes about a minute. Right after that, we'll show you how to get the app on your phone.
 
-Get the app and set your password (links below). Let us know if you have any questions!
-
-{{install_instructions}}
-
-Your Member ID: {{member_id}}
-
-To set your app password (first-time sign-in):
 {{set_password_url}}
+
+Let us know if you have any questions!
 
 Me Ke Mahalo,
 

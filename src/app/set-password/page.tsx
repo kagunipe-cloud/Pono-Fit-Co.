@@ -3,7 +3,6 @@
 import { Suspense, useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import InstallAppBanner from "@/components/InstallAppBanner";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -53,7 +52,7 @@ function SetPasswordContent() {
         setError(data.error ?? "Failed to set password.");
         return;
       }
-      router.push(`/login?password_set=1&email=${encodeURIComponent(em)}`);
+      router.push(`/install?welcome=1&email=${encodeURIComponent(em)}`);
       router.refresh();
     } catch {
       setError("Something went wrong.");
@@ -64,11 +63,10 @@ function SetPasswordContent() {
 
   return (
     <div className="max-w-sm mx-auto py-12 px-4">
-      <InstallAppBanner variant="banner" />
       <div className="bg-white rounded-xl border border-stone-200 shadow-sm p-6">
         <h1 className="text-xl font-bold text-stone-800 mb-1">Set Your Password</h1>
         <p className="text-stone-500 text-sm mb-6">
-          Create a password once. After this, you’ll sign in with your email and this password.
+          Create a password once. Next, we&apos;ll show you how to get the app on your phone.
         </p>
         <p className="text-sm text-stone-600 mb-4 p-3 rounded-lg bg-stone-50 border border-stone-200">
           Already set your password?{" "}
