@@ -24,6 +24,7 @@ type CartItem = {
   price_override_indefinite?: boolean;
   plan_unit?: string;
   gift_recipient_email?: string | null;
+  membership_start_date?: string | null;
 };
 
 type Plan = { id: number; plan_name: string; price: string; unit: string };
@@ -114,6 +115,17 @@ export default function MemberCartPage() {
   >({});
   const [giftDrafts, setGiftDrafts] = useState<Record<number, string>>({});
   const [giftSavingId, setGiftSavingId] = useState<number | null>(null);
+  const [membershipStartDrafts, setMembershipStartDrafts] = useState<Record<number, string>>({});
+  const [membershipStartSavingId, setMembershipStartSavingId] = useState<number | null>(null);
+  const [scheduledCharge, setScheduledCharge] = useState<{
+    id: number;
+    charge_on_ymd: string;
+    status: string;
+    item_count: number;
+    last_error: string | null;
+  } | null>(null);
+  const [scheduleChargeOnDraft, setScheduleChargeOnDraft] = useState("");
+  const [scheduleLoading, setScheduleLoading] = useState(false);
 
   useEffect(() => {
     const next: Record<number, { price: string; months: string; indef: boolean }> = {};
@@ -136,6 +148,16 @@ export default function MemberCartPage() {
     }
     setGiftDrafts(next);
   }, [items]);
+
+  useEffect(() => {
+    const next: Record<number, string> = {};
+    for (const it of items) {
+      if (it.product_type === "membership_plan") {
+        next[it.id] = it.membership_start_date ?? "";
+      }
+    }
+    setMembershipStartDrafts(next);
+  }, [items]);
   const [useCreditLoadingId, setUseCreditLoadingId] = useState<number | null>(null);
   const [useCreditConfirm, setUseCreditConfirm] = useState<{ cartItemId: number; occurrenceId: number; itemName: string } | null>(null);
   const [terminalEstimate, setTerminalEstimate] = useState<{
@@ -152,6 +174,28 @@ export default function MemberCartPage() {
   const [classOccurrences, setClassOccurrences] = useState<ClassOccurrence[]>([]);
   const [classScheduleLoading, setClassScheduleLoading] = useState(false);
   const cartDataUrl = `/api/members/${encodeURIComponent(id != null ? String(id).trim() : "")}/cart-data`;
+
+  async function reloadCartData() {
+    const res = await fetch(cartDataUrl);
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: string };
+    if (!res.ok) return;
+    setItems(Array.isArray(data.items) ? (data.items as CartItem[]) : []);
+    setHasSavedCard(Boolean(data.has_saved_card));
+    setPromoCode(typeof data.promo_code === "string" ? data.promo_code : "");
+    setDiscount(
+      (data.discount as {
+        code: string;
+        percent_off: number;
+        description?: string | null;
+        applies_to_renewals?: boolean;
+      } | null) ?? null
+    );
+    const sc = data.scheduled_charge as
+      | { id: number; charge_on_ymd: string; status: string; item_count: number; last_error: string | null }
+      | null
+      | undefined;
+    setScheduledCharge(sc && typeof sc.id === "number" ? sc : null);
+  }
 
   const canUseTerminal = isStaff;
 
@@ -214,6 +258,11 @@ export default function MemberCartPage() {
         setClassCredits(typeof data.class_credits === "number" ? data.class_credits : 0);
         setIsOwnCart(Boolean(data.is_own_cart));
         setIsStaff(Boolean(data.is_staff));
+        const sc = data.scheduled_charge as
+          | { id: number; charge_on_ymd: string; status: string; item_count: number; last_error: string | null }
+          | null
+          | undefined;
+        setScheduledCharge(sc && typeof sc.id === "number" ? sc : null);
       })
       .catch(() => {
         if (!cancelled) {
@@ -228,6 +277,44 @@ export default function MemberCartPage() {
       cancelled = true;
     };
   }, [id, cartDataUrl]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("session_id")?.trim();
+    if (params.get("schedule_setup") === "1" && sessionId && memberId) {
+      (async () => {
+        try {
+          const res = await fetch(`/api/members/${encodeURIComponent(id)}/setup-complete`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: sessionId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            alert(typeof data.error === "string" ? data.error : "Could not save card.");
+            return;
+          }
+          await reloadCartData();
+          alert("Card saved. The cart will be charged on the scheduled date (see banner below).");
+        } finally {
+          window.history.replaceState({}, "", `/members/${id}/cart`);
+        }
+      })();
+    }
+  }, [id, memberId, cartDataUrl]);
+
+  useEffect(() => {
+    let maxStart = "";
+    for (const it of items) {
+      if (it.product_type !== "membership_plan") continue;
+      const d = (it.membership_start_date ?? "").trim();
+      if (d && (!maxStart || d > maxStart)) maxStart = d;
+    }
+    if (maxStart && !scheduleChargeOnDraft) {
+      setScheduleChargeOnDraft(maxStart);
+    }
+  }, [items, scheduleChargeOnDraft]);
 
   const classScheduleFrom = classScheduleWeekStart;
   const classScheduleTo = addDaysToDateStr(classScheduleWeekStart, 6);
@@ -540,6 +627,91 @@ export default function MemberCartPage() {
     }
   }
 
+  async function scheduleWholeCartCharge() {
+    if (!memberId || !isStaff || items.length === 0) return;
+    const chargeOn = scheduleChargeOnDraft.trim();
+    if (!chargeOn) {
+      alert("Pick a charge date (today or later, gym calendar).");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Schedule the whole cart to charge on ${formatDateForDisplay(chargeOn, tz) || chargeOn}? The cart will be cleared now; we charge the saved card (or one you save next) on that date.`
+      )
+    ) {
+      return;
+    }
+    setScheduleLoading(true);
+    try {
+      const res = await fetch("/api/cart/schedule-charge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          member_id: memberId,
+          charge_on_ymd: chargeOn,
+          ...(hasMonthlyMembershipInCart ? { monthly_recurring: monthlyRecurring } : {}),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(typeof data.error === "string" ? data.error : "Could not schedule.");
+        return;
+      }
+      if (data.needs_payment_method && data.setup_checkout_url) {
+        window.location.href = data.setup_checkout_url as string;
+        return;
+      }
+      if (data.charged_now) {
+        window.location.href = `/members/${id}/cart/success?source=scheduled`;
+        return;
+      }
+      await reloadCartData();
+      alert(typeof data.message === "string" ? data.message : "Scheduled.");
+    } finally {
+      setScheduleLoading(false);
+    }
+  }
+
+  async function cancelScheduledCharge() {
+    if (!memberId || !isStaff || !scheduledCharge) return;
+    if (!window.confirm("Cancel the scheduled charge and put the items back in the cart?")) return;
+    setScheduleLoading(true);
+    try {
+      const res = await fetch(`/api/cart/schedule-charge?member_id=${encodeURIComponent(memberId)}`, {
+        method: "DELETE",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(typeof data.error === "string" ? data.error : "Could not cancel.");
+        return;
+      }
+      await reloadCartData();
+    } finally {
+      setScheduleLoading(false);
+    }
+  }
+
+  async function retryScheduledChargeNow() {
+    if (!memberId || !isStaff || !scheduledCharge) return;
+    setScheduleLoading(true);
+    try {
+      const res = await fetch("/api/cart/schedule-charge/retry", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ member_id: memberId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(typeof data.error === "string" ? data.error : "Retry failed.");
+        await reloadCartData();
+        return;
+      }
+      window.location.href = `/members/${id}/cart/success?source=scheduled`;
+    } finally {
+      setScheduleLoading(false);
+    }
+  }
+
   const subtotal = items.reduce((sum, it) => {
     const p = parseFloat(String(it.price).replace(/[^0-9.-]/g, "")) || 0;
     return sum + (Number.isNaN(p) ? 0 : p) * it.quantity;
@@ -644,6 +816,34 @@ export default function MemberCartPage() {
     }
   }
 
+  async function saveMembershipStartDate(it: CartItem, forceValue?: string | null) {
+    if (!memberId || !isStaff) return;
+    const raw =
+      forceValue !== undefined
+        ? forceValue
+        : (membershipStartDrafts[it.id] ?? "").trim();
+    setMembershipStartSavingId(it.id);
+    try {
+      const res = await fetch(`/api/cart/items/${it.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          member_id: memberId,
+          membership_start_date: raw || null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(typeof data.error === "string" ? data.error : "Could not save start date.");
+        return;
+      }
+      const cartData = await fetch(cartDataUrl).then((r) => r.json());
+      setItems(cartData.items ?? []);
+    } finally {
+      setMembershipStartSavingId(null);
+    }
+  }
+
   async function clearStaffLinePrice(it: CartItem) {
     if (!memberId) return;
     setStaffPriceSavingId(it.id);
@@ -680,10 +880,55 @@ export default function MemberCartPage() {
       <h1 className="text-2xl font-bold text-stone-800 mb-1">Cart for {memberName}</h1>
       <p className="text-stone-500 text-sm mb-3">
         Add membership, class, or PT session. Click Pay with Stripe to complete payment; when payment succeeds, we’ll activate the membership and notify Kisi for door access.
+        {isStaff && (
+          <>
+            {" "}
+            To charge on a future date without taking payment today, use <strong className="font-medium text-stone-600">Schedule charge</strong> (card on file or save a new card first).
+          </>
+        )}
       </p>
       <p className="text-stone-600 text-xs leading-relaxed mb-6 p-3 rounded-lg bg-stone-50 border border-stone-100 max-w-xl">
         {EMAIL_POLICY_MESSAGE}
       </p>
+
+      {scheduledCharge && (
+        <div className="mb-6 p-4 rounded-xl border-2 border-violet-300 bg-violet-50/90 text-sm">
+          <p className="font-semibold text-violet-950">
+            Scheduled charge — {scheduledCharge.item_count} item{scheduledCharge.item_count !== 1 ? "s" : ""} on{" "}
+            {formatDateForDisplay(scheduledCharge.charge_on_ymd, tz) || scheduledCharge.charge_on_ymd}
+          </p>
+          <p className="text-stone-700 mt-1">
+            Status: <span className="font-medium">{scheduledCharge.status.replace(/_/g, " ")}</span>
+            {scheduledCharge.status === "awaiting_card" && " — finish Save card via Stripe below or from the member profile."}
+            {scheduledCharge.last_error && (
+              <span className="block text-red-700 mt-1">Last error: {scheduledCharge.last_error}</span>
+            )}
+          </p>
+          {isStaff && (
+            <div className="flex flex-wrap gap-2 mt-3">
+              {(scheduledCharge.status === "failed" ||
+                (scheduledCharge.charge_on_ymd <= todayInAppTz(tz) && scheduledCharge.status === "pending")) && (
+                <button
+                  type="button"
+                  onClick={retryScheduledChargeNow}
+                  disabled={scheduleLoading}
+                  className="px-3 py-1.5 rounded-lg bg-violet-800 text-white text-sm hover:bg-violet-900 disabled:opacity-50"
+                >
+                  {scheduleLoading ? "…" : "Retry charge now"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={cancelScheduledCharge}
+                disabled={scheduleLoading}
+                className="px-3 py-1.5 rounded-lg border border-stone-400 text-stone-800 text-sm hover:bg-white disabled:opacity-50"
+              >
+                Cancel & restore cart
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="mb-6 flex flex-wrap gap-2">
         <button
@@ -974,6 +1219,12 @@ export default function MemberCartPage() {
                         List: {formatPrice(it.catalog_price)}
                       </span>
                     )}
+                    {it.product_type === "membership_plan" && it.membership_start_date && (
+                      <span className="block text-xs text-brand-700 mt-0.5">
+                        Starts {formatDateForDisplay(it.membership_start_date, tz)}
+                        {it.membership_start_date > todayInAppTz(tz) ? " · door access from that day" : ""}
+                      </span>
+                    )}
                   </span>
                   <div className="flex items-center gap-1 shrink-0">
                     {it.product_type === "class_occurrence" && isOwnCart && classCredits >= 1 && (
@@ -1014,6 +1265,47 @@ export default function MemberCartPage() {
                       >
                         {giftSavingId === it.id ? "Saving…" : "Save"}
                       </button>
+                    </div>
+                  </div>
+                )}
+                {isStaff && it.product_type === "membership_plan" && (
+                  <div className="rounded-lg border border-sky-200 bg-sky-50/80 p-3 text-sm">
+                    <p className="text-xs font-medium text-sky-900 mb-1">Membership starts on (optional)</p>
+                    <p className="text-xs text-stone-600 mb-2">
+                      If they should not be charged until a future date, set the start date and{" "}
+                      <strong className="font-medium">do not checkout until that day</strong>. After payment, door access begins on the start date (gym time zone).
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="date"
+                        className="px-2 py-1.5 rounded border border-stone-200 bg-white"
+                        min={todayInAppTz(tz)}
+                        value={membershipStartDrafts[it.id] ?? ""}
+                        onChange={(e) =>
+                          setMembershipStartDrafts((s) => ({ ...s, [it.id]: e.target.value }))
+                        }
+                      />
+                      <button
+                        type="button"
+                        onClick={() => saveMembershipStartDate(it)}
+                        disabled={membershipStartSavingId === it.id}
+                        className="px-3 py-1.5 rounded-lg bg-sky-800 text-white text-sm hover:bg-sky-900 disabled:opacity-50"
+                      >
+                        {membershipStartSavingId === it.id ? "Saving…" : "Save start date"}
+                      </button>
+                      {(membershipStartDrafts[it.id] || it.membership_start_date) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMembershipStartDrafts((s) => ({ ...s, [it.id]: "" }));
+                            void saveMembershipStartDate(it, null);
+                          }}
+                          disabled={membershipStartSavingId === it.id}
+                          className="px-3 py-1.5 rounded-lg border border-stone-300 text-stone-700 text-sm hover:bg-white disabled:opacity-50"
+                        >
+                          Clear
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1225,6 +1517,38 @@ export default function MemberCartPage() {
                   <span className="text-xl font-bold text-stone-900 pt-0.5">Pay for One Month</span>
                 </label>
               </div>
+            </div>
+          )}
+          {isStaff && !scheduledCharge && (
+            <div className="mb-6 p-5 rounded-xl border-2 border-violet-200 bg-violet-50/50">
+              <h2 className="text-lg font-bold text-violet-950 mb-1">Schedule charge (pay later)</h2>
+              <p className="text-stone-600 text-sm mb-3">
+                Snapshot this whole cart and charge on the date below — uses their <strong className="font-medium">card on file</strong>, or
+                Stripe Checkout to <strong className="font-medium">save a new card</strong> first (no charge today). Failed charges show in Money owed; retry from the banner above.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <span className="text-stone-700">Charge on</span>
+                  <input
+                    type="date"
+                    className="px-2 py-1.5 rounded border border-stone-200 bg-white"
+                    min={todayInAppTz(tz)}
+                    value={scheduleChargeOnDraft}
+                    onChange={(e) => setScheduleChargeOnDraft(e.target.value)}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={scheduleWholeCartCharge}
+                  disabled={scheduleLoading || checkoutLoading}
+                  className="px-4 py-2 rounded-lg bg-violet-700 text-white font-medium hover:bg-violet-800 disabled:opacity-50"
+                >
+                  {scheduleLoading ? "Scheduling…" : hasSavedCard ? "Schedule with card on file" : "Schedule & save card in Stripe"}
+                </button>
+              </div>
+              <p className="text-xs text-stone-500 mt-2">
+                Set membership start dates on lines above so access and billing align. Pay today? Use the buttons below instead.
+              </p>
             </div>
           )}
           <div className="flex flex-wrap gap-3 items-center">

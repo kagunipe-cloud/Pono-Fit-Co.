@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, ensureMembersStripeColumn } from "@/lib/db";
 import { stripeCustomerIdForApi } from "@/lib/stripe-customer";
+import { ensureScheduledCartChargesTable } from "@/lib/scheduled-cart-charge";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +66,18 @@ export async function POST(
     }
 
     db.prepare("UPDATE members SET stripe_customer_id = ? WHERE member_id = ?").run(customerIdApi, memberId);
+
+    const scheduledIdRaw = session.metadata?.scheduled_cart_charge_id;
+    if (scheduledIdRaw) {
+      const scheduledId = parseInt(String(scheduledIdRaw), 10);
+      if (!Number.isNaN(scheduledId)) {
+        ensureScheduledCartChargesTable(db);
+        db.prepare(
+          `UPDATE scheduled_cart_charges SET status = 'pending', last_error = NULL WHERE id = ? AND member_id = ? AND status = 'awaiting_card'`
+        ).run(scheduledId, memberId);
+      }
+    }
+
     db.close();
     return NextResponse.json({ ok: true });
   } catch (err) {

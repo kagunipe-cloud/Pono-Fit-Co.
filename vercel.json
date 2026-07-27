@@ -6,6 +6,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cron/process-scheduled-cart-charges",
+      "schedule": "0 12 * * *"
+    },
+    {
       "path": "/api/cron/renew-subscriptions",
       "schedule": "0 12 * * *"
     },

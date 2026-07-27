@@ -53,6 +53,26 @@ export async function register() {
     }
   };
 
+  const runScheduledCart = async () => {
+    try {
+      const res = await fetch(`${base}/api/cron/process-scheduled-cart-charges`, {
+        headers: secret ? { "x-cron-secret": secret } : {},
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.error("[process-scheduled-cart-charges]", res.status, data);
+        return false;
+      }
+      if ((data.completed as number) > 0 || (data.failed as number) > 0) {
+        console.log("[process-scheduled-cart-charges]", data);
+      }
+      return true;
+    } catch (err) {
+      console.error("[process-scheduled-cart-charges]", err);
+      return false;
+    }
+  };
+
   /** 2:00 / 2:10 AM in the configured gym timezone (not the host’s default UTC). */
   cron.schedule(
     "0 2 * * *",
@@ -64,6 +84,7 @@ export async function register() {
           await runRenewal();
         }, 2 * 60 * 1000);
       }
+      await runScheduledCart();
     },
     gymTzOpts
   );

@@ -2,6 +2,7 @@ import type { getDb } from "./db";
 import { expiryDateSortableSql } from "./db";
 import { normalizeDateToYMD, todayInAppTz } from "./app-timezone";
 import { ensureMembersPassActivationDayColumn } from "./day-pass-credits";
+import { calendarMembershipDoorAccessOnDay } from "./cart-membership-start";
 
 /**
  * Same rules as GET /api/member/me `hasAccess`: at least one Active subscription
@@ -20,7 +21,7 @@ export function memberHasDoorAccessToday(
       return String(s.pass_activation_day ?? "").trim() === todayYmd;
     }
     if (String(s.subscription_pause_started ?? "").trim() !== "") return false;
-    return String(s.expiry_date ?? "") >= todayYmd;
+    return calendarMembershipDoorAccessOnDay(s, todayYmd);
   });
 }
 
@@ -42,13 +43,14 @@ export function listMemberIdsWithDoorAccessToday(db: ReturnType<typeof getDb>, t
                 s.pass_credits_remaining IS NULL
                 AND TRIM(COALESCE(s.subscription_pause_started, '')) = ''
                 AND TRIM(COALESCE(s.expiry_date, '')) != ''
+                AND (TRIM(COALESCE(s.start_date, '')) = '' OR s.start_date <= ?)
                 AND s.expiry_date >= ?
               )
             )
           )
        ORDER BY m.member_id`
     )
-    .all(todayYmd, todayYmd, todayYmd) as { member_id: string }[];
+    .all(todayYmd, todayYmd, todayYmd, todayYmd) as { member_id: string }[];
   return rows.map((r) => r.member_id).filter((id) => id != null && String(id).trim() !== "");
 }
 
@@ -114,10 +116,11 @@ export function getSubscriptionDoorAccessValidUntil(
       `SELECT expiry_date FROM subscriptions
        WHERE member_id = ? AND status = 'Active' AND pass_credits_remaining IS NULL
          AND TRIM(COALESCE(subscription_pause_started, '')) = ''
+         AND (TRIM(COALESCE(start_date, '')) = '' OR start_date <= ?)
          AND expiry_date >= ?
        ORDER BY ${expiryDateSortableSql("expiry_date")} DESC LIMIT 1`
     )
-    .get(memberId, today) as { expiry_date: string } | undefined;
+    .get(memberId, today, today) as { expiry_date: string } | undefined;
   if (!other?.expiry_date?.trim()) return null;
   const ymd = normalizeDateToYMD(other.expiry_date.trim());
   if (ymd) {
@@ -147,10 +150,11 @@ export function kisiDayPassValidUntilIfUnlockShouldSync(
          AND pass_credits_remaining IS NULL
          AND trim(COALESCE(subscription_pause_started, '')) = ''
          AND trim(COALESCE(expiry_date, '')) != ''
+         AND (trim(COALESCE(start_date, '')) = '' OR start_date <= ?)
          AND expiry_date >= ?
        LIMIT 1`
     )
-    .get(memberId, today);
+    .get(memberId, today, today);
   if (hasMonthlyDoor) return null;
 
   const memberAct = db
@@ -190,9 +194,10 @@ export function kisiMonthlyExpiryDayValidUntilIfUnlockShouldSync(
        WHERE member_id = ? AND status = 'Active' AND pass_credits_remaining IS NULL
          AND TRIM(COALESCE(subscription_pause_started, '')) = ''
          AND expiry_date = ?
+         AND (TRIM(COALESCE(start_date, '')) = '' OR start_date <= ?)
        LIMIT 1`
     )
-    .get(memberId, today);
+    .get(memberId, today, today);
   if (!row) return null;
   return endOfCalendarDayInTimeZone(today, tz);
 }

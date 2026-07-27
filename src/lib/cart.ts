@@ -53,4 +53,9 @@ export function ensureCartLinePriceOverrides(db: ReturnType<typeof getDb>) {
   } catch {
     /* already exists */
   }
+  try {
+    db.exec("ALTER TABLE cart_items ADD COLUMN membership_start_date TEXT");
+  } catch {
+    /* already exists */
+  }
 }

@@ -10,6 +10,11 @@ import { hasBillableStripeCustomer } from "../../../../../lib/stripe-customer";
 import { ensurePTSlotTables } from "../../../../../lib/pt-slots";
 import { ensureDiscountsTable } from "../../../../../lib/discounts";
 import { ensureRetailProductsTable, getRetailLineMeta } from "../../../../../lib/retail-products";
+import {
+  ensureScheduledCartChargesTable,
+  getActiveScheduledChargeForMember,
+  parseCartSnapshot,
+} from "../../../../../lib/scheduled-cart-charge";
 
 export const dynamic = "force-dynamic";
 
@@ -64,6 +69,7 @@ export async function GET(
       price_override_months?: number | null;
       price_override_indefinite?: number | null;
       gift_recipient_email?: string | null;
+      membership_start_date?: string | null;
     }[];
     const items: {
       id: number;
@@ -78,6 +84,7 @@ export async function GET(
       price_override_indefinite?: boolean;
       plan_unit?: string;
       gift_recipient_email?: string | null;
+      membership_start_date?: string | null;
     }[] = [];
     for (const it of rawItems) {
       let name = "—";
@@ -131,6 +138,7 @@ export async function GET(
         price_override_months: it.price_override_months ?? null,
         price_override_indefinite: (it.price_override_indefinite ?? 0) === 1,
         gift_recipient_email: it.gift_recipient_email ?? null,
+        membership_start_date: it.membership_start_date ?? null,
         ...(plan_unit != null ? { plan_unit } : {}),
       });
     }
@@ -203,6 +211,26 @@ export async function GET(
         }[];
     }
 
+    ensureScheduledCartChargesTable(db);
+    const scheduledRow = getActiveScheduledChargeForMember(db, member.member_id);
+    let scheduled_charge: {
+      id: number;
+      charge_on_ymd: string;
+      status: string;
+      item_count: number;
+      last_error: string | null;
+    } | null = null;
+    if (scheduledRow) {
+      const snap = parseCartSnapshot(scheduledRow.cart_snapshot_json);
+      scheduled_charge = {
+        id: scheduledRow.id,
+        charge_on_ymd: scheduledRow.charge_on_ymd,
+        status: scheduledRow.status,
+        item_count: snap.length,
+        last_error: scheduledRow.last_error ?? null,
+      };
+    }
+
     db.close();
 
     const memberName = [member.first_name, member.last_name].filter(Boolean).join(" ") || "Member";
@@ -232,6 +260,7 @@ export async function GET(
             applies_to_renewals: discount.applies_to_renewals,
           }
         : null,
+      scheduled_charge,
     });
   } catch (err) {
     console.error(err);

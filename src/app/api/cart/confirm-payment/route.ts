@@ -35,6 +35,7 @@ import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureRetailProductsTable, assertRetailStockForCart, recordRetailInventoryMovement, ensureSaleRetailLinesTable, getRetailLineMeta, getMemberRetailAllowPurchaseWhenOutOfStock } from "../../../../lib/retail-products";
 import { ensureTrainerClient, getTrainerMemberIdByDisplayName } from "../../../../lib/trainer-clients";
 import { formatInAppTz, formatDateTimeInAppTz, todayInAppTz, formatDateForStorage, formatDateForDisplay } from "../../../../lib/app-timezone";
+import { normalizeMembershipStartDateYmd, ymdToLocalNoonDate } from "../../../../lib/cart-membership-start";
 import { formatPrice } from "../../../../lib/format";
 import { computeCcFee } from "../../../../lib/cc-fees";
 import { getMemberIdFromSession } from "../../../../lib/session";
@@ -140,8 +141,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "member_id required" }, { status: 400 });
     }
     const sessionMemberId = await getMemberIdFromSession();
-    const isStaff = !!(await getTrainerMemberId(request));
-    if (sessionMemberId !== member_id && !isStaff) {
+    const cronSecret = process.env.CRON_SECRET?.trim();
+    const cronOk =
+      !!cronSecret &&
+      (request.headers.get("x-cron-secret") === cronSecret ||
+        request.headers.get("authorization") === `Bearer ${cronSecret}`);
+    const isStaff = cronOk || !!(await getTrainerMemberId(request));
+    if (!cronOk && sessionMemberId !== member_id && !isStaff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -218,6 +224,7 @@ export async function POST(request: NextRequest) {
       price_override_months?: number | null;
       price_override_indefinite?: number | null;
       gift_recipient_email?: string | null;
+      membership_start_date?: string | null;
     }[];
     if (items.length === 0) {
       db.close();
@@ -286,6 +293,8 @@ export async function POST(request: NextRequest) {
     let purchasedDayPassPack = false;
     /** True when cart activates a gym membership/sub (not gift, pass pack, retail, PT, etc.). */
     let purchasedMembershipWelcome = false;
+    /** True when a membership was purchased with a future start (door access begins that day). */
+    let purchasedDeferredStartMembership = false;
     db.exec("BEGIN TRANSACTION");
     try {
       assertRetailStockForCart(db, cart.id, { skipRetailStock: allowMemberRetailOversell });
@@ -338,10 +347,23 @@ export async function POST(request: NextRequest) {
             if (grantsDoorAccess) {
               purchasedMembershipWelcome = true;
             }
-            const start_date = new Date();
+            const customStartYmd = normalizeMembershipStartDateYmd(it.membership_start_date, tz);
+            const start_date = customStartYmd ? ymdToLocalNoonDate(customStartYmd) : new Date();
+            const startStr = customStartYmd ?? formatDateForStorage(start_date, tz);
             const expiry_date = addDuration(start_date, plan.length || "1", plan.unit || "Month");
-            const startStr = formatDateForStorage(start_date, tz);
             const expiryStr = formatDateForStorage(expiry_date, tz);
+            const todayYmd = todayInAppTz(tz);
+            if (customStartYmd && customStartYmd > todayYmd) {
+              purchasedDeferredStartMembership = true;
+              const idx = emailLineItems.length - 1;
+              if (idx >= 0) {
+                const line = emailLineItems[idx]!;
+                emailLineItems[idx] = {
+                  ...line,
+                  name: `${line.name} (starts ${formatDateForDisplay(customStartYmd, tz) || customStartYmd})`,
+                };
+              }
+            }
             const daysRemaining = Math.ceil((expiry_date.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
             const sub_id = randomUUID().slice(0, 8);
             ensureSubscriptionRenewalPromoColumns(db);
@@ -378,7 +400,9 @@ export async function POST(request: NextRequest) {
             );
             if (grantsDoorAccess) {
               db.prepare("UPDATE members SET exp_next_payment_date = ? WHERE member_id = ?").run(expiryStr, member_id);
-              kisiGrants.push({ expiry_ymd: expiryStr });
+              if (!customStartYmd || customStartYmd <= todayYmd) {
+                kisiGrants.push({ expiry_ymd: expiryStr });
+              }
             }
           }
         } else if (it.product_type === "pt_session") {
@@ -807,8 +831,9 @@ export async function POST(request: NextRequest) {
           confirmMessage += " Your recurring membership was also set up.";
         }
       } else if (waiver.shouldGrantKisi) {
-        confirmMessage =
-          "Payment confirmed. Membership/bookings created. Kisi notified for door access (if configured).";
+        confirmMessage = purchasedDeferredStartMembership
+          ? "Payment confirmed. Membership/bookings created. Door access starts on the membership start date you set."
+          : "Payment confirmed. Membership/bookings created. Kisi notified for door access (if configured).";
       } else {
         confirmMessage = "Payment confirmed. Sign the liability waiver in the app to activate door access.";
       }

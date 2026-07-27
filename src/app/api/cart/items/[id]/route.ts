@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "../../../../../lib/db";
+import { getDb, getAppTimezone } from "../../../../../lib/db";
 import { ensureCartTables } from "../../../../../lib/cart";
 import { getTrainerMemberId } from "../../../../../lib/admin";
 import { getMemberIdFromSession } from "../../../../../lib/session";
 import { normalizeUnitPriceOverrideInput } from "../../../../../lib/cart-line-prices";
+import { normalizeMembershipStartDateYmd } from "../../../../../lib/cart-membership-start";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +60,59 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     body.gift_recipient_email !== undefined &&
     body.unit_price_override === undefined &&
     body.price_override_months === undefined &&
-    body.price_override_indefinite === undefined;
+    body.price_override_indefinite === undefined &&
+    body.membership_start_date === undefined;
+
+  const membershipStartOnly =
+    body.membership_start_date !== undefined &&
+    body.unit_price_override === undefined &&
+    body.price_override_months === undefined &&
+    body.price_override_indefinite === undefined &&
+    body.gift_recipient_email === undefined;
+
+  if (membershipStartOnly) {
+    if (!(await getTrainerMemberId(request))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const dbStart = getDb();
+    ensureCartTables(dbStart);
+    const tz = getAppTimezone(dbStart);
+    const startRow = dbStart
+      .prepare(
+        `SELECT ci.id, ci.product_type
+         FROM cart_items ci
+         JOIN cart c ON c.id = ci.cart_id
+         WHERE ci.id = ? AND c.member_id = ?`
+      )
+      .get(numericId, member_id) as { id: number; product_type: string } | undefined;
+
+    if (!startRow) {
+      dbStart.close();
+      return NextResponse.json({ error: "Cart item not found" }, { status: 404 });
+    }
+    if (startRow.product_type !== "membership_plan") {
+      dbStart.close();
+      return NextResponse.json({ error: "Membership start date is only for membership lines" }, { status: 400 });
+    }
+
+    const raw = body.membership_start_date;
+    let val: string | null = null;
+    if (raw !== null && raw !== "") {
+      val = normalizeMembershipStartDateYmd(raw, tz);
+      if (!val) {
+        dbStart.close();
+        return NextResponse.json(
+          { error: "membership_start_date must be today or a future date (YYYY-MM-DD)" },
+          { status: 400 }
+        );
+      }
+    }
+    dbStart.prepare("UPDATE cart_items SET membership_start_date = ? WHERE id = ?").run(val, numericId);
+    const updatedStart = dbStart.prepare("SELECT * FROM cart_items WHERE id = ?").get(numericId);
+    dbStart.close();
+    return NextResponse.json(updatedStart);
+  }
 
   if (giftOnly) {
     const sessionMemberId = await getMemberIdFromSession();
