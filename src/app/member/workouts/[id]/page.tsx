@@ -15,6 +15,8 @@ import MemberRecipientLookup, {
   resolveMemberRecipient,
   type MemberLookupHit,
 } from "@/components/member/MemberRecipientLookup";
+import { formatDateForDisplay } from "@/lib/app-timezone";
+import { useAppTimezone } from "@/lib/settings-context";
 
 type LiftDropRow = { reps: string; weight: string; note?: string };
 type LiftSetRow = { reps: string; weight: string; drops?: LiftDropRow[]; note?: string };
@@ -113,7 +115,29 @@ type PRInfoProps = {
   forMemberId?: string | null;
 };
 
+function prHistoryTooltip(
+  data: { pr_reps: number | null; last_session_reps: number | null; last_session_date: string | null },
+  tz: string
+): string {
+  const lines: string[] = [];
+  if (data.pr_reps != null) {
+    lines.push(`Best at this weight: ${data.pr_reps} reps`);
+  }
+  if (data.last_session_reps != null) {
+    const when = data.last_session_date
+      ? formatDateForDisplay(data.last_session_date, tz) || data.last_session_date
+      : null;
+    lines.push(
+      when
+        ? `Last session: ${data.last_session_reps} reps on ${when}`
+        : `Last session: ${data.last_session_reps} reps`
+    );
+  }
+  return lines.join("\n");
+}
+
 function PRInfo({ exerciseId, exerciseName, weight, excludeWorkoutId, forMemberId }: PRInfoProps) {
+  const tz = useAppTimezone();
   const [data, setData] = useState<{ pr_reps: number | null; last_session_reps: number | null; last_session_date: string | null } | null>(null);
   const [loading, setLoading] = useState(false);
   const weightNum = parseFloat(weight);
@@ -146,8 +170,14 @@ function PRInfo({ exerciseId, exerciseName, weight, excludeWorkoutId, forMemberI
   if (data?.pr_reps != null) parts.push(`PR: ${data.pr_reps} reps`);
   if (data?.last_session_reps != null) parts.push(`Last: ${data.last_session_reps} reps`);
   if (parts.length === 0) return null;
+  const tooltip = data ? prHistoryTooltip(data, tz) : "";
   return (
-    <span className="text-xs text-brand-600 font-medium min-w-0 max-w-full break-words">{parts.join(" · ")}</span>
+    <span
+      className="text-xs text-brand-600 font-medium min-w-0 max-w-full break-words cursor-help underline decoration-dotted decoration-brand-400/50 underline-offset-2"
+      title={tooltip || undefined}
+    >
+      {parts.join(" · ")}
+    </span>
   );
 }
 

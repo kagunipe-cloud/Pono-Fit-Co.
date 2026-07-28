@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatDateForDisplay } from "@/lib/app-timezone";
+import { useAppTimezone } from "@/lib/settings-context";
 
 type PrData = { pr_reps: number | null; last_session_reps: number | null; last_session_date: string | null };
 
@@ -33,6 +35,7 @@ export function LiftSetPrPercent({
   forMemberId,
   showPineapple = true,
 }: LiftSetPrPercentProps) {
+  const tz = useAppTimezone();
   const [data, setData] = useState<PrData | null>(null);
   const [loading, setLoading] = useState(false);
   const weightNum = parseFloat(weightStr);
@@ -75,10 +78,21 @@ export function LiftSetPrPercent({
   const isPr = pr == null ? repsNum > 0 : repsNum > pr;
   const pct = pr != null && pr > 0 ? Math.round((repsNum / pr) * 100) : 100;
 
+  let percentTitle: string;
+  if (pr != null && pr > 0) {
+    percentTitle = `Prior best at this weight: ${pr} reps`;
+    if (data.last_session_reps != null && data.last_session_date) {
+      const when = formatDateForDisplay(data.last_session_date, tz) || data.last_session_date;
+      percentTitle += `\nLast session: ${data.last_session_reps} reps on ${when}`;
+    }
+  } else {
+    percentTitle = "First reps logged at this weight";
+  }
+
   return (
     <span
-      className="inline-flex items-center gap-1 text-xs min-w-0 flex-wrap tabular-nums"
-      title={pr != null && pr > 0 ? `Prior best at this weight: ${pr} reps` : "First reps logged at this weight"}
+      className="inline-flex items-center gap-1 text-xs min-w-0 flex-wrap tabular-nums cursor-help"
+      title={percentTitle}
     >
       {showPineapple && isPr && <span aria-hidden>🍍</span>}
       <span className={isPr ? "text-brand-700 font-semibold" : "text-stone-600"}>{pct}% of PR</span>
