@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "../../../../lib/db";
 import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
+import { ensureClassesSessionKindColumns } from "../../../../lib/small-group-pt-booking";
 
 export const dynamic = "force-dynamic";
 
@@ -17,14 +18,15 @@ export async function GET(request: NextRequest) {
 
     const db = getDb();
     ensureRecurringClassesTables(db);
+    ensureClassesSessionKindColumns(db);
     const rows = db.prepare(`
       SELECT o.id, o.class_id, o.recurring_class_id, o.occurrence_date, o.occurrence_time, o.capacity,
              COALESCE(c.class_name, r.name) AS class_name,
              COALESCE(c.instructor, r.instructor) AS instructor,
              COALESCE(c.price, '0') AS price,
              COALESCE(c.duration_minutes, r.duration_minutes, 60) AS duration_minutes,
-             COALESCE(r.session_kind, 'standard') AS session_kind,
-             r.flat_session_price AS flat_session_price,
+             COALESCE(c.session_kind, r.session_kind, 'standard') AS session_kind,
+             COALESCE(NULLIF(TRIM(c.flat_session_price), ''), r.flat_session_price) AS flat_session_price,
              (SELECT COUNT(*) FROM occurrence_bookings b WHERE b.class_occurrence_id = o.id) AS booked_count
       FROM class_occurrences o
       LEFT JOIN classes c ON c.id = o.class_id

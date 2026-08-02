@@ -3,7 +3,13 @@
 import { Suspense, useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { OPEN_GROUP_DEFAULT_FLAT_PRICE, OPEN_GROUP_MAX_PARTICIPANTS } from "@/lib/open-group-pt";
+import {
+  OPEN_GROUP_HOURLY_RATE,
+  OPEN_GROUP_MAX_PARTICIPANTS,
+  smallGroupPtPriceSummary,
+  type SmallGroupPtHours,
+} from "@/lib/open-group-pt";
+import { SameDaySchedulingNotice } from "@/components/SameDaySchedulingNotice";
 
 function formatTime(minutes: number): string {
   const h = Math.floor(minutes / 60);
@@ -44,6 +50,7 @@ function MemberBookPTContent() {
   const [trainers, setTrainers] = useState<TrainerOption[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [slotBookingKind, setSlotBookingKind] = useState<SlotBookingKind>("pt");
+  const [smallGroupHours, setSmallGroupHours] = useState<SmallGroupPtHours>(1);
   const [slotBookingInProgress, setSlotBookingInProgress] = useState(false);
   const [slotAddToCartInProgress, setSlotAddToCartInProgress] = useState(false);
   const [smallGroupReserveInProgress, setSmallGroupReserveInProgress] = useState(false);
@@ -103,23 +110,33 @@ function MemberBookPTContent() {
 
   const [slotFree, setSlotFree] = useState<boolean | null>(null);
   useEffect(() => {
-    if (!slotFromSchedule || !highlightDate || !highlightTime || !slotProduct) {
+    if (!slotFromSchedule || !highlightDate || !highlightTime) {
       setSlotFree(null);
       return;
     }
     const start_time = normalizeTimeToHHmm(highlightTime);
+    const duration_minutes =
+      slotBookingKind === "small_group_pt"
+        ? smallGroupHours * 60
+        : slotProduct?.duration_minutes;
+    if (!duration_minutes) {
+      setSlotFree(null);
+      return;
+    }
     const params = new URLSearchParams({
       date: highlightDate,
       time: start_time,
-      duration_minutes: String(slotProduct.duration_minutes),
-      pt_session_id: String(slotProduct.id),
+      duration_minutes: String(duration_minutes),
     });
+    if (slotBookingKind === "pt" && slotProduct) {
+      params.set("pt_session_id", String(slotProduct.id));
+    }
     if (selectedTrainerIdFromUrl) params.set("trainer_member_id", selectedTrainerIdFromUrl);
     fetch(`/api/pt-bookings/check-open-slot?${params}`)
       .then((r) => r.json())
       .then((data: { free?: boolean }) => setSlotFree(data.free === true))
       .catch(() => setSlotFree(null));
-  }, [slotFromSchedule, highlightDate, highlightTime, slotProduct, selectedTrainerIdFromUrl]);
+  }, [slotFromSchedule, highlightDate, highlightTime, slotProduct, selectedTrainerIdFromUrl, slotBookingKind, smallGroupHours]);
 
   async function submitSlotWithCredit() {
     if (!slotFromSchedule || !highlightDate || !highlightTime || !memberId || !slotProduct) return;
@@ -171,7 +188,7 @@ function MemberBookPTContent() {
   }
 
   async function reserveSmallGroupPt() {
-    if (!slotFromSchedule || !highlightDate || !highlightTime || !memberId || !slotProduct) return;
+    if (!slotFromSchedule || !highlightDate || !highlightTime || !memberId) return;
     const start_time = normalizeTimeToHHmm(highlightTime);
     setSmallGroupReserveInProgress(true);
     try {
@@ -182,7 +199,8 @@ function MemberBookPTContent() {
         body: JSON.stringify({
           occurrence_date: highlightDate,
           start_time,
-          duration_minutes: slotProduct.duration_minutes,
+          duration_hours: smallGroupHours,
+          duration_minutes: smallGroupHours * 60,
           ...(!Number.isNaN(blockId) ? { trainer_availability_id: blockId } : {}),
           ...(selectedTrainerIdFromUrl ? { trainer_member_id: selectedTrainerIdFromUrl } : {}),
         }),
@@ -258,6 +276,7 @@ function MemberBookPTContent() {
           <p className="text-sm text-stone-600 mb-3">
             {highlightDate} at {slotTimeDisplay}
           </p>
+          <SameDaySchedulingNotice dateYmd={highlightDate} className="mb-4" />
           <fieldset className="mb-4 space-y-2">
             <legend className="text-sm font-medium text-stone-700 mb-1">What do you want to book?</legend>
             <label className="flex items-start gap-2 p-3 rounded-lg border border-stone-200 bg-white cursor-pointer has-[:checked]:border-brand-500 has-[:checked]:bg-brand-50/50">
@@ -284,55 +303,72 @@ function MemberBookPTContent() {
               <span>
                 <span className="font-medium text-stone-800 block">Small-Group PT</span>
                 <span className="text-xs text-stone-500">
-                  Free to reserve · ${OPEN_GROUP_DEFAULT_FLAT_PRICE} total at the gym after · invite up to{" "}
+                  Free to reserve · ${OPEN_GROUP_HOURLY_RATE}/hr at the gym · invite up to{" "}
                   {OPEN_GROUP_MAX_PARTICIPANTS - 1} friends · no cancellation fee
                 </span>
               </span>
             </label>
           </fieldset>
-          <div className="mb-3">
-            <label className="block text-sm font-medium text-stone-700 mb-1">Session length</label>
-            <select
-              value={selectedProductId ?? ""}
-              onChange={(e) => setSelectedProductId(parseInt(e.target.value, 10) || null)}
-              className="w-full max-w-md px-3 py-2 rounded-lg border border-stone-200"
-            >
-              {sessionProducts.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.session_name}
-                  {p.trainer ? ` — ${p.trainer}` : ""} · {p.duration_minutes} min · ${p.price}
-                </option>
-              ))}
-            </select>
-            {slotProduct && (
+          {slotBookingKind === "small_group_pt" ? (
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-stone-700 mb-1">How long</label>
+              <select
+                value={smallGroupHours}
+                onChange={(e) => setSmallGroupHours(Number(e.target.value) === 2 ? 2 : 1)}
+                className="w-full max-w-md px-3 py-2 rounded-lg border border-stone-200"
+              >
+                <option value={1}>1 hour — ${OPEN_GROUP_HOURLY_RATE}</option>
+                <option value={2}>2 hours — ${OPEN_GROUP_HOURLY_RATE * 2}</option>
+              </select>
               <p className="text-xs text-stone-500 mt-1">
-                {slotProduct.duration_minutes} min · blocks this time on the schedule
+                {smallGroupPtPriceSummary(smallGroupHours)} at the gym · blocks {smallGroupHours} hr on the schedule
               </p>
-            )}
-          </div>
-          {slotProduct ? (
-            slotBookingKind === "small_group_pt" ? (
-              <div className="space-y-3">
-                {slotFree === false && (
-                  <p className="text-amber-700 text-sm font-medium">
-                    This time doesn&apos;t have enough space for a {slotProduct.duration_minutes}-min session. Please choose another slot on the{" "}
-                    <Link href="/schedule" className="underline">schedule</Link>.
-                  </p>
-                )}
-                <p className="text-sm text-stone-600 leading-relaxed">
-                  Reserving holds this time on the schedule. You won&apos;t be charged in the app — pay the flat group fee at the gym after your session.
-                  Invite friends from the next screen. Cancel anytime before the session with <strong>no cancellation fee</strong>.
+            </div>
+          ) : (
+            <div className="mb-3">
+              <label className="block text-sm font-medium text-stone-700 mb-1">Session length</label>
+              <select
+                value={selectedProductId ?? ""}
+                onChange={(e) => setSelectedProductId(parseInt(e.target.value, 10) || null)}
+                className="w-full max-w-md px-3 py-2 rounded-lg border border-stone-200"
+              >
+                {sessionProducts.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.session_name}
+                    {p.trainer ? ` — ${p.trainer}` : ""} · {p.duration_minutes} min · ${p.price}
+                  </option>
+                ))}
+              </select>
+              {slotProduct && (
+                <p className="text-xs text-stone-500 mt-1">
+                  {slotProduct.duration_minutes} min · blocks this time on the schedule
                 </p>
-                <button
-                  type="button"
-                  onClick={() => void reserveSmallGroupPt()}
-                  disabled={smallGroupReserveInProgress || slotFree === false}
-                  className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
-                >
-                  {smallGroupReserveInProgress ? "Reserving…" : "Reserve Small-Group PT"}
-                </button>
-              </div>
-            ) : (
+              )}
+            </div>
+          )}
+          {slotBookingKind === "small_group_pt" ? (
+            <div className="space-y-3">
+              {slotFree === false && (
+                <p className="text-amber-700 text-sm font-medium">
+                  This time doesn&apos;t have enough space for a {smallGroupHours}-hour session. Please choose another slot on the{" "}
+                  <Link href="/schedule" className="underline">schedule</Link>.
+                </p>
+              )}
+              <p className="text-sm text-stone-600 leading-relaxed">
+                Reserving holds this time on the schedule. You won&apos;t be charged in the app — pay{" "}
+                {smallGroupPtPriceSummary(smallGroupHours)} at the gym after your session. Invite friends from the next screen.
+                Cancel anytime before the session with <strong>no cancellation fee</strong>.
+              </p>
+              <button
+                type="button"
+                onClick={() => void reserveSmallGroupPt()}
+                disabled={smallGroupReserveInProgress || slotFree === false}
+                className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50"
+              >
+                {smallGroupReserveInProgress ? "Reserving…" : "Reserve Small-Group PT"}
+              </button>
+            </div>
+          ) : slotProduct ? (
               <div className="flex flex-wrap items-center gap-3">
                 <span className="text-sm text-stone-700">
                   {slotProduct.session_name} — ${slotProduct.price}
@@ -360,7 +396,6 @@ function MemberBookPTContent() {
                   {slotAddToCartInProgress ? "Adding…" : `Add to cart ($${slotProduct.price})`}
                 </button>
               </div>
-            )
           ) : (
             <p className="text-sm text-amber-600">
               No bookable PT session type. Members can only book when staff add a <strong>PT session with no date/time</strong> (a template) on the PT Sessions page — e.g. &quot;60 min PT&quot;. <Link href="/schedule" className="underline">Back to schedule</Link> or ask staff to add one.

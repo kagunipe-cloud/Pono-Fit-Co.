@@ -35,6 +35,7 @@ export function createSmallGroupPtOccurrence(
     occurrence_time: string;
     duration_minutes: number;
     trainer_member_id?: string | null;
+    flat_session_price?: string | null;
   }
 ): number {
   ensureRecurringClassesTables(db);
@@ -43,6 +44,7 @@ export function createSmallGroupPtOccurrence(
   const time = opts.occurrence_time.trim().slice(0, 5);
   const cap = OPEN_GROUP_MAX_PARTICIPANTS;
   const product_id = `sgpt-${randomUUID().slice(0, 12)}`;
+  const flatPrice = (opts.flat_session_price ?? "").trim() || OPEN_GROUP_DEFAULT_FLAT_PRICE;
 
   const classResult = db
     .prepare(
@@ -61,7 +63,7 @@ export function createSmallGroupPtOccurrence(
       cap,
       opts.duration_minutes,
       SESSION_KIND_OPEN_GROUP_PT,
-      OPEN_GROUP_DEFAULT_FLAT_PRICE
+      flatPrice
     );
 
   const classId = classResult.lastInsertRowid as number;
@@ -82,6 +84,9 @@ export function assertSmallGroupPtSlotFree(
   duration_minutes: number,
   trainer_member_id?: string | null
 ): void {
+  ensureRecurringClassesTables(db);
+  ensureClassesSessionKindColumns(db);
+
   const startMin = timeToMinutes(start_time);
   if (!isPTBookingSlotFree(db, occurrence_date, startMin, duration_minutes, trainer_member_id ?? null)) {
     throw new Error(

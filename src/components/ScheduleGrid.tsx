@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { formatInAppTz, todayInAppTz, weekStartInAppTz, addDaysToDateStr } from "@/lib/app-timezone";
 import { useAppTimezone, useOpenHours } from "@/lib/settings-context";
 import type { BlockSegment } from "@/lib/pt-availability";
-import { isOpenGroupSessionKind } from "@/lib/open-group-pt";
+import { isOpenGroupSessionKind, OPEN_GROUP_HOURLY_RATE } from "@/lib/open-group-pt";
 
 type Occurrence = {
   id: number;
@@ -799,7 +799,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                               {item.sub && <span className="text-xs text-stone-500 block truncate" title={item.sub}>{item.sub}</span>}
                               {isOpenGroupSessionKind(item.session_kind) ? (
                                 <span className="text-xs text-orange-900 font-medium block">
-                                  ${item.flat_session_price ?? "80"} total at gym · {item.booked_count}/{item.capacity} spots
+                                  ${item.flat_session_price ?? String(OPEN_GROUP_HOURLY_RATE)} at gym{item.flat_session_price ? "" : "/hr"} · {item.booked_count}/{item.capacity} spots
                                 </span>
                               ) : (
                                 <span className="text-xs text-stone-500 block">{item.booked_count}/{item.capacity}</span>

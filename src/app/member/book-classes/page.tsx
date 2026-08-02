@@ -9,6 +9,7 @@ import {
   OPEN_GROUP_DEFAULT_FLAT_PRICE,
 } from "@/lib/open-group-pt";
 import { ClassesDiscontinuedNotice } from "@/components/member/ClassesDiscontinuedNotice";
+import { SameDaySchedulingNotice } from "@/components/SameDaySchedulingNotice";
 
 type Occurrence = {
   id: number;
@@ -156,6 +157,7 @@ function MemberBookClassesContent() {
                     {bookedDisplay}/{o.capacity} booked
                     {!og ? <> · {formatPrice(o.price ?? "0")}</> : null}
                   </p>
+                  <SameDaySchedulingNotice dateYmd={o.occurrence_date} className="mt-2" />
                 </div>
               </div>
 

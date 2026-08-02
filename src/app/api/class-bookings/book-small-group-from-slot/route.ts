@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { getDb, getAppTimezone } from "@/lib/db";
+import { ensureRecurringClassesTables } from "@/lib/recurring-classes";
 import { ensurePTSlotTables } from "@/lib/pt-slots";
 import { getMemberIdFromSession } from "@/lib/session";
 import { getAdminMemberId, getTrainerMemberId } from "@/lib/admin";
 import {
-  OPEN_GROUP_DEFAULT_FLAT_PRICE,
   OPEN_GROUP_MAX_PARTICIPANTS,
   SESSION_KIND_OPEN_GROUP_PT,
   SMALL_GROUP_PT_DISPLAY_NAME,
+  normalizeSmallGroupPtHours,
+  smallGroupPtDurationMinutes,
+  smallGroupPtFlatPriceForHours,
 } from "@/lib/open-group-pt";
 import {
   assertSmallGroupPtSlotFree,
@@ -25,7 +28,7 @@ import { normalizePtDurationMinutes } from "@/lib/pt-slots";
 export const dynamic = "force-dynamic";
 
 /**
- * POST { occurrence_date, start_time, duration_minutes?, trainer_availability_id?, trainer_member_id?, member_id? }
+ * POST { occurrence_date, start_time, duration_hours?, duration_minutes?, trainer_availability_id?, trainer_member_id?, member_id? }
  * Creates a one-off Small-Group PT occurrence at an open schedule time and books the member as organizer.
  * Admin may pass member_id to book on behalf of a member.
  */
@@ -52,7 +55,11 @@ export async function POST(request: NextRequest) {
     }
     const occurrence_date = String(body.occurrence_date ?? "").trim();
     const start_time = String(body.start_time ?? "").trim().slice(0, 5);
-    const duration_minutes = normalizePtDurationMinutes(body.duration_minutes, 60);
+    const duration_hours = normalizeSmallGroupPtHours(
+      body.duration_hours != null ? body.duration_hours : Math.round(normalizePtDurationMinutes(body.duration_minutes, 60) / 60)
+    );
+    const duration_minutes = smallGroupPtDurationMinutes(duration_hours);
+    const flatLabel = smallGroupPtFlatPriceForHours(duration_hours);
     const blockId = parseInt(String(body.trainer_availability_id ?? ""), 10);
     let trainer_member_id = String(body.trainer_member_id ?? "").trim() || null;
 
@@ -67,6 +74,7 @@ export async function POST(request: NextRequest) {
 
     const db = getDb();
     ensurePTSlotTables(db);
+    ensureRecurringClassesTables(db);
 
     if (!Number.isNaN(blockId)) {
       const block = db
@@ -94,6 +102,7 @@ export async function POST(request: NextRequest) {
       occurrence_time: start_time,
       duration_minutes,
       trainer_member_id,
+      flat_session_price: flatLabel,
     });
 
     const token = randomUUID();
@@ -108,7 +117,6 @@ export async function POST(request: NextRequest) {
       throw e;
     }
 
-    const flatLabel = OPEN_GROUP_DEFAULT_FLAT_PRICE;
     try {
       const memberRow = db
         .prepare("SELECT email, first_name, last_name FROM members WHERE member_id = ?")

@@ -3,7 +3,12 @@
 import { Suspense, useEffect, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { OPEN_GROUP_DEFAULT_FLAT_PRICE, OPEN_GROUP_MAX_PARTICIPANTS } from "@/lib/open-group-pt";
+import {
+  OPEN_GROUP_HOURLY_RATE,
+  OPEN_GROUP_MAX_PARTICIPANTS,
+  smallGroupPtPriceSummary,
+  type SmallGroupPtHours,
+} from "@/lib/open-group-pt";
 
 type Member = { member_id: string; first_name: string | null; last_name: string | null; email: string | null };
 type PtSession = { id: number; session_name: string; duration_minutes: number; price: string; trainer: string | null; trainer_member_id?: string | null };
@@ -33,6 +38,7 @@ function AdminBookPTForMemberContent() {
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [selectedTrainerId, setSelectedTrainerId] = useState<string>("");
   const [bookingKind, setBookingKind] = useState<BookingKind>("pt");
+  const [smallGroupHours, setSmallGroupHours] = useState<SmallGroupPtHours>(1);
   const [submitting, setSubmitting] = useState(false);
   const [useCreditSubmitting, setUseCreditSubmitting] = useState(false);
   const [payOnArrivalSubmitting, setPayOnArrivalSubmitting] = useState(false);
@@ -86,7 +92,8 @@ function AdminBookPTForMemberContent() {
       .catch(() => setCredits({}));
   }, [selectedMemberId]);
 
-  const duration = selectedSession?.duration_minutes ?? 60;
+  const duration =
+    bookingKind === "small_group_pt" ? smallGroupHours * 60 : (selectedSession?.duration_minutes ?? 60);
   const hasCredit = (credits[duration] ?? 0) >= 1;
   const ptCreditSummary = Object.entries(credits)
     .filter(([, n]) => n > 0)
@@ -243,6 +250,7 @@ function AdminBookPTForMemberContent() {
           member_id: selectedMemberId,
           occurrence_date: date,
           start_time: startTime,
+          duration_hours: smallGroupHours,
           duration_minutes: duration,
           ...(blockId != null ? { trainer_availability_id: blockId } : {}),
           ...(selectedTrainerId ? { trainer_member_id: selectedTrainerId } : {}),
@@ -341,7 +349,7 @@ function AdminBookPTForMemberContent() {
           <span>
             <span className="font-medium text-stone-800 block">Small-Group PT</span>
             <span className="text-xs text-stone-500">
-              ${OPEN_GROUP_DEFAULT_FLAT_PRICE} total at gym · up to {OPEN_GROUP_MAX_PARTICIPANTS} people · invite link for friends · no cancellation fee
+              ${OPEN_GROUP_HOURLY_RATE}/hr at gym · up to {OPEN_GROUP_MAX_PARTICIPANTS} people · invite link for friends · no cancellation fee
             </span>
           </span>
         </label>
@@ -376,23 +384,37 @@ function AdminBookPTForMemberContent() {
 
         <div>
           <label className="block text-sm font-medium text-stone-700 mb-1">
-            {bookingKind === "small_group_pt" ? "Session length" : "PT session type"}
+            {bookingKind === "small_group_pt" ? "How long" : "PT session type"}
           </label>
-          <select
-            value={selectedSessionId ?? ""}
-            onChange={(e) => setSelectedSessionId(e.target.value ? Number(e.target.value) : null)}
-            className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-white"
-          >
-            <option value="">— Select session —</option>
-            {sessions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.session_name} — {s.duration_minutes} min
-                {bookingKind === "pt" ? ` · $${s.price}` : ""}
-              </option>
-            ))}
-          </select>
-          {bookingKind === "small_group_pt" && (
-            <p className="text-xs text-stone-500 mt-1">Length sets how long the slot is held on the schedule.</p>
+          {bookingKind === "small_group_pt" ? (
+            <>
+              <select
+                value={smallGroupHours}
+                onChange={(e) => setSmallGroupHours(Number(e.target.value) === 2 ? 2 : 1)}
+                className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-white"
+              >
+                <option value={1}>1 hour — ${OPEN_GROUP_HOURLY_RATE}</option>
+                <option value={2}>2 hours — ${OPEN_GROUP_HOURLY_RATE * 2}</option>
+              </select>
+              <p className="text-xs text-stone-500 mt-1">
+                {smallGroupPtPriceSummary(smallGroupHours)} collected at the gym · blocks {smallGroupHours} hr on the schedule.
+              </p>
+            </>
+          ) : (
+            <>
+              <select
+                value={selectedSessionId ?? ""}
+                onChange={(e) => setSelectedSessionId(e.target.value ? Number(e.target.value) : null)}
+                className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-white"
+              >
+                <option value="">— Select session —</option>
+                {sessions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.session_name} — {s.duration_minutes} min · ${s.price}
+                  </option>
+                ))}
+              </select>
+            </>
           )}
         </div>
 
@@ -419,13 +441,14 @@ function AdminBookPTForMemberContent() {
       {bookingKind === "small_group_pt" ? (
         <div className="space-y-3">
           <p className="text-sm text-stone-600 leading-relaxed">
-            Reserves the slot for the organizer. They can copy the invite link to add friends. No app charge — ${OPEN_GROUP_DEFAULT_FLAT_PRICE} flat fee collected at the gym after the session.
+            Reserves the slot for the organizer. They can copy the invite link to add friends. No app charge —{" "}
+            {smallGroupPtPriceSummary(smallGroupHours)} collected at the gym after the session.
           </p>
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
               onClick={() => void handleSmallGroupPt()}
-              disabled={!canSubmitSmallGroup || !selectedSessionId || smallGroupSubmitting}
+              disabled={!canSubmitSmallGroup || smallGroupSubmitting}
               className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50"
             >
               {smallGroupSubmitting ? "Reserving…" : "Reserve Small-Group PT"}
