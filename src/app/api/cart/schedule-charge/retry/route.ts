@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
     todayYmd: today,
     confirmPaymentBaseUrl: requestOrigin(request),
     cronSecret,
+    bypassRetryCadence: true,
   });
   db.close();
 

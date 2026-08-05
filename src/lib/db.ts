@@ -378,6 +378,30 @@ export function ensureSubscriptionPauseStartedColumn(db: ReturnType<typeof getDb
   }
 }
 
+/** Auto card retry cadence for monthly renewal cron (see card-retry-cadence.ts). */
+export function ensureSubscriptionAutoRetryColumns(db: ReturnType<typeof getDb>) {
+  try {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN auto_retry_attempt_count INTEGER DEFAULT 0");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN auto_retry_next_ymd TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN auto_retry_exhausted INTEGER DEFAULT 0");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE subscriptions ADD COLUMN auto_retry_staff_notified INTEGER DEFAULT 0");
+  } catch {
+    /* already exists */
+  }
+}
+
 /** Add waiver columns to members if missing (liability waiver before Kisi access). */
 export function ensureMembersWaiverColumns(db: ReturnType<typeof getDb>) {
   try {

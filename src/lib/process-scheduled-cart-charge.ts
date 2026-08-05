@@ -13,6 +13,14 @@ import {
   clearMemberCartItems,
   type ScheduledCartChargeRow,
 } from "./scheduled-cart-charge";
+import {
+  readScheduledChargeAutoRetryState,
+  recordScheduledChargeAutoRetryFailure,
+  shouldRunAutoCardRetry,
+  sendAutoRetryExhaustedStaffEmail,
+  markScheduledChargeAutoRetryStaffNotified,
+  clearScheduledChargeAutoRetryState,
+} from "./card-retry-cadence";
 import { stripeFailureFieldsFromError } from "./stripe-customer-payment-method";
 import Stripe from "stripe";
 
@@ -38,8 +46,10 @@ export async function processOneScheduledCartCharge(params: {
   todayYmd: string;
   confirmPaymentBaseUrl: string;
   cronSecret: string;
+  /** Staff “retry now” bypasses auto retry cadence and exhausted flag. */
+  bypassRetryCadence?: boolean;
 }): Promise<ProcessScheduledResult> {
-  const { db, row, stripe, stripeSecret, todayYmd, confirmPaymentBaseUrl, cronSecret } = params;
+  const { db, row, stripe, stripeSecret, todayYmd, confirmPaymentBaseUrl, cronSecret, bypassRetryCadence } = params;
 
   if (row.status === "awaiting_card") {
     return { status: "skipped", message: "Awaiting saved payment method" };
@@ -50,8 +60,58 @@ export async function processOneScheduledCartCharge(params: {
   if (row.charge_on_ymd > todayYmd) {
     return { status: "skipped", message: "Not due yet" };
   }
-  if (row.last_attempt_ymd === todayYmd && row.status === "failed") {
+
+  const retryState = readScheduledChargeAutoRetryState(row);
+  if (!bypassRetryCadence && !shouldRunAutoCardRetry(todayYmd, retryState)) {
+    if (retryState.exhausted) {
+      return { status: "skipped", message: "Auto card retry exhausted — flagged in Money owed" };
+    }
+    return { status: "skipped", message: `Next auto card retry scheduled for ${retryState.next_attempt_ymd}` };
+  }
+
+  if (row.last_attempt_ymd === todayYmd && row.status === "failed" && bypassRetryCadence) {
+    /* staff retry same day — allow */
+  } else if (row.last_attempt_ymd === todayYmd && row.status === "failed") {
     return { status: "skipped", message: "Already attempted today" };
+  }
+
+  async function recordScheduledFailure(
+    msg: string,
+    amountCents: number | null,
+    stripeCode: string | null
+  ): Promise<void> {
+    ensurePaymentFailuresTable(db);
+    db.prepare(
+      `INSERT INTO payment_failures (member_id, subscription_id, plan_name, amount_cents, reason, stripe_error_code)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(
+      row.member_id,
+      `scheduled:${row.id}`,
+      `Scheduled cart (${row.charge_on_ymd})`,
+      amountCents,
+      msg,
+      stripeCode
+    );
+    const memberRow = db
+      .prepare("SELECT email, first_name FROM members WHERE member_id = ?")
+      .get(row.member_id) as { email: string | null; first_name: string | null } | undefined;
+    if (!bypassRetryCadence) {
+      const newState = recordScheduledChargeAutoRetryFailure(db, row.id, todayYmd, retryState);
+      if (newState.exhausted && !retryState.staff_notified) {
+        const memberName =
+          [memberRow?.first_name?.trim(), memberRow?.email?.trim()].filter(Boolean).join(" — ") || row.member_id;
+        await sendAutoRetryExhaustedStaffEmail({
+          kind: "scheduled_cart",
+          memberName,
+          memberEmail: memberRow?.email ?? null,
+          memberId: row.member_id,
+          label: `Scheduled cart (${row.charge_on_ymd})`,
+          amountDollars: amountCents != null ? `$${(amountCents / 100).toFixed(2)}` : "—",
+          lastReason: msg,
+        });
+        markScheduledChargeAutoRetryStaffNotified(db, row.id);
+      }
+    }
   }
 
   ensureScheduledCartChargesTable(db);
@@ -81,11 +141,7 @@ export async function processOneScheduledCartCharge(params: {
     db.prepare(
       `UPDATE scheduled_cart_charges SET status = 'failed', last_error = ?, last_attempt_ymd = ? WHERE id = ?`
     ).run(msg, todayYmd, row.id);
-    ensurePaymentFailuresTable(db);
-    db.prepare(
-      `INSERT INTO payment_failures (member_id, subscription_id, plan_name, amount_cents, reason, stripe_error_code)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(row.member_id, `scheduled:${row.id}`, `Scheduled cart (${row.charge_on_ymd})`, null, msg, null);
+    await recordScheduledFailure(msg, null, null);
     return { status: "failed", message: msg };
   }
 
@@ -102,18 +158,7 @@ export async function processOneScheduledCartCharge(params: {
     db.prepare(
       `UPDATE scheduled_cart_charges SET status = 'failed', last_error = ?, last_attempt_ymd = ? WHERE id = ?`
     ).run(msg, todayYmd, row.id);
-    ensurePaymentFailuresTable(db);
-    db.prepare(
-      `INSERT INTO payment_failures (member_id, subscription_id, plan_name, amount_cents, reason, stripe_error_code)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(
-      row.member_id,
-      `scheduled:${row.id}`,
-      `Scheduled cart (${row.charge_on_ymd})`,
-      totals.amountCents,
-      msg,
-      null
-    );
+    await recordScheduledFailure(msg, totals.amountCents, null);
     return { status: "failed", message: msg };
   }
 
@@ -135,18 +180,7 @@ export async function processOneScheduledCartCharge(params: {
     db.prepare(
       `UPDATE scheduled_cart_charges SET status = 'failed', last_error = ?, last_attempt_ymd = ? WHERE id = ?`
     ).run(charge.error, todayYmd, row.id);
-    ensurePaymentFailuresTable(db);
-    db.prepare(
-      `INSERT INTO payment_failures (member_id, subscription_id, plan_name, amount_cents, reason, stripe_error_code)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(
-      row.member_id,
-      `scheduled:${row.id}`,
-      `Scheduled cart (${row.charge_on_ymd})`,
-      totals.amountCents,
-      charge.error,
-      charge.stripe_error_code ?? null
-    );
+    await recordScheduledFailure(charge.error, totals.amountCents, charge.stripe_error_code ?? null);
     return { status: "failed", message: charge.error };
   }
 
@@ -181,6 +215,7 @@ export async function processOneScheduledCartCharge(params: {
       row.member_id,
       `scheduled:${row.id}`
     );
+    clearScheduledChargeAutoRetryState(db, row.id);
     return { status: "completed", payment_intent_id: charge.payment_intent_id };
   } catch (err) {
     const { message: msg } = stripeFailureFieldsFromError(err);

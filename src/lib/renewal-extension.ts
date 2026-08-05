@@ -19,6 +19,7 @@ import { computeRenewalChargePrice } from "./renewal-pricing";
 import { grantAccess as kisiGrantAccess } from "./kisi";
 import { kisiDoorAccessValidUntilForExpiryYmd } from "./pass-access";
 import { ensureWaiverBeforeKisi } from "./waiver";
+import { clearSubscriptionAutoRetryState } from "./card-retry-cadence";
 
 type AppDb = ReturnType<typeof getDb>;
 
@@ -209,6 +210,7 @@ export async function extendSubscriptionAfterRenewal(
       ? String(sub.subscription_id).trim()
       : "";
   clearPaymentFailuresAfterSubscriptionRenewal(db, sub.member_id, failureGroupKey);
+  clearSubscriptionAutoRetryState(db, sub.subscription_id);
 
   const origin = process.env.NEXT_PUBLIC_APP_URL?.trim() || "";
   const waiver = await ensureWaiverBeforeKisi(sub.member_id, {

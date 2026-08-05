@@ -10,6 +10,7 @@ import {
   ensureSubscriptionRenewalDiscountPercentColumn,
   ensureSubscriptionPassPackColumns,
   ensureSubscriptionPauseStartedColumn,
+  ensureSubscriptionAutoRetryColumns,
   WEEKLY_GOALS_BOARD_ACCESS_LEVEL,
 } from "../../../../lib/db";
 import { computeRenewalChargePrice } from "../../../../lib/renewal-pricing";
@@ -24,8 +25,62 @@ import {
   stripeFailureFieldsFromError,
 } from "../../../../lib/stripe-customer-payment-method";
 import Stripe from "stripe";
+import {
+  readSubscriptionAutoRetryState,
+  recordSubscriptionAutoRetryFailure,
+  shouldRunAutoCardRetry,
+  sendAutoRetryExhaustedStaffEmail,
+  markSubscriptionAutoRetryStaffNotified,
+} from "../../../../lib/card-retry-cadence";
 
 export const dynamic = "force-dynamic";
+
+function formatCentsAsDollars(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+type ExpiringSub = {
+  subscription_id: string;
+  member_id: string;
+  plan_name: string;
+  access_level: string | null;
+  auto_retry_attempt_count: number | null;
+  auto_retry_next_ymd: string | null;
+  auto_retry_exhausted: number | null;
+  auto_retry_staff_notified: number | null;
+};
+
+async function recordRenewalChargeFailure(
+  db: ReturnType<typeof getDb>,
+  today: string,
+  sub: ExpiringSub,
+  memberRow: { email: string | null; first_name: string | null } | undefined,
+  insertFailure: { run: (...args: unknown[]) => unknown },
+  amountCents: number,
+  reason: string,
+  stripeCode: string | null,
+  retryState: ReturnType<typeof readSubscriptionAutoRetryState>
+): Promise<void> {
+  insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, reason, stripeCode);
+  const newState = recordSubscriptionAutoRetryFailure(db, sub.subscription_id, today, retryState);
+  if (newState.exhausted && !retryState.staff_notified) {
+    const memberName =
+      [memberRow?.first_name?.trim(), memberRow?.email?.trim()].filter(Boolean).join(" — ") || sub.member_id;
+    await sendAutoRetryExhaustedStaffEmail({
+      kind: "renewal",
+      memberName,
+      memberEmail: memberRow?.email ?? null,
+      memberId: sub.member_id,
+      label: sub.plan_name,
+      amountDollars: formatCentsAsDollars(amountCents),
+      lastReason: reason,
+    });
+    markSubscriptionAutoRetryStaffNotified(db, sub.subscription_id);
+  }
+  if (String(sub.access_level ?? "").trim() !== WEEKLY_GOALS_BOARD_ACCESS_LEVEL) {
+    await revokeKisiForMember(db, sub.member_id);
+  }
+}
 
 function parsePriceToCents(p: string | null): number {
   if (p == null || p === "") return 0;
@@ -64,6 +119,7 @@ export async function GET(request: NextRequest) {
   ensureSubscriptionRenewalDiscountPercentColumn(db);
   ensureSubscriptionPassPackColumns(db);
   ensureSubscriptionPauseStartedColumn(db);
+  ensureSubscriptionAutoRetryColumns(db);
 
   const tz = getAppTimezone(db);
   const today = todayString(tz);
@@ -130,6 +186,7 @@ export async function GET(request: NextRequest) {
            s.promo_renewals_remaining, s.renewal_price_indefinite,
            s.complimentary, s.complimentary_renewals_remaining,
            s.renewal_discount_percent,
+           s.auto_retry_attempt_count, s.auto_retry_next_ymd, s.auto_retry_exhausted, s.auto_retry_staff_notified,
            p.plan_name, p.price as plan_price, p.length, p.unit, p.access_level
     FROM subscriptions s
     JOIN membership_plans p ON p.product_id = s.product_id
@@ -150,6 +207,10 @@ export async function GET(request: NextRequest) {
     complimentary: number | null;
     complimentary_renewals_remaining: number | null;
     renewal_discount_percent: number | null;
+    auto_retry_attempt_count: number | null;
+    auto_retry_next_ymd: string | null;
+    auto_retry_exhausted: number | null;
+    auto_retry_staff_notified: number | null;
     plan_name: string;
     plan_price: string;
     length: string;
@@ -162,20 +223,12 @@ export async function GET(request: NextRequest) {
 
   for (const sub of expiring) {
     const memberRow = db.prepare("SELECT stripe_customer_id, email, first_name, auto_renew FROM members WHERE member_id = ?").get(sub.member_id) as { stripe_customer_id: string | null; email: string | null; first_name: string | null; auto_renew?: number | null } | undefined;
-    if (!memberRow) {
-      const priceStr = computeRenewalChargePrice(sub.plan_price, {
-        sub_price: sub.sub_price,
-        promo_renewals_remaining: sub.promo_renewals_remaining,
-        renewal_price_indefinite: sub.renewal_price_indefinite,
-        renewal_discount_percent: sub.renewal_discount_percent ?? null,
-      });
-      const amountCents = parsePriceToCents(priceStr) * Math.max(1, sub.quantity);
-      results.push({ member_id: sub.member_id, status: "skipped", message: "Member not found" });
-      insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "Member not found", null);
-      continue;
-    }
 
     if ((sub.complimentary ?? 0) === 1) {
+      if (!memberRow) {
+        results.push({ member_id: sub.member_id, status: "skipped", message: "Member not found" });
+        continue;
+      }
       try {
         await extendSubscriptionAfterRenewal(db, tz, sub, memberRow, {
           grandTotal: "0",
@@ -193,6 +246,18 @@ export async function GET(request: NextRequest) {
       continue;
     }
 
+    const retryState = readSubscriptionAutoRetryState(sub);
+    if (!shouldRunAutoCardRetry(today, retryState)) {
+      results.push({
+        member_id: sub.member_id,
+        status: "skipped",
+        message: retryState.exhausted
+          ? "Auto card retry exhausted — flagged in Money owed"
+          : `Next auto card retry scheduled for ${retryState.next_attempt_ymd}`,
+      });
+      continue;
+    }
+
     const priceStr = computeRenewalChargePrice(sub.plan_price, {
       sub_price: sub.sub_price,
       promo_renewals_remaining: sub.promo_renewals_remaining,
@@ -200,22 +265,33 @@ export async function GET(request: NextRequest) {
       renewal_discount_percent: sub.renewal_discount_percent ?? null,
     });
     const amountCents = parsePriceToCents(priceStr) * Math.max(1, sub.quantity);
+
+    if (!memberRow) {
+      results.push({ member_id: sub.member_id, status: "error", message: "Member not found" });
+      await recordRenewalChargeFailure(db, today, sub, undefined, insertFailure, amountCents, "Member not found", null, retryState);
+      continue;
+    }
+
     const stripeCustomerId = stripeCustomerIdForApi(memberRow.stripe_customer_id);
     if (!stripeCustomerId) {
       results.push({ member_id: sub.member_id, status: "error", message: "No saved card" });
-      insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "No Stripe customer", null);
-      if (String(sub.access_level ?? "").trim() !== WEEKLY_GOALS_BOARD_ACCESS_LEVEL) {
-        await revokeKisiForMember(db, sub.member_id);
-      }
+      await recordRenewalChargeFailure(
+        db,
+        today,
+        sub,
+        memberRow,
+        insertFailure,
+        amountCents,
+        "No Stripe customer",
+        null,
+        retryState
+      );
       continue;
     }
     const itemTotalDollars = amountCents / 100;
     if (itemTotalDollars <= 0) {
       results.push({ member_id: sub.member_id, status: "error", message: "Invalid price" });
-      insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, amountCents, "Invalid price", null);
-      if (String(sub.access_level ?? "").trim() !== WEEKLY_GOALS_BOARD_ACCESS_LEVEL) {
-        await revokeKisiForMember(db, sub.member_id);
-      }
+      await recordRenewalChargeFailure(db, today, sub, memberRow, insertFailure, amountCents, "Invalid price", null, retryState);
       continue;
     }
 
@@ -241,10 +317,17 @@ export async function GET(request: NextRequest) {
         const blocker = await getOffSessionRenewalBlockerIfResolvedPmIsNull(stripe, stripeCustomerId);
         if (blocker) {
           results.push({ member_id: sub.member_id, status: "error", message: blocker.message });
-          insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, chargeCents, blocker.message, blocker.code);
-          if (String(sub.access_level ?? "").trim() !== WEEKLY_GOALS_BOARD_ACCESS_LEVEL) {
-            await revokeKisiForMember(db, sub.member_id);
-          }
+          await recordRenewalChargeFailure(
+            db,
+            today,
+            sub,
+            memberRow,
+            insertFailure,
+            chargeCents,
+            blocker.message,
+            blocker.code,
+            retryState
+          );
           continue;
         }
       }
@@ -272,10 +355,17 @@ export async function GET(request: NextRequest) {
         const stripeCode = lastError?.decline_code ?? lastError?.code ?? null;
         const reasonText = (lastError?.message ?? "").trim() || statusMsg;
         results.push({ member_id: sub.member_id, status: "error", message: reasonText });
-        insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, chargeCents, reasonText, stripeCode);
-        if (String(sub.access_level ?? "").trim() !== WEEKLY_GOALS_BOARD_ACCESS_LEVEL) {
-          await revokeKisiForMember(db, sub.member_id);
-        }
+        await recordRenewalChargeFailure(
+          db,
+          today,
+          sub,
+          memberRow,
+          insertFailure,
+          chargeCents,
+          reasonText,
+          stripeCode,
+          retryState
+        );
         continue;
       }
 
@@ -291,10 +381,7 @@ export async function GET(request: NextRequest) {
     } catch (err) {
       const { message: msg, stripe_error_code: stripeCode } = stripeFailureFieldsFromError(err);
       results.push({ member_id: sub.member_id, status: "error", message: msg });
-      insertFailure.run(sub.member_id, sub.subscription_id, sub.plan_name, chargeCents, msg, stripeCode);
-      if (String(sub.access_level ?? "").trim() !== WEEKLY_GOALS_BOARD_ACCESS_LEVEL) {
-        await revokeKisiForMember(db, sub.member_id);
-      }
+      await recordRenewalChargeFailure(db, today, sub, memberRow, insertFailure, chargeCents, msg, stripeCode, retryState);
     }
   }
 

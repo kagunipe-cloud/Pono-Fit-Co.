@@ -27,6 +27,10 @@ export type ScheduledCartChargeRow = {
   last_attempt_ymd: string | null;
   last_error: string | null;
   payment_intent_id: string | null;
+  auto_retry_attempt_count?: number | null;
+  auto_retry_next_ymd?: string | null;
+  auto_retry_exhausted?: number | null;
+  auto_retry_staff_notified?: number | null;
 };
 
 export function ensureScheduledCartChargesTable(db: ReturnType<typeof getDb>) {
@@ -51,6 +55,26 @@ export function ensureScheduledCartChargesTable(db: ReturnType<typeof getDb>) {
     db.exec("CREATE INDEX IF NOT EXISTS idx_scheduled_cart_charges_due ON scheduled_cart_charges (status, charge_on_ymd)");
   } catch {
     /* ignore */
+  }
+  try {
+    db.exec("ALTER TABLE scheduled_cart_charges ADD COLUMN auto_retry_attempt_count INTEGER DEFAULT 0");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE scheduled_cart_charges ADD COLUMN auto_retry_next_ymd TEXT");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE scheduled_cart_charges ADD COLUMN auto_retry_exhausted INTEGER DEFAULT 0");
+  } catch {
+    /* already exists */
+  }
+  try {
+    db.exec("ALTER TABLE scheduled_cart_charges ADD COLUMN auto_retry_staff_notified INTEGER DEFAULT 0");
+  } catch {
+    /* already exists */
   }
 }
 
