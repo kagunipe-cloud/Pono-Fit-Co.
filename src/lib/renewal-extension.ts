@@ -16,7 +16,7 @@ import {
 } from "./db";
 import { formatDateTimeInAppTz, todayInAppTz, formatDateForStorage } from "./app-timezone";
 import { computeRenewalChargePrice } from "./renewal-pricing";
-import { grantAccess as kisiGrantAccess } from "./kisi";
+import { grantAccess as kisiGrantAccess, ensureKisiUser } from "./kisi";
 import { kisiDoorAccessValidUntilForExpiryYmd } from "./pass-access";
 import { ensureWaiverBeforeKisi } from "./waiver";
 import { clearSubscriptionAutoRetryState } from "./card-retry-cadence";
@@ -219,12 +219,24 @@ export async function extendSubscriptionAfterRenewal(
   }, origin);
   const grantsDoorAccess = String(sub.access_level ?? "").trim() !== WEEKLY_GOALS_BOARD_ACCESS_LEVEL;
   if (grantsDoorAccess && waiver.shouldGrantKisi) {
-    const kisiId = db.prepare("SELECT kisi_id FROM members WHERE member_id = ?").get(sub.member_id) as { kisi_id: string | null } | undefined;
-    if (kisiId?.kisi_id) {
+    const email = memberRow.email?.trim();
+    let kisiId = db.prepare("SELECT kisi_id FROM members WHERE member_id = ?").get(sub.member_id) as
+      | { kisi_id: string | null }
+      | undefined;
+    let resolvedKisiId = kisiId?.kisi_id?.trim() || null;
+    if (!resolvedKisiId && email) {
+      try {
+        resolvedKisiId = await ensureKisiUser(email, memberRow.first_name ?? undefined);
+        db.prepare("UPDATE members SET kisi_id = ? WHERE member_id = ?").run(resolvedKisiId, sub.member_id);
+      } catch (e) {
+        console.error("[renewal-extension] ensureKisiUser failed for member:", sub.member_id, e);
+      }
+    }
+    if (resolvedKisiId) {
       const kisiValidUntil = kisiDoorAccessValidUntilForExpiryYmd(expiryStr, tz);
       if (kisiValidUntil) {
         try {
-          await kisiGrantAccess(kisiId.kisi_id, kisiValidUntil);
+          await kisiGrantAccess(resolvedKisiId, kisiValidUntil);
         } catch (e) {
           console.error("[renewal-extension] Kisi grant failed for member:", sub.member_id, e);
         }

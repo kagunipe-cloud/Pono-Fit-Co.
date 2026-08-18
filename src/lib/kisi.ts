@@ -259,23 +259,28 @@ export async function grantAccess(kisiUserId: string, validUntil: Date): Promise
     },
   };
 
-  const res = await fetchKisiWithRetry(`${KISI_API_BASE}/role_assignments`, {
+  const postInit: RequestInit = {
     method: "POST",
     headers: {
       Authorization: `KISI-LOGIN ${key}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
-  });
+  };
 
-  if (!res.ok) {
-    const err = await res.text();
-    console.error("[Kisi] role_assignments failed:", res.status, err);
-    const detail = err.trim().slice(0, 400);
-    throw new Error(
-      detail ? `Kisi access grant failed: ${res.status} — ${detail}` : `Kisi access grant failed: ${res.status}`
-    );
+  let lastErr = "";
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const res = await fetchKisiWithRetry(`${KISI_API_BASE}/role_assignments`, postInit);
+    if (res.ok) return;
+    lastErr = await res.text();
+    console.error("[Kisi] role_assignments failed:", res.status, lastErr, `(attempt ${attempt}/3)`);
+    if (attempt < 3) await sleep(750 * attempt);
   }
+
+  const detail = lastErr.trim().slice(0, 400);
+  throw new Error(
+    detail ? `Kisi access grant failed after retries: — ${detail}` : "Kisi access grant failed after retries"
+  );
 }
 
 /**
@@ -428,6 +433,72 @@ export async function grantAccessForGroup(
         : `Kisi grace group grant failed: ${res.status}`
     );
   }
+}
+
+/** Role assignments for a Kisi user (all groups returned by API). */
+export type KisiRoleAssignment = {
+  id: number;
+  group_id?: number | string;
+  role_id?: string;
+  valid_from?: string;
+  valid_until?: string;
+};
+
+export async function listRoleAssignmentsForUser(kisiUserId: string): Promise<KisiRoleAssignment[]> {
+  const key = process.env.KISI_API_KEY?.trim();
+  if (!key) return [];
+  const kisiId = kisiUserId?.trim();
+  if (!kisiId) return [];
+
+  const listRes = await fetchKisiWithRetry(
+    `${KISI_API_BASE}/role_assignments?user_id=${encodeURIComponent(kisiId)}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `KISI-LOGIN ${key}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+  if (!listRes.ok) {
+    const err = await listRes.text();
+    console.error("[Kisi] list role_assignments failed:", listRes.status, err);
+    return [];
+  }
+  const assignments = (await listRes.json()) as KisiRoleAssignment[];
+  return Array.isArray(assignments) ? assignments : [];
+}
+
+/** Active door-group assignment with latest valid_until, if any. */
+export function pickActiveDoorGroupAssignment(
+  assignments: KisiRoleAssignment[],
+  now = new Date()
+): KisiRoleAssignment | null {
+  const envGroup = process.env.KISI_GROUP_ID?.trim();
+  const envGroupNorm = envGroup ? String(parseInt(envGroup, 10) || envGroup) : null;
+  let best: KisiRoleAssignment | null = null;
+  let bestUntil = -Infinity;
+  for (const a of assignments) {
+    if (a?.id == null) continue;
+    if (envGroupNorm && a.group_id != null) {
+      const gNorm = String(parseInt(String(a.group_id), 10) || a.group_id);
+      if (gNorm !== envGroupNorm) continue;
+    }
+    const untilRaw = a.valid_until?.trim();
+    if (!untilRaw) continue;
+    const untilMs = new Date(untilRaw).getTime();
+    if (Number.isNaN(untilMs) || untilMs <= now.getTime()) continue;
+    const fromRaw = a.valid_from?.trim();
+    if (fromRaw) {
+      const fromMs = new Date(fromRaw).getTime();
+      if (!Number.isNaN(fromMs) && fromMs > now.getTime()) continue;
+    }
+    if (untilMs > bestUntil) {
+      bestUntil = untilMs;
+      best = a;
+    }
+  }
+  return best;
 }
 
 /** Fetch a Kisi user by id. Returns null if the user was deleted (stale `members.kisi_id`). */

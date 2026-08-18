@@ -146,6 +146,13 @@ export default function AdminSettingsPage() {
           <p className="text-sm text-stone-500 mt-0.5">Manage macro templates and food entries.</p>
         </Link>
         <Link
+          href="/admin/kisi-access-audit"
+          className="block p-4 rounded-xl border border-stone-200 bg-white hover:border-brand-300 hover:bg-brand-50/30 transition-colors"
+        >
+          <h2 className="font-semibold text-stone-800">Kisi access audit</h2>
+          <p className="text-sm text-stone-500 mt-0.5">Find paid members missing door access in Kisi and fix grants.</p>
+        </Link>
+        <Link
           href="/admin/backup"
           className="block p-4 rounded-xl border border-stone-200 bg-white hover:border-brand-300 hover:bg-brand-50/30 transition-colors"
         >

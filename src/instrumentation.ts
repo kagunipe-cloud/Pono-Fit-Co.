@@ -135,8 +135,30 @@ export async function register() {
     }
   });
 
+  cron.schedule("30 2 * * *", async () => {
+    try {
+      const res = await fetch(`${base}/api/cron/reconcile-kisi-access`, {
+        headers: secret ? { "x-cron-secret": secret } : {},
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.error("[reconcile-kisi-access]", res.status, data);
+        return;
+      }
+      if (data.skipped) {
+        if (data.reason) console.log("[reconcile-kisi-access] skipped:", data.reason);
+        return;
+      }
+      if ((data.fixed as unknown[])?.length > 0 || (data.errors as unknown[])?.length > 0) {
+        console.log("[reconcile-kisi-access]", data);
+      }
+    } catch (err) {
+      console.error("[reconcile-kisi-access]", err);
+    }
+  }, gymTzOpts);
+
   const tzLabel = gymTzOpts.timezone;
   console.log(
-    `[instrumentation] Daily renewal (2:00 AM ${tzLabel}), expiry reminders (2:10 AM ${tzLabel}); hourly PT; occupancy snapshot every 15 min.`
+    `[instrumentation] Daily renewal (2:00 AM ${tzLabel}), expiry reminders (2:10 AM ${tzLabel}), Kisi reconcile (2:30 AM ${tzLabel}, every 3 days); hourly PT; occupancy snapshot every 15 min.`
   );
 }
