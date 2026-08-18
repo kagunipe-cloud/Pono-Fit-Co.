@@ -9,6 +9,7 @@ type AuditRow = {
   name: string | null;
   kisi_id: string | null;
   app_has_door_access_today: boolean;
+  active_membership_in_app?: boolean;
   app_valid_until_iso: string | null;
   waiver_signed: boolean;
   open_payment_failures: number;
@@ -22,15 +23,19 @@ type AuditRow = {
 type AuditResponse = {
   today_ymd?: string;
   timezone?: string;
+  audited_at?: string;
   kisi_configured?: boolean;
   members_scanned?: number;
   in_sync?: number;
   mismatches?: AuditRow[];
   rows?: AuditRow[];
+  members_in_scope?: number;
+  scope?: string;
   pagination?: {
     offset: number;
     limit: number;
-    members_with_email_total: number;
+    members_in_scope: number;
+    members_with_email_total?: number;
     has_more: boolean;
     next_offset: number | null;
   };
@@ -54,7 +59,7 @@ export default function KisiAccessAuditPage() {
   const [data, setData] = useState<AuditResponse | null>(null);
   const [offset, setOffset] = useState(0);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
-  const limit = 40;
+  const limit = 200;
 
   const runAudit = useCallback(async (nextOffset = 0) => {
     setLoading(true);
@@ -136,9 +141,9 @@ export default function KisiAccessAuditPage() {
         </Link>
         <h1 className="text-2xl font-bold text-stone-800">Kisi access audit</h1>
         <p className="text-stone-600 mt-2 max-w-3xl">
-          Compares members who should have door access in the app today with their live Kisi role in{" "}
-          <code className="text-xs bg-stone-100 px-1 rounded">KISI_GROUP_ID</code>. Use this when paid members
-          cannot unlock the door.
+          We build the list from <strong className="font-medium text-stone-800">Active memberships in the app</strong>{" "}
+          (paid, not expired, not paused — not your old inactive imports). Then we check each person against Kisi. We
+          never use Kisi to decide who is on the list.
         </p>
       </header>
 
@@ -188,6 +193,17 @@ export default function KisiAccessAuditPage() {
           <div className="rounded-lg border border-stone-200 bg-white p-4">
             <div className="text-stone-500">Today ({data.timezone})</div>
             <div className="font-semibold text-stone-800">{data.today_ymd}</div>
+            {data.audited_at && (
+              <div className="text-xs text-stone-400 mt-1">
+                Live snapshot: {new Date(data.audited_at).toLocaleString()}
+              </div>
+            )}
+          </div>
+          <div className="rounded-lg border border-stone-200 bg-white p-4">
+            <div className="text-stone-500">Active in app (audit list)</div>
+            <div className="font-semibold text-stone-800">
+              {data.members_in_scope ?? data.pagination?.members_in_scope ?? "—"} in scope
+            </div>
           </div>
           <div className="rounded-lg border border-stone-200 bg-white p-4">
             <div className="text-stone-500">Scanned / in sync</div>
@@ -233,10 +249,11 @@ export default function KisiAccessAuditPage() {
             </div>
             <dl className="mt-3 grid gap-1 text-sm text-stone-700 sm:grid-cols-2">
               <div>
-                App door access today: <strong>{r.app_has_door_access_today ? "Yes" : "No"}</strong>
+                Active membership in app:{" "}
+                <strong>{(r.active_membership_in_app ?? r.app_has_door_access_today) ? "Yes" : "No"}</strong>
               </div>
               <div>
-                Kisi active role: <strong>{r.kisi_has_active_role ? "Yes" : "No"}</strong>
+                Kisi role (live API): <strong>{r.kisi_has_active_role ? "Yes" : "No"}</strong>
               </div>
               <div>Waiver signed: {r.waiver_signed ? "Yes" : "No"}</div>
               <div>Open payment failures: {r.open_payment_failures}</div>

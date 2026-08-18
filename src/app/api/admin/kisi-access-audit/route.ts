@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone, ensureMembersDoorAccessWaiverExemptColumn } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
+import { reconcileKisiDoorAccess } from "@/lib/kisi-access-reconcile";
 import {
-  FIXABLE_KISI_SYNC_STATUSES,
-  fixMemberKisiAccessIfNeeded,
-  reconcileKisiDoorAccess,
-} from "@/lib/kisi-access-reconcile";
-import { runKisiAccessAudit, auditOneMemberKisiAccess, countMembersForKisiAudit } from "@/lib/kisi-access-audit";
-
-const FIXABLE = FIXABLE_KISI_SYNC_STATUSES;
+  runKisiAccessAudit,
+  auditOneMemberKisiAccess,
+  countMembersForKisiAudit,
+  listMemberIdsForKisiAuditScope,
+} from "@/lib/kisi-access-audit";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -28,6 +27,9 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(500, Math.max(1, parseInt(searchParams.get("limit") ?? "50", 10) || 50));
   const offset = Math.max(0, parseInt(searchParams.get("offset") ?? "0", 10) || 0);
   const singleMemberId = searchParams.get("member_id")?.trim() || null;
+  const scopeParam = searchParams.get("scope")?.trim();
+  const scope =
+    scopeParam === "all" ? "all" : scopeParam === "active_door" ? "active_in_app" : "active_in_app";
 
   const db = getDb();
   ensureMembersDoorAccessWaiverExemptColumn(db);
@@ -61,12 +63,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: true, row: audit });
   }
 
-  const totalMembers = countMembersForKisiAudit(db);
+  const totalMembers = countMembersForKisiAudit(db, tz, scope);
   const result = await runKisiAccessAudit(db, tz, {
     mismatches_only: mismatchesOnly,
     lookup_kisi_by_email: true,
     limit,
     offset,
+    scope,
   });
   db.close();
 
@@ -78,13 +81,23 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     description:
-      "Compares who should have door access in the app today vs active Kisi role in KISI_GROUP_ID. " +
-      "Use POST to re-grant fixable mismatches (missing/expired role, missing kisi user when waiver is complete).",
-    ...result,
+      scope === "active_in_app"
+        ? "List comes from Active door memberships in the app (our DB). Each member is then checked against Kisi — not the other way around. Inactive/expired imports are skipped."
+        : "Full scan of every member with email vs Kisi (slow — use only if needed).",
+    scope,
+    members_in_scope: result.members_in_scope,
+    members_scanned: result.members_scanned,
+    in_sync: result.in_sync,
+    mismatches: result.mismatches,
+    rows: result.rows,
+    today_ymd: result.today_ymd,
+    timezone: result.timezone,
+    kisi_configured: result.kisi_configured,
     pagination: {
       offset,
       limit,
-      members_with_email_total: totalMembers,
+      members_in_scope: totalMembers,
+      members_with_email_total: scope === "all" ? totalMembers : undefined,
       has_more: offset + result.members_scanned < totalMembers,
       next_offset: offset + result.members_scanned < totalMembers ? offset + limit : null,
     },
@@ -127,13 +140,9 @@ export async function POST(request: NextRequest) {
 
   let memberIds = (body.member_ids ?? []).map((id) => String(id).trim()).filter(Boolean);
   if (body.fix_all_mismatches) {
-    const audit = await runKisiAccessAudit(db, tz, {
-      mismatches_only: true,
-      lookup_kisi_by_email: true,
-      limit: Math.min(100, body.limit ?? 40),
-      offset: body.offset ?? 0,
-    });
-    memberIds = audit.mismatches.filter((m) => FIXABLE.includes(m.sync_status)).map((m) => m.member_id);
+    const batchOffset = body.offset ?? 0;
+    const batchLimit = Math.min(100, body.limit ?? 40);
+    memberIds = listMemberIdsForKisiAuditScope(db, tz).slice(batchOffset, batchOffset + batchLimit);
   }
 
   if (memberIds.length === 0) {

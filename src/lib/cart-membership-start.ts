@@ -25,8 +25,8 @@ export function calendarMembershipDoorAccessOnDay(
 ): boolean {
   if (sub.status !== "Active") return false;
   if (String(sub.subscription_pause_started ?? "").trim() !== "") return false;
-  const start = String(sub.start_date ?? "").trim();
-  if (start && start > todayYmd) return false;
-  const exp = String(sub.expiry_date ?? "").trim();
-  return exp !== "" && exp >= todayYmd;
+  const startNorm = normalizeDateToYMD(String(sub.start_date ?? ""));
+  if (startNorm && startNorm > todayYmd) return false;
+  const expNorm = normalizeDateToYMD(String(sub.expiry_date ?? ""));
+  return !!expNorm && expNorm >= todayYmd;
 }

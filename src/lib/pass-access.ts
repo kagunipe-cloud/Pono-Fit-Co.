@@ -1,5 +1,5 @@
 import type { getDb } from "./db";
-import { expiryDateSortableSql } from "./db";
+import { expiryDateSortableSql, WEEKLY_GOALS_BOARD_ACCESS_LEVEL } from "./db";
 import { normalizeDateToYMD, todayInAppTz } from "./app-timezone";
 import { ensureMembersPassActivationDayColumn } from "./day-pass-credits";
 import { calendarMembershipDoorAccessOnDay } from "./cart-membership-start";
@@ -51,6 +51,36 @@ export function listMemberIdsWithDoorAccessToday(db: ReturnType<typeof getDb>, t
        ORDER BY m.member_id`
     )
     .all(todayYmd, todayYmd, todayYmd, todayYmd) as { member_id: string }[];
+  return rows.map((r) => r.member_id).filter((id) => id != null && String(id).trim() !== "");
+}
+
+/**
+ * Members with an **Active door-eligible membership in the app** (our DB — not Kisi):
+ * Active subscription, not paused, period not ended (or pass pack with credits).
+ * Excludes inactive/expired imports and goal-board-only plans.
+ */
+export function listMemberIdsActiveDoorMembershipInApp(db: ReturnType<typeof getDb>, todayYmd: string): string[] {
+  ensureMembersPassActivationDayColumn(db);
+  const rows = db
+    .prepare(
+      `SELECT DISTINCT s.member_id
+       FROM subscriptions s
+       JOIN membership_plans p ON p.product_id = s.product_id
+       WHERE s.status = 'Active'
+         AND TRIM(COALESCE(p.access_level, '')) != ?
+         AND TRIM(COALESCE(s.subscription_pause_started, '')) = ''
+         AND (
+           s.pass_credits_remaining IS NOT NULL
+           OR (
+             s.pass_credits_remaining IS NULL
+             AND TRIM(COALESCE(s.expiry_date, '')) != ''
+             AND s.expiry_date >= ?
+             AND (TRIM(COALESCE(s.start_date, '')) = '' OR s.start_date <= ?)
+           )
+         )
+       ORDER BY s.member_id`
+    )
+    .all(WEEKLY_GOALS_BOARD_ACCESS_LEVEL, todayYmd, todayYmd) as { member_id: string }[];
   return rows.map((r) => r.member_id).filter((id) => id != null && String(id).trim() !== "");
 }
 
