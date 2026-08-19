@@ -7,6 +7,7 @@ import {
   auditOneMemberKisiAccess,
   countMembersForKisiAudit,
   listMemberIdsForKisiAuditScope,
+  KISI_AUDIT_BATCH_SIZE,
 } from "@/lib/kisi-access-audit";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const mismatchesOnly = searchParams.get("mismatches_only") === "1" || searchParams.get("mismatches_only") === "true";
-  const limit = Math.min(500, Math.max(1, parseInt(searchParams.get("limit") ?? "50", 10) || 50));
+  const limit = Math.min(500, Math.max(1, parseInt(searchParams.get("limit") ?? String(KISI_AUDIT_BATCH_SIZE), 10) || KISI_AUDIT_BATCH_SIZE));
   const offset = Math.max(0, parseInt(searchParams.get("offset") ?? "0", 10) || 0);
   const singleMemberId = searchParams.get("member_id")?.trim() || null;
   const scopeParam = searchParams.get("scope")?.trim();
@@ -35,7 +36,8 @@ export async function GET(request: NextRequest) {
   ensureMembersDoorAccessWaiverExemptColumn(db);
   const tz = getAppTimezone(db);
 
-  if (singleMemberId) {
+  try {
+    if (singleMemberId) {
     const row = db
       .prepare(
         `SELECT member_id, email, first_name, last_name, kisi_id, waiver_signed_at,
@@ -109,8 +111,26 @@ export async function GET(request: NextRequest) {
       expired_role: "POST fix — same as missing_role.",
       pass_not_activated: "Member taps Activate pass for today on My Membership.",
       open_payment_failures: "Resolve in Money owed — failed renewal revokes Kisi.",
+      kisi_api_error: "Kisi API was unreachable for this member — run audit again when network is stable.",
     },
   });
+  } catch (err) {
+    console.error("[kisi-access-audit GET]", err);
+    try {
+      db.close();
+    } catch {
+      /* ignore */
+    }
+    return NextResponse.json(
+      {
+        error:
+          err instanceof Error && err.message.includes("fetch failed")
+            ? "Kisi API network error — wait a moment and run the audit again."
+            : "Audit failed — try again or use a smaller batch (Next batch).",
+      },
+      { status: 503 }
+    );
+  }
 }
 
 /**
@@ -141,7 +161,7 @@ export async function POST(request: NextRequest) {
   let memberIds = (body.member_ids ?? []).map((id) => String(id).trim()).filter(Boolean);
   if (body.fix_all_mismatches) {
     const batchOffset = body.offset ?? 0;
-    const batchLimit = Math.min(100, body.limit ?? 40);
+    const batchLimit = Math.min(100, body.limit ?? KISI_AUDIT_BATCH_SIZE);
     memberIds = listMemberIdsForKisiAuditScope(db, tz).slice(batchOffset, batchOffset + batchLimit);
   }
 

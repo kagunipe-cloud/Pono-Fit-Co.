@@ -7,6 +7,10 @@ import {
 } from "./pass-access";
 import { todayInAppTz, normalizeDateToYMD } from "./app-timezone";
 import { findKisiUserByEmail, getKisiUserById, listRoleAssignmentsForUser, pickActiveDoorGroupAssignment } from "./kisi";
+import { KISI_AUDIT_BATCH_PAUSE_MS, KISI_AUDIT_BATCH_SIZE, KISI_AUDIT_CRON_LAST_RUN_KEY } from "./kisi-audit-config";
+import { sendStaffEmail } from "./email";
+
+export { KISI_AUDIT_BATCH_SIZE } from "./kisi-audit-config";
 
 export type KisiAccessSyncStatus =
   | "in_sync"
@@ -16,7 +20,8 @@ export type KisiAccessSyncStatus =
   | "waiver_blocked"
   | "no_email"
   | "app_no_access_has_kisi"
-  | "pass_not_activated";
+  | "pass_not_activated"
+  | "kisi_api_error";
 
 export type KisiAccessAuditRow = {
   member_id: string;
@@ -243,24 +248,32 @@ export async function auditOneMemberKisiAccess(
   const openFailures = Number(failureRow?.c ?? 0) || 0;
 
   let resolvedKisiId = row.kisi_id?.trim() || null;
-  if (options?.lookupKisiByEmail !== false && !resolvedKisiId && row.email?.trim()) {
-    resolvedKisiId = (await findKisiUserByEmail(row.email.trim())) ?? null;
-  }
-
+  let kisiCheckError: string | null = null;
   let kisiHasRole = false;
   let kisiValidUntilIso: string | null = null;
-  if (resolvedKisiId) {
-    const stale = await getKisiUserById(resolvedKisiId);
-    if (!stale) {
-      resolvedKisiId = null;
-    } else {
-      const assignments = await listRoleAssignmentsForUser(resolvedKisiId);
-      const active = pickActiveDoorGroupAssignment(assignments);
-      if (active?.valid_until) {
-        kisiHasRole = true;
-        kisiValidUntilIso = active.valid_until;
+  let kisiAssignments: Awaited<ReturnType<typeof listRoleAssignmentsForUser>> = [];
+
+  try {
+    if (options?.lookupKisiByEmail !== false && !resolvedKisiId && row.email?.trim()) {
+      resolvedKisiId = (await findKisiUserByEmail(row.email.trim())) ?? null;
+    }
+
+    if (resolvedKisiId) {
+      const stale = await getKisiUserById(resolvedKisiId);
+      if (!stale) {
+        resolvedKisiId = null;
+      } else {
+        kisiAssignments = await listRoleAssignmentsForUser(resolvedKisiId);
+        const active = pickActiveDoorGroupAssignment(kisiAssignments);
+        if (active?.valid_until) {
+          kisiHasRole = true;
+          kisiValidUntilIso = active.valid_until;
+        }
       }
     }
+  } catch (err) {
+    kisiCheckError = err instanceof Error ? err.message : "Kisi API unavailable";
+    console.error("[kisi-audit] Kisi lookup failed for", row.member_id, err);
   }
 
   const waiverSigned = !!row.waiver_signed_at?.trim();
@@ -268,14 +281,16 @@ export async function auditOneMemberKisiAccess(
   const expectsKisi = doorAccessFromNonGoalBoardSub(subs, todayYmd, row.pass_activation_day);
 
   let sync_status: KisiAccessSyncStatus = "in_sync";
-  if (!appHasDoor && kisiHasRole) {
+  if (kisiCheckError) {
+    sync_status = "kisi_api_error";
+  } else if (!appHasDoor && kisiHasRole) {
     sync_status = "app_no_access_has_kisi";
   } else if (expectsKisi && appHasDoor) {
     if (!waiverSigned && !waiverExempt) sync_status = "waiver_blocked";
     else if (!row.email?.trim()) sync_status = "no_email";
     else if (!resolvedKisiId) sync_status = "missing_kisi_user";
     else if (!kisiHasRole) {
-      const assignments = resolvedKisiId ? await listRoleAssignmentsForUser(resolvedKisiId) : [];
+      const assignments = kisiAssignments;
       const envGroup = process.env.KISI_GROUP_ID?.trim();
       const envGroupNorm = envGroup ? String(parseInt(envGroup, 10) || envGroup) : null;
       const hadExpired = assignments.some((a) => {
@@ -308,6 +323,9 @@ export async function auditOneMemberKisiAccess(
     openFailures,
     resolvedKisiId,
   });
+  if (kisiCheckError) {
+    likely_causes.unshift(`Could not reach Kisi (${kisiCheckError}) — retry audit; door role not verified.`);
+  }
 
   return {
     member_id: row.member_id,
@@ -408,4 +426,109 @@ export async function runKisiAccessAudit(
     mismatches,
     rows: filtered,
   };
+}
+
+export type KisiNightlyAuditResult = {
+  today_ymd: string;
+  timezone: string;
+  members_in_scope: number;
+  members_scanned: number;
+  batches: number;
+  in_sync: number;
+  mismatches: KisiAccessAuditRow[];
+  mismatch_by_status: Record<string, number>;
+};
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Full active-in-app scan in batches of {@link KISI_AUDIT_BATCH_SIZE} (for 3 AM cron). */
+export async function runNightlyKisiAccessAudit(
+  db: ReturnType<typeof getDb>,
+  tz: string
+): Promise<KisiNightlyAuditResult> {
+  const todayYmd = todayInAppTz(tz);
+  const membersInScope = countMembersForKisiAudit(db, tz, "active_in_app");
+  const allMismatches: KisiAccessAuditRow[] = [];
+  let offset = 0;
+  let totalScanned = 0;
+  let inSync = 0;
+  let batches = 0;
+
+  while (offset < membersInScope) {
+    const result = await runKisiAccessAudit(db, tz, {
+      scope: "active_in_app",
+      limit: KISI_AUDIT_BATCH_SIZE,
+      offset,
+      lookup_kisi_by_email: true,
+    });
+    batches++;
+    totalScanned += result.members_scanned;
+    inSync += result.in_sync;
+    allMismatches.push(...result.mismatches);
+    offset += result.members_scanned;
+    if (result.members_scanned === 0) break;
+    if (offset < membersInScope) {
+      await sleep(KISI_AUDIT_BATCH_PAUSE_MS);
+    }
+  }
+
+  const mismatchByStatus: Record<string, number> = {};
+  for (const m of allMismatches) {
+    mismatchByStatus[m.sync_status] = (mismatchByStatus[m.sync_status] ?? 0) + 1;
+  }
+
+  return {
+    today_ymd: todayYmd,
+    timezone: tz,
+    members_in_scope: membersInScope,
+    members_scanned: totalScanned,
+    batches,
+    in_sync: inSync,
+    mismatches: allMismatches,
+    mismatch_by_status: mismatchByStatus,
+  };
+}
+
+export function markKisiAuditCronRun(db: ReturnType<typeof getDb>, tz: string) {
+  const today = todayInAppTz(tz);
+  db.prepare("INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)").run(KISI_AUDIT_CRON_LAST_RUN_KEY, today);
+}
+
+export async function notifyStaffOfKisiAudit(result: KisiNightlyAuditResult): Promise<boolean> {
+  if (result.mismatches.length === 0) return false;
+
+  const base = process.env.NEXT_PUBLIC_APP_URL?.trim()?.replace(/\/$/, "") || "";
+  const auditLink = base ? `${base}/admin/kisi-access-audit` : "/admin/kisi-access-audit";
+  const lines = [
+    `Kisi access audit (${result.today_ymd}, ${result.timezone})`,
+    "",
+    `Active in app: ${result.members_in_scope} · Scanned: ${result.members_scanned} (${result.batches} batches of ${KISI_AUDIT_BATCH_SIZE})`,
+    `In sync: ${result.in_sync} · Mismatches: ${result.mismatches.length}`,
+    "",
+  ];
+
+  if (Object.keys(result.mismatch_by_status).length) {
+    lines.push("By status:");
+    for (const [status, count] of Object.entries(result.mismatch_by_status)) {
+      lines.push(`- ${status}: ${count}`);
+    }
+    lines.push("");
+  }
+
+  lines.push("Sample mismatches:");
+  for (const m of result.mismatches.slice(0, 20)) {
+    lines.push(`- ${m.name ?? m.member_id} (${m.email ?? "no email"}) — ${m.sync_status}`);
+  }
+  if (result.mismatches.length > 20) {
+    lines.push(`… and ${result.mismatches.length - 20} more`);
+  }
+  lines.push("");
+  lines.push(`Review / fix: ${auditLink}`);
+
+  return sendStaffEmail(
+    `Kisi audit: ${result.mismatches.length} mismatch${result.mismatches.length === 1 ? "" : "es"}`,
+    lines.join("\n")
+  );
 }

@@ -157,8 +157,34 @@ export async function register() {
     }
   }, gymTzOpts);
 
+  cron.schedule("0 3 * * *", async () => {
+    try {
+      const res = await fetch(`${base}/api/cron/kisi-access-audit`, {
+        headers: secret ? { "x-cron-secret": secret } : {},
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.error("[kisi-access-audit cron]", res.status, data);
+        return;
+      }
+      if (data.skipped) {
+        if (data.reason) console.log("[kisi-access-audit cron] skipped:", data.reason);
+        return;
+      }
+      if ((data.mismatches as unknown[])?.length > 0) {
+        console.log("[kisi-access-audit cron]", {
+          scanned: data.members_scanned,
+          mismatches: (data.mismatches as unknown[])?.length,
+          staff_emailed: data.staff_emailed,
+        });
+      }
+    } catch (err) {
+      console.error("[kisi-access-audit cron]", err);
+    }
+  }, gymTzOpts);
+
   const tzLabel = gymTzOpts.timezone;
   console.log(
-    `[instrumentation] Daily renewal (2:00 AM ${tzLabel}), expiry reminders (2:10 AM ${tzLabel}), Kisi reconcile (2:30 AM ${tzLabel}, every 3 days); hourly PT; occupancy snapshot every 15 min.`
+    `[instrumentation] Daily renewal (2:00 AM ${tzLabel}), expiry reminders (2:10 AM ${tzLabel}), Kisi reconcile (2:30 AM ${tzLabel}, every 3 days), Kisi audit (3:00 AM ${tzLabel}, batches of 25); hourly PT; occupancy snapshot every 15 min.`
   );
 }

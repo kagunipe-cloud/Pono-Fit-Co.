@@ -26,26 +26,41 @@ function sleep(ms: number): Promise<void> {
 async function fetchKisiWithRetry(url: string, init: RequestInit, options?: { maxAttempts?: number }): Promise<Response> {
   const maxAttempts = options?.maxAttempts ?? 8;
   let last: Response | undefined;
+  let lastNetworkErr: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    const res = await fetch(url, init);
-    last = res;
-    if (res.status !== 429 && res.status !== 503) {
-      return res;
+    try {
+      const res = await fetch(url, init);
+      last = res;
+      lastNetworkErr = undefined;
+      if (res.status !== 429 && res.status !== 503) {
+        return res;
+      }
+      if (attempt >= maxAttempts) {
+        break;
+      }
+      const retryAfter = res.headers.get("Retry-After");
+      let waitMs = 0;
+      if (retryAfter) {
+        const sec = parseInt(retryAfter, 10);
+        if (!Number.isNaN(sec)) waitMs = sec * 1000;
+      }
+      if (waitMs <= 0) {
+        waitMs = Math.min(45_000, 750 * 2 ** (attempt - 1));
+      }
+      console.warn(`[Kisi] ${res.status} — retry ${attempt}/${maxAttempts} in ${waitMs}ms`);
+      await sleep(waitMs);
+    } catch (err) {
+      lastNetworkErr = err;
+      if (attempt >= maxAttempts) {
+        break;
+      }
+      const waitMs = Math.min(45_000, 750 * 2 ** (attempt - 1));
+      console.warn(`[Kisi] network error — retry ${attempt}/${maxAttempts} in ${waitMs}ms`, err);
+      await sleep(waitMs);
     }
-    if (attempt >= maxAttempts) {
-      break;
-    }
-    const retryAfter = res.headers.get("Retry-After");
-    let waitMs = 0;
-    if (retryAfter) {
-      const sec = parseInt(retryAfter, 10);
-      if (!Number.isNaN(sec)) waitMs = sec * 1000;
-    }
-    if (waitMs <= 0) {
-      waitMs = Math.min(45_000, 750 * 2 ** (attempt - 1));
-    }
-    console.warn(`[Kisi] ${res.status} — retry ${attempt}/${maxAttempts} in ${waitMs}ms`);
-    await sleep(waitMs);
+  }
+  if (lastNetworkErr) {
+    throw lastNetworkErr;
   }
   return last!;
 }

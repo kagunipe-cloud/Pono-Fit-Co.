@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
+import { KISI_AUDIT_BATCH_SIZE } from "@/lib/kisi-audit-config";
 
 type AuditRow = {
   member_id: string;
@@ -51,6 +52,7 @@ const STATUS_LABEL: Record<string, string> = {
   no_email: "No email",
   app_no_access_has_kisi: "Kisi active, app says no access",
   pass_not_activated: "Pass not activated today",
+  kisi_api_error: "Kisi API unreachable (retry audit)",
 };
 
 export default function KisiAccessAuditPage() {
@@ -59,7 +61,7 @@ export default function KisiAccessAuditPage() {
   const [data, setData] = useState<AuditResponse | null>(null);
   const [offset, setOffset] = useState(0);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
-  const limit = 200;
+  const limit = KISI_AUDIT_BATCH_SIZE;
 
   const runAudit = useCallback(async (nextOffset = 0) => {
     setLoading(true);
@@ -76,7 +78,10 @@ export default function KisiAccessAuditPage() {
       setData(json);
       setOffset(nextOffset);
     } catch {
-      setMessage({ type: "err", text: "Something went wrong running the audit." });
+      setMessage({
+        type: "err",
+        text: "Audit request failed (timeout or server restart). Wait for Railway deploy to finish, then try again.",
+      });
     } finally {
       setLoading(false);
     }
@@ -144,6 +149,11 @@ export default function KisiAccessAuditPage() {
           We build the list from <strong className="font-medium text-stone-800">Active memberships in the app</strong>{" "}
           (paid, not expired, not paused — not your old inactive imports). Then we check each person against Kisi. We
           never use Kisi to decide who is on the list.
+        </p>
+        <p className="text-stone-500 text-sm mt-2 max-w-3xl">
+          A full scan runs automatically at <strong className="font-medium">3:00 AM gym time</strong> in batches of{" "}
+          {KISI_AUDIT_BATCH_SIZE} (emails staff if mismatches are found). Use this page for manual checks{" "}
+          <strong className="font-medium">off-hours only</strong> — one batch at a time.
         </p>
       </header>
 
