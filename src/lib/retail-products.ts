@@ -1,7 +1,7 @@
 import type { getDb } from "./db";
 
 export const MEMBER_RETAIL_SELF_CHECKOUT_KEY = "member_retail_self_checkout";
-/** When "1", members may add/pay for retail when on-hand stock is zero or below (trusts restocking). Default "0" = block. */
+/** When "1", retail may be sold without positive on-hand quantity (staff cart and member Pro Shop). Default "0" = block. */
 export const MEMBER_RETAIL_ALLOW_PURCHASE_WHEN_OUT_OF_STOCK_KEY = "member_retail_allow_purchase_when_out_of_stock";
 
 export type RetailInventoryReason =
@@ -189,7 +189,7 @@ export function setMemberRetailSelfCheckoutEnabled(db: ReturnType<typeof getDb>,
   );
 }
 
-/** When true, member self-checkout may sell retail without positive on-hand quantity. */
+/** When true, retail may be sold without sufficient on-hand stock (Pro Shop admin setting). */
 export function getMemberRetailAllowPurchaseWhenOutOfStock(db: ReturnType<typeof getDb>): boolean {
   const row = db.prepare("SELECT value FROM app_settings WHERE key = ?").get(MEMBER_RETAIL_ALLOW_PURCHASE_WHEN_OUT_OF_STOCK_KEY) as
     | { value: string }

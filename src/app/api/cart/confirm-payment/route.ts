@@ -287,8 +287,7 @@ export async function POST(request: NextRequest) {
     const cartRenewalDiscountPercent = getRenewalDiscountPercentForPromo(db, cartPromoForRenewal);
 
     ensureRetailProductsTable(db);
-    const allowMemberRetailOversell =
-      sessionMemberId === member_id && !isStaff && getMemberRetailAllowPurchaseWhenOutOfStock(db);
+    const allowRetailOversell = getMemberRetailAllowPurchaseWhenOutOfStock(db);
 
     let purchasedDayPassPack = false;
     /** True when cart activates a gym membership/sub (not gift, pass pack, retail, PT, etc.). */
@@ -297,7 +296,7 @@ export async function POST(request: NextRequest) {
     let purchasedDeferredStartMembership = false;
     db.exec("BEGIN TRANSACTION");
     try {
-      assertRetailStockForCart(db, cart.id, { skipRetailStock: allowMemberRetailOversell });
+      assertRetailStockForCart(db, cart.id, { skipRetailStock: allowRetailOversell });
 
       for (const it of items) {
         if (it.product_type === "membership_plan") {
@@ -581,7 +580,7 @@ export async function POST(request: NextRequest) {
           }
           const effUnit = getEffectiveUnitPriceString(db, it);
           const qty = Math.max(1, Math.floor(Number(it.quantity) || 1));
-          const stockUpdate = allowMemberRetailOversell
+          const stockUpdate = allowRetailOversell
             ? db
                 .prepare(`UPDATE retail_products SET stock_quantity = stock_quantity - ? WHERE id = ? AND active = 1`)
                 .run(qty, it.product_id)

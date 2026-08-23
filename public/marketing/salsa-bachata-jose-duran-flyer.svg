@@ -66,10 +66,13 @@
     </text>
   </g>
 
-  <text x="1275" y="3135" text-anchor="middle" fill="#ffffff" font-family="Arial Black, Impact, sans-serif" font-size="98" font-weight="900" letter-spacing="-1">
+  <text x="1275" y="3050" text-anchor="middle" fill="#ffffff" font-family="Arial Black, Impact, sans-serif" font-size="98" font-weight="900" letter-spacing="-1">
     COME DANCE WITH US!
   </text>
-  <text x="1275" y="3235" text-anchor="middle" fill="#ffd36d" font-family="Arial Black, Impact, sans-serif" font-size="64" font-weight="900" letter-spacing="2">
+  <text x="1275" y="3165" text-anchor="middle" fill="#ffd36d" font-family="Arial Black, Impact, sans-serif" font-size="58" font-weight="900" letter-spacing="2">
+    NO SIGN-UP REQUIRED — JUST SHOW UP!
+  </text>
+  <text x="1275" y="3250" text-anchor="middle" fill="#ffd36d" font-family="Arial Black, Impact, sans-serif" font-size="52" font-weight="900" letter-spacing="2">
     ALL LEVELS WELCOME
   </text>
 </svg>

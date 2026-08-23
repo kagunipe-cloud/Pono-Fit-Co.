@@ -517,8 +517,8 @@ export default function AdminRetailProductsPage() {
             <p className="font-semibold text-stone-900">Purchases when inventory is zero or below</p>
             <p className="text-sm text-stone-600 mt-1">
               {allowPurchaseWhenOutOfStock
-                ? "Members can still add items and pay while stock is at or below zero (for example if the cooler is restocked shortly after). Staff adding from the cart always checks real stock."
-                : `Members cannot purchase a product from the Pro Shop until inventory is above zero. They will see "Unavailable" instead of a SKU or count.`}
+                ? "Staff and members can add and pay for items while stock is at or below zero (for example if the cooler is restocked shortly after)."
+                : `Retail cannot be added to a cart or purchased until inventory is above zero. Members will see "Unavailable" in the Pro Shop.`}
             </p>
           </div>
           <button

@@ -175,12 +175,8 @@ export async function POST(request: NextRequest) {
         db.close();
         return NextResponse.json({ error: "Retail product not found or inactive" }, { status: 404 });
       }
-      const allowOosMember =
-        !isStaff &&
-        sessionMemberId === member_id &&
-        getMemberRetailSelfCheckoutEnabled(db) &&
-        getMemberRetailAllowPurchaseWhenOutOfStock(db);
-      if (!allowOosMember) {
+      const allowWhenOutOfStock = getMemberRetailAllowPurchaseWhenOutOfStock(db);
+      if (!allowWhenOutOfStock) {
         const have = Math.max(0, Math.floor(Number(meta.stock_quantity) || 0));
         if (have < already + quantity) {
           db.close();

@@ -91,10 +91,7 @@ export async function POST(request: NextRequest) {
 
     try {
       ensureRetailProductsTable(db);
-      const skipRetailStockAssert =
-        sessionMemberId === member_id &&
-        !isStaff &&
-        getMemberRetailAllowPurchaseWhenOutOfStock(db);
+      const skipRetailStockAssert = getMemberRetailAllowPurchaseWhenOutOfStock(db);
       assertRetailStockForCart(db, cart.id, { skipRetailStock: skipRetailStockAssert });
     } catch (stockErr) {
       db.close();
