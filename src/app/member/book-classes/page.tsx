@@ -8,8 +8,6 @@ import {
   isOpenGroupSessionKind,
   OPEN_GROUP_DEFAULT_FLAT_PRICE,
 } from "@/lib/open-group-pt";
-import { ClassesDiscontinuedNotice } from "@/components/member/ClassesDiscontinuedNotice";
-import { SameDaySchedulingNotice } from "@/components/SameDaySchedulingNotice";
 
 type Occurrence = {
   id: number;
@@ -40,7 +38,28 @@ function MemberBookClassesContent() {
   const [credits, setCredits] = useState<number | null>(null);
   const [occurrences, setOccurrences] = useState<Occurrence[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bookingId, setBookingId] = useState<number | null>(null);
+  const [addingId, setAddingId] = useState<number | null>(null);
+  const [ogReserveLoadingId, setOgReserveLoadingId] = useState<number | null>(null);
   const [ogStatusByOcc, setOgStatusByOcc] = useState<Record<number, OgStatus>>({});
+
+  const reloadOccurrences = useCallback(async () => {
+    const from = new Date().toISOString().slice(0, 10);
+    const to = (() => {
+      const d = new Date();
+      d.setDate(d.getDate() + 28);
+      return d.toISOString().slice(0, 10);
+    })();
+    if (highlightId) {
+      const r = await fetch(`/api/offerings/class-occurrences/${highlightId}`);
+      const occ = r.ok ? await r.json() : null;
+      setOccurrences(occ && !Array.isArray(occ) ? [occ as Occurrence] : []);
+    } else {
+      const r = await fetch(`/api/offerings/class-occurrences?from=${from}&to=${to}`);
+      const list = r.ok ? await r.json() : [];
+      setOccurrences(Array.isArray(list) ? list : []);
+    }
+  }, [highlightId]);
 
   useEffect(() => {
     const from = new Date().toISOString().slice(0, 10);
@@ -104,6 +123,72 @@ function MemberBookClassesContent() {
     refMap.current[highlightId]?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [loading, highlightId, occurrences.length]);
 
+  async function bookWithCredit(occurrenceId: number) {
+    if (credits !== null && credits < 1) return;
+    setBookingId(occurrenceId);
+    try {
+      const res = await fetch("/api/class-bookings/book", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ class_occurrence_id: occurrenceId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCredits(data.balance ?? credits! - 1);
+        await reloadOccurrences();
+      } else {
+        alert(data.error ?? "Booking failed");
+      }
+    } finally {
+      setBookingId(null);
+    }
+  }
+
+  async function addToCart(occurrenceId: number) {
+    if (!memberId) return;
+    setAddingId(occurrenceId);
+    try {
+      const res = await fetch("/api/cart/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ member_id: memberId, product_type: "class_occurrence", product_id: occurrenceId, quantity: 1 }),
+      });
+      if (res.ok) router.push("/member/cart");
+      else {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error ?? "Could not add to cart");
+      }
+    } finally {
+      setAddingId(null);
+    }
+  }
+
+  async function reserveOpenGroup(occurrenceId: number, inviteToken?: string) {
+    setOgReserveLoadingId(occurrenceId);
+    try {
+      const res = await fetch("/api/class-bookings/book-open-group", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          class_occurrence_id: occurrenceId,
+          ...(inviteToken ? { invite_token: inviteToken } : {}),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await reloadOccurrences();
+        await refreshOgStatus(occurrenceId);
+        if (typeof data.share_url === "string" && data.share_url) {
+          window.alert(`Invite up to 3 friends with this link (they'll need to log in):\n\n${data.share_url}`);
+        }
+      } else {
+        alert(data.error ?? "Could not complete reservation");
+      }
+    } finally {
+      setOgReserveLoadingId(null);
+    }
+  }
+
   if (loading) return <div className="p-8 text-center text-stone-500">Loading…</div>;
 
   const formatPrice = (p: string) => {
@@ -122,13 +207,18 @@ function MemberBookClassesContent() {
         </Link>
       )}
       <h1 className="text-2xl font-bold text-stone-800 mb-2">{highlightId ? "Book this class" : "Book a Class"}</h1>
-      <ClassesDiscontinuedNotice />
-      {credits != null && credits > 0 ? (
-        <p className="text-stone-600 text-sm mb-6">
-          You still have <strong>{credits}</strong> class credit{credits !== 1 ? "s" : ""} on file; staff can help apply them. New bookings use{" "}
-          <Link href="/schedule" className="text-brand-600 hover:underline">Small-Group PT on the schedule</Link>.
+      <p className="text-stone-600 mb-6">
+        Pay for a single class or use a class credit — except <strong>Open Group Personal Training</strong> (flat fee at the gym).
+        You have <strong>{credits ?? 0} class credits</strong>.{" "}
+        <Link href="/member/class-packs" className="text-brand-600 hover:underline">
+          Class packs
+        </Link>
+      </p>
+      {credits !== null && credits < 1 && (
+        <p className="mb-6 p-4 rounded-lg bg-amber-50 text-amber-800 text-sm">
+          No credits. <Link href="/member/class-packs" className="underline">Buy a class pack</Link> to use credits, or pay per class below (Open Group PT uses the orange schedule flow).
         </p>
-      ) : null}
+      )}
       <ul className="space-y-4">
         {occurrences.map((o) => {
           const og = isOpenGroupSessionKind(o.session_kind);
@@ -147,8 +237,8 @@ function MemberBookClassesContent() {
                   <p className="font-medium text-stone-800 flex flex-wrap items-center gap-2">
                     {o.class_name}
                     {og ? (
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-100 text-brand-900 border border-brand-200">
-                        Small-Group PT
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-orange-200 text-orange-900 border border-orange-300">
+                        Open Group PT
                       </span>
                     ) : null}
                   </p>
@@ -157,7 +247,6 @@ function MemberBookClassesContent() {
                     {bookedDisplay}/{o.capacity} booked
                     {!og ? <> · {formatPrice(o.price ?? "0")}</> : null}
                   </p>
-                  <SameDaySchedulingNotice dateYmd={o.occurrence_date} className="mt-2" />
                 </div>
               </div>
 
@@ -165,8 +254,7 @@ function MemberBookClassesContent() {
                 <div className="space-y-3 text-sm text-stone-700">
                   <p>
                     <strong>${deskFlat(o)} total at the gym</strong> for everyone in your group (however many show up, up to{" "}
-                    {o.capacity}). Signing up in the app is free — you pay at the gym after the session. There is no cancellation fee.
-                    Existing groups can still invite friends below; new groups book via the schedule (Small-Group PT).
+                    {o.capacity}). Signing up here is free; only the organizer can reserve an empty slot, then shares an invite link.
                   </p>
                   {st?.my_role === "organizer" && st.share_url ? (
                     <div className="rounded-lg border border-orange-200 bg-white p-3 space-y-2">
@@ -186,11 +274,15 @@ function MemberBookClassesContent() {
                       You&apos;re booked in this group. Remind everyone: ${deskFlat(o)} total at the desk.
                     </p>
                   ) : null}
-                  {st?.my_role === "organizer" || st?.my_role === "guest" ? null : bookedDisplay === 0 ? (
-                    <p className="text-stone-600">
-                      Reserve new groups from an available time on the{" "}
-                      <Link href="/schedule" className="text-brand-700 font-medium underline">schedule</Link> (Book PT → Small-Group PT).
-                    </p>
+                  {bookedDisplay === 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => reserveOpenGroup(o.id)}
+                      disabled={ogReserveLoadingId === o.id}
+                      className="px-4 py-2 rounded-lg bg-orange-600 text-white text-sm font-medium hover:bg-orange-700 disabled:opacity-50"
+                    >
+                      {ogReserveLoadingId === o.id ? "Saving…" : "Reserve slot & start group"}
+                    </button>
                   ) : !st?.my_role ? (
                     <p className="text-stone-600">
                       This time is already reserved. Ask the organizer for the invite link, or{" "}
@@ -202,10 +294,24 @@ function MemberBookClassesContent() {
                   ) : null}
                 </div>
               ) : (
-                <p className="text-sm text-stone-600">
-                  Standard class booking is paused. Use{" "}
-                  <Link href="/schedule" className="text-brand-700 font-medium underline">Small-Group PT on the schedule</Link> instead.
-                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => addToCart(o.id)}
+                    disabled={addingId !== null}
+                    className="px-4 py-2 rounded-lg border border-stone-300 bg-white text-stone-700 text-sm font-medium hover:bg-stone-50 disabled:opacity-50"
+                  >
+                    {addingId === o.id ? "Adding…" : `Pay ${formatPrice(o.price ?? "0")}`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => bookWithCredit(o.id)}
+                    disabled={(credits ?? 0) < 1 || bookingId !== null}
+                    className="px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {bookingId === o.id ? "Booking…" : "Use 1 credit"}
+                  </button>
+                </div>
               )}
             </li>
           );
