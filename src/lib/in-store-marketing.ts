@@ -30,7 +30,7 @@ export const IN_STORE_MARKETING_CATALOG: InStoreMarketingSlide[] = [
   {
     id: "zen-iv-wellness",
     title: "Zen IV & Wellness Session",
-    description: "Saturday 8/29, 2–3 PM. Breathwork, sound-healing, and B12 shot included. $40.",
+    description: "Saturday 8/29, 2–3 PM. Breathwork, sound-healing, and B12 shot included. $40. RSVP to Kari at (562) 708-4646.",
     src: "/marketing/zen-iv-wellness-tv.svg",
   },
 ];

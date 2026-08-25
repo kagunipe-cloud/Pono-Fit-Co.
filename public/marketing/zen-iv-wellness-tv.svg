@@ -17,9 +17,9 @@
 
   <rect width="1920" height="1080" fill="url(#warmWash)"/>
   <rect x="28" y="28" width="1864" height="1024" rx="34" fill="none" stroke="#4b2e2a" stroke-width="6"/>
-  <rect x="72" y="72" width="850" height="836" rx="38" fill="#4b2e2a"/>
+  <rect x="72" y="72" width="850" height="738" rx="38" fill="#4b2e2a"/>
 
-  <rect x="105" y="100" width="790" height="125" rx="62" fill="#e8bd78"/>
+  <rect x="115" y="100" width="770" height="125" rx="62" fill="#e8bd78" stroke="#fffaf2" stroke-width="8"/>
   <text x="500" y="184" text-anchor="middle" fill="#4b2e2a" font-family="Arial Black, Impact, sans-serif" font-size="78" font-weight="900" letter-spacing="4">
     THIS SATURDAY
   </text>
@@ -39,7 +39,7 @@
   </text>
 
   <g filter="url(#shadow)">
-    <rect x="980" y="100" width="820" height="780" rx="42" fill="#fffaf2" stroke="#4b2e2a" stroke-width="10"/>
+    <rect x="980" y="100" width="820" height="710" rx="42" fill="#fffaf2" stroke="#4b2e2a" stroke-width="10"/>
     <rect x="980" y="100" width="820" height="24" rx="12" fill="url(#goldBar)"/>
     <text x="1390" y="220" text-anchor="middle" fill="#9a5b45" font-family="Arial, Helvetica, sans-serif" font-size="48" font-weight="700">
       Kari Khan (RN) is Leading
@@ -50,20 +50,27 @@
     <text x="1390" y="510" text-anchor="middle" fill="#4b2e2a" font-family="Arial Black, Impact, sans-serif" font-size="82" font-weight="900">
       SOUND-HEALING
     </text>
-    <path d="M1130 590H1650" stroke="#e8bd78" stroke-width="14" stroke-linecap="round"/>
-    <text x="1390" y="705" text-anchor="middle" fill="#9a5b45" font-family="Arial Black, Impact, sans-serif" font-size="62" font-weight="900">
-      B12 SHOT INCLUDED
+    <rect x="1080" y="570" width="620" height="210" rx="34" fill="#f3dfc1" stroke="#e8bd78" stroke-width="10"/>
+    <text x="1390" y="655" text-anchor="middle" fill="#9a5b45" font-family="Arial Black, Impact, sans-serif" font-size="64" font-weight="900" letter-spacing="1">
+      B12 SHOT
+    </text>
+    <text x="1390" y="735" text-anchor="middle" fill="#9a5b45" font-family="Arial Black, Impact, sans-serif" font-size="64" font-weight="900" letter-spacing="1">
+      INCLUDED
     </text>
   </g>
 
   <g filter="url(#shadow)">
-    <rect x="120" y="920" width="1680" height="90" rx="45" fill="#4b2e2a"/>
-    <text x="800" y="982" text-anchor="middle" fill="#e8bd78" font-family="Arial Black, Impact, sans-serif" font-size="48" font-weight="900" letter-spacing="2">
+    <rect x="120" y="830" width="1680" height="215" rx="45" fill="#4b2e2a"/>
+    <text x="720" y="920" text-anchor="middle" fill="#e8bd78" font-family="Arial Black, Impact, sans-serif" font-size="46" font-weight="900" letter-spacing="2">
       SATURDAY 8/29  |  2:00 PM - 3:00 PM
     </text>
-    <rect x="1490" y="895" width="310" height="140" rx="70" fill="#e8bd78"/>
-    <text x="1645" y="994" text-anchor="middle" fill="#4b2e2a" font-family="Arial Black, Impact, sans-serif" font-size="84" font-weight="900">
+    <rect x="1475" y="850" width="285" height="165" rx="82" fill="#e8bd78" stroke="#fffaf2" stroke-width="8"/>
+    <text x="1617" y="967" text-anchor="middle" fill="#4b2e2a" font-family="Arial Black, Impact, sans-serif" font-size="84" font-weight="900">
       $40
+    </text>
+    <path d="M300 950H1140" stroke="#c9785b" stroke-width="6" stroke-linecap="round"/>
+    <text x="720" y="1010" text-anchor="middle" fill="#ffffff" font-family="Arial Black, Impact, sans-serif" font-size="52" font-weight="900">
+      RSVP to Kari at (562) 708-4646
     </text>
   </g>
 </svg>

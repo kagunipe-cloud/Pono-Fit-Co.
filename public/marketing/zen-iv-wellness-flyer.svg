@@ -16,7 +16,7 @@
     </linearGradient>
   </defs>
 
-  <rect width="2550" height="3300" fill="#fffaf2"/>
+  <rect width="2550" height="3300" fill="#ffffff"/>
   <rect x="90" y="90" width="2370" height="3120" rx="72" fill="none" stroke="#4b2e2a" stroke-width="10"/>
   <rect x="140" y="140" width="2270" height="3020" rx="58" fill="none" stroke="#e8bd78" stroke-width="12"/>
 
@@ -24,49 +24,56 @@
   <text x="1275" y="315" text-anchor="middle" fill="#4b2e2a" font-family="Arial Black, Impact, sans-serif" font-size="104" font-weight="900" letter-spacing="4">
     THIS SATURDAY • 8/29
   </text>
-  <text x="1275" y="535" text-anchor="middle" fill="#4b2e2a" font-family="Arial Black, Impact, sans-serif" font-size="66" font-weight="900" letter-spacing="7">
+  <text x="1275" y="550" text-anchor="middle" fill="#4b2e2a" font-family="Arial Black, Impact, sans-serif" font-size="105" font-weight="900" letter-spacing="7">
     PONO FIT CO.
   </text>
-  <text x="1275" y="800" text-anchor="middle" fill="#4b2e2a" font-family="Arial Black, Impact, sans-serif" font-size="220" font-weight="900" letter-spacing="-5">
+  <text x="1275" y="800" text-anchor="middle" fill="#4b2e2a" font-family="Arial Black, Impact, sans-serif" font-size="235" font-weight="900" letter-spacing="-5">
     WELLNESS
   </text>
-  <text x="1275" y="985" text-anchor="middle" fill="#9a5b45" font-family="Arial Black, Impact, sans-serif" font-size="205" font-weight="900" letter-spacing="0">
+  <text x="1275" y="985" text-anchor="middle" fill="#9a5b45" font-family="Arial Black, Impact, sans-serif" font-size="220" font-weight="900" letter-spacing="0">
     SESSION
   </text>
   <path d="M720 1085H1830" stroke="#c9785b" stroke-width="18" stroke-linecap="round"/>
-  <text x="1275" y="1225" text-anchor="middle" fill="#4b2e2a" font-family="Arial, Helvetica, sans-serif" font-size="120" font-weight="700">
+  <text x="1275" y="1225" text-anchor="middle" fill="#4b2e2a" font-family="Arial, Helvetica, sans-serif" font-size="130" font-weight="700">
     with Zen IV &amp; Wellness
   </text>
 
   <g filter="url(#shadow)">
-    <rect x="200" y="1480" width="2150" height="1150" rx="60" fill="#fffaf2" stroke="#4b2e2a" stroke-width="18"/>
-    <rect x="200" y="1480" width="2150" height="42" rx="21" fill="url(#mintBar)"/>
-    <text x="1275" y="1750" text-anchor="middle" fill="#9a5b45" font-family="Arial Black, Impact, sans-serif" font-size="70" font-weight="900" letter-spacing="3">
-      Kari Khan (RN) is Leading
+    <rect x="200" y="1350" width="2150" height="1250" rx="60" fill="#ffffff" stroke="#4b2e2a" stroke-width="18"/>
+    <rect x="200" y="1380" width="2150" height="42" rx="21" fill="url(#mintBar)"/>
+    <text x="1275" y="1635" text-anchor="middle" fill="#9a5b45" font-family="Arial Black, Impact, sans-serif" font-size="82" font-weight="900" letter-spacing="3">
+      LED BY KARI KHAN, RN
     </text>
-    <text x="1275" y="2010" text-anchor="middle" fill="#4b2e2a" font-family="Arial Black, Impact, sans-serif" font-size="126" font-weight="900">
+    <text x="1275" y="1865" text-anchor="middle" fill="#4b2e2a" font-family="Arial Black, Impact, sans-serif" font-size="145" font-weight="900">
       BREATHWORK &amp;
     </text>
-    <text x="1275" y="2200" text-anchor="middle" fill="#4b2e2a" font-family="Arial Black, Impact, sans-serif" font-size="126" font-weight="900">
+    <text x="1275" y="2070" text-anchor="middle" fill="#4b2e2a" font-family="Arial Black, Impact, sans-serif" font-size="145" font-weight="900">
       SOUND-HEALING
     </text>
-    <path d="M590 2320H1960" stroke="#e8bd78" stroke-width="20" stroke-linecap="round"/>
-    <text x="1275" y="2460" text-anchor="middle" fill="#9a5b45" font-family="Arial Black, Impact, sans-serif" font-size="84" font-weight="900">
-      B12 SHOT INCLUDED
+    <rect x="520" y="2185" width="1510" height="330" rx="48" fill="#f3dfc1" stroke="#e8bd78" stroke-width="12"/>
+    <text x="1275" y="2320" text-anchor="middle" fill="#9a5b45" font-family="Arial Black, Impact, sans-serif" font-size="125" font-weight="900" letter-spacing="2">
+      B12 SHOT
+    </text>
+    <text x="1275" y="2450" text-anchor="middle" fill="#9a5b45" font-family="Arial Black, Impact, sans-serif" font-size="125" font-weight="900" letter-spacing="2">
+      INCLUDED
     </text>
   </g>
 
   <g filter="url(#shadow)">
-    <rect x="200" y="2745" width="2150" height="400" rx="60" fill="#4b2e2a"/>
-    <text x="900" y="2915" text-anchor="middle" fill="#e8bd78" font-family="Arial Black, Impact, sans-serif" font-size="74" font-weight="900" letter-spacing="3">
+    <rect x="200" y="2630" width="2150" height="520" rx="60" fill="#4b2e2a"/>
+    <text x="900" y="2800" text-anchor="middle" fill="#e8bd78" font-family="Arial Black, Impact, sans-serif" font-size="94" font-weight="900" letter-spacing="3">
       SATURDAY 8/29
     </text>
-    <text x="900" y="3040" text-anchor="middle" fill="#ffffff" font-family="Arial Black, Impact, sans-serif" font-size="72" font-weight="900">
+    <text x="900" y="2920" text-anchor="middle" fill="#ffffff" font-family="Arial Black, Impact, sans-serif" font-size="92" font-weight="900">
       2:00 PM – 3:00 PM
     </text>
-    <rect x="1640" y="2820" width="570" height="235" rx="117" fill="#e8bd78"/>
-    <text x="1925" y="2985" text-anchor="middle" fill="#4b2e2a" font-family="Arial Black, Impact, sans-serif" font-size="138" font-weight="900">
+    <rect x="1590" y="2700" width="620" height="270" rx="135" fill="#e8bd78" stroke="#fffaf2" stroke-width="10"/>
+    <text x="1900" y="2890" text-anchor="middle" fill="#4b2e2a" font-family="Arial Black, Impact, sans-serif" font-size="164" font-weight="900">
       $40
+    </text>
+    <path d="M430 2985H2120" stroke="#c9785b" stroke-width="8" stroke-linecap="round"/>
+    <text x="1275" y="3085" text-anchor="middle" fill="#ffffff" font-family="Arial Black, Impact, sans-serif" font-size="88" font-weight="900">
+      RSVP to Kari at (562) 708-4646
     </text>
   </g>
 </svg>
