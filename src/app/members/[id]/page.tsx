@@ -176,6 +176,8 @@ export default function MemberDetailPage() {
   const [reactivateMembershipSubmitting, setReactivateMembershipSubmitting] = useState(false);
   const [adjustSubId, setAdjustSubId] = useState<string | null>(null);
   const [adjustDateStr, setAdjustDateStr] = useState("");
+  const [priceSubId, setPriceSubId] = useState<string | null>(null);
+  const [priceInput, setPriceInput] = useState("");
   const [membershipPauseLoadingSid, setMembershipPauseLoadingSid] = useState<string | null>(null);
   const [waiverResult, setWaiverResult] = useState<{ message: string; url?: string } | null>(null);
   const [waiverExemptSaving, setWaiverExemptSaving] = useState(false);
@@ -469,8 +471,39 @@ export default function MemberDetailPage() {
   function openAdjustExpiry(subscriptionId: string, expiryRaw: unknown) {
     const s = String(expiryRaw ?? "").trim();
     const m = /^(\d{4}-\d{2}-\d{2})/.exec(s);
+    setPriceSubId(null);
+    setPriceInput("");
     setAdjustDateStr(m ? m[1] : "");
     setAdjustSubId(subscriptionId);
+  }
+
+  function openSetPrice(subscriptionId: string, priceRaw: unknown) {
+    setAdjustSubId(null);
+    setAdjustDateStr("");
+    setPriceSubId(subscriptionId);
+    setPriceInput(String(priceRaw ?? "").replace(/[$,]/g, "").trim());
+  }
+
+  async function submitSetPrice() {
+    if (!priceSubId || !priceInput.trim()) return;
+    setAdminAction("set-price");
+    try {
+      const res = await fetch("/api/admin/subscriptions/adjust-price", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscription_id: priceSubId, price: priceInput.trim() }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setPriceSubId(null);
+        setPriceInput("");
+        await fetchMember();
+      } else {
+        alert(json.error ?? "Failed to update price");
+      }
+    } finally {
+      setAdminAction(null);
+    }
   }
 
   async function submitAdjustExpiry() {
@@ -1875,7 +1908,7 @@ export default function MemberDetailPage() {
             <p className="p-6 text-stone-500 text-sm">No subscriptions.</p>
           ) : (
             <table className="w-full text-left text-sm">
-              <thead><tr className="bg-stone-50 text-stone-500"><th className="py-2 px-4">Plan</th><th className="py-2 px-4">Status</th><th className="py-2 px-4">Start</th><th className="py-2 px-4">Expiry</th><th className="py-2 px-4">Days left</th><th className="py-2 px-4">Admin</th></tr></thead>
+              <thead><tr className="bg-stone-50 text-stone-500"><th className="py-2 px-4">Plan</th><th className="py-2 px-4">Status</th><th className="py-2 px-4">Start</th><th className="py-2 px-4">Expiry</th><th className="py-2 px-4">Days left</th><th className="py-2 px-4">Renewal price</th><th className="py-2 px-4">Admin</th></tr></thead>
               <tbody>
                 {data.subscriptions.map((s, i) => {
                   const isBankedPassPack =
@@ -1920,9 +1953,50 @@ export default function MemberDetailPage() {
                       )}
                     </td>
                     <td className="py-2 px-4">
+                      {isBankedPassPack ? (
+                        <span className="text-stone-400">—</span>
+                      ) : (
+                        String(s.price ?? "—")
+                      )}
+                    </td>
+                    <td className="py-2 px-4">
                       {isAdmin && s.status !== "Cancelled" ? (
                         isBankedPassPack ? (
                           <span className="text-xs text-stone-500">Banked days — member activates under My Membership</span>
+                        ) : priceSubId === String(s.subscription_id) ? (
+                          <div className="flex flex-col gap-2 items-start min-w-[11rem]">
+                            <label className="text-xs text-stone-500">Future auto-renew price (USD)</label>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={priceInput}
+                              onChange={(e) => setPriceInput(e.target.value)}
+                              className="text-xs border border-stone-300 rounded px-2 py-1 text-stone-800 w-full"
+                              disabled={pauseBusy}
+                              placeholder="0.00"
+                            />
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void submitSetPrice()}
+                                disabled={pauseBusy || !priceInput.trim()}
+                                className="text-brand-700 hover:underline text-xs font-medium disabled:opacity-50"
+                              >
+                                {adminAction === "set-price" ? "…" : "Save"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPriceSubId(null);
+                                  setPriceInput("");
+                                }}
+                                disabled={pauseBusy}
+                                className="text-stone-600 hover:underline text-xs disabled:opacity-50"
+                              >
+                                Close
+                              </button>
+                            </div>
+                          </div>
                         ) : adjustSubId === String(s.subscription_id) ? (
                           <div className="flex flex-col gap-2 items-start min-w-[11rem]">
                             <label className="text-xs text-stone-500 sr-only">New expiry</label>
@@ -1980,6 +2054,14 @@ export default function MemberDetailPage() {
                                 )}
                               </div>
                             ) : null}
+                            <button
+                              type="button"
+                              onClick={() => openSetPrice(String(s.subscription_id), s.price)}
+                              disabled={pauseBusy}
+                              className="text-brand-700 hover:underline text-xs font-medium disabled:opacity-50"
+                            >
+                              Set price
+                            </button>
                             <button
                               type="button"
                               onClick={() => openAdjustExpiry(String(s.subscription_id), s.expiry_date)}
