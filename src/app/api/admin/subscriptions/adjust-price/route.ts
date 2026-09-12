@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { getDb, ensureSubscriptionRenewalPromoColumns } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
@@ -55,7 +55,10 @@ export async function POST(request: NextRequest) {
   const previous = row.price;
 
   try {
-    db.prepare(`UPDATE subscriptions SET price = ? WHERE subscription_id = ?`).run(parsed.value, subscriptionId);
+    ensureSubscriptionRenewalPromoColumns(db);
+    db.prepare(
+      `UPDATE subscriptions SET price = ?, renewal_price_indefinite = 1, promo_renewals_remaining = NULL WHERE subscription_id = ?`
+    ).run(parsed.value, subscriptionId);
     db.close();
     return NextResponse.json({
       ok: true,

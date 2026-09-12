@@ -110,7 +110,7 @@ export default function SubscriptionsPage() {
     <div className="max-w-6xl mx-auto">
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-stone-800 tracking-tight">Subscriptions</h1>
-        <p className="text-stone-500 mt-1">Active and cancelled subscriptions. Set price updates the amount stored on the subscription (used for renewals per your pricing rules).</p>
+        <p className="text-stone-500 mt-1">Active and cancelled subscriptions. Set price updates the renewal amount for that member (used on future auto-renewals).</p>
       </header>
 
       <div className="bg-white rounded-xl border border-stone-200 shadow-sm overflow-hidden">
