@@ -9,3 +9,15 @@ export function isSameDayAppointment(dateYmd: string | null | undefined, tz: str
   if (!norm) return false;
   return norm === todayInAppTz(tz);
 }
+
+/** Members must call for same-day PT; admin or staff booking on behalf may still book. Returns error message or null. */
+export function memberSameDayPtBookingError(
+  dateYmd: string | null | undefined,
+  tz: string,
+  opts: { isAdmin?: boolean; memberSelfBooking?: boolean }
+): string | null {
+  if (opts.isAdmin) return null;
+  if (opts.memberSelfBooking === false) return null;
+  if (!isSameDayAppointment(dateYmd, tz)) return null;
+  return SAME_DAY_SCHEDULING_MESSAGE;
+}

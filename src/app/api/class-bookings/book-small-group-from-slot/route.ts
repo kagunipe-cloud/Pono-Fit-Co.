@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { getDb, getAppTimezone } from "@/lib/db";
+import { getDb, getAppTimezone, ensureMembersProfileColumns } from "@/lib/db";
 import { ensureRecurringClassesTables } from "@/lib/recurring-classes";
 import { ensurePTSlotTables } from "@/lib/pt-slots";
 import { getMemberIdFromSession } from "@/lib/session";
@@ -24,6 +24,8 @@ import {
   getTrainerDisplayNameFromMemberId,
 } from "@/lib/email";
 import { normalizePtDurationMinutes } from "@/lib/pt-slots";
+import { memberSameDayPtBookingError } from "@/lib/same-day-scheduling";
+import { memberPtBookingPhoneError } from "@/lib/member-phone";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +69,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "occurrence_date and start_time required" }, { status: 400 });
     }
 
+    const tz = getAppTimezone();
+    const memberSelfBooking = sessionMemberId === memberId && !isAdmin;
+    const sameDayErr = memberSameDayPtBookingError(occurrence_date, tz, { isAdmin, memberSelfBooking });
+    if (sameDayErr) {
+      return NextResponse.json({ error: sameDayErr }, { status: 400 });
+    }
+
     const today = new Date().toISOString().slice(0, 10);
     if (occurrence_date < today) {
       return NextResponse.json({ error: "Cannot book past times" }, { status: 400 });
@@ -75,6 +84,13 @@ export async function POST(request: NextRequest) {
     const db = getDb();
     ensurePTSlotTables(db);
     ensureRecurringClassesTables(db);
+    ensureMembersProfileColumns(db);
+
+    const phoneErr = memberPtBookingPhoneError(db, memberId, { isAdmin, memberSelfBooking });
+    if (phoneErr) {
+      db.close();
+      return NextResponse.json({ error: phoneErr }, { status: 400 });
+    }
 
     if (!Number.isNaN(blockId)) {
       const block = db

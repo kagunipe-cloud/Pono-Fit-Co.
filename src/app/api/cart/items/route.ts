@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersProfileColumns } from "../../../../lib/db";
 import { ensureCartTables } from "../../../../lib/cart";
 import { getMemberIdFromSession } from "../../../../lib/session";
+import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { getAdminMemberId, getTrainerMemberId } from "../../../../lib/admin";
 import { CLASSES_DISCONTINUED_API_ERROR } from "../../../../lib/classes-discontinued";
 import { ensureRecurringClassesTables } from "../../../../lib/recurring-classes";
@@ -14,6 +15,9 @@ import {
   getRetailInCartQty,
   getRetailLineMeta,
 } from "../../../../lib/retail-products";
+import { memberSameDayPtBookingError } from "../../../../lib/same-day-scheduling";
+import { memberPtBookingPhoneError } from "../../../../lib/member-phone";
+import { memberFirstTimePtDurationError } from "../../../../lib/first-time-pt-booking";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +76,15 @@ export async function POST(request: NextRequest) {
           })
         : null;
 
+    if (slot_json) {
+      const slotDate = String(slot.date);
+      const memberSelfBooking = sessionMemberId === member_id && !isAdmin && !isStaff;
+      const sameDayErr = memberSameDayPtBookingError(slotDate, getAppTimezone(), { isAdmin, memberSelfBooking });
+      if (sameDayErr) {
+        return NextResponse.json({ error: sameDayErr }, { status: 400 });
+      }
+    }
+
     let gift_recipient_email: string | null = null;
     if (product_type === "membership_plan" && body.gift_recipient_email != null && String(body.gift_recipient_email).trim() !== "") {
       const g = String(body.gift_recipient_email).trim().toLowerCase();
@@ -83,6 +96,26 @@ export async function POST(request: NextRequest) {
 
     const db = getDb();
     ensureCartTables(db);
+
+    if (slot_json) {
+      ensureMembersProfileColumns(db);
+      ensurePTSlotTables(db);
+      const memberSelfBooking = sessionMemberId === member_id && !isAdmin && !isStaff;
+      const phoneErr = memberPtBookingPhoneError(db, member_id, { isAdmin, memberSelfBooking });
+      if (phoneErr) {
+        db.close();
+        return NextResponse.json({ error: phoneErr }, { status: 400 });
+      }
+      const slotDuration = Number(slot.duration_minutes);
+      const firstTimeDurationErr = memberFirstTimePtDurationError(db, member_id, slotDuration, {
+        isAdmin,
+        memberSelfBooking,
+      });
+      if (firstTimeDurationErr) {
+        db.close();
+        return NextResponse.json({ error: firstTimeDurationErr }, { status: 400 });
+      }
+    }
 
     let resolvedProductId = product_id;
     if (product_type === "retail") {

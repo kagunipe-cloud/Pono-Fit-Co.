@@ -73,7 +73,7 @@ export default function MacroWeekCalendar({
         </button>
       </div>
       <p className="text-xs text-stone-500 mb-4">
-        Tap a day to open your journal. Hit your macros (within 15%) and earn a shaka on The Board.
+        Tap a day to open your journal. Hit your macros and earn a shaka on The Board — protein at/above goal, fat and carbs at/below goal, calories within 15%.
       </p>
 
       {loading ? (

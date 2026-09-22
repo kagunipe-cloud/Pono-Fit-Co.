@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { formatInAppTz, todayInAppTz, weekStartInAppTz, addDaysToDateStr } from "@/lib/app-timezone";
 import { useAppTimezone, useOpenHours } from "@/lib/settings-context";
+import { isSameDayAppointment, SAME_DAY_SCHEDULING_MESSAGE } from "@/lib/same-day-scheduling";
 import type { BlockSegment } from "@/lib/pt-availability";
 import { isOpenGroupSessionKind, OPEN_GROUP_HOURLY_RATE } from "@/lib/open-group-pt";
 
@@ -141,6 +142,34 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
   const refreshKey = scheduleRefreshKey ?? localRefreshKey;
   type SelectedSlot = { date: string; slotMin: number; timeStr: string; item: CellItem };
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
+  const [memberSameDayNotice, setMemberSameDayNotice] = useState<{ date: string; time: string } | null>(null);
+  const isMember = variant === "member";
+
+  function showMemberSameDayNotice(date: string, time: string) {
+    setMemberSameDayNotice({ date, time });
+  }
+
+  function memberPtBookControl(date: string, timeStr: string, href: string, className: string, label: string) {
+    if (isMember && isSameDayAppointment(date, tz)) {
+      return (
+        <button
+          type="button"
+          className={`${className} cursor-pointer`}
+          onClick={(e) => {
+            e.stopPropagation();
+            showMemberSameDayNotice(date, timeStr);
+          }}
+        >
+          {label}
+        </button>
+      );
+    }
+    return (
+      <Link href={href} className={className} onClick={(e) => e.stopPropagation()}>
+        {label}
+      </Link>
+    );
+  }
 
   const [trainerPickMembers, setTrainerPickMembers] = useState<{ member_id: string; first_name: string | null; last_name: string | null; email: string | null }[]>(
     []
@@ -907,9 +936,16 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                                 <>
                                   <span className="text-xs font-medium text-stone-800">Available</span>
                                   {!isTrainer && <span className="text-xs text-stone-500 block truncate">{item.trainer}</span>}
-                                  {!isTrainer && (
-                                    <Link href={variant === "master" ? `/admin/book-pt-for-member?block=${item.blockId}&date=${date}&time=${encodeURIComponent(timeStr)}` : `/member/book-pt?block=${item.blockId}&date=${date}&time=${encodeURIComponent(timeStr)}${bookPtQuery || ""}${trainerQuery || ""}`} className="text-xs text-brand-600 hover:underline mt-0.5 inline-block" onClick={(e) => e.stopPropagation()}>Book</Link>
-                                  )}
+                                  {!isTrainer &&
+                                    memberPtBookControl(
+                                      date,
+                                      timeStr,
+                                      variant === "master"
+                                        ? `/admin/book-pt-for-member?block=${item.blockId}&date=${date}&time=${encodeURIComponent(timeStr)}`
+                                        : `/member/book-pt?block=${item.blockId}&date=${date}&time=${encodeURIComponent(timeStr)}${bookPtQuery || ""}${trainerQuery || ""}`,
+                                      "text-xs text-brand-600 hover:underline mt-0.5 inline-block",
+                                      "Book"
+                                    )}
                                 </>
                               )}
                             </div>
@@ -923,7 +959,15 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                               {isTrainer ? (
                                 <span className="text-xs text-stone-600 font-medium">{SCHEDULE_LABEL_TRAINER_NO_HOURS}</span>
                               ) : (
-                                <Link href={variant === "master" ? `/admin/book-pt-for-member?date=${date}&time=${timeStr}` : `/member/book-pt?date=${date}&time=${timeStr}${bookPtQuery || ""}${trainerQuery || ""}`} className="text-xs text-brand-700 hover:text-brand-800 hover:underline">Available</Link>
+                                {memberPtBookControl(
+                                  date,
+                                  timeStr,
+                                  variant === "master"
+                                    ? `/admin/book-pt-for-member?date=${date}&time=${timeStr}`
+                                    : `/member/book-pt?date=${date}&time=${timeStr}${bookPtQuery || ""}${trainerQuery || ""}`,
+                                  "text-xs text-brand-700 hover:text-brand-800 hover:underline",
+                                  "Available"
+                                )}
                               )}
                             </div>
                           )}
@@ -955,6 +999,35 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
             <>Add classes in <Link href="/classes" className="text-brand-600 hover:underline">Classes</Link> or set up trainer availability for PT.</>
           )}
         </p>
+      )}
+
+      {memberSameDayNotice && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setMemberSameDayNotice(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-xl max-w-md w-full p-5 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="same-day-pt-title"
+          >
+            <h3 id="same-day-pt-title" className="font-semibold text-stone-800">
+              Same-day PT — {memberSameDayNotice.date} at {memberSameDayNotice.time}
+            </h3>
+            <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+              {SAME_DAY_SCHEDULING_MESSAGE}
+            </p>
+            <button
+              type="button"
+              onClick={() => setMemberSameDayNotice(null)}
+              className="w-full py-2 rounded-lg border border-stone-200 text-stone-700 text-sm font-medium hover:bg-stone-50"
+            >
+              OK
+            </button>
+          </div>
+        </div>
       )}
 
       {(isMaster || isTrainer) && selectedSlot && (

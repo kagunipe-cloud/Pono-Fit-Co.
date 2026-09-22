@@ -1434,7 +1434,8 @@ export default function MemberMacrosDayPage() {
                 <p className="text-sm font-medium text-emerald-700 mt-3">Counts for The Board this week ✓</p>
               ) : (
                 <p className="text-sm text-amber-800 mt-3">
-                  Logged, but outside {board.tolerance_percent}% on: {board.miss_reasons.join(", ")}.
+                  Logged, but didn&apos;t meet targets on: {board.miss_reasons.join(", ")}. Protein at/above goal; fat
+                  and carbs at/below goal; calories within {board.tolerance_percent}%.
                 </p>
               )}
               {!isToday && board.countable && (

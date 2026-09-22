@@ -39,7 +39,8 @@ import { normalizeMembershipStartDateYmd, ymdToLocalNoonDate } from "../../../..
 import { formatPrice } from "../../../../lib/format";
 import { computeCcFee } from "../../../../lib/cc-fees";
 import { getMemberIdFromSession } from "../../../../lib/session";
-import { getTrainerMemberId } from "../../../../lib/admin";
+import { getTrainerMemberId, getAdminMemberId } from "../../../../lib/admin";
+import { memberFirstTimePtDurationError } from "../../../../lib/first-time-pt-booking";
 import { randomUUID } from "crypto";
 import { stripeCustomerIdForApi } from "../../../../lib/stripe-customer";
 import Stripe from "stripe";
@@ -147,6 +148,8 @@ export async function POST(request: NextRequest) {
       (request.headers.get("x-cron-secret") === cronSecret ||
         request.headers.get("authorization") === `Bearer ${cronSecret}`);
     const isStaff = cronOk || !!(await getTrainerMemberId(request));
+    const isAdmin = !!(await getAdminMemberId(request));
+    const memberSelfBooking = (cronOk || sessionMemberId === member_id) && !isStaff && !isAdmin;
     if (!cronOk && sessionMemberId !== member_id && !isStaff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -428,6 +431,14 @@ export async function POST(request: NextRequest) {
               }
             }
             if (slot) {
+              const firstTimeDurationErr = memberFirstTimePtDurationError(db, member_id, slot.duration_minutes, {
+                isAdmin,
+                memberSelfBooking,
+              });
+              if (firstTimeDurationErr) {
+                db.close();
+                return NextResponse.json({ error: firstTimeDurationErr }, { status: 400 });
+              }
               const trainerMemberId = slot.trainer_member_id || null;
               db.prepare(
                 "INSERT INTO pt_open_bookings (member_id, occurrence_date, start_time, duration_minutes, pt_session_id, payment_type, trainer_member_id) VALUES (?, ?, ?, ?, ?, 'paid', ?)"

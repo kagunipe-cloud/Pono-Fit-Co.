@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone } from "../../../../lib/db";
+import { getDb, getAppTimezone, ensureMembersProfileColumns } from "../../../../lib/db";
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { getAdminMemberId, getTrainerMemberId } from "../../../../lib/admin";
 import { ensurePTSlotTables, getPTCreditBalance, normalizePtDurationMinutes, reservedMinutes } from "../../../../lib/pt-slots";
@@ -19,6 +19,9 @@ import {
   sendMemberBookingConfirmationEmail,
   getTrainerDisplayNameFromMemberId,
 } from "../../../../lib/email";
+import { memberSameDayPtBookingError } from "../../../../lib/same-day-scheduling";
+import { memberPtBookingPhoneError } from "../../../../lib/member-phone";
+import { memberFirstTimePtDurationError, firstTimeStackTwoThirtyCreditsError, FIRST_TIME_PT_MIN_DURATION_MINUTES } from "../../../../lib/first-time-pt-booking";
 
 export const dynamic = "force-dynamic";
 
@@ -33,10 +36,12 @@ export async function POST(request: NextRequest) {
     const trainer_availability_id = parseInt(String(body.trainer_availability_id), 10);
     const occurrence_date = (body.occurrence_date ?? "").trim();
     const start_time = (body.start_time ?? "").trim();
-    const session_duration_minutes = normalizePtDurationMinutes(body.session_duration_minutes, 60);
+    const requested_duration_minutes = normalizePtDurationMinutes(body.session_duration_minutes, 60);
     const member_id = (body.member_id ?? "").trim();
     const use_credit = !!body.use_credit;
     const pay_on_arrival = !!body.pay_on_arrival;
+    const first_time_stack_30_credits = !!body.first_time_stack_30_credits;
+    let session_duration_minutes = requested_duration_minutes;
 
     if (!trainer_availability_id || !occurrence_date || !start_time || !member_id) {
       return NextResponse.json({ error: "trainer_availability_id, occurrence_date, start_time, member_id required" }, { status: 400 });
@@ -66,9 +71,53 @@ export async function POST(request: NextRequest) {
     if (pay_on_arrival && !isAdmin) {
       return NextResponse.json({ error: "Only admins can book pay-on-arrival" }, { status: 403 });
     }
+    if (first_time_stack_30_credits) {
+      if (!use_credit || pay_on_arrival) {
+        return NextResponse.json({ error: "Stacked first-visit credits require using PT credits." }, { status: 400 });
+      }
+      if (requested_duration_minutes !== 30) {
+        return NextResponse.json({ error: "Stacked first-visit credits require a 30-minute session type." }, { status: 400 });
+      }
+      session_duration_minutes = FIRST_TIME_PT_MIN_DURATION_MINUTES;
+    }
+
+    const tz = getAppTimezone();
+    const memberSelfBooking = sessionMemberId === member_id && !isAdmin && !trainerBookingForMember;
+    const sameDayErr = memberSameDayPtBookingError(occurrence_date, tz, { isAdmin, memberSelfBooking });
+    if (sameDayErr) {
+      return NextResponse.json({ error: sameDayErr }, { status: 400 });
+    }
 
     const db = getDb();
     ensurePTSlotTables(db);
+    ensureMembersProfileColumns(db);
+
+    const phoneErr = memberPtBookingPhoneError(db, member_id, { isAdmin, memberSelfBooking });
+    if (phoneErr) {
+      db.close();
+      return NextResponse.json({ error: phoneErr }, { status: 400 });
+    }
+
+    const firstTimeDurationErr = memberFirstTimePtDurationError(db, member_id, requested_duration_minutes, {
+      isAdmin,
+      memberSelfBooking,
+      stackTwoThirtyCredits: first_time_stack_30_credits,
+    });
+    if (firstTimeDurationErr) {
+      db.close();
+      return NextResponse.json({ error: firstTimeDurationErr }, { status: 400 });
+    }
+
+    if (first_time_stack_30_credits) {
+      const stackErr = firstTimeStackTwoThirtyCreditsError(db, member_id, requested_duration_minutes, {
+        isAdmin,
+        memberSelfBooking,
+      });
+      if (stackErr) {
+        db.close();
+        return NextResponse.json({ error: stackErr }, { status: 400 });
+      }
+    }
 
     const block = db.prepare("SELECT id, trainer, trainer_member_id, start_time, end_time FROM trainer_availability WHERE id = ?").get(trainer_availability_id) as
       | { id: number; trainer: string; trainer_member_id: string | null; start_time: string; end_time: string }
@@ -120,14 +169,38 @@ export async function POST(request: NextRequest) {
     }
 
     if (use_credit && !pay_on_arrival) {
-      const balance = getPTCreditBalance(db, member_id, session_duration_minutes);
-      if (balance < 1) {
-        db.close();
-        return NextResponse.json({ error: `No ${session_duration_minutes}-min PT credits. Purchase a pack or pay.` }, { status: 400 });
+      if (first_time_stack_30_credits) {
+        const balance30 = getPTCreditBalance(db, member_id, requested_duration_minutes);
+        if (balance30 < 2) {
+          db.close();
+          return NextResponse.json({ error: "You need two 30-minute PT credits for a stacked first visit." }, { status: 400 });
+        }
+        db.prepare(
+          "INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id) VALUES (?, ?, -1, ?, 'trainer_specific_booking', ?)"
+        ).run(
+          member_id,
+          requested_duration_minutes,
+          "First visit stacked 30-min credit (1 of 2)",
+          String(trainer_availability_id + "-" + occurrence_date + "-" + start_time + "-stack1")
+        );
+        db.prepare(
+          "INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id) VALUES (?, ?, -1, ?, 'trainer_specific_booking', ?)"
+        ).run(
+          member_id,
+          requested_duration_minutes,
+          "First visit stacked 30-min credit (2 of 2)",
+          String(trainer_availability_id + "-" + occurrence_date + "-" + start_time + "-stack2")
+        );
+      } else {
+        const balance = getPTCreditBalance(db, member_id, session_duration_minutes);
+        if (balance < 1) {
+          db.close();
+          return NextResponse.json({ error: `No ${session_duration_minutes}-min PT credits. Purchase a pack or pay.` }, { status: 400 });
+        }
+        db.prepare(
+          "INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id) VALUES (?, ?, -1, ?, 'trainer_specific_booking', ?)"
+        ).run(member_id, session_duration_minutes, `Booked ${session_duration_minutes}-min PT`, String(trainer_availability_id + "-" + occurrence_date + "-" + start_time));
       }
-      db.prepare(
-        "INSERT INTO pt_credit_ledger (member_id, duration_minutes, amount, reason, reference_type, reference_id) VALUES (?, ?, -1, ?, 'trainer_specific_booking', ?)"
-      ).run(member_id, session_duration_minutes, `Booked ${session_duration_minutes}-min PT`, String(trainer_availability_id + "-" + occurrence_date + "-" + start_time));
     }
 
     const payment_type = pay_on_arrival ? "pay_on_arrival" : use_credit ? "credit" : "paid";
@@ -138,7 +211,10 @@ export async function POST(request: NextRequest) {
     const trainerMemberId = (block.trainer_member_id ?? "").trim();
     if (trainerMemberId) ensureTrainerClient(db, trainerMemberId, member_id);
 
-    const newBalance = use_credit ? getPTCreditBalance(db, member_id, session_duration_minutes) : undefined;
+    const newBalance =
+      use_credit && !pay_on_arrival
+        ? getPTCreditBalance(db, member_id, first_time_stack_30_credits ? requested_duration_minutes : session_duration_minutes)
+        : undefined;
 
     // Email notifications: staff + trainer
     try {
@@ -147,8 +223,11 @@ export async function POST(request: NextRequest) {
         .get(member_id) as { email: string | null; first_name: string | null; last_name: string | null } | undefined;
       const memberName = memberRow ? [memberRow.first_name, memberRow.last_name].filter(Boolean).join(" ").trim() || member_id : member_id;
       const whenStr = `${occurrence_date} ${start_time}`;
+      const sessionLabel = first_time_stack_30_credits
+        ? `${session_duration_minutes} min first PT (2×30-min credits)`
+        : `${session_duration_minutes} min`;
       const staffSubject = `PT booking: ${memberName} → ${block.trainer}`;
-      const staffBody = `${memberName} booked PT (${session_duration_minutes} min) with ${block.trainer} on ${whenStr}.`;
+      const staffBody = `${memberName} booked PT (${sessionLabel}) with ${block.trainer} on ${whenStr}.`;
       sendStaffEmail(staffSubject, staffBody).catch(() => {});
 
       const trainerId = (block.trainer_member_id ?? "").trim();
@@ -159,7 +238,7 @@ export async function POST(request: NextRequest) {
         const trainerEmail = trainerRow?.email?.trim();
         if (trainerEmail) {
           const trainerSubject = `New PT booking with ${memberName}`;
-          const trainerBody = `${memberName} booked a ${session_duration_minutes}-minute PT session with you on ${whenStr}.`;
+          const trainerBody = `${memberName} booked a ${sessionLabel} PT session with you on ${whenStr}.`;
           sendMemberEmail(trainerEmail, trainerSubject, trainerBody).catch(() => {});
         }
       }
@@ -173,7 +252,7 @@ export async function POST(request: NextRequest) {
           to: memberEmail,
           memberFirstName: memberRow?.first_name,
           kind: "pt",
-          sessionTitle: `${session_duration_minutes} min PT with ${block.trainer}`,
+          sessionTitle: `${sessionLabel} PT with ${block.trainer}`,
           dateYmd: occurrence_date,
           timeRaw: start_time,
           trainerDisplayName: trainerDisplay,
