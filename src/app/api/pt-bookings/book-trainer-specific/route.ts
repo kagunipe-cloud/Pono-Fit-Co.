@@ -81,16 +81,17 @@ export async function POST(request: NextRequest) {
       session_duration_minutes = FIRST_TIME_PT_MIN_DURATION_MINUTES;
     }
 
-    const tz = getAppTimezone();
-    const memberSelfBooking = sessionMemberId === member_id && !isAdmin && !trainerBookingForMember;
-    const sameDayErr = memberSameDayPtBookingError(occurrence_date, tz, { isAdmin, memberSelfBooking });
-    if (sameDayErr) {
-      return NextResponse.json({ error: sameDayErr }, { status: 400 });
-    }
-
     const db = getDb();
     ensurePTSlotTables(db);
     ensureMembersProfileColumns(db);
+
+    const tz = getAppTimezone(db);
+    const memberSelfBooking = sessionMemberId === member_id && !isAdmin && !trainerBookingForMember;
+    const sameDayErr = memberSameDayPtBookingError(occurrence_date, tz, { isAdmin, memberSelfBooking });
+    if (sameDayErr) {
+      db.close();
+      return NextResponse.json({ error: sameDayErr }, { status: 400 });
+    }
 
     const phoneErr = memberPtBookingPhoneError(db, member_id, { isAdmin, memberSelfBooking });
     if (phoneErr) {

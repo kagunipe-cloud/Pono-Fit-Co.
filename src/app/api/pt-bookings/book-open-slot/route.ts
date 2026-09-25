@@ -60,16 +60,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Stacked first-visit credits require using PT credits." }, { status: 400 });
     }
 
-    const tz = getAppTimezone();
-    const memberSelfBooking = sessionMemberId === member_id && !isAdmin;
-    const sameDayErr = memberSameDayPtBookingError(occurrence_date, tz, { isAdmin, memberSelfBooking });
-    if (sameDayErr) {
-      return NextResponse.json({ error: sameDayErr }, { status: 400 });
-    }
-
     const db = getDb();
     ensurePTSlotTables(db);
     ensureMembersProfileColumns(db);
+
+    const tz = getAppTimezone(db);
+    const memberSelfBooking = sessionMemberId === member_id && !isAdmin;
+    const sameDayErr = memberSameDayPtBookingError(occurrence_date, tz, { isAdmin, memberSelfBooking });
+    if (sameDayErr) {
+      db.close();
+      return NextResponse.json({ error: sameDayErr }, { status: 400 });
+    }
 
     const phoneErr = memberPtBookingPhoneError(db, member_id, { isAdmin, memberSelfBooking });
     if (phoneErr) {

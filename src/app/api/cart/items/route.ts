@@ -76,15 +76,6 @@ export async function POST(request: NextRequest) {
           })
         : null;
 
-    if (slot_json) {
-      const slotDate = String(slot.date);
-      const memberSelfBooking = sessionMemberId === member_id && !isAdmin && !isStaff;
-      const sameDayErr = memberSameDayPtBookingError(slotDate, getAppTimezone(), { isAdmin, memberSelfBooking });
-      if (sameDayErr) {
-        return NextResponse.json({ error: sameDayErr }, { status: 400 });
-      }
-    }
-
     let gift_recipient_email: string | null = null;
     if (product_type === "membership_plan" && body.gift_recipient_email != null && String(body.gift_recipient_email).trim() !== "") {
       const g = String(body.gift_recipient_email).trim().toLowerCase();
@@ -101,6 +92,12 @@ export async function POST(request: NextRequest) {
       ensureMembersProfileColumns(db);
       ensurePTSlotTables(db);
       const memberSelfBooking = sessionMemberId === member_id && !isAdmin && !isStaff;
+      const slotDate = String(slot.date);
+      const sameDayErr = memberSameDayPtBookingError(slotDate, getAppTimezone(db), { isAdmin, memberSelfBooking });
+      if (sameDayErr) {
+        db.close();
+        return NextResponse.json({ error: sameDayErr }, { status: 400 });
+      }
       const phoneErr = memberPtBookingPhoneError(db, member_id, { isAdmin, memberSelfBooking });
       if (phoneErr) {
         db.close();
