@@ -959,7 +959,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                               {isTrainer ? (
                                 <span className="text-xs text-stone-600 font-medium">{SCHEDULE_LABEL_TRAINER_NO_HOURS}</span>
                               ) : (
-                                {memberPtBookControl(
+                                memberPtBookControl(
                                   date,
                                   timeStr,
                                   variant === "master"
@@ -967,7 +967,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                                     : `/member/book-pt?date=${date}&time=${timeStr}${bookPtQuery || ""}${trainerQuery || ""}`,
                                   "text-xs text-brand-700 hover:text-brand-800 hover:underline",
                                   "Available"
-                                )}
+                                )
                               )}
                             </div>
                           )}
