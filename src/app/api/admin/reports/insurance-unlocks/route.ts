@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, getAppTimezone, ensureMembersInsuranceFitnessIdColumn } from "@/lib/db";
 import { getAdminMemberId } from "@/lib/admin";
 import { ensureUsageTables } from "@/lib/usage";
-import { endOfDayInTz, startOfDayInTz } from "@/lib/app-timezone";
+import { endOfDayInTz, startOfDayInTz, dateStringInAppTz } from "@/lib/app-timezone";
 import {
   isValidInsuranceReportFilter,
   type InsuranceReportFilter,
@@ -61,7 +61,24 @@ export async function GET(request: NextRequest) {
 
     db.close();
 
-    const members = report.members.map(({ billable_visits: _bv, ...rest }) => rest);
+    const members = report.members.map((m) => ({
+      member_id: m.member_id,
+      first_name: m.first_name,
+      last_name: m.last_name,
+      insurance_program: m.insurance_program,
+      birthday: m.birthday,
+      insurance_fitness_id: m.insurance_fitness_id,
+      billable_days: m.billable_days,
+      all_unlocks: m.all_unlocks,
+      visit_days: m.billable_visits.map((v) => dateStringInAppTz(v.happened_at, tz)),
+      billable_visits: m.billable_visits.map((v) => ({
+        id: v.id,
+        happened_at: v.happened_at,
+        visit_date: dateStringInAppTz(v.happened_at, tz),
+        lock_name: v.lock_name,
+        lock_id: v.lock_id,
+      })),
+    }));
 
     return NextResponse.json({
       program,

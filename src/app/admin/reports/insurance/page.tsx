@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { formatDateTimeInAppTz } from "@/lib/app-timezone";
+import { formatDateTimeInAppTz, formatDateForDisplay } from "@/lib/app-timezone";
 import { useAppTimezone } from "@/lib/settings-context";
 import { getPresetRange } from "@/lib/report-date-presets";
 import {
@@ -25,12 +25,22 @@ type Row = {
   insurance_program: string | null;
 };
 
+type BillableVisit = {
+  id: number;
+  happened_at: string;
+  visit_date: string;
+  lock_name: string | null;
+  lock_id: number | null;
+};
+
 type MemberSummary = {
   member_id: string;
   first_name: string | null;
   last_name: string | null;
   insurance_program: string | null;
   billable_days: number;
+  visit_days: string[];
+  billable_visits: BillableVisit[];
   all_unlocks: Row[];
 };
 
@@ -157,8 +167,8 @@ export default function InsuranceReportPage() {
       <p className="text-stone-600 text-sm mb-6">
         For reporting, <strong>one visit per member per calendar day</strong> — the first successful door unlock that day
         (gym time). Includes members with <strong>any</strong> insurance program on file, or narrow to Optum / Tivity /
-        ASH below. The table lists each member and their <strong>billable visit-day count</strong>; click a count to see every
-        unlock in this range. Dates use the gym timezone
+        ASH below. Each row shows <strong>which calendar days</strong> count as billable visits (first successful unlock
+        that day). Click the visit-day count to see every door event in the range. Dates use the gym timezone
         {timezone ? ` (${timezone})` : ""}.
       </p>
 
@@ -294,13 +304,14 @@ export default function InsuranceReportPage() {
           <p className="p-6 text-stone-500 text-sm">No successful unlocks in this range for the selected filter.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm min-w-[480px]">
+            <table className="w-full text-left text-sm min-w-[640px]">
               <thead>
                 <tr className="bg-stone-50 text-stone-500">
                   <th className="py-2 px-4">Member</th>
                   <th className="py-2 px-4">Member ID</th>
                   <th className="py-2 px-4 min-w-[8rem]">Program</th>
                   <th className="py-2 px-4 w-40">Visit days (billable)</th>
+                  <th className="py-2 px-4 min-w-[12rem]">Visit dates</th>
                 </tr>
               </thead>
               <tbody>
@@ -332,11 +343,53 @@ export default function InsuranceReportPage() {
                           </button>
                           <span className="text-stone-400 text-xs ml-1.5">({m.all_unlocks.length} event{m.all_unlocks.length === 1 ? "" : "s"})</span>
                         </td>
+                        <td className="py-2 px-4 text-stone-700 align-top">
+                          {m.visit_days?.length ? (
+                            <ul className="space-y-0.5">
+                              {m.visit_days.map((ymd) => (
+                                <li key={ymd} className="whitespace-nowrap tabular-nums">
+                                  {formatDateForDisplay(ymd, tz || timezone)}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
                       </tr>
                       {expanded ? (
                         <tr className="bg-stone-50/80">
-                          <td colSpan={4} className="p-0">
+                          <td colSpan={5} className="p-0">
                             <div className="px-4 py-3 border-t border-stone-100 text-left">
+                              {(m.billable_visits?.length ?? 0) > 0 ? (
+                                <>
+                                  <p className="text-xs font-medium text-stone-700 mb-2">Billable visit days</p>
+                                  <div className="overflow-x-auto rounded-lg border border-brand-200 bg-brand-50/40 mb-4">
+                                    <table className="w-full text-left text-sm min-w-[420px]">
+                                      <thead>
+                                        <tr className="bg-brand-50 text-stone-600 text-xs">
+                                          <th className="py-1.5 px-3">Visit date</th>
+                                          <th className="py-1.5 px-3">First check-in</th>
+                                          <th className="py-1.5 px-3">Door</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {m.billable_visits.map((v) => (
+                                          <tr key={v.id} className="border-t border-brand-100/80">
+                                            <td className="py-1.5 px-3 font-medium whitespace-nowrap">
+                                              {formatDateForDisplay(v.visit_date, tz || timezone)}
+                                            </td>
+                                            <td className="py-1.5 px-3 whitespace-nowrap text-stone-600">
+                                              {formatDateTimeInAppTz(new Date(v.happened_at), undefined, tz || timezone)}
+                                            </td>
+                                            <td className="py-1.5 px-3">{v.lock_name ?? v.lock_id ?? "—"}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </>
+                              ) : null}
                               <p className="text-xs text-stone-500 mb-3">
                                 All door events in this range (extra same-day swipes do not add billable days).
                               </p>
