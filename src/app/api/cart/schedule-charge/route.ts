@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { getDb, getAppTimezone, ensureMembersStripeColumn } from "@/lib/db";
 import { ensureCartTables } from "@/lib/cart";
 import { getTrainerMemberId } from "@/lib/admin";
+import { processedByStaffFromRequest } from "@/lib/stripe-processed-by-metadata";
 import { ensurePTSlotTables } from "@/lib/pt-slots";
 import { ensureRecurringClassesTables, ensureClassesRecurringColumns, ensureClassOccurrencesClassId } from "@/lib/recurring-classes";
 import { ensureRetailProductsTable, assertRetailStockForCart } from "@/lib/retail-products";
@@ -181,6 +182,8 @@ export async function POST(request: NextRequest) {
     const successUrl = `${origin}/members/${memberRouteId}/cart?schedule_setup=1&session_id={CHECKOUT_SESSION_ID}`;
     const cancelUrl = `${origin}/members/${memberRouteId}/cart?schedule_cancelled=1`;
 
+    const processedBy = await processedByStaffFromRequest(request);
+
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: "setup",
       payment_method_types: ["card", "us_bank_account"],
@@ -190,6 +193,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         member_id,
         scheduled_cart_charge_id: String(scheduledId),
+        ...processedBy,
       },
     };
     if (stripeCustomerId) {

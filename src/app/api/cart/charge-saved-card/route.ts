@@ -6,7 +6,8 @@ import { ensureDiscountsTable } from "@/lib/discounts";
 import { ensurePTSlotTables } from "@/lib/pt-slots";
 import { assertRetailStockForCart, getMemberRetailAllowPurchaseWhenOutOfStock, ensureRetailProductsTable } from "@/lib/retail-products";
 import { ensureRecurringClassesTables, ensureClassesRecurringColumns, ensureClassOccurrencesClassId } from "@/lib/recurring-classes";
-import { getTrainerMemberId } from "@/lib/admin";
+import { getAdminMemberId, getTrainerMemberId } from "@/lib/admin";
+import { buildStripeProcessedByMetadata } from "@/lib/stripe-processed-by-metadata";
 import { getMemberIdFromSession } from "@/lib/session";
 import { computeCcFee } from "@/lib/cc-fees";
 import { stripeCustomerIdForApi } from "@/lib/stripe-customer";
@@ -175,6 +176,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    let processedBy: Record<string, string> = {};
+    if (staffId) {
+      const isAdmin = !!(await getAdminMemberId(request));
+      processedBy = buildStripeProcessedByMetadata(staffId, isAdmin ? "admin" : "staff");
+    } else if (sessionMemberId) {
+      processedBy = buildStripeProcessedByMetadata(sessionMemberId, "member");
+    }
     const piParams: Stripe.PaymentIntentCreateParams = {
       amount: amountCents,
       currency: "usd",
@@ -185,6 +193,7 @@ export async function POST(request: NextRequest) {
       metadata: {
         member_id,
         type: "cart_off_session",
+        ...processedBy,
         ...(taxDollars > 0 ? { tax_amount: taxDollars.toFixed(2) } : {}),
         ...(hasMonthlyMembershipInCart
           ? { monthly_recurring: monthly_recurring_body === false ? "0" : "1" }

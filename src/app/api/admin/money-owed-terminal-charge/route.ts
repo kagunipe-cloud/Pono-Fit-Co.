@@ -9,6 +9,7 @@ import {
 } from "@/lib/db";
 import { computeRenewalChargePrice } from "@/lib/renewal-pricing";
 import { getAdminMemberId } from "@/lib/admin";
+import { buildStripeProcessedByMetadata } from "@/lib/stripe-processed-by-metadata";
 import { computeCcFee } from "@/lib/cc-fees";
 import { stripeCustomerIdForApi } from "@/lib/stripe-customer";
 import {
@@ -171,6 +172,7 @@ export async function POST(request: NextRequest) {
         money_owed_renewal: "1",
         member_id,
         subscription_id: sub.subscription_id,
+        ...buildStripeProcessedByMetadata(adminId, "admin"),
         item_total: itemTotalDollars.toFixed(2),
         cc_fee: ccFeeDollars.toFixed(2),
         tax_amount: taxDollars.toFixed(2),

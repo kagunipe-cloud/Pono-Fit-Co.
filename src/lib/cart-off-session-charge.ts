@@ -3,6 +3,7 @@ import {
   getOffSessionRenewalBlockerIfResolvedPmIsNull,
   resolveStripeCustomerCardPaymentMethodId,
 } from "./stripe-customer-payment-method";
+import { buildStripeProcessedByMetadata, type StripeProcessedByRole } from "./stripe-processed-by-metadata";
 
 export type OffSessionCartChargeResult =
   | { ok: true; payment_intent_id: string }
@@ -20,6 +21,8 @@ export async function chargeCartOffSession(params: {
   promoCode: string | null;
   scheduled_cart_charge_id?: number;
   staffInitiated?: boolean;
+  processedByMemberId?: string | null;
+  processedByRole?: StripeProcessedByRole | null;
 }): Promise<OffSessionCartChargeResult> {
   const {
     stripe,
@@ -32,6 +35,8 @@ export async function chargeCartOffSession(params: {
     promoCode,
     scheduled_cart_charge_id,
     staffInitiated,
+    processedByMemberId,
+    processedByRole,
   } = params;
 
   if (amountCents < 50) {
@@ -61,6 +66,7 @@ export async function chargeCartOffSession(params: {
       metadata: {
         member_id,
         type: scheduled_cart_charge_id ? "scheduled_cart" : "cart_off_session",
+        ...buildStripeProcessedByMetadata(processedByMemberId, processedByRole),
         ...(scheduled_cart_charge_id ? { scheduled_cart_charge_id: String(scheduled_cart_charge_id) } : {}),
         ...(taxDollars > 0 ? { tax_amount: taxDollars.toFixed(2) } : {}),
         ...(hasMonthlyMembershipInCart ? { monthly_recurring: monthly_recurring ? "1" : "0" } : {}),

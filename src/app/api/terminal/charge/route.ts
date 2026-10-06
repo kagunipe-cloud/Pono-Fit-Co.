@@ -6,7 +6,8 @@ import { getEffectiveUnitPriceString } from "@/lib/cart-line-prices";
 import { ensureDiscountsTable } from "@/lib/discounts";
 import { ensurePTSlotTables } from "@/lib/pt-slots";
 import { ensureRecurringClassesTables, ensureClassesRecurringColumns, ensureClassOccurrencesClassId } from "@/lib/recurring-classes";
-import { getTrainerMemberId } from "@/lib/admin";
+import { getAdminMemberId, getTrainerMemberId } from "@/lib/admin";
+import { buildStripeProcessedByMetadata } from "@/lib/stripe-processed-by-metadata";
 import { computeCcFee } from "@/lib/cc-fees";
 import { ensureRetailProductsTable, assertRetailStockForCart } from "@/lib/retail-products";
 import Stripe from "stripe";
@@ -174,6 +175,8 @@ export async function POST(request: NextRequest) {
       dbStripe.close();
     }
 
+    const isAdmin = !!(await getAdminMemberId(request));
+    const processedBy = buildStripeProcessedByMetadata(staffId, isAdmin ? "admin" : "staff");
     const piParams: Stripe.PaymentIntentCreateParams = {
       amount: amountCents,
       currency: "usd",
@@ -181,6 +184,7 @@ export async function POST(request: NextRequest) {
       capture_method: "automatic",
       metadata: {
         member_id,
+        ...processedBy,
         ...(taxDollars > 0 ? { tax_amount: taxDollars.toFixed(2) } : {}),
         ...(hasMonthlyMembershipInCart
           ? { monthly_recurring: monthly_recurring_body === false ? "0" : "1" }

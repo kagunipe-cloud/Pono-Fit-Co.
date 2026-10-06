@@ -9,6 +9,7 @@ import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureDiscountsTable } from "../../../../lib/discounts";
 import { getMemberIdFromSession } from "../../../../lib/session";
 import { getTrainerMemberId } from "../../../../lib/admin";
+import { processedByFromCartRequest } from "../../../../lib/stripe-processed-by-metadata";
 import { computeCcFee } from "../../../../lib/cc-fees";
 import { stripeCustomerIdForApi } from "../../../../lib/stripe-customer";
 import Stripe from "stripe";
@@ -212,6 +213,8 @@ export async function POST(request: NextRequest) {
       monthlyRecurringMeta = monthly_recurring_body === false ? "0" : "1";
     }
 
+    const processedBy = await processedByFromCartRequest(request, member_id);
+
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: "payment",
       billing_address_collection: "required",
@@ -242,6 +245,7 @@ export async function POST(request: NextRequest) {
         member_id,
         stripe_checkout_flow: "v2",
         save_card_for_future: "1",
+        ...processedBy,
         ...(monthlyRecurringMeta != null ? { monthly_recurring: monthlyRecurringMeta } : {}),
         ...(promoCode ? { promo_code: promoCode } : {}),
       },
@@ -250,6 +254,7 @@ export async function POST(request: NextRequest) {
     sessionParams.payment_intent_data = {
       metadata: {
         member_id,
+        ...processedBy,
         ...(monthlyRecurringMeta != null ? { monthly_recurring: monthlyRecurringMeta } : {}),
       },
       setup_future_usage: "off_session",
