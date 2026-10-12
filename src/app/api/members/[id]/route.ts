@@ -26,6 +26,7 @@ import {
   migrateLegacyPassPackSubscriptionsToLedger,
 } from "../../../../lib/day-pass-credits";
 import { getSalePurchaseLinesBySalesId } from "../../../../lib/sale-purchase-lines";
+import { computeRenewalChargePrice } from "../../../../lib/renewal-pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -107,6 +108,16 @@ export async function GET(
         const n = calendarDaysUntilExpiryYmd(exp, today_ymd);
         if (n !== null) sub.days_remaining = String(n);
       }
+      const planPrice = String(sub.plan_price ?? "");
+      sub.renewal_charge_base = computeRenewalChargePrice(planPrice, {
+        sub_price: String(sub.price ?? "0"),
+        promo_renewals_remaining:
+          sub.promo_renewals_remaining != null ? Number(sub.promo_renewals_remaining) : null,
+        renewal_price_indefinite:
+          sub.renewal_price_indefinite != null ? Number(sub.renewal_price_indefinite) : null,
+        renewal_discount_percent:
+          sub.renewal_discount_percent != null ? Number(sub.renewal_discount_percent) : null,
+      });
     }
 
     const classBookings = db.prepare(`

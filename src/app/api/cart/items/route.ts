@@ -18,6 +18,12 @@ import {
 import { memberSameDayPtBookingError } from "../../../../lib/same-day-scheduling";
 import { memberPtBookingPhoneError } from "../../../../lib/member-phone";
 import { memberFirstTimePtDurationError } from "../../../../lib/first-time-pt-booking";
+import {
+  doorMonthlyMembershipStackError,
+  enforceDoorMonthlyMembershipStack,
+  isMemberSelfCartAction,
+  monthlyMembershipStackHttpBody,
+} from "../../../../lib/monthly-membership-stack";
 
 export const dynamic = "force-dynamic";
 
@@ -216,6 +222,20 @@ export async function POST(request: NextRequest) {
             },
             { status: 409 }
           );
+        }
+      }
+    }
+
+    if (product_type === "membership_plan" && !gift_recipient_email) {
+      const plan = db
+        .prepare("SELECT unit, access_level, category FROM membership_plans WHERE id = ?")
+        .get(resolvedProductId) as { unit: string | null; access_level: string | null; category: string | null } | undefined;
+      if (enforceDoorMonthlyMembershipStack(isAdmin)) {
+        const stackErr = doorMonthlyMembershipStackError(db, member_id, plan, { cartId: cart.id });
+        if (stackErr) {
+          db.close();
+          const memberUi = isMemberSelfCartAction(sessionMemberId, member_id, isStaff, isAdmin);
+          return NextResponse.json(monthlyMembershipStackHttpBody(memberUi), { status: 409 });
         }
       }
     }

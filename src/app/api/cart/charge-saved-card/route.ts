@@ -15,6 +15,12 @@ import {
   getOffSessionRenewalBlockerIfResolvedPmIsNull,
   resolveStripeCustomerCardPaymentMethodId,
 } from "@/lib/stripe-customer-payment-method";
+import {
+  assertNoDoorMonthlyStackInCart,
+  enforceDoorMonthlyMembershipStack,
+  isMemberSelfCartAction,
+  monthlyMembershipStackHttpBody,
+} from "@/lib/monthly-membership-stack";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +42,8 @@ function parsePrice(p: string | null): number {
 export async function POST(request: NextRequest) {
   const sessionMemberId = await getMemberIdFromSession();
   const staffId = await getTrainerMemberId(request);
+  const isAdmin = !!(await getAdminMemberId(request));
+  const isStaff = !!staffId;
   if (!sessionMemberId && !staffId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -90,6 +98,15 @@ export async function POST(request: NextRequest) {
       { error: stockErr instanceof Error ? stockErr.message : "Insufficient stock" },
       { status: 409 }
     );
+  }
+
+  if (enforceDoorMonthlyMembershipStack(isAdmin)) {
+    const monthlyStackErr = assertNoDoorMonthlyStackInCart(db, member_id, cart.id);
+    if (monthlyStackErr) {
+      db.close();
+      const memberUi = isMemberSelfCartAction(sessionMemberId, member_id, isStaff, isAdmin);
+      return NextResponse.json(monthlyMembershipStackHttpBody(memberUi), { status: 409 });
+    }
   }
 
   let hasMonthlyMembershipInCart = false;

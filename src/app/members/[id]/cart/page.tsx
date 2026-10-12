@@ -8,6 +8,9 @@ import { computeCcFee } from "@/lib/cc-fees";
 import { todayInAppTz, weekStartInAppTz, addDaysToDateStr, formatDateForDisplay } from "@/lib/app-timezone";
 import { useAppTimezone, useOpenHours } from "@/lib/settings-context";
 import { EMAIL_POLICY_MESSAGE } from "@/lib/email-policy";
+import { MemberPayRenewalBanner } from "@/components/member/MemberPayRenewalBanner";
+import { MEMBER_EXISTING_MONTHLY_MESSAGE } from "@/lib/monthly-membership-stack";
+import { isExistingMonthlyMembershipBlock, postMemberPayRenewal } from "@/lib/member-pay-renewal-client";
 
 const CameraBarcodeScanner = lazy(() => import("@/components/CameraBarcodeScanner"));
 
@@ -109,6 +112,9 @@ export default function MemberCartPage() {
   const [classCredits, setClassCredits] = useState(0);
   const [isOwnCart, setIsOwnCart] = useState(false);
   const [isStaff, setIsStaff] = useState(false);
+  const [showExistingMonthlyPay, setShowExistingMonthlyPay] = useState(false);
+  const [payingRenewal, setPayingRenewal] = useState(false);
+  const [renewalPayMessage, setRenewalPayMessage] = useState<string | null>(null);
   const [staffPriceSavingId, setStaffPriceSavingId] = useState<number | null>(null);
   const [staffDrafts, setStaffDrafts] = useState<
     Record<number, { price: string; months: string; indef: boolean }>
@@ -377,6 +383,22 @@ export default function MemberCartPage() {
   }, [classOccurrences, openHourMin, openHourMax]);
 
 
+  async function handleMemberPayRenewal() {
+    setRenewalPayMessage(null);
+    setPayingRenewal(true);
+    try {
+      const { ok, message } = await postMemberPayRenewal();
+      setRenewalPayMessage(message);
+      if (ok) setShowExistingMonthlyPay(false);
+    } finally {
+      setPayingRenewal(false);
+    }
+  }
+
+  function memberExistingMonthlyBlock(res: Response, json: Record<string, unknown>): boolean {
+    return res.status === 409 && isOwnCart && !isStaff && isExistingMonthlyMembershipBlock(json);
+  }
+
   async function addToCart(
     product_type:
       | "membership_plan"
@@ -404,12 +426,14 @@ export default function MemberCartPage() {
       setAddMode(null);
       return;
     }
-    const errBody = (await res.json().catch(() => ({}))) as { error?: string };
+    const errBody = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: string };
     const base = typeof errBody.error === "string" && errBody.error.trim() ? errBody.error : `Could not add to cart (${res.status}).`;
     if (res.status === 403) {
       alert(
         `${base} Staff or the member must be signed in: you can add to this member’s cart only when you’re logged in as an admin or trainer, or as this member.`
       );
+    } else if (memberExistingMonthlyBlock(res, errBody)) {
+      setShowExistingMonthlyPay(true);
     } else {
       alert(base);
     }
@@ -566,8 +590,14 @@ export default function MemberCartPage() {
           ...(hasMonthlyMembershipInCart ? { monthly_recurring: monthlyRecurring } : {}),
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to start checkout");
+      const data = (await res.json()) as Record<string, unknown> & { error?: string; url?: string };
+      if (!res.ok) {
+        if (memberExistingMonthlyBlock(res, data)) {
+          setShowExistingMonthlyPay(true);
+          return;
+        }
+        throw new Error(data.error ?? "Failed to start checkout");
+      }
       if (data.url) {
         window.location.href = data.url;
         return;
@@ -602,8 +632,12 @@ export default function MemberCartPage() {
           ...(hasMonthlyMembershipInCart ? { monthly_recurring: monthlyRecurring } : {}),
         }),
       });
-      const data = await res.json().catch(() => ({}));
+      const data = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: string };
       if (!res.ok) {
+        if (memberExistingMonthlyBlock(res, data)) {
+          setShowExistingMonthlyPay(true);
+          return;
+        }
         throw new Error(typeof data.error === "string" ? data.error : "Charge failed");
       }
       const paymentIntentId = data.payment_intent_id as string | undefined;
@@ -890,6 +924,16 @@ export default function MemberCartPage() {
       <p className="text-stone-600 text-xs leading-relaxed mb-6 p-3 rounded-lg bg-stone-50 border border-stone-100 max-w-xl">
         {EMAIL_POLICY_MESSAGE}
       </p>
+
+      {isOwnCart && !isStaff && showExistingMonthlyPay && (
+        <MemberPayRenewalBanner
+          title="You already have a monthly membership"
+          description={MEMBER_EXISTING_MONTHLY_MESSAGE}
+          paying={payingRenewal}
+          payMessage={renewalPayMessage}
+          onPay={() => void handleMemberPayRenewal()}
+        />
+      )}
 
       {scheduledCharge && (
         <div className="mb-6 p-4 rounded-xl border-2 border-violet-300 bg-violet-50/90 text-sm">

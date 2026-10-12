@@ -4,6 +4,9 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { formatPrice, toTitleCase } from "@/lib/format";
+import { MemberPayRenewalBanner } from "@/components/member/MemberPayRenewalBanner";
+import { MEMBER_EXISTING_MONTHLY_MESSAGE } from "@/lib/monthly-membership-stack";
+import { isExistingMonthlyMembershipBlock, postMemberPayRenewal } from "@/lib/member-pay-renewal-client";
 
 type PlanRow = { id: number; plan_name: string; price?: string; length?: string; unit?: string; description?: string | null };
 
@@ -18,6 +21,9 @@ function MemberMembershipsContent() {
   const [plans, setPlans] = useState<PlanRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState<number | null>(null);
+  const [showExistingMonthlyPay, setShowExistingMonthlyPay] = useState(false);
+  const [payingRenewal, setPayingRenewal] = useState(false);
+  const [renewalPayMessage, setRenewalPayMessage] = useState<string | null>(null);
 
   const visiblePlans = useMemo(() => {
     if (!hasValidPlanFilter) return plans;
@@ -42,18 +48,40 @@ function MemberMembershipsContent() {
       .finally(() => setLoading(false));
   }, [router]);
 
+  async function handlePayRenewal() {
+    setRenewalPayMessage(null);
+    setPayingRenewal(true);
+    try {
+      const { ok, message } = await postMemberPayRenewal();
+      setRenewalPayMessage(message);
+      if (ok) setShowExistingMonthlyPay(false);
+    } finally {
+      setPayingRenewal(false);
+    }
+  }
+
   async function addToCart(id: number) {
     if (!memberId) return;
     setAdding(id);
+    setShowExistingMonthlyPay(false);
+    setRenewalPayMessage(null);
     try {
       const res = await fetch("/api/cart/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ member_id: memberId, product_type: "membership_plan", product_id: id, quantity: 1 }),
       });
+      const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       if (res.ok) {
         router.push("/member/cart");
+        return;
       }
+      if (res.status === 409 && isExistingMonthlyMembershipBlock(json)) {
+        setShowExistingMonthlyPay(true);
+        return;
+      }
+      const err = typeof json.error === "string" ? json.error : "Could not add to cart.";
+      alert(err);
     } finally {
       setAdding(null);
     }
@@ -72,6 +100,17 @@ function MemberMembershipsContent() {
         All plans (including 5- and 10-day pass packs) are listed here. Staff edit plans under{" "}
         <span className="text-stone-700">Services → Membership Plans</span> in the sidebar.
       </p>
+
+      {showExistingMonthlyPay && (
+        <MemberPayRenewalBanner
+          title="You already have a monthly membership"
+          description={MEMBER_EXISTING_MONTHLY_MESSAGE}
+          paying={payingRenewal}
+          payMessage={renewalPayMessage}
+          onPay={() => void handlePayRenewal()}
+        />
+      )}
+
       {hasValidPlanFilter && visiblePlans.length > 0 && (
         <p className="text-sm text-stone-500 mb-6">
           Showing the plan you selected.{" "}

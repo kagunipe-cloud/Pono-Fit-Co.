@@ -1908,7 +1908,7 @@ export default function MemberDetailPage() {
             <p className="p-6 text-stone-500 text-sm">No subscriptions.</p>
           ) : (
             <table className="w-full text-left text-sm">
-              <thead><tr className="bg-stone-50 text-stone-500"><th className="py-2 px-4">Plan</th><th className="py-2 px-4">Status</th><th className="py-2 px-4">Start</th><th className="py-2 px-4">Expiry</th><th className="py-2 px-4">Days left</th><th className="py-2 px-4">Renewal price</th><th className="py-2 px-4">Admin</th></tr></thead>
+              <thead><tr className="bg-stone-50 text-stone-500"><th className="py-2 px-4">Plan</th><th className="py-2 px-4">Status</th><th className="py-2 px-4">Start</th><th className="py-2 px-4">Expiry</th><th className="py-2 px-4">Days left</th><th className="py-2 px-4" title="Base amount before tax and card fee; same rules as auto-renew">Renewal price</th><th className="py-2 px-4">Admin</th></tr></thead>
               <tbody>
                 {data.subscriptions.map((s, i) => {
                   const isBankedPassPack =
@@ -1956,7 +1956,7 @@ export default function MemberDetailPage() {
                       {isBankedPassPack ? (
                         <span className="text-stone-400">—</span>
                       ) : (
-                        String(s.price ?? "—")
+                        String(s.renewal_charge_base ?? s.price ?? "—")
                       )}
                     </td>
                     <td className="py-2 px-4">
@@ -2056,7 +2056,9 @@ export default function MemberDetailPage() {
                             ) : null}
                             <button
                               type="button"
-                              onClick={() => openSetPrice(String(s.subscription_id), s.price)}
+                              onClick={() =>
+                                openSetPrice(String(s.subscription_id), s.renewal_charge_base ?? s.price)
+                              }
                               disabled={pauseBusy}
                               className="text-brand-700 hover:underline text-xs font-medium disabled:opacity-50"
                             >

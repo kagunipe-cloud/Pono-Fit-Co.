@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { getDb, getAppTimezone, ensureMembersStripeColumn } from "@/lib/db";
 import { ensureCartTables } from "@/lib/cart";
-import { getTrainerMemberId } from "@/lib/admin";
+import { getAdminMemberId, getTrainerMemberId } from "@/lib/admin";
 import { processedByStaffFromRequest } from "@/lib/stripe-processed-by-metadata";
 import { ensurePTSlotTables } from "@/lib/pt-slots";
 import { ensureRecurringClassesTables, ensureClassesRecurringColumns, ensureClassOccurrencesClassId } from "@/lib/recurring-classes";
@@ -22,6 +22,7 @@ import {
   type ScheduledCartChargeRow,
 } from "@/lib/scheduled-cart-charge";
 import { processOneScheduledCartCharge } from "@/lib/process-scheduled-cart-charge";
+import { assertNoDoorMonthlyStackInCart, enforceDoorMonthlyMembershipStack } from "@/lib/monthly-membership-stack";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,7 @@ export async function POST(request: NextRequest) {
   if (!staffId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const isAdmin = !!(await getAdminMemberId(request));
 
   const stripeSecret = process.env.STRIPE_SECRET_KEY?.trim();
   if (!stripeSecret) {
@@ -103,6 +105,14 @@ export async function POST(request: NextRequest) {
       { error: stockErr instanceof Error ? stockErr.message : "Insufficient stock" },
       { status: 409 }
     );
+  }
+
+  if (enforceDoorMonthlyMembershipStack(isAdmin)) {
+    const monthlyStackErr = assertNoDoorMonthlyStackInCart(db, member_id, cart.id);
+    if (monthlyStackErr) {
+      db.close();
+      return NextResponse.json({ error: monthlyStackErr }, { status: 409 });
+    }
   }
 
   const snapshot = snapshotCartItems(rawItems);

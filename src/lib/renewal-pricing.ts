@@ -24,15 +24,19 @@ export function computeRenewalChargePrice(planPrice: string, sub: RenewalPricing
   if (useNegotiated && subStored > 0) return String(subStored);
 
   const pct = sub.renewal_discount_percent;
+  const catalog = parseMoney(planPrice);
   if (pct != null && pct > 0 && pct < 100) {
-    const catalog = parseMoney(planPrice);
     if (catalog > 0) {
       const eff = catalog * (1 - pct / 100);
       return String(Math.round(eff * 100) / 100);
     }
   }
 
-  const catalog = parseMoney(planPrice);
+  /** Matches admin “Renewal price” when staff set a rate below catalog (incl. Set price / cart override). */
+  if (subStored > 0 && catalog > 0 && subStored < catalog) {
+    return String(subStored);
+  }
+
   if (catalog > 0) return String(planPrice);
   if (subStored > 0) return String(subStored);
   return "0";

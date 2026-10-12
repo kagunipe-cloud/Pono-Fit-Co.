@@ -43,6 +43,12 @@ import { getTrainerMemberId, getAdminMemberId } from "../../../../lib/admin";
 import { memberFirstTimePtDurationError } from "../../../../lib/first-time-pt-booking";
 import { randomUUID } from "crypto";
 import { stripeCustomerIdForApi } from "../../../../lib/stripe-customer";
+import {
+  assertNoDoorMonthlyStackInCart,
+  enforceDoorMonthlyMembershipStack,
+  isMemberSelfCartAction,
+  monthlyMembershipStackHttpBody,
+} from "../../../../lib/monthly-membership-stack";
 import Stripe from "stripe";
 
 export const dynamic = "force-dynamic";
@@ -234,6 +240,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Cart is empty" }, { status: 400 });
     }
 
+    if (enforceDoorMonthlyMembershipStack(isAdmin)) {
+      const monthlyStackErr = assertNoDoorMonthlyStackInCart(db, member_id, cart.id);
+      if (monthlyStackErr) {
+        db.close();
+        const memberUi = isMemberSelfCartAction(sessionMemberId, member_id, isStaff, isAdmin);
+        return NextResponse.json(monthlyMembershipStackHttpBody(memberUi), { status: 409 });
+      }
+    }
+
     ensureRecurringClassesTables(db);
     for (const it of items) {
       if (it.product_type !== "class_occurrence") continue;
@@ -383,6 +398,11 @@ export async function POST(request: NextRequest) {
               }
             }
             const renewalDiscountToStore = isMonth ? cartRenewalDiscountPercent : null;
+            /** One-time staff override: store catalog on the sub so renewals use list price; negotiated rate lives in effUnit on the sale only. */
+            const priceOnSub =
+              renewalIndef === 1 || (promoRenewals != null && promoRenewals > 0)
+                ? effUnit
+                : String(plan.price ?? effUnit);
             db.prepare(`
               INSERT INTO subscriptions (subscription_id, member_id, product_id, status, start_date, expiry_date, days_remaining, price, sales_id, quantity, promo_renewals_remaining, renewal_price_indefinite, renewal_discount_percent)
               VALUES (?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -393,7 +413,7 @@ export async function POST(request: NextRequest) {
               startStr,
               expiryStr,
               String(daysRemaining),
-              effUnit,
+              priceOnSub,
               sales_id,
               it.quantity,
               promoRenewals,

@@ -13,7 +13,6 @@ import { toTitleCase } from "@/lib/format";
 import { formatDateForDisplay } from "@/lib/app-timezone";
 
 import OccupancyCount from "@/components/OccupancyCount";
-import MemberGoalBoardPreview from "@/components/member/MemberGoalBoardPreview";
 
 
 
@@ -37,6 +36,12 @@ type MemberData = {
 
   waiver_complete_for_door?: boolean;
 
+  renewal_payment_due?: {
+    subscription_id: string | null;
+    plan_name: string | null;
+    amount_cents: number | null;
+  } | null;
+
 } | null;
 
 
@@ -54,6 +59,10 @@ export default function MemberHomePage() {
   const [unlockMessage, setUnlockMessage] = useState<string | null>(null);
 
   const [proShopSelfCheckout, setProShopSelfCheckout] = useState(false);
+
+  const [payingRenewal, setPayingRenewal] = useState(false);
+
+  const [renewalPayMessage, setRenewalPayMessage] = useState<string | null>(null);
 
 
 
@@ -100,6 +109,32 @@ export default function MemberHomePage() {
   }, [data]);
 
 
+
+  async function handlePayRenewal() {
+    const due = data?.renewal_payment_due;
+    if (!due) return;
+    setRenewalPayMessage(null);
+    setPayingRenewal(true);
+    try {
+      const res = await fetch("/api/member/pay-renewal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subscription_id: due.subscription_id ?? undefined }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setRenewalPayMessage(json.message ?? "Payment received. Thank you!");
+        const refresh = await fetch("/api/member/me");
+        if (refresh.ok) setData(await refresh.json());
+      } else {
+        setRenewalPayMessage(json.error ?? "Payment failed.");
+      }
+    } catch {
+      setRenewalPayMessage("Payment failed. Try again or update your card on the membership page.");
+    } finally {
+      setPayingRenewal(false);
+    }
+  }
 
   async function handleUnlock() {
 
@@ -212,7 +247,31 @@ export default function MemberHomePage() {
       )}
 
 
-      <MemberGoalBoardPreview />
+      {data.renewal_payment_due && (
+        <div className="mb-6 p-4 rounded-xl border border-red-300 bg-red-50 text-red-950">
+          <p className="font-semibold text-sm mb-1">Sorry, there was a problem with your subscription renewal</p>
+          <p className="text-sm text-red-900/95 mb-3">
+            {data.renewal_payment_due.plan_name
+              ? `We couldn’t renew ${data.renewal_payment_due.plan_name}. Pay the overdue renewal below — buying another membership won’t fix this.`
+              : "We couldn’t renew your membership. Pay below — buying another membership won’t fix this."}
+          </p>
+          <button
+            type="button"
+            onClick={() => void handlePayRenewal()}
+            disabled={payingRenewal}
+            className="inline-flex items-center justify-center px-5 py-2.5 rounded-lg bg-red-800 text-white text-sm font-medium hover:bg-red-900 disabled:opacity-50"
+          >
+            {payingRenewal ? "Processing…" : "Pay now"}
+          </button>
+          {renewalPayMessage && <p className="text-sm mt-3 text-red-900">{renewalPayMessage}</p>}
+          <p className="text-xs mt-3 text-red-800/90">
+            Card trouble?{" "}
+            <Link href="/member/membership" className="font-medium underline hover:no-underline">
+              Update payment method
+            </Link>
+          </p>
+        </div>
+      )}
 
       <div className="mb-8 flex flex-col sm:flex-row sm:items-start gap-6">
 

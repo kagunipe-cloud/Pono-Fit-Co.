@@ -6,6 +6,7 @@ import {
   ensureMembersProfileColumns,
   ensureMembersDoorAccessWaiverExemptColumn,
   ensureSubscriptionPauseStartedColumn,
+  ensurePaymentFailuresTable,
 } from "../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../lib/recurring-classes";
@@ -175,6 +176,20 @@ export async function GET() {
     });
 
     const tz = getAppTimezone(db);
+
+    ensurePaymentFailuresTable(db);
+    const renewalFailure = db
+      .prepare(
+        `SELECT subscription_id, plan_name, amount_cents
+         FROM payment_failures
+         WHERE member_id = ?
+           AND (dismissed_at IS NULL OR TRIM(COALESCE(dismissed_at, '')) = '')
+         ORDER BY id DESC LIMIT 1`
+      )
+      .get(memberId) as
+      | { subscription_id: string | null; plan_name: string | null; amount_cents: number | null }
+      | undefined;
+
     db.close();
 
     const today = todayInAppTz(tz);
@@ -211,6 +226,13 @@ export async function GET() {
       has_saved_card: hasBillableStripeCustomer(member.stripe_customer_id),
       auto_renew: (member.auto_renew ?? 0) === 1,
       waiver_complete_for_door: waiverCompleteForDoor,
+      renewal_payment_due: renewalFailure
+        ? {
+            subscription_id: renewalFailure.subscription_id,
+            plan_name: renewalFailure.plan_name,
+            amount_cents: renewalFailure.amount_cents,
+          }
+        : null,
     });
   } catch (err) {
     console.error(err);

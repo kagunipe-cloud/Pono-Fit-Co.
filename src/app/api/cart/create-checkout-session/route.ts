@@ -8,8 +8,14 @@ import { ensureRetailProductsTable, assertRetailStockForCart, getRetailLineMeta,
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureDiscountsTable } from "../../../../lib/discounts";
 import { getMemberIdFromSession } from "../../../../lib/session";
-import { getTrainerMemberId } from "../../../../lib/admin";
+import { getAdminMemberId, getTrainerMemberId } from "../../../../lib/admin";
 import { processedByFromCartRequest } from "../../../../lib/stripe-processed-by-metadata";
+import {
+  assertNoDoorMonthlyStackInCart,
+  enforceDoorMonthlyMembershipStack,
+  isMemberSelfCartAction,
+  monthlyMembershipStackHttpBody,
+} from "../../../../lib/monthly-membership-stack";
 import { computeCcFee } from "../../../../lib/cc-fees";
 import { stripeCustomerIdForApi } from "../../../../lib/stripe-customer";
 import Stripe from "stripe";
@@ -33,6 +39,7 @@ export async function POST(request: NextRequest) {
     }
     const sessionMemberId = await getMemberIdFromSession();
     const isStaff = !!(await getTrainerMemberId(request));
+    const isAdmin = !!(await getAdminMemberId(request));
     if (sessionMemberId !== member_id && !isStaff) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
@@ -100,6 +107,15 @@ export async function POST(request: NextRequest) {
         { error: stockErr instanceof Error ? stockErr.message : "Insufficient stock" },
         { status: 409 }
       );
+    }
+
+    if (enforceDoorMonthlyMembershipStack(isAdmin)) {
+      const monthlyStackErr = assertNoDoorMonthlyStackInCart(db, member_id, cart.id);
+      if (monthlyStackErr) {
+        db.close();
+        const memberUi = isMemberSelfCartAction(sessionMemberId, member_id, isStaff, isAdmin);
+        return NextResponse.json(monthlyMembershipStackHttpBody(memberUi), { status: 409 });
+      }
     }
 
     let hasMonthlyMembershipInCart = false;
