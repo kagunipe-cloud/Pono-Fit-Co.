@@ -34,6 +34,10 @@ export type CheckInBoardPayload = {
 
 function displayName(row: Pick<DoorCheckInRow, "member_id" | "first_name" | "last_name">): string {
   const first = row.first_name?.trim();
+  const last = row.last_name?.trim();
+  if (first && last) {
+    return `${first} ${last.charAt(0).toUpperCase()}.`;
+  }
   if (first) return first;
   const full = [row.first_name, row.last_name].filter(Boolean).join(" ").trim();
   return full || String(row.member_id ?? "").trim();

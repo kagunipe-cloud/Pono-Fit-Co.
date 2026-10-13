@@ -1,4 +1,4 @@
-import { EXISTING_MONTHLY_MEMBERSHIP_CODE } from "./monthly-membership-stack";
+import { EXISTING_MONTHLY_MEMBERSHIP_CODE } from "./monthly-membership-stack-messages";
 
 export function isExistingMonthlyMembershipBlock(json: Record<string, unknown>): boolean {
   return json.code === EXISTING_MONTHLY_MEMBERSHIP_CODE;

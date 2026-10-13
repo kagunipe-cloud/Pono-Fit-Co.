@@ -1,5 +1,16 @@
 import { WEEKLY_GOALS_BOARD_ACCESS_LEVEL, type getDb } from "./db";
 import { MEMBERSHIP_PLAN_JOIN_SQL } from "./mrr";
+import {
+  EXISTING_MONTHLY_MEMBERSHIP_CODE,
+  MEMBER_EXISTING_MONTHLY_MESSAGE,
+  MONTHLY_MEMBERSHIP_STACK_ERROR,
+} from "./monthly-membership-stack-messages";
+
+export {
+  EXISTING_MONTHLY_MEMBERSHIP_CODE,
+  MEMBER_EXISTING_MONTHLY_MESSAGE,
+  MONTHLY_MEMBERSHIP_STACK_ERROR,
+} from "./monthly-membership-stack-messages";
 
 type AppDb = ReturnType<typeof getDb>;
 
@@ -55,14 +66,6 @@ function cartHasDoorMonthlyMembership(db: AppDb, cartId: number, excludeCartItem
   }
   return false;
 }
-
-export const MONTHLY_MEMBERSHIP_STACK_ERROR =
-  "This member already has an active monthly membership. Cancel the extra subscription or use Pay Now on the member home page if renewal failed — don't add another monthly membership. Day passes and weekly plans are still OK.";
-
-export const MEMBER_EXISTING_MONTHLY_MESSAGE =
-  "You already have a monthly membership with us. If you need to pay your bill, click below.";
-
-export const EXISTING_MONTHLY_MEMBERSHIP_CODE = "existing_monthly_membership";
 
 export function isMemberSelfCartAction(
   sessionMemberId: string | null,

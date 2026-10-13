@@ -9,7 +9,7 @@ import { todayInAppTz, weekStartInAppTz, addDaysToDateStr, formatDateForDisplay 
 import { useAppTimezone, useOpenHours } from "@/lib/settings-context";
 import { EMAIL_POLICY_MESSAGE } from "@/lib/email-policy";
 import { MemberPayRenewalBanner } from "@/components/member/MemberPayRenewalBanner";
-import { MEMBER_EXISTING_MONTHLY_MESSAGE } from "@/lib/monthly-membership-stack";
+import { MEMBER_EXISTING_MONTHLY_MESSAGE } from "@/lib/monthly-membership-stack-messages";
 import { isExistingMonthlyMembershipBlock, postMemberPayRenewal } from "@/lib/member-pay-renewal-client";
 
 const CameraBarcodeScanner = lazy(() => import("@/components/CameraBarcodeScanner"));

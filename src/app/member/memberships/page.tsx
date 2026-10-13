@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { formatPrice, toTitleCase } from "@/lib/format";
 import { MemberPayRenewalBanner } from "@/components/member/MemberPayRenewalBanner";
-import { MEMBER_EXISTING_MONTHLY_MESSAGE } from "@/lib/monthly-membership-stack";
+import { MEMBER_EXISTING_MONTHLY_MESSAGE } from "@/lib/monthly-membership-stack-messages";
 import { isExistingMonthlyMembershipBlock, postMemberPayRenewal } from "@/lib/member-pay-renewal-client";
 
 type PlanRow = { id: number; plan_name: string; price?: string; length?: string; unit?: string; description?: string | null };
