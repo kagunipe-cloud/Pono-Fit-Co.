@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb, getAppTimezone, ensurePaymentFailuresTable } from "@/lib/db";
+import { getDb, getAppTimezone } from "@/lib/db";
 import { getMemberIdFromSession } from "@/lib/session";
 import { retryMonthlyRenewalPayment } from "@/lib/retry-monthly-renewal-payment";
-import { normalizeSubscriptionKey } from "@/lib/money-owed-renewal-load";
+import { getMemberRenewalPaymentDue } from "@/lib/member-renewal-payment-due";
 
 export const dynamic = "force-dynamic";
 
@@ -13,44 +13,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Not logged in" }, { status: 401 });
   }
 
-  let subscriptionId: string | null = null;
+  const db = getDb();
+  const tz = getAppTimezone(db);
+
+  const due = getMemberRenewalPaymentDue(db, memberId);
+  if (!due) {
+    db.close();
+    return NextResponse.json({ error: "No overdue renewal payment is due." }, { status: 400 });
+  }
+
+  let subscriptionId = due.subscription_id;
   try {
     const body = await request.json().catch(() => ({}));
     if (body.subscription_id != null && String(body.subscription_id).trim() !== "") {
-      subscriptionId = String(body.subscription_id).trim();
+      const requested = String(body.subscription_id).trim();
+      const dueSub = String(due.subscription_id ?? "").trim();
+      if (dueSub && requested !== dueSub) {
+        db.close();
+        return NextResponse.json({ error: "No overdue renewal payment is due for that membership." }, { status: 400 });
+      }
+      subscriptionId = requested;
     }
   } catch {
     /* optional body */
-  }
-
-  const db = getDb();
-  ensurePaymentFailuresTable(db);
-  const tz = getAppTimezone(db);
-
-  const subKey = normalizeSubscriptionKey(subscriptionId);
-  const open = db
-    .prepare(
-      `SELECT 1 FROM payment_failures
-       WHERE member_id = ? AND COALESCE(subscription_id, '') = ?
-         AND (dismissed_at IS NULL OR TRIM(COALESCE(dismissed_at, '')) = '')
-       LIMIT 1`
-    )
-    .get(memberId, subKey) as { 1?: number } | undefined;
-
-  if (!open) {
-    const anyOpen = db
-      .prepare(
-        `SELECT subscription_id FROM payment_failures
-         WHERE member_id = ?
-           AND (dismissed_at IS NULL OR TRIM(COALESCE(dismissed_at, '')) = '')
-         ORDER BY id DESC LIMIT 1`
-      )
-      .get(memberId) as { subscription_id: string | null } | undefined;
-    if (!anyOpen) {
-      db.close();
-      return NextResponse.json({ error: "No overdue renewal payment is due." }, { status: 400 });
-    }
-    subscriptionId = anyOpen.subscription_id;
   }
 
   const result = await retryMonthlyRenewalPayment(db, tz, memberId, subscriptionId);

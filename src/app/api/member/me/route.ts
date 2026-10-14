@@ -6,7 +6,6 @@ import {
   ensureMembersProfileColumns,
   ensureMembersDoorAccessWaiverExemptColumn,
   ensureSubscriptionPauseStartedColumn,
-  ensurePaymentFailuresTable,
 } from "../../../../lib/db";
 import { ensurePTSlotTables } from "../../../../lib/pt-slots";
 import { ensureRecurringClassesTables, getMemberCreditBalance } from "../../../../lib/recurring-classes";
@@ -20,6 +19,7 @@ import {
   getMemberDayPassLedgerBalance,
   migrateLegacyPassPackSubscriptionsToLedger,
 } from "../../../../lib/day-pass-credits";
+import { getMemberRenewalPaymentDue } from "../../../../lib/member-renewal-payment-due";
 
 export const dynamic = "force-dynamic";
 
@@ -177,18 +177,7 @@ export async function GET() {
 
     const tz = getAppTimezone(db);
 
-    ensurePaymentFailuresTable(db);
-    const renewalFailure = db
-      .prepare(
-        `SELECT subscription_id, plan_name, amount_cents
-         FROM payment_failures
-         WHERE member_id = ?
-           AND (dismissed_at IS NULL OR TRIM(COALESCE(dismissed_at, '')) = '')
-         ORDER BY id DESC LIMIT 1`
-      )
-      .get(memberId) as
-      | { subscription_id: string | null; plan_name: string | null; amount_cents: number | null }
-      | undefined;
+    const renewalFailure = getMemberRenewalPaymentDue(db, memberId);
 
     db.close();
 

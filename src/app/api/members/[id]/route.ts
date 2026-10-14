@@ -98,15 +98,19 @@ export async function GET(
     const day_pass_credits = getMemberDayPassLedgerBalance(db, mid);
 
     for (const sub of subscriptions) {
+      const subStatus = String(sub.status ?? "").trim().toLowerCase();
+      const isEndedSub = subStatus === "cancelled" || subStatus === "refunded";
       const passCredits = sub.pass_credits_remaining;
       if (passCredits != null && String(passCredits).trim() !== "") {
         sub.days_remaining = String(Math.max(0, Math.floor(Number(passCredits))));
-        continue;
-      }
-      const exp = sub.expiry_date;
-      if (typeof exp === "string" && exp.trim() !== "") {
-        const n = calendarDaysUntilExpiryYmd(exp, today_ymd);
-        if (n !== null) sub.days_remaining = String(n);
+      } else if (isEndedSub) {
+        sub.days_remaining = "—";
+      } else {
+        const exp = sub.expiry_date;
+        if (typeof exp === "string" && exp.trim() !== "") {
+          const n = calendarDaysUntilExpiryYmd(exp, today_ymd);
+          if (n !== null) sub.days_remaining = String(n);
+        }
       }
       const planPrice = String(sub.plan_price ?? "");
       sub.renewal_charge_base = computeRenewalChargePrice(planPrice, {
