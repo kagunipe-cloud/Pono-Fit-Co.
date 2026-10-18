@@ -7,6 +7,7 @@ import {
   MEMBERSHIP_PLAN_JOIN_SQL,
 } from "../../../lib/mrr";
 import { randomUUID } from "crypto";
+import { memberRowMatchesSearch } from "../../../lib/member-search-match";
 
 export const dynamic = "force-dynamic";
 
@@ -103,6 +104,17 @@ export async function GET(request: NextRequest) {
         ORDER BY m.last_name ASC, m.first_name ASC
       `);
       rows = stmt.all(pattern, pattern, pattern, pattern, pattern) as Record<string, unknown>[];
+      rows = rows.filter((m) =>
+        memberRowMatchesSearch(
+          {
+            first_name: m.first_name as string | null,
+            last_name: m.last_name as string | null,
+            email: m.email as string | null,
+            member_id: m.member_id as string | null,
+          },
+          q
+        )
+      );
     } else {
       const stmt = db.prepare(`
         SELECT m.id, m.member_id, m.first_name, m.last_name, m.email, m.phone, m.kisi_id, m.kisi_group_id, m.join_date,

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import MemberSearchField from "@/components/MemberSearchField";
 
 type ClientRow = {
   id: number;
@@ -14,12 +15,9 @@ type ClientRow = {
   client_email: string | null;
 };
 type Trainer = { member_id: string; display_name: string };
-type Member = { member_id: string; first_name?: string | null; last_name?: string | null; email?: string | null };
-
 export default function MyClientsPage() {
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -62,10 +60,6 @@ export default function MyClientsPage() {
     fetch("/api/trainers")
       .then((r) => (r.ok ? r.json() : []))
       .then((list) => setTrainers(Array.isArray(list) ? list : []))
-      .catch(() => {});
-    fetch("/api/members")
-      .then((r) => (r.ok ? r.json() : []))
-      .then((list) => setMembers(Array.isArray(list) ? list : []))
       .catch(() => {});
   }, []);
 
@@ -237,22 +231,12 @@ export default function MyClientsPage() {
                   </select>
                 </div>
               )}
-              <div>
-                <label className="block text-sm font-medium text-stone-600 mb-1">Client (member)</label>
-                <select
-                  value={addClientId}
-                  onChange={(e) => setAddClientId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-200"
-                  required
-                >
-                  <option value="">Select member</option>
-                  {members.map((m) => (
-                    <option key={m.member_id} value={m.member_id}>
-                      {[m.first_name, m.last_name].filter(Boolean).join(" ").trim() || m.member_id} {m.email ? `(${m.email})` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <MemberSearchField
+                label="Client (member)"
+                memberId={addClientId}
+                onMemberIdChange={setAddClientId}
+                placeholder="Search name, email, or member ID"
+              />
               <div className="flex gap-2">
                 <button type="submit" disabled={adding} className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50">
                   {adding ? "Adding…" : "Add"}

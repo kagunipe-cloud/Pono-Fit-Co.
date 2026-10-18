@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, useMemo } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -9,8 +9,7 @@ import {
   smallGroupPtPriceSummary,
   type SmallGroupPtHours,
 } from "@/lib/open-group-pt";
-
-type Member = { member_id: string; first_name: string | null; last_name: string | null; email: string | null };
+import MemberSearchField from "@/components/MemberSearchField";
 type PtSession = { id: number; session_name: string; duration_minutes: number; price: string; trainer: string | null; trainer_member_id?: string | null };
 type Trainer = { member_id: string; display_name: string };
 type BookingKind = "pt" | "small_group_pt";
@@ -30,10 +29,8 @@ function AdminBookPTForMemberContent() {
   const block = searchParams.get("block")?.trim() || "";
   const memberIdPrefill = searchParams.get("member_id")?.trim() || "";
 
-  const [members, setMembers] = useState<Member[]>([]);
   const [sessions, setSessions] = useState<PtSession[]>([]);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
-  const [memberQuery, setMemberQuery] = useState("");
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
   const [selectedTrainerId, setSelectedTrainerId] = useState<string>("");
@@ -52,10 +49,6 @@ function AdminBookPTForMemberContent() {
   }, [memberIdPrefill]);
 
   useEffect(() => {
-    fetch("/api/members")
-      .then((r) => r.json())
-      .then((list) => setMembers(Array.isArray(list) ? list : []))
-      .catch(() => setMembers([]));
     fetch("/api/offerings/pt-session-products")
       .then((r) => r.json())
       .then((list) => setSessions(Array.isArray(list) ? list : []))
@@ -65,18 +58,6 @@ function AdminBookPTForMemberContent() {
       .then((list) => setTrainers(Array.isArray(list) ? list : []))
       .catch(() => setTrainers([]));
   }, []);
-
-  const filteredMembers = useMemo(() => {
-    if (!memberQuery.trim()) return members.slice(0, 50);
-    const q = memberQuery.toLowerCase();
-    return members.filter(
-      (m) =>
-        (m.first_name ?? "").toLowerCase().includes(q) ||
-        (m.last_name ?? "").toLowerCase().includes(q) ||
-        (m.email ?? "").toLowerCase().includes(q) ||
-        (m.member_id ?? "").toLowerCase().includes(q)
-    ).slice(0, 30);
-  }, [members, memberQuery]);
 
   const selectedSession = selectedSessionId != null ? sessions.find((s) => s.id === selectedSessionId) : null;
   const startTime = time ? normalizeTimeToHHmm(time) : "";
@@ -356,31 +337,11 @@ function AdminBookPTForMemberContent() {
       </fieldset>
 
       <div className="space-y-4 mb-6">
-        <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1">
-            {bookingKind === "small_group_pt" ? "Organizer (member)" : "Member to charge"}
-          </label>
-          <input
-            type="text"
-            value={memberQuery}
-            onChange={(e) => setMemberQuery(e.target.value)}
-            placeholder="Search by name, email, or member ID"
-            className="w-full px-3 py-2 rounded-lg border border-stone-200 mb-2"
-          />
-          <select
-            value={selectedMemberId}
-            onChange={(e) => setSelectedMemberId(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-white"
-            size={6}
-          >
-            <option value="">— Select member —</option>
-            {filteredMembers.map((m) => (
-              <option key={m.member_id} value={m.member_id}>
-                {[m.first_name, m.last_name].filter(Boolean).join(" ")} ({m.member_id})
-              </option>
-            ))}
-          </select>
-        </div>
+        <MemberSearchField
+          label={bookingKind === "small_group_pt" ? "Organizer (member)" : "Member to charge"}
+          memberId={selectedMemberId}
+          onMemberIdChange={setSelectedMemberId}
+        />
 
         <div>
           <label className="block text-sm font-medium text-stone-700 mb-1">

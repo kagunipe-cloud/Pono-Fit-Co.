@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import MemberSearchField from "@/components/MemberSearchField";
 
 type Member = { member_id: string; first_name?: string | null; last_name?: string | null; email?: string | null; role?: string | null };
 
@@ -10,7 +11,6 @@ type Trainer = { member_id: string; display_name: string };
 
 export default function NewTrainerPage() {
   const router = useRouter();
-  const [members, setMembers] = useState<Member[]>([]);
   const [trainers, setTrainers] = useState<Trainer[]>([]);
   const [useExisting, setUseExisting] = useState(true);
   const [existingId, setExistingId] = useState("");
@@ -25,27 +25,42 @@ export default function NewTrainerPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/members").then((r) => r.json()),
-      fetch("/api/trainers").then((r) => r.json()),
-    ])
-      .then(([membersData, trainersData]) => {
-        setMembers(Array.isArray(membersData) ? membersData : []);
+    fetch("/api/trainers")
+      .then((r) => r.json())
+      .then((trainersData) => {
         setTrainers(Array.isArray(trainersData) ? trainersData : []);
       })
       .catch(() => {});
   }, []);
 
   const trainerMemberIds = new Set(trainers.map((t) => t.member_id));
-  const candidates = members.filter((m) => !trainerMemberIds.has(m.member_id));
-  const selectedMember = existingId ? members.find((m) => m.member_id === existingId) : null;
-  const isAdminMember = selectedMember?.role === "Admin";
+  const [existingRole, setExistingRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!existingId.trim()) {
+      setExistingRole(null);
+      return;
+    }
+    fetch(`/api/members?q=${encodeURIComponent(existingId.trim())}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: Member[]) => {
+        const row = Array.isArray(rows) ? rows.find((m) => m.member_id === existingId) : null;
+        setExistingRole(row?.role ?? null);
+      })
+      .catch(() => setExistingRole(null));
+  }, [existingId]);
+
+  const isAdminMember = existingRole === "Admin";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (useExisting && !existingId) {
       setError("Select a member");
+      return;
+    }
+    if (useExisting && trainerMemberIds.has(existingId)) {
+      setError("That member is already a trainer.");
       return;
     }
     if (!useExisting && !email.trim()) {
@@ -111,19 +126,11 @@ export default function NewTrainerPage() {
             </label>
           </div>
           {useExisting ? (
-            <select
-              value={existingId}
-              onChange={(e) => setExistingId(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-stone-200"
-            >
-              <option value="">Select member…</option>
-              {candidates.map((m) => (
-                <option key={m.member_id} value={m.member_id}>
-                  {[m.first_name, m.last_name].filter(Boolean).join(" ")} {m.email ? `(${m.email})` : ""} {m.role === "Admin" ? "— Admin" : ""}
-                </option>
-              ))}
-              {candidates.length === 0 && <option value="">No members available (all are already trainers)</option>}
-            </select>
+            <MemberSearchField
+              memberId={existingId}
+              onMemberIdChange={setExistingId}
+              placeholder="Search name, email, or member ID"
+            />
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -144,7 +151,7 @@ export default function NewTrainerPage() {
               </div>
             </div>
           )}
-          {selectedMember?.role === "Admin" && (
+          {isAdminMember && (
             <p className="mt-2 text-sm text-amber-700 bg-amber-50 px-3 py-2 rounded-lg">This member is an admin; 1099 and I-9 are not required.</p>
           )}
         </div>

@@ -2,14 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import MemberSearchField from "@/components/MemberSearchField";
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-type Member = { member_id: string; first_name: string | null; last_name: string | null };
 type SessionType = { id: number; session_name: string; duration_minutes: number; price: string; trainer: string | null };
 
 export default function GenerateRecurringPTBookingPage() {
-  const [members, setMembers] = useState<Member[]>([]);
   const [sessionTypes, setSessionTypes] = useState<SessionType[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -26,16 +25,12 @@ export default function GenerateRecurringPTBookingPage() {
   });
 
   useEffect(() => {
-    Promise.all([
-      fetch("/api/members").then((r) => r.json()),
-      fetch("/api/offerings/pt-session-products").then((r) => r.json()),
-    ])
-      .then(([memData, sessData]) => {
-        setMembers(Array.isArray(memData) ? memData : []);
+    fetch("/api/offerings/pt-session-products")
+      .then((r) => r.json())
+      .then((sessData) => {
         setSessionTypes(Array.isArray(sessData) ? sessData : []);
         setForm((f) => ({
           ...f,
-          member_id: f.member_id || (Array.isArray(memData) && memData[0]?.member_id ? String(memData[0].member_id) : ""),
           pt_session_id:
             f.pt_session_id ||
             (Array.isArray(sessData) && sessData[0]?.id != null ? String(sessData[0].id) : ""),
@@ -114,19 +109,11 @@ export default function GenerateRecurringPTBookingPage() {
             </label>
           </div>
           {form.useMember ? (
-            <select
-              value={form.member_id}
-              onChange={(e) => setForm((f) => ({ ...f, member_id: e.target.value }))}
-              className="w-full px-4 py-2.5 rounded-lg border border-stone-200"
-              required={form.useMember}
-            >
-              <option value="">Select member</option>
-              {members.map((m) => (
-                <option key={m.member_id} value={m.member_id}>
-                  {[m.first_name, m.last_name].filter(Boolean).join(" ") || m.member_id}
-                </option>
-              ))}
-            </select>
+            <MemberSearchField
+              memberId={form.member_id}
+              onMemberIdChange={(id) => setForm((f) => ({ ...f, member_id: id }))}
+              placeholder="Search name, email, or member ID — keep typing to narrow"
+            />
           ) : (
             <input
               type="text"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { formatInAppTz, todayInAppTz, weekStartInAppTz, addDaysToDateStr } from "@/lib/app-timezone";
@@ -8,6 +8,7 @@ import { useAppTimezone, useOpenHours } from "@/lib/settings-context";
 import { isSameDayAppointment, SAME_DAY_SCHEDULING_MESSAGE } from "@/lib/same-day-scheduling";
 import type { BlockSegment } from "@/lib/pt-availability";
 import { isOpenGroupSessionKind, OPEN_GROUP_HOURLY_RATE } from "@/lib/open-group-pt";
+import MemberSearchField from "@/components/MemberSearchField";
 
 type Occurrence = {
   id: number;
@@ -97,6 +98,12 @@ function slotOverlaps(slotMin: number, startMin: number, endMin: number): boolea
   return startMin < slotEnd && endMin > slotMin;
 }
 
+function canTrainerQuickBlockItem(item: CellItem): boolean {
+  if (item.type === "trainer_not_available") return true;
+  if (item.type === "pt_segment" && !item.booked && !item.unavailable) return true;
+  return false;
+}
+
 type ScheduleGridProps = { variant: "member" | "master" | "trainer"; trainerMemberId?: string | null; trainerDisplayName?: string | null; /** When this changes (e.g. after trainer adds/removes availability), grid refetches. */ scheduleRefreshKey?: number; /** When true (e.g. admin viewing trainer on Trainers page), show Block time link and allow removing unavailable blocks. */ allowAdminEdit?: boolean; /** When admin or trainer clicks a slot on trainer view, can request to add availability for that slot (dayOfWeek 0-6, startTime, endTime). */ onAddAvailabilityForSlot?: (dayOfWeek: number, startTime: string, endTime: string) => void; /** Called after an availability block is deleted from the grid (e.g. so parent can refetch list). */ onAvailabilityChange?: () => void };
 
 export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayName, scheduleRefreshKey, allowAdminEdit, onAddAvailabilityForSlot, onAvailabilityChange }: ScheduleGridProps) {
@@ -171,20 +178,14 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
     );
   }
 
-  const [trainerPickMembers, setTrainerPickMembers] = useState<{ member_id: string; first_name: string | null; last_name: string | null; email: string | null }[]>(
-    []
-  );
-  const [trainerPickLoading, setTrainerPickLoading] = useState(false);
-  const [trainerBookMemberQuery, setTrainerBookMemberQuery] = useState("");
   const [trainerBookMemberId, setTrainerBookMemberId] = useState("");
   const [trainerBookDuration, setTrainerBookDuration] = useState<30 | 60 | 90>(60);
   const [trainerBookUseCredit, setTrainerBookUseCredit] = useState(false);
   const [trainerBookSubmitting, setTrainerBookSubmitting] = useState(false);
   const [trainerBlockSubmitting, setTrainerBlockSubmitting] = useState(false);
   const [trainerHoldDescription, setTrainerHoldDescription] = useState("");
-  const trainerMemberSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const trainerMembersFetchAbortRef = useRef<AbortController | null>(null);
-
+  const [trainerBlockStart, setTrainerBlockStart] = useState("");
+  const [trainerBlockEnd, setTrainerBlockEnd] = useState("");
   // Recompute initial week when gym timezone loads/updates (SettingsContext fetches async)
   useEffect(() => {
     setWeekStartStr(getInitialWeekStartStr(tz));
@@ -550,70 +551,25 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
   useEffect(() => {
     if (!selectedSlot) {
       setTrainerBookMemberId("");
-      setTrainerBookMemberQuery("");
-      setTrainerPickMembers([]);
-      setTrainerPickLoading(false);
       setTrainerBookDuration(60);
       setTrainerBookUseCredit(false);
       setTrainerHoldDescription("");
-      trainerMemberSearchTimerRef.current && clearTimeout(trainerMemberSearchTimerRef.current);
-      trainerMembersFetchAbortRef.current?.abort();
+      setTrainerBlockStart("");
+      setTrainerBlockEnd("");
       return;
     }
     if (!isTrainer || allowAdminEdit) return;
+    const startMin = parseTimeToMinutes(selectedSlot.timeStr);
+    setTrainerBlockStart(timeMinutesToTimeString(startMin));
+    setTrainerBlockEnd(timeMinutesToTimeString(startMin + SLOT_MINUTES));
+    setTrainerHoldDescription("");
     const it = selectedSlot.item;
-    if (it.type !== "pt_segment" || it.booked || it.unavailable) return;
-    setTrainerBookMemberId("");
-    setTrainerBookMemberQuery("");
-    setTrainerPickMembers([]);
-    setTrainerBookDuration(60);
-    setTrainerBookUseCredit(false);
-  }, [selectedSlot, isTrainer, allowAdminEdit]);
-
-  useEffect(() => {
-    if (!selectedSlot || !isTrainer || allowAdminEdit) return;
-    const it = selectedSlot.item;
-    if (it.type !== "pt_segment" || it.booked || it.unavailable) return;
-
-    const q = trainerBookMemberQuery.trim();
-    if (q.length < 2) {
-      setTrainerPickMembers([]);
-      setTrainerPickLoading(false);
-      return;
+    if (it.type === "pt_segment" && !it.booked && !it.unavailable) {
+      setTrainerBookMemberId("");
+      setTrainerBookDuration(60);
+      setTrainerBookUseCredit(false);
     }
-
-    if (trainerMemberSearchTimerRef.current) clearTimeout(trainerMemberSearchTimerRef.current);
-    trainerMemberSearchTimerRef.current = setTimeout(() => {
-      trainerMembersFetchAbortRef.current?.abort();
-      const ac = new AbortController();
-      trainerMembersFetchAbortRef.current = ac;
-      setTrainerPickLoading(true);
-      fetch(`/api/members?q=${encodeURIComponent(q)}`, { signal: ac.signal })
-        .then((r) => r.json())
-        .then((list) =>
-          setTrainerPickMembers(
-            Array.isArray(list)
-              ? list.map((m: { member_id: string; first_name: string | null; last_name: string | null; email: string | null }) => ({
-                  member_id: String(m.member_id),
-                  first_name: m.first_name,
-                  last_name: m.last_name,
-                  email: m.email,
-                }))
-              : []
-          )
-        )
-        .catch((e: Error & { name?: string }) => {
-          if (e.name !== "AbortError") setTrainerPickMembers([]);
-        })
-        .finally(() => {
-          if (!ac.signal.aborted) setTrainerPickLoading(false);
-        });
-    }, 320);
-
-    return () => {
-      if (trainerMemberSearchTimerRef.current) clearTimeout(trainerMemberSearchTimerRef.current);
-    };
-  }, [selectedSlot, isTrainer, allowAdminEdit, trainerBookMemberQuery]);
+  }, [selectedSlot, isTrainer, allowAdminEdit]);
 
   async function handleTrainerQuickBlock() {
     if (!selectedSlot) return;
@@ -622,16 +578,21 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
       alert("Enter a short reason for this hold (only staff see it on the schedule).");
       return;
     }
+    const startMin = parseTimeToMinutes(trainerBlockStart);
+    const endMin = parseTimeToMinutes(trainerBlockEnd);
+    if (endMin <= startMin) {
+      alert("End time must be after start time.");
+      return;
+    }
     setTrainerBlockSubmitting(true);
     try {
-      const endMin = parseTimeToMinutes(selectedSlot.timeStr) + SLOT_MINUTES;
       const res = await fetch("/api/offerings/unavailable-blocks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           recurrence_type: "one_time",
           occurrence_date: selectedSlot.date,
-          start_time: selectedSlot.timeStr,
+          start_time: timeMinutesToTimeString(startMin),
           end_time: timeMinutesToTimeString(endMin),
           description: desc,
         }),
@@ -1067,10 +1028,35 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                   </Link>
                 </li>
               )}
-              {isTrainer && !allowAdminEdit && (
-                <li className="rounded-lg border border-stone-100 bg-stone-50 p-3 space-y-1.5">
+              {isTrainer && !allowAdminEdit && canTrainerQuickBlockItem(selectedSlot.item) && (
+                <li className="rounded-lg border border-stone-100 bg-stone-50 p-3 space-y-2">
+                  <span className="font-medium text-stone-800 block text-sm">Block time (one-time hold)</span>
+                  <p className="text-xs text-stone-500 leading-snug">
+                    {selectedSlot.item.type === "trainer_not_available"
+                      ? "Optional: adds an explicit hold on this date (e.g. appointment) even without weekly hours here."
+                      : "Members see unavailable time; only staff see your description on the schedule."}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block text-xs font-medium text-stone-600">
+                      Start
+                      <input
+                        type="time"
+                        value={trainerBlockStart}
+                        onChange={(e) => setTrainerBlockStart(e.target.value)}
+                        className="mt-1 w-full px-2 py-2 rounded-lg border border-stone-200 text-sm"
+                      />
+                    </label>
+                    <label className="block text-xs font-medium text-stone-600">
+                      End
+                      <input
+                        type="time"
+                        value={trainerBlockEnd}
+                        onChange={(e) => setTrainerBlockEnd(e.target.value)}
+                        className="mt-1 w-full px-2 py-2 rounded-lg border border-stone-200 text-sm"
+                      />
+                    </label>
+                  </div>
                   <label className="block text-xs font-medium text-stone-600">Hold description (required)</label>
-                  <p className="text-xs text-stone-500">Only staff see this label on dark hold cells; members just see unavailable time.</p>
                   <input
                     type="text"
                     value={trainerHoldDescription}
@@ -1078,23 +1064,14 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                     placeholder="e.g. Dentist, vacation day"
                     className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
                   />
-                </li>
-              )}
-              {isTrainer && !allowAdminEdit && (
-                <li>
                   <button
                     type="button"
                     disabled={trainerBlockSubmitting}
                     onClick={() => void handleTrainerQuickBlock()}
-                    className="text-left text-brand-600 hover:underline disabled:opacity-50"
+                    className="w-full py-2 rounded-lg bg-white border border-stone-300 text-stone-800 text-sm font-medium hover:bg-stone-100 disabled:opacity-50"
                   >
-                    {trainerBlockSubmitting ? "Saving…" : "Block this 30-minute slot (one-time)"}
+                    {trainerBlockSubmitting ? "Saving…" : "Block this time"}
                   </button>
-                  <span className="block text-xs text-stone-500 mt-0.5">
-                    {selectedSlot.item.type === "trainer_not_available"
-                      ? "Optional: adds an explicit one-date hold on top of having no weekly hours (e.g. appointment)."
-                      : "Creates an explicit hold for just this half-hour on this date (vacation, personal time)."}
-                  </span>
                 </li>
               )}
               {selectedSlot.item.type === "class" && selectedSlot.item.booked_count > 0 && (isMaster || allowAdminEdit) && (
@@ -1163,37 +1140,12 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                   <span className="text-xs text-stone-600 block">
                     Session is with you ({trainerDisplayName ?? "trainer"}). Starts at {selectedSlot.timeStr} for this slot.
                   </span>
-                  <label className="block text-xs font-medium text-stone-500">Find member</label>
-                  <input
-                    type="search"
-                    value={trainerBookMemberQuery}
-                    onChange={(e) => setTrainerBookMemberQuery(e.target.value)}
-                    placeholder="Name, email, or member ID (type 2+ characters)"
-                    className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
+                  <MemberSearchField
+                    label="Find member"
+                    memberId={trainerBookMemberId}
+                    onMemberIdChange={setTrainerBookMemberId}
+                    placeholder="Name, email, or member ID — keep typing to narrow results"
                   />
-                  <p className="text-[11px] text-stone-500">Searches the full member list (same as admin). Results appear after a short pause.</p>
-                  <select
-                    value={trainerBookMemberId}
-                    onChange={(e) => setTrainerBookMemberId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
-                    disabled={trainerPickLoading}
-                  >
-                    <option value="">
-                      {trainerPickLoading
-                        ? "Searching…"
-                        : trainerBookMemberQuery.trim().length < 2
-                          ? "— Type 2+ letters to search —"
-                          : trainerPickMembers.length === 0
-                            ? "— No matches —"
-                            : "— Select member —"}
-                    </option>
-                    {trainerPickMembers.map((m) => (
-                      <option key={m.member_id} value={m.member_id}>
-                        {[m.first_name, m.last_name].filter(Boolean).join(" ").trim() || m.member_id}
-                        {m.email ? ` · ${m.email}` : ""}
-                      </option>
-                    ))}
-                  </select>
                   <div className="flex flex-wrap gap-2 items-center">
                     <span className="text-xs font-medium text-stone-500">Duration</span>
                     <select
@@ -1218,14 +1170,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                   >
                     {trainerBookSubmitting ? "Booking…" : "Book session"}
                   </button>
-                  <button
-                    type="button"
-                    disabled={trainerBlockSubmitting}
-                    onClick={() => void handleTrainerQuickBlock()}
-                    className="w-full py-2 rounded-lg border border-stone-300 text-stone-700 text-sm font-medium hover:bg-stone-100 disabled:opacity-50"
-                  >
-                    {trainerBlockSubmitting ? "Saving…" : "Or block this slot instead (one-time)"}
-                  </button>
+                  <p className="text-xs text-stone-500">To block instead of booking, use &quot;Block time&quot; above.</p>
                 </li>
               )}
               {selectedSlot.item.type === "pt_segment" && selectedSlot.item.unavailable && selectedSlot.item.unavailable_block_id != null && (isTrainer || allowAdminEdit) && (

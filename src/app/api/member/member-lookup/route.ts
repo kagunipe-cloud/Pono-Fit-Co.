@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb, ensureMembersAccountDeletedAtColumn } from "@/lib/db";
 import { getMemberIdFromSession } from "@/lib/session";
 import { getTrainerMemberId, getAdminMemberId } from "@/lib/admin";
+import { memberRowMatchesSearch } from "@/lib/member-search-match";
 
 export const dynamic = "force-dynamic";
 
@@ -85,10 +86,12 @@ export async function GET(request: NextRequest) {
         .all(memberId, pattern, pattern, pattern, pattern, pattern) as typeof rows;
     }
 
+    const filtered = rows.filter((r) => memberRowMatchesSearch(r, q));
+
     db.close();
 
     return NextResponse.json(
-      rows.map((r) => ({
+      filtered.map((r) => ({
         member_id: r.member_id,
         display_name: memberDisplayName(r),
         email: String(r.email ?? "").trim(),

@@ -1,12 +1,11 @@
 "use client";
 
-import { Suspense, useEffect, useState, useMemo } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { formatDateForDisplay } from "@/lib/app-timezone";
 import { isOpenGroupSessionKind, OPEN_GROUP_DEFAULT_FLAT_PRICE } from "@/lib/open-group-pt";
-
-type Member = { member_id: string; first_name: string | null; last_name: string | null; email: string | null };
+import MemberSearchField from "@/components/MemberSearchField";
 type Occurrence = {
   id: number;
   occurrence_date: string;
@@ -27,8 +26,6 @@ function AdminBookClassForMemberContent() {
 
   const [occurrence, setOccurrence] = useState<Occurrence | null>(null);
   const [occurrenceError, setOccurrenceError] = useState<string | null>(null);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [memberQuery, setMemberQuery] = useState("");
   const [selectedMemberId, setSelectedMemberId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,27 +48,6 @@ function AdminBookClassForMemberContent() {
       .then((data) => setOccurrence(data))
       .catch(() => setOccurrenceError("Could not load class occurrence."));
   }, [occurrenceIdParam]);
-
-  useEffect(() => {
-    fetch("/api/members")
-      .then((r) => r.json())
-      .then((list) => setMembers(Array.isArray(list) ? list : []))
-      .catch(() => setMembers([]));
-  }, []);
-
-  const filteredMembers = useMemo(() => {
-    if (!memberQuery.trim()) return members.slice(0, 50);
-    const q = memberQuery.toLowerCase();
-    return members
-      .filter(
-        (m) =>
-          (m.first_name ?? "").toLowerCase().includes(q) ||
-          (m.last_name ?? "").toLowerCase().includes(q) ||
-          (m.email ?? "").toLowerCase().includes(q) ||
-          (m.member_id ?? "").toLowerCase().includes(q)
-      )
-      .slice(0, 30);
-  }, [members, memberQuery]);
 
   async function handleAddToCart() {
     if (!selectedMemberId || !occurrence) {
@@ -147,29 +123,11 @@ function AdminBookClassForMemberContent() {
       )}
 
       <div className="space-y-4 mb-6">
-        <div>
-          <label className="block text-sm font-medium text-stone-700 mb-1">Member to charge</label>
-          <input
-            type="text"
-            value={memberQuery}
-            onChange={(e) => setMemberQuery(e.target.value)}
-            placeholder="Search by name, email, or member ID"
-            className="w-full px-3 py-2 rounded-lg border border-stone-200 mb-2"
-          />
-          <select
-            value={selectedMemberId}
-            onChange={(e) => setSelectedMemberId(e.target.value)}
-            className="w-full px-3 py-2 rounded-lg border border-stone-200 bg-white"
-            size={6}
-          >
-            <option value="">— Select member —</option>
-            {filteredMembers.map((m) => (
-              <option key={m.member_id} value={m.member_id}>
-                {[m.first_name, m.last_name].filter(Boolean).join(" ")} ({m.member_id})
-              </option>
-            ))}
-          </select>
-        </div>
+        <MemberSearchField
+          label="Member to charge"
+          memberId={selectedMemberId}
+          onMemberIdChange={setSelectedMemberId}
+        />
       </div>
 
       {error && <p className="mb-4 text-red-600 text-sm">{error}</p>}

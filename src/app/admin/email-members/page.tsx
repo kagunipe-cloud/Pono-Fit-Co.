@@ -7,6 +7,7 @@ import {
   FETCH_TIMEOUT_WELCOME_EMAIL_MS,
   isFetchAbortError,
 } from "@/lib/client-fetch-timeout";
+import MemberSearchField from "@/components/MemberSearchField";
 
 type MemberRow = {
   member_id: string;
@@ -70,10 +71,7 @@ export default function AdminEmailMembersPage() {
     waiverUrl?: string;
   } | null>(null);
 
-  const [allMembers, setAllMembers] = useState<MemberRow[]>([]);
-  const [loadingMembers, setLoadingMembers] = useState(false);
   const [oneMemberId, setOneMemberId] = useState("");
-  const [memberPickSearch, setMemberPickSearch] = useState("");
 
   const [trialExpiredDays, setTrialExpiredDays] = useState<number | "">("");
   const [compProductType, setCompProductType] = useState<string>("");
@@ -122,16 +120,6 @@ export default function AdminEmailMembersPage() {
     const allowed = allowedMessageKinds(recipientScope);
     setMessageKind((prev) => (allowed.includes(prev) ? prev : allowed[0]));
   }, [recipientScope]);
-
-  useEffect(() => {
-    if (!smtpConfigured || recipientScope !== "one_member") return;
-    setLoadingMembers(true);
-    fetch("/api/members")
-      .then((r) => (r.ok ? r.json() : []))
-      .then((list: MemberRow[]) => setAllMembers(Array.isArray(list) ? list : []))
-      .catch(() => setAllMembers([]))
-      .finally(() => setLoadingMembers(false));
-  }, [smtpConfigured, recipientScope]);
 
   useEffect(() => {
     if (!smtpConfigured || recipientScope !== "onboarding") return;
@@ -190,19 +178,6 @@ export default function AdminEmailMembersPage() {
       .catch(() => setFilteredMembers(null))
       .finally(() => setLoadingFiltered(false));
   }
-
-  const membersPickList = useMemo(() => {
-    const withEmail = allMembers.filter((m) => (m.email ?? "").trim());
-    const q = memberPickSearch.trim().toLowerCase();
-    if (!q) return withEmail;
-    return withEmail.filter(
-      (m) =>
-        (m.first_name ?? "").toLowerCase().includes(q) ||
-        (m.last_name ?? "").toLowerCase().includes(q) ||
-        (m.email ?? "").toLowerCase().includes(q) ||
-        m.member_id.toLowerCase().includes(q)
-    );
-  }, [allMembers, memberPickSearch]);
 
   const filteredWelcomeMembers = useMemo(() => {
     if (!welcomeSearch.trim()) return welcomeMembers;
@@ -494,33 +469,14 @@ export default function AdminEmailMembersPage() {
             <p className="text-sm text-stone-600">{recipientSummary}</p>
 
             {recipientScope === "one_member" && (
-              <div className="space-y-2 pt-2 border-t border-stone-100">
-                <input
-                  type="search"
-                  placeholder="Search members…"
-                  value={memberPickSearch}
-                  onChange={(e) => setMemberPickSearch(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
+              <div className="pt-2 border-t border-stone-100">
+                <MemberSearchField
+                  label="Recipient"
+                  memberId={oneMemberId}
+                  onMemberIdChange={setOneMemberId}
+                  requireEmail
+                  placeholder="Search name or email (must have email on file)"
                 />
-                {loadingMembers ? (
-                  <p className="text-sm text-stone-500">Loading members…</p>
-                ) : (
-                  <select
-                    value={oneMemberId}
-                    onChange={(e) => setOneMemberId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-stone-200 text-sm"
-                  >
-                    <option value="">— Select member —</option>
-                    {membersPickList.map((m) => {
-                      const name = [m.first_name, m.last_name].filter(Boolean).join(" ") || "—";
-                      return (
-                        <option key={m.member_id} value={m.member_id}>
-                          {name} · {m.email ?? "no email"} · {m.member_id}
-                        </option>
-                      );
-                    })}
-                  </select>
-                )}
               </div>
             )}
 
