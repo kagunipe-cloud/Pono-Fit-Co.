@@ -56,16 +56,18 @@ function isWithinMacroTolerance(actual: number, goal: number): boolean {
   return Math.abs(actual - goal) <= goal * MACRO_GOAL_TOLERANCE;
 }
 
-/** Protein passes at or above goal (any amount over counts). */
+/** Protein: at or above goal, or up to tolerance% below goal. */
 function proteinMacroPasses(actual: number, goal: number): boolean {
   if (!Number.isFinite(actual) || !Number.isFinite(goal) || goal <= 0) return false;
-  return actual >= goal;
+  const floor = goal * (1 - MACRO_GOAL_TOLERANCE);
+  return actual >= floor;
 }
 
-/** Fat and carbs pass at or below goal (any amount under counts). */
-function underGoalMacroPasses(actual: number, goal: number): boolean {
+/** Fat and carbs: at or below goal, or up to tolerance% above goal. */
+function cappedMacroPasses(actual: number, goal: number): boolean {
   if (!Number.isFinite(actual) || !Number.isFinite(goal) || goal <= 0) return false;
-  return actual <= goal;
+  const ceiling = goal * (1 + MACRO_GOAL_TOLERANCE);
+  return actual <= ceiling;
 }
 
 export function macroGoalGramTargets(goal: MacroGoalRow): { calories: number; protein: number; fat: number; carbs: number } | null {
@@ -93,8 +95,8 @@ export function macroDayMissReasons(total: MacroTotals | undefined, goal: MacroG
   const misses: string[] = [];
   if (!isWithinMacroTolerance(total.cal, targets.calories)) misses.push("calories");
   if (!proteinMacroPasses(total.p, targets.protein)) misses.push("protein");
-  if (!underGoalMacroPasses(total.f, targets.fat)) misses.push("fat");
-  if (!underGoalMacroPasses(total.c, targets.carbs)) misses.push("carbs");
+  if (!cappedMacroPasses(total.f, targets.fat)) misses.push("fat");
+  if (!cappedMacroPasses(total.c, targets.carbs)) misses.push("carbs");
   return misses;
 }
 
