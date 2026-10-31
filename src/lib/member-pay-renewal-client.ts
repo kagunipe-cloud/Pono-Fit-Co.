@@ -1,7 +1,11 @@
-import { EXISTING_MONTHLY_MEMBERSHIP_CODE } from "./monthly-membership-stack-messages";
+import { EXISTING_MONTHLY_MEMBERSHIP_CODE, MONTHLY_MEMBERSHIP_IN_CART_CODE } from "./monthly-membership-stack-messages";
 
 export function isExistingMonthlyMembershipBlock(json: Record<string, unknown>): boolean {
   return json.code === EXISTING_MONTHLY_MEMBERSHIP_CODE;
+}
+
+export function isMonthlyMembershipInCartBlock(json: Record<string, unknown>): boolean {
+  return json.code === MONTHLY_MEMBERSHIP_IN_CART_CODE;
 }
 
 /** Shared client helper for POST /api/member/pay-renewal */

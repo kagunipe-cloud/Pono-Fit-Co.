@@ -3,16 +3,22 @@ import { MEMBERSHIP_PLAN_JOIN_SQL } from "./mrr";
 import {
   EXISTING_MONTHLY_MEMBERSHIP_CODE,
   MEMBER_EXISTING_MONTHLY_MESSAGE,
+  MEMBER_MONTHLY_IN_CART_MESSAGE,
+  MONTHLY_MEMBERSHIP_IN_CART_CODE,
   MONTHLY_MEMBERSHIP_STACK_ERROR,
 } from "./monthly-membership-stack-messages";
 
 export {
   EXISTING_MONTHLY_MEMBERSHIP_CODE,
   MEMBER_EXISTING_MONTHLY_MESSAGE,
+  MEMBER_MONTHLY_IN_CART_MESSAGE,
+  MONTHLY_MEMBERSHIP_IN_CART_CODE,
   MONTHLY_MEMBERSHIP_STACK_ERROR,
 } from "./monthly-membership-stack-messages";
 
 type AppDb = ReturnType<typeof getDb>;
+
+export type MonthlyMembershipStackBlockReason = "active_subscription" | "cart_already_has_monthly";
 
 export type MembershipPlanRow = {
   unit?: string | null;
@@ -81,10 +87,25 @@ export function enforceDoorMonthlyMembershipStack(isAdmin: boolean): boolean {
   return !isAdmin;
 }
 
-/** HTTP body for blocked monthly-on-monthly; member UI gets Pay now affordance via `code`. */
-export function monthlyMembershipStackHttpBody(forMemberUi: boolean): Record<string, unknown> {
+/** HTTP body for blocked monthly-on-monthly; member UI gets Pay now only when an active sub exists. */
+export function monthlyMembershipStackHttpBody(
+  forMemberUi: boolean,
+  reason: MonthlyMembershipStackBlockReason
+): Record<string, unknown> {
   if (!forMemberUi) {
-    return { error: MONTHLY_MEMBERSHIP_STACK_ERROR };
+    return {
+      error:
+        reason === "cart_already_has_monthly"
+          ? "This member already has a monthly membership in their cart. Open their cart to checkout or remove the line before adding another monthly plan."
+          : MONTHLY_MEMBERSHIP_STACK_ERROR,
+    };
+  }
+  if (reason === "cart_already_has_monthly") {
+    return {
+      error: MEMBER_MONTHLY_IN_CART_MESSAGE,
+      code: MONTHLY_MEMBERSHIP_IN_CART_CODE,
+      show_pay_renewal: false,
+    };
   }
   return {
     error: MEMBER_EXISTING_MONTHLY_MESSAGE,
@@ -97,20 +118,34 @@ export function monthlyMembershipStackHttpBody(forMemberUi: boolean): Record<str
  * Block adding another door monthly membership when one is already active or already in the cart.
  * Gifts (recipient email) are allowed.
  */
+export function doorMonthlyMembershipStackReason(
+  db: AppDb,
+  memberId: string,
+  plan: MembershipPlanRow | null | undefined,
+  opts?: { cartId?: number; excludeCartItemId?: number }
+): MonthlyMembershipStackBlockReason | null {
+  if (!isDoorMonthlyMembershipPlan(plan)) return null;
+  if (countActiveDoorMonthlySubscriptions(db, memberId) >= 1) {
+    return "active_subscription";
+  }
+  if (opts?.cartId != null && cartHasDoorMonthlyMembership(db, opts.cartId, opts.excludeCartItemId)) {
+    return "cart_already_has_monthly";
+  }
+  return null;
+}
+
+/** @deprecated Use doorMonthlyMembershipStackReason + monthlyMembershipStackHttpBody */
 export function doorMonthlyMembershipStackError(
   db: AppDb,
   memberId: string,
   plan: MembershipPlanRow | null | undefined,
   opts?: { cartId?: number; excludeCartItemId?: number }
 ): string | null {
-  if (!isDoorMonthlyMembershipPlan(plan)) return null;
-  if (countActiveDoorMonthlySubscriptions(db, memberId) >= 1) {
-    return MONTHLY_MEMBERSHIP_STACK_ERROR;
-  }
-  if (opts?.cartId != null && cartHasDoorMonthlyMembership(db, opts.cartId, opts.excludeCartItemId)) {
-    return MONTHLY_MEMBERSHIP_STACK_ERROR;
-  }
-  return null;
+  const reason = doorMonthlyMembershipStackReason(db, memberId, plan, opts);
+  if (!reason) return null;
+  return reason === "cart_already_has_monthly"
+    ? "Monthly membership already in cart."
+    : MONTHLY_MEMBERSHIP_STACK_ERROR;
 }
 
 export function assertNoDoorMonthlyStackInCart(db: AppDb, memberId: string, cartId: number): string | null {

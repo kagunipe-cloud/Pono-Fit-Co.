@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
     if (monthlyStackErr) {
       db.close();
       const memberUi = isMemberSelfCartAction(sessionMemberId, member_id, isStaff, isAdmin);
-      return NextResponse.json(monthlyMembershipStackHttpBody(memberUi), { status: 409 });
+      return NextResponse.json(monthlyMembershipStackHttpBody(memberUi, "active_subscription"), { status: 409 });
     }
   }
 

@@ -6,4 +6,9 @@ export const MONTHLY_MEMBERSHIP_STACK_ERROR =
 export const MEMBER_EXISTING_MONTHLY_MESSAGE =
   "You already have a monthly membership with us. If you need to pay your bill, click below.";
 
+export const MEMBER_MONTHLY_IN_CART_MESSAGE =
+  "You already have a monthly membership in your cart. Open Cart to finish checkout, or remove it there before adding a different monthly plan.";
+
 export const EXISTING_MONTHLY_MEMBERSHIP_CODE = "existing_monthly_membership";
+
+export const MONTHLY_MEMBERSHIP_IN_CART_CODE = "monthly_membership_in_cart";

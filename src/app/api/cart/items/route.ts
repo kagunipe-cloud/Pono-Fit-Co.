@@ -19,7 +19,7 @@ import { memberSameDayPtBookingError } from "../../../../lib/same-day-scheduling
 import { memberPtBookingPhoneError } from "../../../../lib/member-phone";
 import { memberFirstTimePtDurationError } from "../../../../lib/first-time-pt-booking";
 import {
-  doorMonthlyMembershipStackError,
+  doorMonthlyMembershipStackReason,
   enforceDoorMonthlyMembershipStack,
   isMemberSelfCartAction,
   monthlyMembershipStackHttpBody,
@@ -231,11 +231,11 @@ export async function POST(request: NextRequest) {
         .prepare("SELECT unit, access_level, category FROM membership_plans WHERE id = ?")
         .get(resolvedProductId) as { unit: string | null; access_level: string | null; category: string | null } | undefined;
       if (enforceDoorMonthlyMembershipStack(isAdmin)) {
-        const stackErr = doorMonthlyMembershipStackError(db, member_id, plan, { cartId: cart.id });
-        if (stackErr) {
+        const stackReason = doorMonthlyMembershipStackReason(db, member_id, plan, { cartId: cart.id });
+        if (stackReason) {
           db.close();
           const memberUi = isMemberSelfCartAction(sessionMemberId, member_id, isStaff, isAdmin);
-          return NextResponse.json(monthlyMembershipStackHttpBody(memberUi), { status: 409 });
+          return NextResponse.json(monthlyMembershipStackHttpBody(memberUi, stackReason), { status: 409 });
         }
       }
     }

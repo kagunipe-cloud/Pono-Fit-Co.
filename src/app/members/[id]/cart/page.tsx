@@ -9,8 +9,8 @@ import { todayInAppTz, weekStartInAppTz, addDaysToDateStr, formatDateForDisplay 
 import { useAppTimezone, useOpenHours } from "@/lib/settings-context";
 import { EMAIL_POLICY_MESSAGE } from "@/lib/email-policy";
 import { MemberPayRenewalBanner } from "@/components/member/MemberPayRenewalBanner";
-import { MEMBER_EXISTING_MONTHLY_MESSAGE } from "@/lib/monthly-membership-stack-messages";
-import { isExistingMonthlyMembershipBlock, postMemberPayRenewal } from "@/lib/member-pay-renewal-client";
+import { MEMBER_EXISTING_MONTHLY_MESSAGE, MEMBER_MONTHLY_IN_CART_MESSAGE } from "@/lib/monthly-membership-stack-messages";
+import { isExistingMonthlyMembershipBlock, isMonthlyMembershipInCartBlock, postMemberPayRenewal } from "@/lib/member-pay-renewal-client";
 
 const CameraBarcodeScanner = lazy(() => import("@/components/CameraBarcodeScanner"));
 
@@ -113,6 +113,7 @@ export default function MemberCartPage() {
   const [isOwnCart, setIsOwnCart] = useState(false);
   const [isStaff, setIsStaff] = useState(false);
   const [showExistingMonthlyPay, setShowExistingMonthlyPay] = useState(false);
+  const [showMonthlyInCartHint, setShowMonthlyInCartHint] = useState(false);
   const [payingRenewal, setPayingRenewal] = useState(false);
   const [renewalPayMessage, setRenewalPayMessage] = useState<string | null>(null);
   const [staffPriceSavingId, setStaffPriceSavingId] = useState<number | null>(null);
@@ -395,8 +396,22 @@ export default function MemberCartPage() {
     }
   }
 
+  function handleMonthlyStack409(json: Record<string, unknown>): boolean {
+    if (isMonthlyMembershipInCartBlock(json)) {
+      setShowMonthlyInCartHint(true);
+      setShowExistingMonthlyPay(false);
+      return true;
+    }
+    if (isExistingMonthlyMembershipBlock(json)) {
+      setShowExistingMonthlyPay(true);
+      setShowMonthlyInCartHint(false);
+      return true;
+    }
+    return false;
+  }
+
   function memberExistingMonthlyBlock(res: Response, json: Record<string, unknown>): boolean {
-    return res.status === 409 && isOwnCart && !isStaff && isExistingMonthlyMembershipBlock(json);
+    return res.status === 409 && isOwnCart && !isStaff && handleMonthlyStack409(json);
   }
 
   async function addToCart(
@@ -924,6 +939,13 @@ export default function MemberCartPage() {
       <p className="text-stone-600 text-xs leading-relaxed mb-6 p-3 rounded-lg bg-stone-50 border border-stone-100 max-w-xl">
         {EMAIL_POLICY_MESSAGE}
       </p>
+
+      {isOwnCart && !isStaff && showMonthlyInCartHint && (
+        <div className="mb-6 p-4 rounded-xl border-2 border-brand-200 bg-brand-50/80 text-sm">
+          <p className="font-semibold text-stone-800">Monthly membership already in your cart</p>
+          <p className="text-stone-700 mt-1">{MEMBER_MONTHLY_IN_CART_MESSAGE}</p>
+        </div>
+      )}
 
       {isOwnCart && !isStaff && showExistingMonthlyPay && (
         <MemberPayRenewalBanner

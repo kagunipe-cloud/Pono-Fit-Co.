@@ -5,8 +5,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { formatPrice, toTitleCase } from "@/lib/format";
 import { MemberPayRenewalBanner } from "@/components/member/MemberPayRenewalBanner";
-import { MEMBER_EXISTING_MONTHLY_MESSAGE } from "@/lib/monthly-membership-stack-messages";
-import { isExistingMonthlyMembershipBlock, postMemberPayRenewal } from "@/lib/member-pay-renewal-client";
+import { MEMBER_EXISTING_MONTHLY_MESSAGE, MEMBER_MONTHLY_IN_CART_MESSAGE } from "@/lib/monthly-membership-stack-messages";
+import { isExistingMonthlyMembershipBlock, isMonthlyMembershipInCartBlock, postMemberPayRenewal } from "@/lib/member-pay-renewal-client";
 
 type PlanRow = { id: number; plan_name: string; price?: string; length?: string; unit?: string; description?: string | null };
 
@@ -22,6 +22,7 @@ function MemberMembershipsContent() {
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState<number | null>(null);
   const [showExistingMonthlyPay, setShowExistingMonthlyPay] = useState(false);
+  const [showMonthlyInCart, setShowMonthlyInCart] = useState(false);
   const [payingRenewal, setPayingRenewal] = useState(false);
   const [renewalPayMessage, setRenewalPayMessage] = useState<string | null>(null);
 
@@ -64,6 +65,7 @@ function MemberMembershipsContent() {
     if (!memberId) return;
     setAdding(id);
     setShowExistingMonthlyPay(false);
+    setShowMonthlyInCart(false);
     setRenewalPayMessage(null);
     try {
       const res = await fetch("/api/cart/items", {
@@ -74,6 +76,10 @@ function MemberMembershipsContent() {
       const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
       if (res.ok) {
         router.push("/member/cart");
+        return;
+      }
+      if (res.status === 409 && isMonthlyMembershipInCartBlock(json)) {
+        setShowMonthlyInCart(true);
         return;
       }
       if (res.status === 409 && isExistingMonthlyMembershipBlock(json)) {
@@ -100,6 +106,19 @@ function MemberMembershipsContent() {
         All plans (including 5- and 10-day pass packs) are listed here. Staff edit plans under{" "}
         <span className="text-stone-700">Services → Membership Plans</span> in the sidebar.
       </p>
+
+      {showMonthlyInCart && (
+        <div className="mb-6 p-4 rounded-xl border-2 border-brand-200 bg-brand-50/80 text-sm">
+          <p className="font-semibold text-stone-800">Monthly membership already in your cart</p>
+          <p className="text-stone-700 mt-1">{MEMBER_MONTHLY_IN_CART_MESSAGE}</p>
+          <Link
+            href="/member/cart"
+            className="inline-block mt-3 px-4 py-2 rounded-lg bg-brand-600 text-white text-sm font-medium hover:bg-brand-700"
+          >
+            Open cart
+          </Link>
+        </div>
+      )}
 
       {showExistingMonthlyPay && (
         <MemberPayRenewalBanner
