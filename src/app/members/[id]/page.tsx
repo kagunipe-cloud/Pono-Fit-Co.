@@ -172,6 +172,7 @@ export default function MemberDetailPage() {
   const [ptCreditsExpanded, setPtCreditsExpanded] = useState(false);
   const [sendingWaiver, setSendingWaiver] = useState(false);
   const [sendingPasswordReset, setSendingPasswordReset] = useState(false);
+  const [sendingWelcomeEmail, setSendingWelcomeEmail] = useState(false);
   const [togglingAutoRenew, setTogglingAutoRenew] = useState(false);
   const [reactivateMembershipSubmitting, setReactivateMembershipSubmitting] = useState(false);
   const [adjustSubId, setAdjustSubId] = useState<string | null>(null);
@@ -411,6 +412,35 @@ export default function MemberDetailPage() {
     } finally {
       clear();
       setSendingPasswordReset(false);
+    }
+  }
+
+  async function handleSendWelcomeEmail() {
+    setPasswordResetMessage(null);
+    setSendingWelcomeEmail(true);
+    const { signal, clear } = createFetchTimeoutSignal(FETCH_TIMEOUT_EMAIL_MS);
+    try {
+      const res = await fetch(`/api/admin/members/${encodeURIComponent(id)}/send-welcome-email`, {
+        method: "POST",
+        signal,
+      });
+      const json = (await res.json()) as { error?: string; message?: string };
+      if (res.ok) {
+        setPasswordResetMessage(json.message ?? "Welcome email sent.");
+      } else {
+        setPasswordResetMessage(json.error ?? "Could not send welcome email.");
+      }
+    } catch (e) {
+      if (isFetchAbortError(e)) {
+        setPasswordResetMessage(
+          "Request timed out — email may still send. Check your SMTP or try again in a minute."
+        );
+      } else {
+        setPasswordResetMessage("Could not send welcome email.");
+      }
+    } finally {
+      clear();
+      setSendingWelcomeEmail(false);
     }
   }
 
@@ -1468,8 +1498,19 @@ export default function MemberDetailPage() {
             {isAdmin && (
               <button
                 type="button"
+                onClick={handleSendWelcomeEmail}
+                disabled={sendingWelcomeEmail || sendingPasswordReset}
+                className="px-4 py-2 rounded-lg border border-brand-300 bg-brand-50 text-brand-900 hover:bg-brand-100 font-medium disabled:opacity-50"
+                title="Welcome email: Member ID + set-password link (install steps after). Best for new profiles who never used the app."
+              >
+                {sendingWelcomeEmail ? "Sending…" : "Send welcome email"}
+              </button>
+            )}
+            {isAdmin && (
+              <button
+                type="button"
                 onClick={handleSendPasswordReset}
-                disabled={sendingPasswordReset}
+                disabled={sendingPasswordReset || sendingWelcomeEmail}
                 className="px-4 py-2 rounded-lg border border-stone-200 hover:bg-stone-50 font-medium disabled:opacity-50"
                 title="Same email as Forgot password: 24-hour link to choose a new password"
               >
