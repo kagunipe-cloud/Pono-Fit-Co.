@@ -23,6 +23,7 @@ type Occurrence = {
   recurring_class_id?: number | null;
   session_kind?: string;
   flat_session_price?: string | null;
+  trainer_member_id?: string | null;
 };
 
 type PtBlockWithSegments = { id: number; trainer: string; date: string; start_time: string; end_time: string; segments?: BlockSegment[] };
@@ -246,6 +247,14 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
         const overlapping: Occurrence[] = [];
         for (const o of occurrences) {
           if (o.occurrence_date !== date) continue;
+          if (
+            variant === "member" &&
+            effectiveTrainerId != null &&
+            (o.trainer_member_id ?? "").trim() !== "" &&
+            (o.trainer_member_id ?? "").trim() !== effectiveTrainerId.trim()
+          ) {
+            continue;
+          }
           const startMin = parseTimeToMinutes(o.occurrence_time);
           const durationMin = typeof o.duration_minutes === "number" ? o.duration_minutes : 60;
           const endMin = startMin + durationMin + CLASS_BUFFER_MINUTES;
@@ -256,7 +265,7 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
           Math.floor((startMin - TIME_SLOT_MIN) / SLOT_MINUTES) * SLOT_MINUTES + TIME_SLOT_MIN;
         const o = overlapping.find((occ) => toClassStartSlot(parseTimeToMinutes(occ.occurrence_time)) === slotMin)
           ?? overlapping[0];
-        if (o && !(variant === "member" && isOpenGroupSessionKind(o.session_kind))) {
+        if (o) {
           const startMin = parseTimeToMinutes(o.occurrence_time);
           const durationMin = typeof o.duration_minutes === "number" ? o.duration_minutes : 60;
           const oClassStartSlot = toClassStartSlot(startMin);
@@ -795,9 +804,23 @@ export default function ScheduleGrid({ variant, trainerMemberId, trainerDisplayN
                                 <span className="text-xs text-stone-500 block">{item.booked_count}/{item.capacity}</span>
                               )}
                               <div className="flex flex-wrap gap-1 mt-1">
-                                <Link href={`/schedule/${item.id}/roster`} className={`text-xs font-medium hover:underline ${isOpenGroupSessionKind(item.session_kind) ? "text-orange-700" : "text-blue-600"}`} onClick={(e) => e.stopPropagation()}>Roster</Link>
-                                <span className="text-stone-300">·</span>
-                                <Link href={variant === "master" ? `/admin/book-class-for-member?occurrence_id=${item.id}` : `/member/book-classes?occurrence=${item.id}`} className={`text-xs font-medium hover:underline ${isOpenGroupSessionKind(item.session_kind) ? "text-orange-700" : "text-blue-600"}`} onClick={(e) => e.stopPropagation()}>Book</Link>
+                                {(isMaster || isTrainer || allowAdminEdit) && (
+                                  <>
+                                    <Link href={`/schedule/${item.id}/roster`} className={`text-xs font-medium hover:underline ${isOpenGroupSessionKind(item.session_kind) ? "text-orange-700" : "text-blue-600"}`} onClick={(e) => e.stopPropagation()}>Roster</Link>
+                                    <span className="text-stone-300">·</span>
+                                  </>
+                                )}
+                                <Link
+                                  href={
+                                    variant === "master"
+                                      ? `/admin/book-class-for-member?occurrence_id=${item.id}`
+                                      : `/member/book-classes?occurrence=${item.id}`
+                                  }
+                                  className={`text-xs font-medium hover:underline ${isOpenGroupSessionKind(item.session_kind) ? "text-orange-700" : "text-blue-600"}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {variant === "member" && isOpenGroupSessionKind(item.session_kind) ? "Join" : "Book"}
+                                </Link>
                               </div>
                             </div>
                           )}
