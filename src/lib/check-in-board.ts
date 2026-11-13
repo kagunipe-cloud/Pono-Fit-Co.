@@ -113,3 +113,43 @@ export function buildCheckInBoard(db: Db, tz: string, weekStart?: string, today?
     rows: ranked,
   };
 }
+
+export type MemberCheckInDaysResult = {
+  visit_days: number;
+  dates: string[];
+};
+
+/** Unique local calendar days with at least one successful door unlock for one member. */
+export function countMemberUniqueCheckInDays(
+  db: Db,
+  memberId: string,
+  tz: string,
+  startYmd: string,
+  endYmd: string,
+): MemberCheckInDaysResult {
+  ensureUsageTables(db);
+  const since = toSqliteCompare(startOfDayInTz(startYmd, tz));
+  const until = toSqliteCompare(endOfDayInTz(endYmd, tz));
+  const happenedNorm = `substr(replace(replace(d.happened_at, 'T', ' '), 'Z', ''), 1, 19)`;
+
+  const rows = db
+    .prepare(
+      `SELECT d.happened_at
+       FROM door_access_events d
+       WHERE d.success = 1
+         AND d.member_id = ?
+         AND ${happenedNorm} >= ?
+         AND ${happenedNorm} <= ?
+       ORDER BY d.happened_at ASC`
+    )
+    .all(memberId, since, until) as { happened_at: string }[];
+
+  const days = new Set<string>();
+  for (const row of rows) {
+    const ymd = dateStringInAppTz(row.happened_at, tz);
+    if (!ymd || ymd < startYmd || ymd > endYmd) continue;
+    days.add(ymd);
+  }
+  const dates = Array.from(days).sort();
+  return { visit_days: dates.length, dates };
+}

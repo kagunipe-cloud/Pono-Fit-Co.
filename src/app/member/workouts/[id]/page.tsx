@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { EXERCISE_TYPE_OPTIONS, isTimedExerciseType, type ExerciseType } from "@/lib/exercise-types";
+import ExerciseDemoVideos from "@/components/member/ExerciseDemoVideos";
 import { getWeightComparisonWithArticle } from "@/lib/workout-congrats";
 import { milesToKm, kmToMiles } from "@/lib/workouts";
 import { MAX_WORKOUT_NOTE_LEN } from "@/lib/workout-notes";
@@ -242,7 +243,12 @@ export default function MemberWorkoutDetailPage() {
   const [exerciseSuggestions, setExerciseSuggestions] = useState<OfficialExercise[]>([]);
   const [selectedOfficialId, setSelectedOfficialId] = useState<number | null>(null);
   const [showCustomNameReminder, setShowCustomNameReminder] = useState(false);
-  const [instructionsModal, setInstructionsModal] = useState<{ exerciseName: string; instructions: string[]; exerciseId?: number } | null>(null);
+  const [instructionsModal, setInstructionsModal] = useState<{
+    exerciseName: string;
+    instructions: string[];
+    exerciseId?: number;
+    showImage?: boolean;
+  } | null>(null);
   const [loadingInstructions, setLoadingInstructions] = useState(false);
   const [editingExId, setEditingExId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
@@ -1337,7 +1343,8 @@ export default function MemberWorkoutDetailPage() {
                           setInstructionsModal({
                             exerciseName: data.name ?? exerciseName.trim(),
                             instructions: Array.isArray(data.instructions) ? data.instructions : [],
-                            exerciseId: data.image_path ? data.id : undefined,
+                            exerciseId: data.id,
+                            showImage: Boolean(data.image_path),
                           });
                           return;
                         }
@@ -2107,7 +2114,8 @@ export default function MemberWorkoutDetailPage() {
                                   setInstructionsModal({
                                     exerciseName: data.name ?? ex.exercise_name,
                                     instructions: Array.isArray(data.instructions) ? data.instructions : [],
-                                    exerciseId: data.image_path ? data.id : undefined,
+                                    exerciseId: data.id,
+                                    showImage: Boolean(data.image_path),
                                   });
                                   return;
                                 }
@@ -2745,7 +2753,7 @@ export default function MemberWorkoutDetailPage() {
               </button>
             </div>
             <div className="p-4 overflow-y-auto space-y-4">
-              {instructionsModal.exerciseId && (
+              {instructionsModal.exerciseId && instructionsModal.showImage && (
                 <Image
                   src={`/api/exercises/${instructionsModal.exerciseId}/image`}
                   alt={instructionsModal.exerciseName}
@@ -2763,6 +2771,9 @@ export default function MemberWorkoutDetailPage() {
                   ))}
                 </ol>
               )}
+              {instructionsModal.exerciseId != null ? (
+                <ExerciseDemoVideos exerciseId={instructionsModal.exerciseId} />
+              ) : null}
             </div>
             <div className="p-4 border-t border-stone-200">
               <button

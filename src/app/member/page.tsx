@@ -13,6 +13,7 @@ import { toTitleCase } from "@/lib/format";
 import { formatDateForDisplay } from "@/lib/app-timezone";
 
 import OccupancyCount from "@/components/OccupancyCount";
+import MemberVisitDays from "@/components/member/MemberVisitDays";
 
 
 
@@ -214,7 +215,7 @@ export default function MemberHomePage() {
 
       <h1 className="text-2xl font-bold text-stone-800 mb-6">Welcome, {data.member.name}</h1>
 
-
+      <MemberVisitDays />
 
       {!waiverCompleteForDoor && (
 
