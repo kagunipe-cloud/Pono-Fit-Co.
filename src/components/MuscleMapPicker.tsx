@@ -222,31 +222,37 @@ function transformPolygon(points: string, offset?: TraceOffset): string {
     .join(" ");
 }
 
-function normalizedText(exercise: MuscleMapExercise): string {
-  return [
-    exercise.name,
-    exercise.primary_muscles,
-    exercise.secondary_muscles,
-    exercise.muscle_group,
-    exercise.equipment,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
+/**
+ * Every muscle map region uses the same rule:
+ * - With primary_muscles set → must match that region’s searchTerms (no secondary-only hits).
+ * - With no primary_muscles → name may match region nameTerms (incomplete catalog fallback).
+ */
+function primaryMuscleText(exercise: MuscleMapExercise): string {
+  return (exercise.primary_muscles ?? "").toLowerCase();
+}
+
+function exerciseMatchesRegion(exercise: MuscleMapExercise, region: MuscleRegion): boolean {
+  const primary = primaryMuscleText(exercise);
+  const name = exercise.name.toLowerCase();
+
+  if (primary.trim()) {
+    return region.searchTerms.some((term) => primary.includes(term));
+  }
+
+  return region.nameTerms.some((term) => name.includes(term));
 }
 
 function scoreExercise(exercise: MuscleMapExercise, region: MuscleRegion): number {
-  const text = normalizedText(exercise);
+  if (!exerciseMatchesRegion(exercise, region)) return 0;
   const name = exercise.name.toLowerCase();
-  let score = 0;
+  const primary = primaryMuscleText(exercise);
+  let score = 10;
   for (const term of region.searchTerms) {
-    if (text.includes(term)) score += 4;
+    if (primary.includes(term)) score += 6;
+    if (name.includes(term)) score += 2;
   }
   for (const term of region.nameTerms) {
-    if (name.includes(term)) score += 3;
-  }
-  if (exercise.primary_muscles && region.searchTerms.some((term) => exercise.primary_muscles?.toLowerCase().includes(term))) {
-    score += 6;
+    if (name.includes(term)) score += 4;
   }
   return score;
 }
