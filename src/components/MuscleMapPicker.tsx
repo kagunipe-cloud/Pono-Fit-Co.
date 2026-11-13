@@ -14,6 +14,7 @@ export type MuscleMapExercise = {
   equipment?: string | null;
   difficulty?: string | null;
   log_count?: number;
+  movement_class?: string | null;
 };
 
 type MuscleRegion = {
@@ -207,6 +208,15 @@ const REGIONS: MuscleRegion[] = [
 ];
 
 const DEFAULT_REGION_ID = "glutes";
+
+type MovementFilter = "compound" | "isolation" | "mixed";
+
+function passesMovementFilter(exercise: MuscleMapExercise, filter: MovementFilter): boolean {
+  if (filter === "mixed") return true;
+  if (filter === "compound") return exercise.movement_class === "compound";
+  if (filter === "isolation") return exercise.movement_class === "isolation";
+  return true;
+}
 
 function transformPolygon(points: string, offset?: TraceOffset): string {
   if (!offset || (offset.dx === 0 && offset.dy === 0)) return points;
@@ -493,6 +503,7 @@ export function MuscleMapPicker({
   const defaultRegion = REGIONS.find((r) => r.id === DEFAULT_REGION_ID) ?? REGIONS[0]!;
   const [side, setSide] = useState<"front" | "back">(defaultRegion.side);
   const [selectedRegionId, setSelectedRegionId] = useState(DEFAULT_REGION_ID);
+  const [movementFilter, setMovementFilter] = useState<MovementFilter>("mixed");
   const [exercises, setExercises] = useState<MuscleMapExercise[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -513,7 +524,7 @@ export function MuscleMapPicker({
   const suggestions = useMemo(() => {
     return exercises
       .map((exercise) => ({ exercise, score: scoreExercise(exercise, selectedRegion) }))
-      .filter((row) => row.score > 0)
+      .filter((row) => row.score > 0 && passesMovementFilter(row.exercise, movementFilter))
       .sort((a, b) => {
         const da = difficultySortKey(a.exercise.difficulty);
         const db = difficultySortKey(b.exercise.difficulty);
@@ -525,7 +536,7 @@ export function MuscleMapPicker({
       })
       .slice(0, 24)
       .map((row) => row.exercise);
-  }, [exercises, selectedRegion]);
+  }, [exercises, selectedRegion, movementFilter]);
 
   function selectRegion(regionId: string) {
     const region = REGIONS.find((item) => item.id === regionId);
@@ -574,6 +585,34 @@ export function MuscleMapPicker({
             </span>
             {loading && <span className="text-xs text-stone-400">Loading exercises...</span>}
           </div>
+          <div
+            className="mb-3 inline-flex rounded-lg border border-stone-200 bg-stone-50 p-0.5 text-xs font-medium"
+            role="tablist"
+            aria-label="Compound or isolation"
+          >
+            {(
+              [
+                ["mixed", "Mixed"],
+                ["compound", "Compound"],
+                ["isolation", "Isolation"],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={movementFilter === id}
+                onClick={() => setMovementFilter(id)}
+                className={`rounded-md px-2.5 py-1.5 transition-colors ${
+                  movementFilter === id
+                    ? "bg-white text-stone-900 shadow-sm"
+                    : "text-stone-500 hover:text-stone-800"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
 
           {suggestions.length > 0 ? (
             <ul className="max-h-72 overflow-auto rounded-lg border border-stone-200 divide-y divide-stone-100">
@@ -590,6 +629,11 @@ export function MuscleMapPicker({
                         exercise.difficulty
                           ? exercise.difficulty.charAt(0).toUpperCase() + exercise.difficulty.slice(1)
                           : null,
+                        exercise.movement_class === "compound"
+                          ? "Compound"
+                          : exercise.movement_class === "isolation"
+                            ? "Isolation"
+                            : null,
                         exercise.log_count ? `${exercise.log_count} logs` : null,
                         [exercise.primary_muscles, exercise.equipment].filter(Boolean).join(" · ") || null,
                       ]
@@ -602,7 +646,9 @@ export function MuscleMapPicker({
             </ul>
           ) : (
             <div className="rounded-lg border border-dashed border-stone-200 p-4 text-sm text-stone-500">
-              No matches yet. Try another muscle group or use the search box below.
+              {movementFilter === "mixed"
+                ? "No matches yet. Try another muscle group or use the search box below."
+                : `No ${movementFilter} lifts tagged for ${selectedRegion.label}. Try Mixed, another muscle, or search below.`}
             </div>
           )}
         </div>

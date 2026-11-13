@@ -37,8 +37,9 @@ export async function GET(request: NextRequest) {
 
     const rows = db
       .prepare(
-        `SELECT e.id, e.name, e.type, e.primary_muscles, e.secondary_muscles, e.equipment, e.muscle_group,
-                e.instructions, e.image_path, c.difficulty, c.fetched_at AS difficulty_fetched_at, c.source_note AS difficulty_note
+        `SELECT e.id, e.name, e.type, e.primary_muscles, e.secondary_muscles, e.antagonist_muscles, e.equipment, e.muscle_group,
+                e.instructions, e.image_path, e.movement_class, e.muscles_enriched_at, e.muscles_enrich_confidence,
+                c.difficulty, c.fetched_at AS difficulty_fetched_at, c.source_note AS difficulty_note
          FROM exercises e
          LEFT JOIN exercise_difficulty_cache c ON c.exercise_id = e.id
          ORDER BY e.name`

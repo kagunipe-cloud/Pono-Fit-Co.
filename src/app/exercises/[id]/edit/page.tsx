@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { EXERCISE_TYPE_OPTIONS, type ExerciseType } from "@/lib/exercise-types";
 import { MUSCLE_GROUP_LABELS } from "@/lib/muscle-groups";
+import { MOVEMENT_CLASS_VALUES } from "@/lib/exercise-movement-class";
 
 type Exercise = {
   id: number;
@@ -13,6 +14,8 @@ type Exercise = {
   type: string;
   primary_muscles: string | null;
   secondary_muscles: string | null;
+  antagonist_muscles: string | null;
+  movement_class: string | null;
   equipment: string | null;
   muscle_group: string | null;
   instructions: string[] | string | null;
@@ -40,6 +43,8 @@ export default function EditExercisePage() {
     type: "lift" as ExerciseType,
     primary_muscles: "",
     secondary_muscles: "",
+    antagonist_muscles: "",
+    movement_class: "",
     equipment: "",
     muscle_group: "",
     instructions: "",
@@ -56,6 +61,8 @@ export default function EditExercisePage() {
             type: EXERCISE_TYPE_OPTIONS.some((option) => option.value === data.type) ? (data.type as ExerciseType) : "lift",
             primary_muscles: data.primary_muscles ?? "",
             secondary_muscles: data.secondary_muscles ?? "",
+            antagonist_muscles: data.antagonist_muscles ?? "",
+            movement_class: data.movement_class ?? "",
             equipment: data.equipment ?? "",
             muscle_group: data.muscle_group ?? "",
             instructions: Array.isArray(data.instructions) ? data.instructions.join("\n") : data.instructions ?? "",
@@ -89,6 +96,8 @@ export default function EditExercisePage() {
           type: form.type,
           primary_muscles: form.primary_muscles.trim() || null,
           secondary_muscles: form.secondary_muscles.trim() || null,
+          antagonist_muscles: form.antagonist_muscles.trim() || null,
+          movement_class: form.movement_class.trim() || null,
           equipment: form.equipment.trim() || null,
           muscle_group: form.muscle_group.trim() || null,
           instructions,
@@ -225,6 +234,37 @@ export default function EditExercisePage() {
             value={form.secondary_muscles}
             onChange={(e) => setForm((f) => ({ ...f, secondary_muscles: e.target.value }))}
             placeholder="e.g. deltoids"
+            className="w-full px-3 py-2 rounded-lg border border-stone-200"
+          />
+        </div>
+        {form.type === "lift" && (
+          <div>
+            <label htmlFor="movement_class" className="block text-sm font-medium text-stone-700 mb-1">
+              Compound vs isolation
+            </label>
+            <select
+              id="movement_class"
+              value={form.movement_class}
+              onChange={(e) => setForm((f) => ({ ...f, movement_class: e.target.value }))}
+              className="w-full px-3 py-2 rounded-lg border border-stone-200"
+            >
+              <option value="">Unset</option>
+              {MOVEMENT_CLASS_VALUES.map((v) => (
+                <option key={v} value={v}>
+                  {v === "compound" ? "Compound" : "Isolation"}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div>
+          <label htmlFor="antagonist_muscles" className="block text-sm font-medium text-stone-700 mb-1">Antagonist muscles</label>
+          <input
+            id="antagonist_muscles"
+            type="text"
+            value={form.antagonist_muscles}
+            onChange={(e) => setForm((f) => ({ ...f, antagonist_muscles: e.target.value }))}
+            placeholder="e.g. biceps, hip flexors"
             className="w-full px-3 py-2 rounded-lg border border-stone-200"
           />
         </div>

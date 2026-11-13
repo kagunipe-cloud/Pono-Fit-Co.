@@ -548,7 +548,18 @@ export function ensureWorkoutTables(db: AppDb) {
   db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_exercises_name_type ON exercises(name, type)").run();
   db.prepare("CREATE INDEX IF NOT EXISTS idx_exercises_name ON exercises(name)").run();
   const exerciseCols = db.prepare("PRAGMA table_info(exercises)").all() as { name: string }[];
-  for (const col of ["primary_muscles", "secondary_muscles", "equipment", "muscle_group", "instructions", "image_path"]) {
+  for (const col of [
+    "primary_muscles",
+    "secondary_muscles",
+    "antagonist_muscles",
+    "movement_class",
+    "equipment",
+    "muscle_group",
+    "instructions",
+    "image_path",
+    "muscles_enriched_at",
+    "muscles_enrich_confidence",
+  ]) {
     if (exerciseCols.every((c) => c.name !== col)) {
       try {
         db.prepare(`ALTER TABLE exercises ADD COLUMN ${col} TEXT`).run();

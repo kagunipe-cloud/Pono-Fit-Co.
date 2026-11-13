@@ -7,7 +7,7 @@ export const MUSCLE_GROUP_LABELS = ["legs", "back", "chest", "shoulders", "arms"
 export type MuscleGroup = (typeof MUSCLE_GROUP_LABELS)[number];
 
 /** Map individual muscle name (lowercase) -> macro group. Covers free-exercise-db, wger, and anatomical names. */
-const MUSCLE_TO_GROUP: Record<string, MuscleGroup> = {
+export const MUSCLE_TO_GROUP: Record<string, MuscleGroup> = {
   // Legs
   quadriceps: "legs",
   quads: "legs",

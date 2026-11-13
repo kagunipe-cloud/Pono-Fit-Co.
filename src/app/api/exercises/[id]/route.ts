@@ -19,8 +19,20 @@ export async function GET(
     const db = getDb();
     ensureWorkoutTables(db);
     const row = db.prepare(
-      "SELECT id, name, type, primary_muscles, secondary_muscles, equipment, muscle_group, instructions, image_path FROM exercises WHERE id = ?"
-    ).get(id) as { id: number; name: string; type: string; primary_muscles: string | null; secondary_muscles: string | null; equipment: string | null; muscle_group: string | null; instructions: string | null; image_path: string | null } | undefined;
+      "SELECT id, name, type, primary_muscles, secondary_muscles, antagonist_muscles, movement_class, equipment, muscle_group, instructions, image_path FROM exercises WHERE id = ?"
+    ).get(id) as {
+      id: number;
+      name: string;
+      type: string;
+      primary_muscles: string | null;
+      secondary_muscles: string | null;
+      antagonist_muscles: string | null;
+      movement_class: string | null;
+      equipment: string | null;
+      muscle_group: string | null;
+      instructions: string | null;
+      image_path: string | null;
+    } | undefined;
     db.close();
 
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -41,6 +53,8 @@ export async function GET(
       type: row.type,
       primary_muscles: row.primary_muscles,
       secondary_muscles: row.secondary_muscles,
+      antagonist_muscles: row.antagonist_muscles,
+      movement_class: row.movement_class,
       equipment: row.equipment,
       muscle_group: row.muscle_group,
       instructions,
@@ -71,6 +85,10 @@ export async function PATCH(
 
     const primary_muscles = body.primary_muscles != null ? String(body.primary_muscles).trim() || null : null;
     const secondary_muscles = body.secondary_muscles != null ? String(body.secondary_muscles).trim() || null : null;
+    const antagonist_muscles = body.antagonist_muscles != null ? String(body.antagonist_muscles).trim() || null : null;
+    const rawMovement = body.movement_class != null ? String(body.movement_class).trim().toLowerCase() : "";
+    const movement_class =
+      rawMovement === "compound" || rawMovement === "isolation" ? rawMovement : rawMovement === "" ? null : undefined;
     const equipment = body.equipment != null ? String(body.equipment).trim() || null : null;
     const rawMuscleGroup = body.muscle_group != null ? String(body.muscle_group).trim().toLowerCase() : "";
     const muscle_group = MUSCLE_GROUP_LABELS.includes(rawMuscleGroup as (typeof MUSCLE_GROUP_LABELS)[number])
@@ -103,8 +121,28 @@ export async function PATCH(
       );
     }
 
-    const updates: string[] = ["name", "type", "primary_muscles", "secondary_muscles", "equipment", "muscle_group"];
-    const values: (string | null)[] = [name, type, primary_muscles, secondary_muscles, equipment, muscle_group];
+    const updates: string[] = [
+      "name",
+      "type",
+      "primary_muscles",
+      "secondary_muscles",
+      "antagonist_muscles",
+      "equipment",
+      "muscle_group",
+    ];
+    const values: (string | null)[] = [
+      name,
+      type,
+      primary_muscles,
+      secondary_muscles,
+      antagonist_muscles,
+      equipment,
+      muscle_group,
+    ];
+    if (movement_class !== undefined) {
+      updates.push("movement_class");
+      values.push(movement_class);
+    }
     if (instructions !== undefined) {
       updates.push("instructions");
       values.push(instructions);

@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const rows = db
       .prepare(
         `SELECT e.id, e.name, e.type, e.primary_muscles, e.secondary_muscles, e.equipment, e.muscle_group,
-                c.difficulty
+                e.movement_class, c.difficulty
          FROM exercises e
          LEFT JOIN exercise_difficulty_cache c ON c.exercise_id = e.id
          WHERE e.type = ?
