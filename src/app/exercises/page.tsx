@@ -6,6 +6,13 @@ import Link from "next/link";
 import { EXERCISE_TYPE_OPTIONS, type ExerciseType } from "@/lib/exercise-types";
 import { MUSCLE_GROUP_LABELS } from "@/lib/muscle-groups";
 
+type CatalogSort =
+  | "name"
+  | "popularity_desc"
+  | "popularity_asc"
+  | "difficulty_asc"
+  | "difficulty_desc";
+
 type ExerciseRow = {
   id: number;
   name: string;
@@ -16,6 +23,10 @@ type ExerciseRow = {
   muscle_group?: string | null;
   instructions?: string | null;
   image_path?: string | null;
+  log_count?: number;
+  member_count?: number;
+  difficulty?: string | null;
+  difficulty_note?: string | null;
 };
 
 const MUSCLE_GROUP_OPTIONS = MUSCLE_GROUP_LABELS.map((value) => ({
@@ -52,18 +63,24 @@ export default function ExercisesPage() {
   const [csvImportResult, setCsvImportResult] = useState<string | null>(null);
   const [fixingEncoding, setFixingEncoding] = useState(false);
   const [fixEncodingResult, setFixEncodingResult] = useState<string | null>(null);
+  const [catalogSort, setCatalogSort] = useState<CatalogSort>("popularity_desc");
+  const [enrichingDifficulty, setEnrichingDifficulty] = useState(false);
+  const [enrichResult, setEnrichResult] = useState<string | null>(null);
 
-  function fetchList() {
-    fetch("/api/exercises")
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data: ExerciseRow[]) => setList(Array.isArray(data) ? data : []))
+  function fetchList(sort: CatalogSort = catalogSort) {
+    setLoading(true);
+    fetch(`/api/admin/exercises/catalog?sort=${encodeURIComponent(sort)}`)
+      .then((r) => (r.ok ? r.json() : { exercises: [] }))
+      .then((data: { exercises?: ExerciseRow[] }) =>
+        setList(Array.isArray(data.exercises) ? data.exercises : [])
+      )
       .catch(() => setList([]))
       .finally(() => setLoading(false));
   }
 
   useEffect(() => {
-    fetchList();
-  }, []);
+    fetchList(catalogSort);
+  }, [catalogSort]);
 
   const duplicateKeys = new Set(
     Array.from(
@@ -441,7 +458,9 @@ export default function ExercisesPage() {
       <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 className="text-sm font-medium text-stone-500">All exercises ({filteredList.length} of {list.length})</h2>
-          <p className="text-xs text-stone-500">Use filters to find messy titles, duplicates, and nonstandard muscle groups.</p>
+          <p className="text-xs text-stone-500">
+            Popularity = times logged at Fox. Difficulty = web lookup (Serper + Gemini), cached ~4 months.
+          </p>
         </div>
         <label className="inline-flex items-center gap-2 text-sm text-stone-600">
           <input
@@ -452,6 +471,62 @@ export default function ExercisesPage() {
           />
           Possible duplicates only
         </label>
+      </div>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <label className="text-sm text-stone-600">
+          Sort
+          <select
+            value={catalogSort}
+            onChange={(e) => setCatalogSort(e.target.value as CatalogSort)}
+            className="ml-2 rounded-lg border border-stone-200 px-3 py-2 text-sm"
+          >
+            <option value="popularity_desc">Popularity (most logged)</option>
+            <option value="popularity_asc">Popularity (least logged)</option>
+            <option value="difficulty_asc">Difficulty (beginner → advanced)</option>
+            <option value="difficulty_desc">Difficulty (advanced → beginner)</option>
+            <option value="name">Name (A–Z)</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          disabled={enrichingDifficulty || filteredList.length === 0}
+          className="px-3 py-2 rounded-lg border border-stone-200 text-sm font-medium hover:bg-stone-100 disabled:opacity-50"
+          onClick={async () => {
+            const needIds = filteredList.filter((ex) => !ex.difficulty).map((ex) => ex.id).slice(0, 12);
+            if (needIds.length === 0) {
+              setEnrichResult("No missing difficulty in current filter (or all set). Try a broader filter.");
+              return;
+            }
+            setEnrichingDifficulty(true);
+            setEnrichResult(null);
+            try {
+              const res = await fetch("/api/admin/exercises/enrich-difficulty", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ exercise_ids: needIds }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (res.ok) {
+                const ok = (data.updated as { difficulty: string | null }[] | undefined)?.filter((r) => r.difficulty).length ?? 0;
+                setEnrichResult(`Looked up ${needIds.length} exercise(s) on the web; ${ok} got a difficulty rating.`);
+                fetchList(catalogSort);
+              } else {
+                setEnrichResult(data.error ?? "Lookup failed — check GEMINI_API_KEY and SERPER_API_KEY.");
+              }
+            } catch (e) {
+              setEnrichResult(e instanceof Error ? e.message : "Lookup failed");
+            } finally {
+              setEnrichingDifficulty(false);
+            }
+          }}
+        >
+          {enrichingDifficulty ? "Looking up…" : "Look up difficulty (web)"}
+        </button>
+        {enrichResult && (
+          <span className={`text-xs ${enrichResult.includes("got") ? "text-stone-600" : "text-amber-800"}`}>
+            {enrichResult}
+          </span>
+        )}
       </div>
       <div className="mb-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_9rem_11rem]">
         <input
@@ -495,6 +570,8 @@ export default function ExercisesPage() {
               <tr>
                 <th className="px-3 py-2 font-medium w-14"></th>
                 <th className="px-3 py-2 font-medium">TYPE</th>
+                <th className="px-3 py-2 font-medium w-24">LOGS</th>
+                <th className="px-3 py-2 font-medium w-28">DIFFICULTY</th>
                 <th className="px-3 py-2 font-medium">NAME</th>
                 <th className="px-3 py-2 font-medium">MUSCLE GROUP</th>
                 <th className="px-3 py-2 font-medium">TARGET MUSCLE</th>
@@ -535,6 +612,15 @@ export default function ExercisesPage() {
                       )}
                     </td>
                     <td className="px-3 py-2 capitalize text-stone-500">{ex.type}</td>
+                    <td className="px-3 py-2 tabular-nums text-stone-600" title={`${ex.member_count ?? 0} members`}>
+                      {ex.log_count ?? 0}
+                    </td>
+                    <td
+                      className="px-3 py-2 capitalize text-stone-600"
+                      title={ex.difficulty_note ?? (ex.difficulty ? "From web lookup" : "Not looked up yet")}
+                    >
+                      {ex.difficulty ?? "—"}
+                    </td>
                     <td className="px-3 py-2">
                       <span>{ex.name}</span>
                       {isDuplicate && (

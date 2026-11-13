@@ -1,6 +1,6 @@
 # YouTube exercise form videos (member workouts)
 
-Members see **suggested YouTube links** in **Need Instructions?** on workouts. Videos are discovered via search, ranked for **safety** and **credential signals**, validated with the **YouTube Data API**, and **cached** so the modal stays fast.
+Members see **suggested YouTube links** via **Video instructions** on workouts. Videos are discovered via search, ranked for **safety** and **credential signals**, validated with the **YouTube Data API**, and **cached** so the modal stays fast.
 
 ## What you need to add
 

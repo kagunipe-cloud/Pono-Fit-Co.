@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
+import { difficultySortKey } from "@/lib/exercise-difficulty";
 
 export type MuscleMapExercise = {
   id: number;
@@ -11,6 +12,8 @@ export type MuscleMapExercise = {
   secondary_muscles?: string | null;
   muscle_group?: string | null;
   equipment?: string | null;
+  difficulty?: string | null;
+  log_count?: number;
 };
 
 type MuscleRegion = {
@@ -481,7 +484,8 @@ export function MuscleMapPicker({
 }: {
   onPickExercise: (exercise: MuscleMapExercise) => void;
 }) {
-  const [side, setSide] = useState<"front" | "back">("front");
+  const defaultRegion = REGIONS.find((r) => r.id === DEFAULT_REGION_ID) ?? REGIONS[0]!;
+  const [side, setSide] = useState<"front" | "back">(defaultRegion.side);
   const [selectedRegionId, setSelectedRegionId] = useState(DEFAULT_REGION_ID);
   const [exercises, setExercises] = useState<MuscleMapExercise[]>([]);
   const [loading, setLoading] = useState(false);
@@ -490,10 +494,11 @@ export function MuscleMapPicker({
 
   useEffect(() => {
     setLoading(true);
-    fetch("/api/exercises?type=lift")
-      .then((res) => (res.ok ? res.json() : []))
-      .then((list: MuscleMapExercise[]) => {
-        setExercises(Array.isArray(list) ? list.filter((exercise) => exercise.type === "lift") : []);
+    fetch("/api/member/exercises/browse?type=lift")
+      .then((res) => (res.ok ? res.json() : { exercises: [] }))
+      .then((data: { exercises?: MuscleMapExercise[] }) => {
+        const list = Array.isArray(data.exercises) ? data.exercises : [];
+        setExercises(list.filter((exercise) => exercise.type === "lift"));
       })
       .catch(() => setExercises([]))
       .finally(() => setLoading(false));
@@ -503,8 +508,16 @@ export function MuscleMapPicker({
     return exercises
       .map((exercise) => ({ exercise, score: scoreExercise(exercise, selectedRegion) }))
       .filter((row) => row.score > 0)
-      .sort((a, b) => b.score - a.score || a.exercise.name.localeCompare(b.exercise.name))
-      .slice(0, 18)
+      .sort((a, b) => {
+        const da = difficultySortKey(a.exercise.difficulty);
+        const db = difficultySortKey(b.exercise.difficulty);
+        if (da !== db) return da - db;
+        const popA = a.exercise.log_count ?? 0;
+        const popB = b.exercise.log_count ?? 0;
+        if (popB !== popA) return popB - popA;
+        return a.exercise.name.localeCompare(b.exercise.name);
+      })
+      .slice(0, 24)
       .map((row) => row.exercise);
   }, [exercises, selectedRegion]);
 
@@ -519,7 +532,10 @@ export function MuscleMapPicker({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-stone-800">Pick by muscle group</p>
-          <p className="text-xs text-stone-500">Tap a muscle, then choose an exercise to fill your workout.</p>
+          <p className="text-xs text-stone-500">
+            Tap a muscle on the diagram. List is sorted beginner → advanced, then by how often it&apos;s logged at Pono
+            Fit Co.
+          </p>
         </div>
         <div className="inline-flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
           {(["front", "back"] as const).map((nextSide) => (
@@ -564,7 +580,15 @@ export function MuscleMapPicker({
                   >
                     <span className="block text-sm font-medium text-stone-800">{exercise.name}</span>
                     <span className="block text-xs text-stone-500">
-                      {[exercise.primary_muscles, exercise.equipment].filter(Boolean).join(" - ") || "Lift"}
+                      {[
+                        exercise.difficulty
+                          ? exercise.difficulty.charAt(0).toUpperCase() + exercise.difficulty.slice(1)
+                          : null,
+                        exercise.log_count ? `${exercise.log_count} logs` : null,
+                        [exercise.primary_muscles, exercise.equipment].filter(Boolean).join(" · ") || null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || "Lift"}
                     </span>
                   </button>
                 </li>

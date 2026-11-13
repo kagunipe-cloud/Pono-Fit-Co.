@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { EXERCISE_TYPE_OPTIONS, isTimedExerciseType, type ExerciseType } from "@/lib/exercise-types";
 import ExerciseDemoVideos from "@/components/member/ExerciseDemoVideos";
+import VideoInstructionsButton from "@/components/member/VideoInstructionsButton";
 import { getWeightComparisonWithArticle } from "@/lib/workout-congrats";
 import { milesToKm, kmToMiles } from "@/lib/workouts";
 import { MAX_WORKOUT_NOTE_LEN } from "@/lib/workout-notes";
@@ -1319,9 +1320,10 @@ export default function MemberWorkoutDetailPage() {
                 {exerciseName.trim()}
                 <span className="ml-2 text-xs font-normal text-stone-500 capitalize">({mode})</span>
               </p>
-              <div className="mt-2">
-                <button
-                  type="button"
+              <div className="mt-3">
+                <VideoInstructionsButton
+                  loading={loadingInstructions}
+                  className="w-full sm:w-auto"
                   onClick={async () => {
                     setLoadingInstructions(true);
                     try {
@@ -1354,11 +1356,7 @@ export default function MemberWorkoutDetailPage() {
                       setLoadingInstructions(false);
                     }
                   }}
-                  disabled={loadingInstructions}
-                  className="text-sm text-brand-600 hover:underline disabled:opacity-50"
-                >
-                  {loadingInstructions ? "Loading…" : "Need Instructions?"}
-                </button>
+                />
               </div>
               <label className="block mt-4">
                 <span className="text-xs font-medium text-stone-600">Exercise note (optional)</span>
@@ -2091,8 +2089,9 @@ export default function MemberWorkoutDetailPage() {
                             </button>
                           </span>
                         )}
-                        <button
-                          type="button"
+                        <VideoInstructionsButton
+                          loading={loadingInstructions}
+                          className="my-1"
                           onClick={async () => {
                             setLoadingInstructions(true);
                             try {
@@ -2125,11 +2124,7 @@ export default function MemberWorkoutDetailPage() {
                               setLoadingInstructions(false);
                             }
                           }}
-                          disabled={loadingInstructions}
-                          className="text-sm text-brand-600 hover:underline disabled:opacity-50"
-                        >
-                          {loadingInstructions ? "Loading…" : "Need Instructions?"}
-                        </button>
+                        />
                         <button
                           type="button"
                           onClick={() => startEditing(ex)}
@@ -2753,6 +2748,9 @@ export default function MemberWorkoutDetailPage() {
               </button>
             </div>
             <div className="p-4 overflow-y-auto space-y-4">
+              {instructionsModal.exerciseId != null ? (
+                <ExerciseDemoVideos exerciseId={instructionsModal.exerciseId} />
+              ) : null}
               {instructionsModal.exerciseId && instructionsModal.showImage && (
                 <Image
                   src={`/api/exercises/${instructionsModal.exerciseId}/image`}
@@ -2771,9 +2769,6 @@ export default function MemberWorkoutDetailPage() {
                   ))}
                 </ol>
               )}
-              {instructionsModal.exerciseId != null ? (
-                <ExerciseDemoVideos exerciseId={instructionsModal.exerciseId} />
-              ) : null}
             </div>
             <div className="p-4 border-t border-stone-200">
               <button

@@ -77,7 +77,7 @@ export default function ExerciseDemoVideos({ exerciseId }: { exerciseId: number 
       body={
         <>
           <p className="text-xs text-stone-500 mb-3 leading-relaxed">
-            These open on YouTube (third-party). They are not Fox coaching or medical advice. Stop if
+            These open on YouTube (third-party). They are not Pono Fit Co. coaching or medical advice. Stop if
             anything hurts and ask a trainer.
           </p>
           {pending ? (
@@ -112,7 +112,7 @@ export default function ExerciseDemoVideos({ exerciseId }: { exerciseId: number 
 
 function DemoVideosSection({ title, body }: { title: string; body: ReactNode }) {
   return (
-    <div className="border-t border-stone-100 pt-4">
+    <div className="border-b border-stone-100 pb-4 mb-1">
       <h3 className="text-sm font-semibold text-stone-700 mb-2">{title}</h3>
       {body}
     </div>
