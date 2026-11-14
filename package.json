@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "eslint . --max-warnings 0",
     "import": "node scripts/import-csv.js",
+    "enrich-exercises": "tsx scripts/enrich-exercises-batch.ts",
     "cap:sync": "cap sync",
     "cap:ios": "cap open ios",
     "cap:android": "cap open android"
@@ -48,6 +49,7 @@
     "eslint-config-next": "15.1.9",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.16",
+    "tsx": "^4.23.15",
     "typescript": "5.9.3"
   }
 }

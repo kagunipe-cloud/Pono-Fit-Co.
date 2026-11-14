@@ -11,6 +11,35 @@ On **`/exercises`**:
 
 Requires `GEMINI_API_KEY`; `SERPER_API_KEY` recommended.
 
+## Terminal (batch — recommended)
+
+Same enrich logic, one command, no clicking. Uses the SQLite file on this machine (`data/the-fox-says.db`) or the Railway volume when run in **Railway Shell**.
+
+```bash
+npm install   # once, picks up tsx
+npm run enrich-exercises
+```
+
+Options (after `--`):
+
+| Flag | Meaning |
+|------|---------|
+| `--muscles-only` | Skip difficulty |
+| `--difficulty-only` | Skip muscles |
+| `--limit=100` | Cap how many per phase (default: all that need it) |
+| `--type=lift` | Only lifts |
+| `--force` | Re-run even if recently enriched |
+| `--apply-low` | Save low-confidence muscle lookups |
+| `--sleep=1500` | Ms between API calls (default 1200) |
+
+**Production:** Railway → service → **Shell**:
+
+```bash
+cd /app && npm run enrich-exercises
+```
+
+Env vars (`GEMINI_API_KEY`, `SERPER_API_KEY`) must already be set on the service. A full catalog can take a while (Serper + Gemini per exercise).
+
 ## API
 
 `POST /api/admin/exercises/enrich-muscles`
