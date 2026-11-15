@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
       secondary_muscles: string | null;
       equipment: string | null;
       muscle_group: string | null;
+      movement_class: string | null;
       difficulty: string | null;
     }[];
 
@@ -58,6 +59,7 @@ export async function GET(request: NextRequest) {
         secondary_muscles: r.secondary_muscles,
         equipment: r.equipment,
         muscle_group,
+        movement_class: r.movement_class,
         difficulty: r.difficulty,
         log_count: pop?.log_count ?? 0,
       };

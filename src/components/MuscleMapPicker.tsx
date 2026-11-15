@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
-import { difficultySortKey } from "@/lib/exercise-difficulty";
+import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { difficultySortKey, type ExerciseDifficulty } from "@/lib/exercise-difficulty";
+import { parseMovementClass, type MovementClass } from "@/lib/exercise-movement-class";
 
 export type MuscleMapExercise = {
   id: number;
@@ -209,13 +210,80 @@ const REGIONS: MuscleRegion[] = [
 
 const DEFAULT_REGION_ID = "glutes";
 
-type MovementFilter = "compound" | "isolation" | "mixed";
+const DIFFICULTY_OPTIONS: { id: ExerciseDifficulty; label: string; badgeClass: string; chipClass: string }[] = [
+  {
+    id: "beginner",
+    label: "Beginner",
+    badgeClass: "bg-emerald-100 text-emerald-800 ring-emerald-200",
+    chipClass: "bg-emerald-600 text-white border-emerald-700",
+  },
+  {
+    id: "intermediate",
+    label: "Intermediate",
+    badgeClass: "bg-amber-100 text-amber-900 ring-amber-200",
+    chipClass: "bg-amber-500 text-white border-amber-600",
+  },
+  {
+    id: "advanced",
+    label: "Advanced",
+    badgeClass: "bg-rose-100 text-rose-900 ring-rose-200",
+    chipClass: "bg-rose-600 text-white border-rose-700",
+  },
+];
 
-function passesMovementFilter(exercise: MuscleMapExercise, filter: MovementFilter): boolean {
-  if (filter === "mixed") return true;
-  if (filter === "compound") return exercise.movement_class === "compound";
-  if (filter === "isolation") return exercise.movement_class === "isolation";
-  return true;
+const MOVEMENT_OPTIONS: { id: MovementClass; label: string }[] = [
+  { id: "compound", label: "Compound" },
+  { id: "isolation", label: "Isolation" },
+];
+
+function normalizeDifficulty(raw: string | null | undefined): ExerciseDifficulty | null {
+  const s = (raw ?? "").trim().toLowerCase();
+  if (s === "beginner" || s === "intermediate" || s === "advanced") return s;
+  return null;
+}
+
+function passesDifficultyFilter(exercise: MuscleMapExercise, selected: Set<ExerciseDifficulty>): boolean {
+  if (selected.size === 0) return true;
+  const level = normalizeDifficulty(exercise.difficulty);
+  return level !== null && selected.has(level);
+}
+
+function passesMovementFilter(exercise: MuscleMapExercise, selected: Set<MovementClass>): boolean {
+  if (selected.size === 0) return true;
+  const mc = parseMovementClass(exercise.movement_class, exercise.type);
+  return mc !== null && selected.has(mc);
+}
+
+function difficultyMeta(level: string | null | undefined) {
+  const id = normalizeDifficulty(level);
+  if (!id) return null;
+  return DIFFICULTY_OPTIONS.find((o) => o.id === id) ?? null;
+}
+
+function FilterChip({
+  active,
+  onClick,
+  children,
+  activeClassName,
+  inactiveClassName = "border-stone-200 bg-white text-stone-600 hover:border-stone-300 hover:text-stone-900",
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+  activeClassName: string;
+  inactiveClassName?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${
+        active ? activeClassName : inactiveClassName
+      }`}
+    >
+      {children}
+    </button>
+  );
 }
 
 function transformPolygon(points: string, offset?: TraceOffset): string {
@@ -503,9 +571,28 @@ export function MuscleMapPicker({
   const defaultRegion = REGIONS.find((r) => r.id === DEFAULT_REGION_ID) ?? REGIONS[0]!;
   const [side, setSide] = useState<"front" | "back">(defaultRegion.side);
   const [selectedRegionId, setSelectedRegionId] = useState(DEFAULT_REGION_ID);
-  const [movementFilter, setMovementFilter] = useState<MovementFilter>("mixed");
+  const [difficultyFilters, setDifficultyFilters] = useState<Set<ExerciseDifficulty>>(() => new Set());
+  const [movementFilters, setMovementFilters] = useState<Set<MovementClass>>(() => new Set());
   const [exercises, setExercises] = useState<MuscleMapExercise[]>([]);
   const [loading, setLoading] = useState(false);
+
+  function toggleDifficulty(id: ExerciseDifficulty) {
+    setDifficultyFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleMovement(id: MovementClass) {
+    setMovementFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const selectedRegion = REGIONS.find((region) => region.id === selectedRegionId) ?? REGIONS[0]!;
 
@@ -524,7 +611,12 @@ export function MuscleMapPicker({
   const suggestions = useMemo(() => {
     return exercises
       .map((exercise) => ({ exercise, score: scoreExercise(exercise, selectedRegion) }))
-      .filter((row) => row.score > 0 && passesMovementFilter(row.exercise, movementFilter))
+      .filter(
+        (row) =>
+          row.score > 0 &&
+          passesDifficultyFilter(row.exercise, difficultyFilters) &&
+          passesMovementFilter(row.exercise, movementFilters)
+      )
       .sort((a, b) => {
         const da = difficultySortKey(a.exercise.difficulty);
         const db = difficultySortKey(b.exercise.difficulty);
@@ -536,7 +628,7 @@ export function MuscleMapPicker({
       })
       .slice(0, 24)
       .map((row) => row.exercise);
-  }, [exercises, selectedRegion, movementFilter]);
+  }, [exercises, selectedRegion, difficultyFilters, movementFilters]);
 
   function selectRegion(regionId: string) {
     const region = REGIONS.find((item) => item.id === regionId);
@@ -550,8 +642,8 @@ export function MuscleMapPicker({
         <div>
           <p className="text-sm font-semibold text-stone-800">Pick by muscle group</p>
           <p className="text-xs text-stone-500">
-            Tap a muscle on the diagram. List is sorted beginner → advanced, then by how often it&apos;s logged at Pono
-            Fit Co.
+            Tap a muscle on the diagram. Sorted beginner → advanced, then popularity. Toggle any difficulty and movement
+            filters (none selected = show all).
           </p>
         </div>
         <div className="inline-flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
@@ -585,33 +677,37 @@ export function MuscleMapPicker({
             </span>
             {loading && <span className="text-xs text-stone-400">Loading exercises...</span>}
           </div>
-          <div
-            className="mb-3 inline-flex rounded-lg border border-stone-200 bg-stone-50 p-0.5 text-xs font-medium"
-            role="tablist"
-            aria-label="Compound or isolation"
-          >
-            {(
-              [
-                ["mixed", "Mixed"],
-                ["compound", "Compound"],
-                ["isolation", "Isolation"],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                aria-selected={movementFilter === id}
-                onClick={() => setMovementFilter(id)}
-                className={`rounded-md px-2.5 py-1.5 transition-colors ${
-                  movementFilter === id
-                    ? "bg-white text-stone-900 shadow-sm"
-                    : "text-stone-500 hover:text-stone-800"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="mb-3 space-y-2">
+            <div>
+              <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-stone-500">Difficulty</p>
+              <div className="flex flex-wrap gap-1.5">
+                {DIFFICULTY_OPTIONS.map((opt) => (
+                  <FilterChip
+                    key={opt.id}
+                    active={difficultyFilters.has(opt.id)}
+                    onClick={() => toggleDifficulty(opt.id)}
+                    activeClassName={opt.chipClass}
+                  >
+                    {opt.label}
+                  </FilterChip>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-stone-500">Movement</p>
+              <div className="flex flex-wrap gap-1.5">
+                {MOVEMENT_OPTIONS.map((opt) => (
+                  <FilterChip
+                    key={opt.id}
+                    active={movementFilters.has(opt.id)}
+                    onClick={() => toggleMovement(opt.id)}
+                    activeClassName="bg-brand-600 text-white border-brand-700"
+                  >
+                    {opt.label}
+                  </FilterChip>
+                ))}
+              </div>
+            </div>
           </div>
 
           {suggestions.length > 0 ? (
@@ -623,17 +719,32 @@ export function MuscleMapPicker({
                     onClick={() => onPickExercise(exercise)}
                     className="block w-full px-3 py-2 text-left hover:bg-brand-50"
                   >
-                    <span className="block text-sm font-medium text-stone-800">{exercise.name}</span>
-                    <span className="block text-xs text-stone-500">
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-sm font-medium text-stone-800">{exercise.name}</span>
+                      {(() => {
+                        const meta = difficultyMeta(exercise.difficulty);
+                        if (!meta) return null;
+                        return (
+                          <span
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ring-1 ring-inset ${meta.badgeClass}`}
+                          >
+                            {meta.label}
+                          </span>
+                        );
+                      })()}
+                      {parseMovementClass(exercise.movement_class, exercise.type) === "compound" && (
+                        <span className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-600">
+                          Compound
+                        </span>
+                      )}
+                      {parseMovementClass(exercise.movement_class, exercise.type) === "isolation" && (
+                        <span className="shrink-0 rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-600">
+                          Isolation
+                        </span>
+                      )}
+                    </span>
+                    <span className="mt-0.5 block text-xs text-stone-500">
                       {[
-                        exercise.difficulty
-                          ? exercise.difficulty.charAt(0).toUpperCase() + exercise.difficulty.slice(1)
-                          : null,
-                        exercise.movement_class === "compound"
-                          ? "Compound"
-                          : exercise.movement_class === "isolation"
-                            ? "Isolation"
-                            : null,
                         exercise.log_count ? `${exercise.log_count} logs` : null,
                         [exercise.primary_muscles, exercise.equipment].filter(Boolean).join(" · ") || null,
                       ]
@@ -646,9 +757,7 @@ export function MuscleMapPicker({
             </ul>
           ) : (
             <div className="rounded-lg border border-dashed border-stone-200 p-4 text-sm text-stone-500">
-              {movementFilter === "mixed"
-                ? "No matches yet. Try another muscle group or use the search box below."
-                : `No ${movementFilter} lifts tagged for ${selectedRegion.label}. Try Mixed, another muscle, or search below.`}
+              No matches for this muscle and filters. Clear filters, pick another region, or search below.
             </div>
           )}
         </div>
