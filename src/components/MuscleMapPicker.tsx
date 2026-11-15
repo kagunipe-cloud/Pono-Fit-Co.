@@ -626,7 +626,6 @@ export function MuscleMapPicker({
         if (popB !== popA) return popB - popA;
         return a.exercise.name.localeCompare(b.exercise.name);
       })
-      .slice(0, 24)
       .map((row) => row.exercise);
   }, [exercises, selectedRegion, difficultyFilters, movementFilters]);
 
@@ -670,11 +669,14 @@ export function MuscleMapPicker({
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(18rem,1.05fr)]">
         <BodyMapImage side={side} selectedRegionId={selectedRegionId} onSelect={selectRegion} />
-        <div className="min-w-0">
+        <div className="flex min-h-0 min-w-0 flex-col">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-brand-100 px-3 py-1 text-sm font-semibold text-brand-800">
               {selectedRegion.label}
             </span>
+            {!loading && suggestions.length > 0 && (
+              <span className="text-xs text-stone-500">{suggestions.length} lifts · scroll list</span>
+            )}
             {loading && <span className="text-xs text-stone-400">Loading exercises...</span>}
           </div>
           <div className="mb-3 space-y-2">
@@ -711,7 +713,10 @@ export function MuscleMapPicker({
           </div>
 
           {suggestions.length > 0 ? (
-            <ul className="max-h-72 overflow-auto rounded-lg border border-stone-200 divide-y divide-stone-100">
+            <ul
+              className="max-h-[min(28rem,58vh)] min-h-[8rem] shrink-0 overflow-y-auto overscroll-y-contain rounded-lg border border-stone-200 divide-y divide-stone-100 touch-pan-y [-webkit-overflow-scrolling:touch]"
+              aria-label={`Exercises for ${selectedRegion.label}`}
+            >
               {suggestions.map((exercise) => (
                 <li key={exercise.id}>
                   <button
