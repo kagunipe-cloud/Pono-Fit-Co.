@@ -34,16 +34,23 @@ function parseArgs(argv: string[]) {
   let sleepMs = 3_500;
   let force = false;
   let typeFilter = "lift";
+  const ids: number[] = [];
 
   for (const arg of argv) {
     if (arg.startsWith("--limit=")) limit = Math.max(0, parseInt(arg.slice("--limit=".length), 10) || 0);
     if (arg.startsWith("--sleep=")) sleepMs = Math.max(0, parseInt(arg.slice("--sleep=".length), 10) || 0);
     if (arg.startsWith("--type=")) typeFilter = arg.slice("--type=".length).trim() || "lift";
+    if (arg.startsWith("--ids=")) {
+      for (const part of arg.slice("--ids=".length).split(",")) {
+        const n = parseInt(part.trim(), 10);
+        if (n > 0) ids.push(n);
+      }
+    }
     if (arg === "--force") force = true;
     if (arg === "--all-types") typeFilter = "all";
   }
 
-  return { limit, sleepMs, force, typeFilter };
+  return { limit, sleepMs, force, typeFilter, ids };
 }
 
 function sleep(ms: number) {
@@ -99,7 +106,15 @@ async function main() {
     rows = rows.filter((r) => r.type === args.typeFilter);
   }
 
-  const queue = rows.filter((r) => needsWarm(cacheKeyForExercise(r.id, r.name, r.type), db, args.force).go);
+  if (args.ids.length > 0) {
+    const idSet = new Set(args.ids);
+    rows = rows.filter((r) => idSet.has(r.id));
+  }
+
+  const queue =
+    args.ids.length > 0
+      ? rows
+      : rows.filter((r) => needsWarm(cacheKeyForExercise(r.id, r.name, r.type), db, args.force).go);
   const toProcess = args.limit > 0 ? queue.slice(0, args.limit) : queue;
 
   console.log(

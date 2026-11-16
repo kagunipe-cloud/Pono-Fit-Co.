@@ -152,7 +152,11 @@ export function simplifyExerciseNameForVideoSearch(name: string): string {
 }
 
 function normalizeSearchSpelling(name: string): string {
-  return name.replace(/-/g, " ").replace(/\s+/g, " ").trim();
+  return name
+    .replace(/\u00b0|°|Â°/g, " degree ")
+    .replace(/-/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function searchNamesForExercise(exerciseName: string): string[] {
@@ -396,6 +400,8 @@ Return JSON picks: up to ${maxPicks} items, best first. reject=true means do not
 
 type SerperOrganic = { title?: string; link?: string; snippet?: string };
 
+let serperErrorLogged = false;
+
 async function serperSearch(query: string): Promise<SerperOrganic[]> {
   const apiKey = process.env.SERPER_API_KEY?.trim();
   if (!apiKey) return [];
@@ -405,10 +411,21 @@ async function serperSearch(query: string): Promise<SerperOrganic[]> {
       headers: { "Content-Type": "application/json", "X-Api-Key": apiKey },
       body: JSON.stringify({ q: query, num: 12 }),
     });
-    if (!res.ok) return [];
+    if (!res.ok) {
+      if (!serperErrorLogged) {
+        serperErrorLogged = true;
+        const body = await res.text().catch(() => "");
+        console.warn(`[exercise-demo-videos] Serper HTTP ${res.status}: ${body.slice(0, 240)}`);
+      }
+      return [];
+    }
     const data = (await res.json()) as { organic?: SerperOrganic[] };
     return data.organic ?? [];
-  } catch {
+  } catch (e) {
+    if (!serperErrorLogged) {
+      serperErrorLogged = true;
+      console.warn("[exercise-demo-videos] Serper request failed:", e instanceof Error ? e.message : e);
+    }
     return [];
   }
 }
@@ -427,7 +444,11 @@ async function youtubeSearch(query: string): Promise<Candidate[]> {
       key,
     });
     const res = await fetch(`${YOUTUBE_API}/search?${params}`);
-    if (!res.ok) return [];
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      console.warn(`[exercise-demo-videos] YouTube search HTTP ${res.status}: ${body.slice(0, 240)}`);
+      return [];
+    }
     const data = (await res.json()) as {
       items?: Array<{ id?: { videoId?: string }; snippet?: { title?: string; channelTitle?: string; description?: string } }>;
     };
