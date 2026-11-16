@@ -18,11 +18,13 @@ config({ path: path.join(process.cwd(), ".env.local") });
 import { getDb } from "../src/lib/db";
 import {
   CACHE_TTL_DAYS,
+  EMPTY_CACHE_RETRY_DAYS,
   cacheKeyForExercise,
   ensureExerciseDemoVideoCacheTable,
   getCachedDemoVideos,
   isRefreshLocked,
   refreshExerciseDemoVideos,
+  simplifyExerciseNameForVideoSearch,
 } from "../src/lib/exercise-demo-videos";
 
 type Row = { id: number; name: string; type: string };
@@ -63,10 +65,10 @@ function needsWarm(
   if (isRefreshLocked(db, cacheKey)) return { go: false, reason: "refresh locked" };
   const cached = getCachedDemoVideos(db, cacheKey);
   if (!cached) return { go: true };
-  if (cached.videos.length === 0 && cacheAgeDays(cached.fetched_at) > 14) return { go: true };
+  if (cached.videos.length === 0 && cacheAgeDays(cached.fetched_at) > EMPTY_CACHE_RETRY_DAYS) return { go: true };
   if (cached.videos.length > 0 && cacheAgeDays(cached.fetched_at) > CACHE_TTL_DAYS) return { go: true };
   if (cached.videos.length > 0) return { go: false, reason: "fresh cache" };
-  if (cacheAgeDays(cached.fetched_at) <= 14) return { go: false, reason: "recent empty try" };
+  if (cacheAgeDays(cached.fetched_at) <= EMPTY_CACHE_RETRY_DAYS) return { go: false, reason: "recent empty try" };
   return { go: true };
 }
 
@@ -119,7 +121,12 @@ async function main() {
         console.log(`${videos.length} video(s), top views ${topViews > 0 ? topViews.toLocaleString() : "—"}`);
         ok++;
       } else {
-        console.log("no vetted videos");
+        const alt = simplifyExerciseNameForVideoSearch(row.name);
+        console.log(
+          alt.toLowerCase() !== row.name.trim().toLowerCase()
+            ? `no vetted videos (searched base name “${alt}” too)`
+            : "no vetted videos"
+        );
         empty++;
       }
     } catch (e) {

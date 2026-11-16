@@ -18,6 +18,8 @@ const GEMINI_MODEL =
 
 export const CACHE_TTL_DAYS = 60;
 export const VALIDATE_INTERVAL_DAYS = 7;
+/** Re-try lookup when last run saved zero videos (failed or too-strict rank). */
+export const EMPTY_CACHE_RETRY_DAYS = 2;
 /** Max picks per format after ranking (Tier A preferred). */
 export const MAX_SHORTS = 3;
 export const MAX_FULL_LENGTH = 3;
@@ -117,6 +119,55 @@ function topViewCountFromVideos(videos: ExerciseDemoVideo[]): number {
 
 function normalizeExerciseName(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+/** Shorter name for YouTube/Serper when the catalog title is a niche variant (bands, SMR, plate loaded, etc.). */
+export function simplifyExerciseNameForVideoSearch(name: string): string {
+  let s = name.trim().replace(/\s+/g, " ");
+  const stripSuffixes = [
+    /\s*-\s*with bands\s*$/i,
+    /\s*-\s*with chains\s*$/i,
+    /\s*-\s*powerlifting\s*$/i,
+    /\s*\(plate loaded\)\s*$/i,
+    /\s*\(multiple response\)\s*$/i,
+    /\s*-\s*smr\s*$/i,
+    /\s*-smr\s*$/i,
+    /\s*:\s*power lift\s*$/i,
+    /\s*:\s*underhand\s*$/i,
+    /\s*:\s*overhand\s*$/i,
+  ];
+  for (const re of stripSuffixes) s = s.replace(re, "").trim();
+
+  const dashParts = s.split(/\s+-\s+/);
+  if (dashParts.length > 1) {
+    const tail = dashParts.slice(1).join(" - ");
+    if (
+      /^(with|w\/|plate|band|chain|power|alternate|single|one arm|one-arm|two arm|two-arm)/i.test(tail) ||
+      tail.length > 32
+    ) {
+      s = dashParts[0]!.trim();
+    }
+  }
+  return s;
+}
+
+function normalizeSearchSpelling(name: string): string {
+  return name.replace(/-/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function searchNamesForExercise(exerciseName: string): string[] {
+  const primary = exerciseName.trim();
+  const spaced = normalizeSearchSpelling(primary);
+  const simple = simplifyExerciseNameForVideoSearch(primary);
+  const simpleSpaced = normalizeSearchSpelling(simple);
+  const names: string[] = [primary];
+  const add = (n: string) => {
+    if (n && !names.some((x) => x.toLowerCase() === n.toLowerCase())) names.push(n);
+  };
+  add(spaced);
+  add(simple);
+  add(simpleSpaced);
+  return names;
 }
 
 export function cacheKeyForExercise(exerciseId: number | null, exerciseName: string, type?: string): string {
@@ -286,9 +337,10 @@ ${formatLine ? `${formatLine}\n` : ""}
 RULES (strict):
 1. SAFETY FIRST: Prefer clear form tutorials. REJECT spectacle, ego lifts, world records, insane weight PRs, "vs" challenges, compilations, or clickbait where the hook is heavy lifting not teaching.
 2. Clickbait example to REJECT: titles centered on how much weight someone lifted rather than how to perform the movement.
-3. Tier A: channel or title shows credible coaching signals (DPT, physical therapist, CSCS, exercise physiologist, ACSM, NSCA, clinic, university physio) AND the video is instructional.
-4. Tier B: strong instructional value but weaker credential signals — mark reject=true for member-facing strict mode (we only surface Tier A non-rejected).
-5. Only use candidate indices from the list. Do not invent URLs.
+3. Tier A: credible coaching signals (DPT, CSCS, physio, ACSM, NSCA, clinic, university) AND instructional.
+4. Tier B: clear how-to / form tutorial without credential keywords — set reject=false only when truly instructional; reject=true for spectacle or vague content.
+5. Prefer at least one solid pick over returning none when a good tutorial exists.
+6. Only use candidate indices from the list. Do not invent URLs.
 
 CANDIDATES:
 ${listText}
@@ -321,7 +373,8 @@ Return JSON picks: up to ${maxPicks} items, best first. reject=true means do not
     };
     const out: ExerciseDemoVideo[] = [];
     for (const pick of parsed.picks ?? []) {
-      if (pick.reject || pick.tier !== "A") continue;
+      if (pick.reject) continue;
+      if (pick.tier !== "A" && pick.tier !== "B") continue;
       const c = candidates[pick.candidate_index];
       if (!c) continue;
       out.push({
@@ -329,7 +382,7 @@ Return JSON picks: up to ${maxPicks} items, best first. reject=true means do not
         url: displayUrl(c.video_id, c.format),
         title: c.title,
         channel_title: c.channel_title,
-        tier: "A",
+        tier: pick.tier,
         format: c.format,
         view_count: c.view_count,
       });
@@ -420,25 +473,30 @@ function ingestSerperHits(organic: SerperOrganic[], byId: Map<string, Candidate>
 
 async function discoverCandidates(exerciseName: string): Promise<Candidate[]> {
   const byId = new Map<string, Candidate>();
+  const names = searchNamesForExercise(exerciseName);
 
-  const fullQ = `"${exerciseName}" exercise form technique how to site:youtube.com`;
-  ingestSerperHits(await serperSearch(fullQ), byId);
+  for (const name of names) {
+    const fullQ = `"${name}" exercise form technique how to site:youtube.com`;
+    ingestSerperHits(await serperSearch(fullQ), byId);
 
-  const shortsQ = `"${exerciseName}" exercise form #shorts site:youtube.com`;
-  ingestSerperHits(await serperSearch(shortsQ), byId);
+    const shortsQ = `"${name}" exercise form #shorts site:youtube.com`;
+    ingestSerperHits(await serperSearch(shortsQ), byId);
+  }
 
   if (byId.size < 6) {
-    for (const c of await youtubeSearch(`${exerciseName} proper form tutorial`)) {
-      if (!byId.has(c.video_id)) byId.set(c.video_id, c);
-    }
-    for (const c of await youtubeSearch(`${exerciseName} exercise form shorts`)) {
-      if (!byId.has(c.video_id)) {
-        byId.set(c.video_id, { ...c, format: classifyVideoFormat(c.video_id, { title: c.title, url: c.url }) });
+    for (const name of names) {
+      for (const c of await youtubeSearch(`${name} proper form tutorial`)) {
+        if (!byId.has(c.video_id)) byId.set(c.video_id, c);
+      }
+      for (const c of await youtubeSearch(`${name} exercise form shorts`)) {
+        if (!byId.has(c.video_id)) {
+          byId.set(c.video_id, { ...c, format: classifyVideoFormat(c.video_id, { title: c.title, url: c.url }) });
+        }
       }
     }
   }
 
-  return Array.from(byId.values()).slice(0, 20);
+  return Array.from(byId.values()).slice(0, 24);
 }
 
 async function enrichAndFilterCandidates(candidates: Candidate[]): Promise<Candidate[]> {
@@ -571,9 +629,17 @@ async function rankForFormat(
 ): Promise<ExerciseDemoVideo[]> {
   const pool = candidates.filter((c) => c.format === format);
   if (pool.length === 0) return [];
-  let videos = (await rankWithGemini(exerciseName, pool, maxPicks, format)) ?? rankHeuristic(pool, maxPicks);
+  const simpleName = simplifyExerciseNameForVideoSearch(exerciseName);
+  const rankLabel = simpleName !== exerciseName.trim() ? `${exerciseName} (${simpleName})` : exerciseName;
+
+  let videos =
+    (await rankWithGemini(rankLabel, pool, maxPicks, format)) ?? rankHeuristic(pool, maxPicks);
   if (videos.length === 0) {
     videos = rankHeuristic(pool, maxPicks).filter((v) => v.tier === "A");
+  }
+  /** Instructional Tier B when no credentialed Tier A (common for niche catalog names). */
+  if (videos.length === 0) {
+    videos = rankHeuristic(pool, maxPicks);
   }
   return videos.slice(0, maxPicks);
 }
@@ -618,7 +684,7 @@ export function evaluateCacheForResponse(
   const stale = ageDays > CACHE_TTL_DAYS;
   const needsValidation = daysSince(cached.validated_at) > VALIDATE_INTERVAL_DAYS;
   const needsFullRefresh =
-    cached.videos.length === 0 ? ageDays > 14 : stale;
+    cached.videos.length === 0 ? ageDays > EMPTY_CACHE_RETRY_DAYS : stale;
   const needsStaleRediscover = cached.videos.length > 0 && stale;
   return {
     needsFullRefresh,
@@ -704,6 +770,14 @@ export async function refreshExerciseDemoVideos(
     const shorts = await rankForFormat(exerciseName, candidates, "short", MAX_SHORTS);
     const full = await rankForFormat(exerciseName, candidates, "full", MAX_FULL_LENGTH);
     const videos = [...shorts, ...full];
+    if (videos.length === 0 && candidates.length > 0) {
+      console.warn(
+        `[exercise-demo-videos] no vetted picks for "${exerciseName}" (${candidates.length} candidates after YouTube filter)`
+      );
+    }
+    if (videos.length === 0 && raw.length === 0) {
+      console.warn(`[exercise-demo-videos] no candidates found for "${exerciseName}"`);
+    }
     saveCache(db, cacheKey, exerciseId, exerciseName, videos);
     return videos;
   } catch (e) {
