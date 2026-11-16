@@ -9,6 +9,7 @@ import {
   getCachedDemoVideos,
   isRefreshLocked,
   refreshExerciseDemoVideos,
+  splitDemoVideosByFormat,
   validateCachedDemoVideos,
 } from "@/lib/exercise-demo-videos";
 
@@ -104,8 +105,12 @@ export async function GET(
       status = "pending";
     }
 
+    const split = splitDemoVideosByFormat(showVideos);
+
     return NextResponse.json({
-      videos: showVideos,
+      videos: split.ordered,
+      shorts: split.shorts,
+      full_length: split.full_length,
       status,
       cached: cached != null && hasVideos,
       refreshing: status === "pending",

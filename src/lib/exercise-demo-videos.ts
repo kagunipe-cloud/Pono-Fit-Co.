@@ -18,9 +18,13 @@ const GEMINI_MODEL =
 
 export const CACHE_TTL_DAYS = 60;
 export const VALIDATE_INTERVAL_DAYS = 7;
-export const MAX_VIDEOS = 3;
+/** Max picks per format after ranking (Tier A preferred). */
+export const MAX_SHORTS = 3;
+export const MAX_FULL_LENGTH = 3;
 const REFRESH_LOCK_MINUTES = 3;
 const CACHE_MAX_ROWS = 5000;
+
+export type DemoVideoFormat = "short" | "full";
 
 export type ExerciseDemoVideo = {
   video_id: string;
@@ -28,6 +32,9 @@ export type ExerciseDemoVideo = {
   title: string;
   channel_title: string;
   tier: "A" | "B";
+  format: DemoVideoFormat;
+  /** YouTube view count when we validated the candidate (interest proxy). */
+  view_count?: number;
 };
 
 type Candidate = {
@@ -36,6 +43,8 @@ type Candidate = {
   title: string;
   channel_title: string;
   description: string;
+  format: DemoVideoFormat;
+  view_count?: number;
 };
 
 type CacheRow = {
@@ -47,6 +56,17 @@ type CacheRow = {
   validated_at: string | null;
   refresh_lock_until: string | null;
 };
+
+function ensureExerciseDemoVideoTopViewsColumn(db: Db) {
+  const cols = db.prepare("PRAGMA table_info(exercise_demo_video_cache)").all() as { name: string }[];
+  if (cols.every((c) => c.name !== "top_view_count")) {
+    try {
+      db.prepare("ALTER TABLE exercise_demo_video_cache ADD COLUMN top_view_count INTEGER").run();
+    } catch {
+      /* ignore */
+    }
+  }
+}
 
 export function ensureExerciseDemoVideoCacheTable(db: Db) {
   db.exec(`
@@ -61,6 +81,38 @@ export function ensureExerciseDemoVideoCacheTable(db: Db) {
     );
     CREATE INDEX IF NOT EXISTS idx_exercise_demo_video_cache_exercise_id ON exercise_demo_video_cache(exercise_id);
   `);
+  ensureExerciseDemoVideoTopViewsColumn(db);
+}
+
+/** Max YouTube views among saved form demos — proxy for “how much this lift is watched online”. */
+export function loadYoutubeInterestMap(db: Db): Map<number, number> {
+  ensureExerciseDemoVideoCacheTable(db);
+  const rows = db
+    .prepare(
+      `SELECT exercise_id, top_view_count, videos_json
+       FROM exercise_demo_video_cache
+       WHERE exercise_id IS NOT NULL`
+    )
+    .all() as { exercise_id: number; top_view_count: number | null; videos_json: string }[];
+
+  const map = new Map<number, number>();
+  for (const row of rows) {
+    let top = row.top_view_count ?? 0;
+    if (top <= 0) {
+      const videos = readVideosJson(row.videos_json);
+      for (const v of videos) {
+        if ((v.view_count ?? 0) > top) top = v.view_count ?? 0;
+      }
+    }
+    if (top <= 0) continue;
+    const prev = map.get(row.exercise_id) ?? 0;
+    if (top > prev) map.set(row.exercise_id, top);
+  }
+  return map;
+}
+
+function topViewCountFromVideos(videos: ExerciseDemoVideo[]): number {
+  return videos.reduce((max, v) => Math.max(max, v.view_count ?? 0), 0);
 }
 
 function normalizeExerciseName(name: string): string {
@@ -111,6 +163,37 @@ function watchUrl(videoId: string): string {
   return `https://www.youtube.com/watch?v=${videoId}`;
 }
 
+function shortsUrl(videoId: string): string {
+  return `https://www.youtube.com/shorts/${videoId}`;
+}
+
+function parseIso8601DurationSeconds(iso: string | undefined): number | null {
+  if (!iso?.trim()) return null;
+  const m = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?$/i.exec(iso.trim());
+  if (!m) return null;
+  const h = parseInt(m[1] ?? "0", 10);
+  const min = parseInt(m[2] ?? "0", 10);
+  const sec = parseFloat(m[3] ?? "0");
+  return h * 3600 + min * 60 + sec;
+}
+
+/** Shorts: /shorts URL, #shorts in title, or ≤60s duration (YouTube Shorts cap). */
+export function classifyVideoFormat(
+  videoId: string,
+  opts: { url?: string; title?: string; durationSeconds?: number | null }
+): DemoVideoFormat {
+  const url = opts.url ?? "";
+  const title = opts.title ?? "";
+  if (/\/shorts\//i.test(url) || /#shorts\b/i.test(title)) return "short";
+  const dur = opts.durationSeconds;
+  if (dur != null && dur > 0 && dur <= 60) return "short";
+  return "full";
+}
+
+function displayUrl(videoId: string, format: DemoVideoFormat): string {
+  return format === "short" ? shortsUrl(videoId) : watchUrl(videoId);
+}
+
 const CLICKBAIT_TITLE =
   /\b(world\s*record|insane|strongest|heaviest|\d{3,}\s*(lbs?|pounds?|kg|kilos?)|vs\.?\s|challenge|ego|pr\b|personal\s+record|montage|fails?\b|compilation)\b/i;
 
@@ -126,12 +209,11 @@ function heuristicScore(c: Candidate): { score: number; tier: "A" | "B" } {
   if (FORM_BOOST.test(text)) score += 4;
   if (CRED_BOOST.test(text)) score += 5;
   if (CLICKBAIT_TITLE.test(c.title)) score -= 8;
-  if (/\bshorts?\b/i.test(c.title)) score -= 2;
   const tier: "A" | "B" = CRED_BOOST.test(text) ? "A" : "B";
   return { score, tier };
 }
 
-function rankHeuristic(candidates: Candidate[]): ExerciseDemoVideo[] {
+function rankHeuristic(candidates: Candidate[], maxPicks: number): ExerciseDemoVideo[] {
   const scored = candidates
     .map((c) => {
       const { score, tier } = heuristicScore(c);
@@ -142,14 +224,16 @@ function rankHeuristic(candidates: Candidate[]): ExerciseDemoVideo[] {
 
   const strict = scored.filter((x) => x.tier === "A" && x.score >= 3);
   const pool = strict.length > 0 ? strict : scored.filter((x) => x.tier === "A");
-  const chosen = (pool.length > 0 ? pool : scored).slice(0, MAX_VIDEOS);
+  const chosen = (pool.length > 0 ? pool : scored).slice(0, maxPicks);
 
   return chosen.map(({ c, tier }) => ({
     video_id: c.video_id,
-    url: c.url,
+    url: displayUrl(c.video_id, c.format),
     title: c.title,
     channel_title: c.channel_title,
     tier,
+    format: c.format,
+    view_count: c.view_count,
   }));
 }
 
@@ -172,7 +256,12 @@ const RANK_JSON_SCHEMA = {
   required: ["picks"],
 } as const;
 
-async function rankWithGemini(exerciseName: string, candidates: Candidate[]): Promise<ExerciseDemoVideo[] | null> {
+async function rankWithGemini(
+  exerciseName: string,
+  candidates: Candidate[],
+  maxPicks: number,
+  formatHint?: DemoVideoFormat
+): Promise<ExerciseDemoVideo[] | null> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey || candidates.length === 0) return null;
 
@@ -185,8 +274,15 @@ async function rankWithGemini(exerciseName: string, candidates: Candidate[]): Pr
     )
     .join("\n");
 
-  const prompt = `You rank YouTube videos for gym members learning exercise form for: "${exerciseName}".
+  const formatLine =
+    formatHint === "short"
+      ? "These candidates are YouTube Shorts (quick demos). Prefer clear, safe form cues in under a minute."
+      : formatHint === "full"
+        ? "These candidates are full-length tutorials. Prefer thorough, safe form instruction."
+        : "";
 
+  const prompt = `You rank YouTube videos for gym members learning exercise form for: "${exerciseName}".
+${formatLine ? `${formatLine}\n` : ""}
 RULES (strict):
 1. SAFETY FIRST: Prefer clear form tutorials. REJECT spectacle, ego lifts, world records, insane weight PRs, "vs" challenges, compilations, or clickbait where the hook is heavy lifting not teaching.
 2. Clickbait example to REJECT: titles centered on how much weight someone lifted rather than how to perform the movement.
@@ -197,7 +293,7 @@ RULES (strict):
 CANDIDATES:
 ${listText}
 
-Return JSON picks: up to ${MAX_VIDEOS} items, best first. reject=true means do not show.`;
+Return JSON picks: up to ${maxPicks} items, best first. reject=true means do not show.`;
 
   const url = `${GEMINI_BASE}/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`;
   try {
@@ -230,12 +326,14 @@ Return JSON picks: up to ${MAX_VIDEOS} items, best first. reject=true means do n
       if (!c) continue;
       out.push({
         video_id: c.video_id,
-        url: c.url,
+        url: displayUrl(c.video_id, c.format),
         title: c.title,
         channel_title: c.channel_title,
         tier: "A",
+        format: c.format,
+        view_count: c.view_count,
       });
-      if (out.length >= MAX_VIDEOS) break;
+      if (out.length >= maxPicks) break;
     }
     return out.length > 0 ? out : null;
   } catch {
@@ -290,6 +388,7 @@ async function youtubeSearch(query: string): Promise<Candidate[]> {
         title: item.snippet?.title?.trim() || "YouTube video",
         channel_title: item.snippet?.channelTitle?.trim() || "",
         description: item.snippet?.description?.trim() || "",
+        format: "full",
       });
     }
     return out;
@@ -298,35 +397,48 @@ async function youtubeSearch(query: string): Promise<Candidate[]> {
   }
 }
 
-async function discoverCandidates(exerciseName: string): Promise<Candidate[]> {
-  const q = `"${exerciseName}" exercise form technique how to site:youtube.com`;
-  const organic = await serperSearch(q);
-  const byId = new Map<string, Candidate>();
-
+function ingestSerperHits(organic: SerperOrganic[], byId: Map<string, Candidate>) {
   for (const o of organic) {
     const link = o.link?.trim();
     if (!link) continue;
     const id = parseYouTubeVideoId(link);
     if (!id) continue;
-    if (!byId.has(id)) {
-      byId.set(id, {
-        video_id: id,
-        url: watchUrl(id),
-        title: o.title?.trim() || "YouTube video",
-        channel_title: "",
-        description: o.snippet?.trim() || "",
-      });
-    }
+    if (byId.has(id)) continue;
+    const isShortsLink = /\/shorts\//i.test(link);
+    const title = o.title?.trim() || "YouTube video";
+    const format = classifyVideoFormat(id, { url: link, title });
+    byId.set(id, {
+      video_id: id,
+      url: isShortsLink ? shortsUrl(id) : watchUrl(id),
+      title,
+      channel_title: "",
+      description: o.snippet?.trim() || "",
+      format,
+    });
   }
+}
 
-  if (byId.size < 4) {
-    const ytQ = `${exerciseName} proper form tutorial`;
-    for (const c of await youtubeSearch(ytQ)) {
+async function discoverCandidates(exerciseName: string): Promise<Candidate[]> {
+  const byId = new Map<string, Candidate>();
+
+  const fullQ = `"${exerciseName}" exercise form technique how to site:youtube.com`;
+  ingestSerperHits(await serperSearch(fullQ), byId);
+
+  const shortsQ = `"${exerciseName}" exercise form #shorts site:youtube.com`;
+  ingestSerperHits(await serperSearch(shortsQ), byId);
+
+  if (byId.size < 6) {
+    for (const c of await youtubeSearch(`${exerciseName} proper form tutorial`)) {
       if (!byId.has(c.video_id)) byId.set(c.video_id, c);
     }
+    for (const c of await youtubeSearch(`${exerciseName} exercise form shorts`)) {
+      if (!byId.has(c.video_id)) {
+        byId.set(c.video_id, { ...c, format: classifyVideoFormat(c.video_id, { title: c.title, url: c.url }) });
+      }
+    }
   }
 
-  return Array.from(byId.values()).slice(0, 12);
+  return Array.from(byId.values()).slice(0, 20);
 }
 
 async function enrichAndFilterCandidates(candidates: Candidate[]): Promise<Candidate[]> {
@@ -339,7 +451,7 @@ async function enrichAndFilterCandidates(candidates: Candidate[]): Promise<Candi
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50);
     const params = new URLSearchParams({
-      part: "snippet,status",
+      part: "snippet,status,contentDetails,statistics",
       id: chunk.join(","),
       key,
     });
@@ -351,18 +463,30 @@ async function enrichAndFilterCandidates(candidates: Candidate[]): Promise<Candi
           id: string;
           status?: { uploadStatus?: string; privacyStatus?: string };
           snippet?: { title?: string; channelTitle?: string; description?: string };
+          contentDetails?: { duration?: string };
+          statistics?: { viewCount?: string };
         }>;
       };
       const prev = new Map(candidates.map((c) => [c.video_id, c]));
       for (const item of data.items ?? []) {
         if (item.status?.privacyStatus !== "public" || item.status?.uploadStatus !== "processed") continue;
         const base = prev.get(item.id);
+        const title = item.snippet?.title?.trim() || base?.title || "YouTube video";
+        const durationSeconds = parseIso8601DurationSeconds(item.contentDetails?.duration);
+        const format = classifyVideoFormat(item.id, {
+          url: base?.url,
+          title,
+          durationSeconds,
+        });
+        const viewCount = parseInt(item.statistics?.viewCount ?? "0", 10);
         enriched.push({
           video_id: item.id,
-          url: watchUrl(item.id),
-          title: item.snippet?.title?.trim() || base?.title || "YouTube video",
+          url: displayUrl(item.id, format),
+          title,
           channel_title: item.snippet?.channelTitle?.trim() || base?.channel_title || "",
           description: item.snippet?.description?.trim() || base?.description || "",
+          format,
+          view_count: Number.isFinite(viewCount) && viewCount > 0 ? viewCount : undefined,
         });
       }
     } catch {
@@ -399,13 +523,59 @@ export async function validateVideoIds(videoIds: string[]): Promise<Set<string>>
   return alive;
 }
 
+function normalizeCachedVideo(raw: Partial<ExerciseDemoVideo> & { video_id: string }): ExerciseDemoVideo | null {
+  if (!raw.video_id?.trim()) return null;
+  const format: DemoVideoFormat =
+    raw.format === "short" || raw.format === "full"
+      ? raw.format
+      : classifyVideoFormat(raw.video_id, { url: raw.url, title: raw.title });
+  const url =
+    raw.url?.trim() ||
+    (format === "short" ? shortsUrl(raw.video_id) : watchUrl(raw.video_id));
+  return {
+    video_id: raw.video_id,
+    url,
+    title: raw.title?.trim() || "YouTube video",
+    channel_title: raw.channel_title?.trim() || "",
+    tier: raw.tier === "A" || raw.tier === "B" ? raw.tier : "A",
+    format,
+    view_count: typeof raw.view_count === "number" && raw.view_count > 0 ? raw.view_count : undefined,
+  };
+}
+
 function readVideosJson(json: string): ExerciseDemoVideo[] {
   try {
-    const parsed = JSON.parse(json) as ExerciseDemoVideo[];
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed = JSON.parse(json) as Array<Partial<ExerciseDemoVideo> & { video_id: string }>;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(normalizeCachedVideo).filter((v): v is ExerciseDemoVideo => v != null);
   } catch {
     return [];
   }
+}
+
+export function splitDemoVideosByFormat(videos: ExerciseDemoVideo[]): {
+  shorts: ExerciseDemoVideo[];
+  full_length: ExerciseDemoVideo[];
+  ordered: ExerciseDemoVideo[];
+} {
+  const shorts = videos.filter((v) => v.format === "short");
+  const full_length = videos.filter((v) => v.format === "full");
+  return { shorts, full_length, ordered: [...shorts, ...full_length] };
+}
+
+async function rankForFormat(
+  exerciseName: string,
+  candidates: Candidate[],
+  format: DemoVideoFormat,
+  maxPicks: number
+): Promise<ExerciseDemoVideo[]> {
+  const pool = candidates.filter((c) => c.format === format);
+  if (pool.length === 0) return [];
+  let videos = (await rankWithGemini(exerciseName, pool, maxPicks, format)) ?? rankHeuristic(pool, maxPicks);
+  if (videos.length === 0) {
+    videos = rankHeuristic(pool, maxPicks).filter((v) => v.tier === "A");
+  }
+  return videos.slice(0, maxPicks);
 }
 
 export function getCachedDemoVideos(
@@ -499,17 +669,19 @@ function saveCache(
     ).run();
   }
   const json = JSON.stringify(videos);
+  const topViews = topViewCountFromVideos(videos);
   db.prepare(
-    `INSERT INTO exercise_demo_video_cache (cache_key, exercise_id, exercise_name, videos_json, fetched_at, validated_at, refresh_lock_until)
-     VALUES (?, ?, ?, ?, datetime('now'), datetime('now'), NULL)
+    `INSERT INTO exercise_demo_video_cache (cache_key, exercise_id, exercise_name, videos_json, fetched_at, validated_at, refresh_lock_until, top_view_count)
+     VALUES (?, ?, ?, ?, datetime('now'), datetime('now'), NULL, ?)
      ON CONFLICT(cache_key) DO UPDATE SET
        exercise_id = excluded.exercise_id,
        exercise_name = excluded.exercise_name,
        videos_json = excluded.videos_json,
        fetched_at = excluded.fetched_at,
        validated_at = excluded.validated_at,
-       refresh_lock_until = NULL`
-  ).run(cacheKey, exerciseId, exerciseName, json);
+       refresh_lock_until = NULL,
+       top_view_count = excluded.top_view_count`
+  ).run(cacheKey, exerciseId, exerciseName, json, topViews > 0 ? topViews : null);
 }
 
 /** Full Serper/YouTube + Gemini refresh (~2–6s). Call in background — not on critical UI path. */
@@ -529,8 +701,9 @@ export async function refreshExerciseDemoVideos(
       return [];
     }
     const candidates = await enrichAndFilterCandidates(raw);
-    let videos = (await rankWithGemini(exerciseName, candidates)) ?? rankHeuristic(candidates);
-    if (videos.length === 0) videos = rankHeuristic(candidates).filter((v) => v.tier === "A");
+    const shorts = await rankForFormat(exerciseName, candidates, "short", MAX_SHORTS);
+    const full = await rankForFormat(exerciseName, candidates, "full", MAX_FULL_LENGTH);
+    const videos = [...shorts, ...full];
     saveCache(db, cacheKey, exerciseId, exerciseName, videos);
     return videos;
   } catch (e) {

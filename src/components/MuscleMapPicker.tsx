@@ -14,7 +14,7 @@ export type MuscleMapExercise = {
   muscle_group?: string | null;
   equipment?: string | null;
   difficulty?: string | null;
-  log_count?: number;
+  youtube_view_count?: number;
   movement_class?: string | null;
 };
 
@@ -621,9 +621,9 @@ export function MuscleMapPicker({
         const da = difficultySortKey(a.exercise.difficulty);
         const db = difficultySortKey(b.exercise.difficulty);
         if (da !== db) return da - db;
-        const popA = a.exercise.log_count ?? 0;
-        const popB = b.exercise.log_count ?? 0;
-        if (popB !== popA) return popB - popA;
+        const viewsA = a.exercise.youtube_view_count ?? 0;
+        const viewsB = b.exercise.youtube_view_count ?? 0;
+        if (viewsB !== viewsA) return viewsB - viewsA;
         return a.exercise.name.localeCompare(b.exercise.name);
       })
       .map((row) => row.exercise);
@@ -641,8 +641,8 @@ export function MuscleMapPicker({
         <div>
           <p className="text-sm font-semibold text-stone-800">Pick by muscle group</p>
           <p className="text-xs text-stone-500">
-            Tap a muscle on the diagram. Sorted beginner → advanced, then popularity. Toggle any difficulty and movement
-            filters (none selected = show all).
+            Tap a muscle on the diagram. Sorted beginner → advanced, then YouTube interest (views on form videos we’ve
+            looked up — builds as members use Video instructions). Toggle filters anytime (none = show all).
           </p>
         </div>
         <div className="inline-flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
@@ -747,14 +747,17 @@ export function MuscleMapPicker({
                           Isolation
                         </span>
                       )}
+                      {(exercise.youtube_view_count ?? 0) >= 500_000 && (
+                        <span
+                          className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-800"
+                          title="High view counts on YouTube form videos for this lift"
+                        >
+                          Hot on YouTube
+                        </span>
+                      )}
                     </span>
                     <span className="mt-0.5 block text-xs text-stone-500">
-                      {[
-                        exercise.log_count ? `${exercise.log_count} logs` : null,
-                        [exercise.primary_muscles, exercise.equipment].filter(Boolean).join(" · ") || null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ") || "Lift"}
+                      {[exercise.primary_muscles, exercise.equipment].filter(Boolean).join(" · ") || "Lift"}
                     </span>
                   </button>
                 </li>

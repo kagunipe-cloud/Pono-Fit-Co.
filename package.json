@@ -10,6 +10,7 @@
     "lint": "eslint . --max-warnings 0",
     "import": "node scripts/import-csv.js",
     "enrich-exercises": "tsx scripts/enrich-exercises-batch.ts",
+    "warm-youtube-lifts": "tsx scripts/warm-youtube-lifts.ts",
     "cap:sync": "cap sync",
     "cap:ios": "cap open ios",
     "cap:android": "cap open android"

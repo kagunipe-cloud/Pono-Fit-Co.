@@ -72,3 +72,23 @@ Restart the server after changing env vars.
 - Member disclaimer shown above the list.
 
 Future: admin-pinned videos and channel allowlists (not implemented yet).
+
+## Batch warm (muscle map YouTube sort)
+
+Pre-run the same Video instructions pipeline for many lifts so muscle-map sorting has view counts without waiting on members.
+
+```bash
+npm run warm-youtube-lifts
+npm run warm-youtube-lifts -- --limit=30    # smoke test
+npm run warm-youtube-lifts -- --sleep=4000  # slower (quota-friendly)
+npm run warm-youtube-lifts -- --force       # ignore fresh cache
+```
+
+**Railway Shell** (long run — use `nohup`):
+
+```bash
+cd /app && nohup npm run warm-youtube-lifts > /tmp/warm-youtube.log 2>&1 &
+tail -f /tmp/warm-youtube.log
+```
+
+Needs `SERPER_API_KEY` or `YOUTUBE_API_KEY`; `GEMINI_API_KEY` for best ranking. Each lift costs several API calls (~2–6 s + `--sleep` default 2.5s).
