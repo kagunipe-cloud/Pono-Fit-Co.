@@ -31,7 +31,7 @@ type Row = { id: number; name: string; type: string };
 
 function parseArgs(argv: string[]) {
   let limit = 0;
-  let sleepMs = 2_500;
+  let sleepMs = 3_500;
   let force = false;
   let typeFilter = "lift";
 

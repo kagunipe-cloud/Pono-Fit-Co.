@@ -259,7 +259,8 @@ function heuristicScore(c: Candidate): { score: number; tier: "A" | "B" } {
   let score = 0;
   if (FORM_BOOST.test(text)) score += 4;
   if (CRED_BOOST.test(text)) score += 5;
-  if (CLICKBAIT_TITLE.test(c.title)) score -= 8;
+  /** Weight / PR in title is common on good tutorials — only penalize when it isn’t instructional. */
+  if (CLICKBAIT_TITLE.test(c.title) && !FORM_BOOST.test(text)) score -= 8;
   const tier: "A" | "B" = CRED_BOOST.test(text) ? "A" : "B";
   return { score, tier };
 }
@@ -270,7 +271,6 @@ function rankHeuristic(candidates: Candidate[], maxPicks: number): ExerciseDemoV
       const { score, tier } = heuristicScore(c);
       return { c, score, tier };
     })
-    .filter((x) => x.score >= 0)
     .sort((a, b) => b.score - a.score);
 
   const strict = scored.filter((x) => x.tier === "A" && x.score >= 3);
@@ -481,13 +481,19 @@ async function discoverCandidates(exerciseName: string): Promise<Candidate[]> {
 
     const shortsQ = `"${name}" exercise form #shorts site:youtube.com`;
     ingestSerperHits(await serperSearch(shortsQ), byId);
+
+    const looseQ = `${name} proper form tutorial site:youtube.com`;
+    ingestSerperHits(await serperSearch(looseQ), byId);
   }
 
-  if (byId.size < 6) {
-    for (const name of names) {
-      for (const c of await youtubeSearch(`${name} proper form tutorial`)) {
-        if (!byId.has(c.video_id)) byId.set(c.video_id, c);
-      }
+  for (const name of names) {
+    for (const c of await youtubeSearch(`${name} proper form tutorial`)) {
+      if (!byId.has(c.video_id)) byId.set(c.video_id, c);
+    }
+    for (const c of await youtubeSearch(`${name} exercise form how to`)) {
+      if (!byId.has(c.video_id)) byId.set(c.video_id, c);
+    }
+    if (byId.size < 4) {
       for (const c of await youtubeSearch(`${name} exercise form shorts`)) {
         if (!byId.has(c.video_id)) {
           byId.set(c.video_id, { ...c, format: classifyVideoFormat(c.video_id, { title: c.title, url: c.url }) });
@@ -621,6 +627,40 @@ export function splitDemoVideosByFormat(videos: ExerciseDemoVideo[]): {
   return { shorts, full_length, ordered: [...shorts, ...full_length] };
 }
 
+function lastResortFormPicks(pool: Candidate[], exerciseName: string, maxPicks: number): ExerciseDemoVideo[] {
+  const tokens = exerciseName
+    .toLowerCase()
+    .replace(/-/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length > 2 && !/^(the|and|with|for)$/i.test(t));
+
+  const ranked = [...pool]
+    .map((c) => {
+      const blob = `${c.title} ${c.description}`.toLowerCase();
+      const tokenHits = tokens.filter((t) => blob.includes(t)).length;
+      const instructional = FORM_BOOST.test(blob);
+      const views = c.view_count ?? 0;
+      const score = tokenHits * 3 + (instructional ? 4 : 0) + Math.min(6, Math.log10(views + 1));
+      return { c, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  const chosen =
+    ranked.filter((x) => x.score >= 3).length > 0
+      ? ranked.filter((x) => x.score >= 3)
+      : ranked.sort((a, b) => (b.c.view_count ?? 0) - (a.c.view_count ?? 0));
+
+  return chosen.slice(0, maxPicks).map(({ c }) => ({
+    video_id: c.video_id,
+    url: displayUrl(c.video_id, c.format),
+    title: c.title,
+    channel_title: c.channel_title,
+    tier: "B" as const,
+    format: c.format,
+    view_count: c.view_count,
+  }));
+}
+
 async function rankForFormat(
   exerciseName: string,
   candidates: Candidate[],
@@ -640,6 +680,9 @@ async function rankForFormat(
   /** Instructional Tier B when no credentialed Tier A (common for niche catalog names). */
   if (videos.length === 0) {
     videos = rankHeuristic(pool, maxPicks);
+  }
+  if (videos.length === 0) {
+    videos = lastResortFormPicks(pool, exerciseName, maxPicks);
   }
   return videos.slice(0, maxPicks);
 }
@@ -763,10 +806,16 @@ export async function refreshExerciseDemoVideos(
   try {
     const raw = await discoverCandidates(exerciseName);
     if (raw.length === 0) {
+      console.warn(`[exercise-demo-videos] no Serper/YouTube hits for "${exerciseName}"`);
       saveCache(db, cacheKey, exerciseId, exerciseName, []);
       return [];
     }
     const candidates = await enrichAndFilterCandidates(raw);
+    if (candidates.length === 0) {
+      console.warn(
+        `[exercise-demo-videos] ${raw.length} raw hits but 0 public after YouTube filter for "${exerciseName}"`
+      );
+    }
     const shorts = await rankForFormat(exerciseName, candidates, "short", MAX_SHORTS);
     const full = await rankForFormat(exerciseName, candidates, "full", MAX_FULL_LENGTH);
     const videos = [...shorts, ...full];
