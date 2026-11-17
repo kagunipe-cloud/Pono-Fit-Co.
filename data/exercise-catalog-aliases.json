@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "from": "Barbell Bench Press",
+      "to": "Flat Barbell Bench Press",
+      "note": "FitnessDB / wger default flat bench"
+    },
+    {
+      "from": "Barbell Incline Bench Press",
+      "to": "Incline Barbell Bench Press"
+    },
+    {
+      "from": "Barbell Decline Bench Press",
+      "to": "Decline Barbell Bench Press"
+    },
+    {
+      "from": "Barbell Close Grip Bench Press",
+      "to": "Barbell Close-Grip Bench Press"
+    },
+    {
+      "from": "Barbell Bicep Curl",
+      "to": "Standing Barbell Bicep Curl"
+    },
+    {
+      "from": "Dumbbell Bicep Curl",
+      "to": "Standing Dumbbell Bicep Curl (Supinating)"
+    },
+    {
+      "from": "Barbell Romanian Deadlift",
+      "to": "Barbell Romanian Deadlift (RDL)"
+    },
+    {
+      "from": "Romanian Deadlift",
+      "to": "Barbell Romanian Deadlift (RDL)"
+    },
+    {
+      "from": "Conventional Deadlift",
+      "to": "Conventional Barbell Deadlift"
+    },
+    {
+      "from": "Barbell Deadlift",
+      "to": "Conventional Barbell Deadlift"
+    },
+    {
+      "from": "Trap Bar Deadlift",
+      "to": "Trap Bar (Hex Bar) Deadlift (High Handles)"
+    },
+    {
+      "from": "Hex Bar Deadlift",
+      "to": "Trap Bar (Hex Bar) Deadlift (High Handles)"
+    },
+    {
+      "from": "Lat Pulldown",
+      "to": "Wide-Grip Lat Pulldown"
+    },
+    {
+      "from": "Cable Lat Pulldown",
+      "to": "Wide-Grip Lat Pulldown"
+    },
+    {
+      "from": "Triceps Dip",
+      "to": "Tricep Bench Dip"
+    },
+    {
+      "from": "Triceps Dip:  kneeling",
+      "to": "Assisted Chest Dip Machine"
+    },
+    {
+      "from": "Assisted Triceps Dip",
+      "to": "Assisted Chest Dip Machine"
+    },
+    {
+      "from": "Bodyweight Push-Up",
+      "to": "Standard Bodyweight Push-Up"
+    },
+    {
+      "from": "Push-Up",
+      "to": "Standard Bodyweight Push-Up"
+    },
+    {
+      "from": "Pull-Up",
+      "to": "Bodyweight Pull-Up (Wide/Shoulder-Width)"
+    },
+    {
+      "from": "Chin-Up",
+      "to": "Chin-Up (Supinated Grip)"
+    },
+    {
+      "from": "Leg Press",
+      "to": "45-Degree Leg Press (Standard Stance)"
+    },
+    {
+      "from": "Goblet Squat",
+      "to": "Dumbbell Goblet Squat"
+    },
+    {
+      "from": "Bulgarian Split Squat",
+      "to": "Dumbbell Bulgarian Split Squat"
+    },
+    {
+      "from": "Walking Lunge",
+      "to": "Dumbbell Walking Lunge"
+    },
+    {
+      "from": "Face Pull",
+      "to": "Cable Face Pull (Rope)"
+    },
+    {
+      "from": "Cable Tricep Pushdown",
+      "to": "Cable Tricep Rope Pushdown"
+    },
+    {
+      "from": "Skull Crusher",
+      "to": "EZ-Bar Skull Crusher (Lying Tricep Extension)"
+    },
+    {
+      "from": "Lateral Raise",
+      "to": "Dumbbell Lateral Raise (Standing)"
+    },
+    {
+      "from": "Front Squat",
+      "to": "Barbell Front Squat (Clean Grip)"
+    },
+    {
+      "from": "Back Squat",
+      "to": "Barbell High-Bar Back Squat"
+    }
+  ]
+}

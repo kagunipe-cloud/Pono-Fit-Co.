@@ -104,7 +104,10 @@ export default function ExerciseDemoVideos({ exerciseId }: { exerciseId: number 
           {pending ? (
             <p className="text-sm text-stone-400">Finding form videos… usually a few seconds.</p>
           ) : !hasAny ? (
-            <p className="text-sm text-stone-500">No vetted videos found for this exercise yet.</p>
+            <p className="text-sm text-stone-500">
+              {data.message?.trim() ||
+                "No vetted videos cached for this exercise yet."}
+            </p>
           ) : (
             <div className="space-y-4">
               {shorts.length > 0 ? (

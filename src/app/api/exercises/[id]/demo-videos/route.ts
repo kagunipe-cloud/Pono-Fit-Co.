@@ -10,6 +10,7 @@ import {
   isRefreshLocked,
   refreshExerciseDemoVideos,
   splitDemoVideosByFormat,
+  isExerciseDemoAutoRefreshEnabled,
   validateCachedDemoVideos,
 } from "@/lib/exercise-demo-videos";
 
@@ -21,7 +22,7 @@ function discoveryConfigured(): boolean {
   );
 }
 
-/** GET — cached YouTube form demos (member). Fast path; refresh runs in background via `after()`. */
+/** GET — cached YouTube form demos (member). Refresh only when EXERCISE_DEMO_AUTO_REFRESH=true. */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -66,7 +67,9 @@ export async function GET(
     const hasVideos = showVideos.length > 0;
     const noCache = cached == null;
 
+    const autoRefresh = isExerciseDemoAutoRefreshEnabled();
     const shouldBackgroundRefresh =
+      autoRefresh &&
       !locked &&
       (noCache ||
         needsFullRefresh ||
@@ -101,11 +104,16 @@ export async function GET(
     db.close();
 
     let status: "ready" | "pending" | "unavailable" = "ready";
-    if (!hasVideos && (noCache || locked || shouldBackgroundRefresh)) {
+    if (!hasVideos && autoRefresh && (noCache || locked || shouldBackgroundRefresh)) {
       status = "pending";
     }
 
     const split = splitDemoVideosByFormat(showVideos);
+
+    const message =
+      !hasVideos && !autoRefresh
+        ? "No cached videos for this exercise yet. Your gym can add them during a scheduled catalog warm-up."
+        : undefined;
 
     return NextResponse.json({
       videos: split.ordered,
@@ -114,6 +122,7 @@ export async function GET(
       status,
       cached: cached != null && hasVideos,
       refreshing: status === "pending",
+      message,
     });
   } catch (err) {
     console.error(err);

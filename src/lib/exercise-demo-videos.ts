@@ -20,6 +20,19 @@ export const CACHE_TTL_DAYS = 60;
 export const VALIDATE_INTERVAL_DAYS = 7;
 /** Re-try lookup when last run saved zero videos (failed or too-strict rank). */
 export const EMPTY_CACHE_RETRY_DAYS = 2;
+
+/**
+ * When false (default), members only see pre-warmed cache — no Serper/YouTube/Gemini on Video instructions.
+ * Set EXERCISE_DEMO_AUTO_REFRESH=true to allow background refresh on cache miss (expensive).
+ */
+export function isExerciseDemoAutoRefreshEnabled(): boolean {
+  return process.env.EXERCISE_DEMO_AUTO_REFRESH?.trim() === "true";
+}
+
+/** Lean discover = 1 Serper + at most 1 YouTube search per refresh (batch warm). Full requires EXERCISE_DEMO_FULL_DISCOVER=true. */
+function useFullDiscoverQueries(): boolean {
+  return process.env.EXERCISE_DEMO_FULL_DISCOVER?.trim() === "true";
+}
 /** Max picks per format after ranking (Tier A preferred). */
 export const MAX_SHORTS = 3;
 export const MAX_FULL_LENGTH = 3;
@@ -35,7 +48,7 @@ export type ExerciseDemoVideo = {
   channel_title: string;
   tier: "A" | "B";
   format: DemoVideoFormat;
-  /** YouTube view count when we validated the candidate (interest proxy). */
+  /** Legacy field in cached JSON — no longer populated (saves YouTube quota). */
   view_count?: number;
 };
 
@@ -59,17 +72,6 @@ type CacheRow = {
   refresh_lock_until: string | null;
 };
 
-function ensureExerciseDemoVideoTopViewsColumn(db: Db) {
-  const cols = db.prepare("PRAGMA table_info(exercise_demo_video_cache)").all() as { name: string }[];
-  if (cols.every((c) => c.name !== "top_view_count")) {
-    try {
-      db.prepare("ALTER TABLE exercise_demo_video_cache ADD COLUMN top_view_count INTEGER").run();
-    } catch {
-      /* ignore */
-    }
-  }
-}
-
 export function ensureExerciseDemoVideoCacheTable(db: Db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS exercise_demo_video_cache (
@@ -83,38 +85,6 @@ export function ensureExerciseDemoVideoCacheTable(db: Db) {
     );
     CREATE INDEX IF NOT EXISTS idx_exercise_demo_video_cache_exercise_id ON exercise_demo_video_cache(exercise_id);
   `);
-  ensureExerciseDemoVideoTopViewsColumn(db);
-}
-
-/** Max YouTube views among saved form demos — proxy for “how much this lift is watched online”. */
-export function loadYoutubeInterestMap(db: Db): Map<number, number> {
-  ensureExerciseDemoVideoCacheTable(db);
-  const rows = db
-    .prepare(
-      `SELECT exercise_id, top_view_count, videos_json
-       FROM exercise_demo_video_cache
-       WHERE exercise_id IS NOT NULL`
-    )
-    .all() as { exercise_id: number; top_view_count: number | null; videos_json: string }[];
-
-  const map = new Map<number, number>();
-  for (const row of rows) {
-    let top = row.top_view_count ?? 0;
-    if (top <= 0) {
-      const videos = readVideosJson(row.videos_json);
-      for (const v of videos) {
-        if ((v.view_count ?? 0) > top) top = v.view_count ?? 0;
-      }
-    }
-    if (top <= 0) continue;
-    const prev = map.get(row.exercise_id) ?? 0;
-    if (top > prev) map.set(row.exercise_id, top);
-  }
-  return map;
-}
-
-function topViewCountFromVideos(videos: ExerciseDemoVideo[]): number {
-  return videos.reduce((max, v) => Math.max(max, v.view_count ?? 0), 0);
 }
 
 function normalizeExerciseName(name: string): string {
@@ -495,6 +465,20 @@ function ingestSerperHits(organic: SerperOrganic[], byId: Map<string, Candidate>
 async function discoverCandidates(exerciseName: string): Promise<Candidate[]> {
   const byId = new Map<string, Candidate>();
   const names = searchNamesForExercise(exerciseName);
+  const searchName = names[1] ?? names[0] ?? exerciseName;
+
+  if (!useFullDiscoverQueries()) {
+    ingestSerperHits(
+      await serperSearch(`${searchName} proper form tutorial site:youtube.com`),
+      byId
+    );
+    if (byId.size < 4) {
+      for (const c of await youtubeSearch(`${searchName} proper form tutorial`)) {
+        if (!byId.has(c.video_id)) byId.set(c.video_id, c);
+      }
+    }
+    return Array.from(byId.values()).slice(0, 16);
+  }
 
   for (const name of names) {
     const fullQ = `"${name}" exercise form technique how to site:youtube.com`;
@@ -511,14 +495,9 @@ async function discoverCandidates(exerciseName: string): Promise<Candidate[]> {
     for (const c of await youtubeSearch(`${name} proper form tutorial`)) {
       if (!byId.has(c.video_id)) byId.set(c.video_id, c);
     }
-    for (const c of await youtubeSearch(`${name} exercise form how to`)) {
-      if (!byId.has(c.video_id)) byId.set(c.video_id, c);
-    }
     if (byId.size < 4) {
-      for (const c of await youtubeSearch(`${name} exercise form shorts`)) {
-        if (!byId.has(c.video_id)) {
-          byId.set(c.video_id, { ...c, format: classifyVideoFormat(c.video_id, { title: c.title, url: c.url }) });
-        }
+      for (const c of await youtubeSearch(`${name} exercise form how to`)) {
+        if (!byId.has(c.video_id)) byId.set(c.video_id, c);
       }
     }
   }
@@ -536,7 +515,7 @@ async function enrichAndFilterCandidates(candidates: Candidate[]): Promise<Candi
   for (let i = 0; i < ids.length; i += 50) {
     const chunk = ids.slice(i, i + 50);
     const params = new URLSearchParams({
-      part: "snippet,status,contentDetails,statistics",
+      part: "snippet,status,contentDetails",
       id: chunk.join(","),
       key,
     });
@@ -549,7 +528,6 @@ async function enrichAndFilterCandidates(candidates: Candidate[]): Promise<Candi
           status?: { uploadStatus?: string; privacyStatus?: string };
           snippet?: { title?: string; channelTitle?: string; description?: string };
           contentDetails?: { duration?: string };
-          statistics?: { viewCount?: string };
         }>;
       };
       const prev = new Map(candidates.map((c) => [c.video_id, c]));
@@ -563,7 +541,6 @@ async function enrichAndFilterCandidates(candidates: Candidate[]): Promise<Candi
           title,
           durationSeconds,
         });
-        const viewCount = parseInt(item.statistics?.viewCount ?? "0", 10);
         enriched.push({
           video_id: item.id,
           url: displayUrl(item.id, format),
@@ -571,7 +548,6 @@ async function enrichAndFilterCandidates(candidates: Candidate[]): Promise<Candi
           channel_title: item.snippet?.channelTitle?.trim() || base?.channel_title || "",
           description: item.snippet?.description?.trim() || base?.description || "",
           format,
-          view_count: Number.isFinite(viewCount) && viewCount > 0 ? viewCount : undefined,
         });
       }
     } catch {
@@ -660,16 +636,13 @@ function lastResortFormPicks(pool: Candidate[], exerciseName: string, maxPicks: 
       const blob = `${c.title} ${c.description}`.toLowerCase();
       const tokenHits = tokens.filter((t) => blob.includes(t)).length;
       const instructional = FORM_BOOST.test(blob);
-      const views = c.view_count ?? 0;
-      const score = tokenHits * 3 + (instructional ? 4 : 0) + Math.min(6, Math.log10(views + 1));
+      const score = tokenHits * 3 + (instructional ? 4 : 0);
       return { c, score };
     })
     .sort((a, b) => b.score - a.score);
 
   const chosen =
-    ranked.filter((x) => x.score >= 3).length > 0
-      ? ranked.filter((x) => x.score >= 3)
-      : ranked.sort((a, b) => (b.c.view_count ?? 0) - (a.c.view_count ?? 0));
+    ranked.filter((x) => x.score >= 3).length > 0 ? ranked.filter((x) => x.score >= 3) : ranked;
 
   return chosen.slice(0, maxPicks).map(({ c }) => ({
     video_id: c.video_id,
@@ -799,19 +772,17 @@ function saveCache(
     ).run();
   }
   const json = JSON.stringify(videos);
-  const topViews = topViewCountFromVideos(videos);
   db.prepare(
-    `INSERT INTO exercise_demo_video_cache (cache_key, exercise_id, exercise_name, videos_json, fetched_at, validated_at, refresh_lock_until, top_view_count)
-     VALUES (?, ?, ?, ?, datetime('now'), datetime('now'), NULL, ?)
+    `INSERT INTO exercise_demo_video_cache (cache_key, exercise_id, exercise_name, videos_json, fetched_at, validated_at, refresh_lock_until)
+     VALUES (?, ?, ?, ?, datetime('now'), datetime('now'), NULL)
      ON CONFLICT(cache_key) DO UPDATE SET
        exercise_id = excluded.exercise_id,
        exercise_name = excluded.exercise_name,
        videos_json = excluded.videos_json,
        fetched_at = excluded.fetched_at,
        validated_at = excluded.validated_at,
-       refresh_lock_until = NULL,
-       top_view_count = excluded.top_view_count`
-  ).run(cacheKey, exerciseId, exerciseName, json, topViews > 0 ? topViews : null);
+       refresh_lock_until = NULL`
+  ).run(cacheKey, exerciseId, exerciseName, json);
 }
 
 /** Full Serper/YouTube + Gemini refresh (~2–6s). Call in background — not on critical UI path. */

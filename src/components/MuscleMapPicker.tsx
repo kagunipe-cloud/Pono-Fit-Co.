@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import { catalogRankForRegion } from "@/lib/exercise-catalog-order";
 import { difficultySortKey, type ExerciseDifficulty } from "@/lib/exercise-difficulty";
 import { parseMovementClass, type MovementClass } from "@/lib/exercise-movement-class";
 
@@ -14,7 +15,7 @@ export type MuscleMapExercise = {
   muscle_group?: string | null;
   equipment?: string | null;
   difficulty?: string | null;
-  youtube_view_count?: number;
+  log_count?: number;
   movement_class?: string | null;
 };
 
@@ -618,12 +619,15 @@ export function MuscleMapPicker({
           passesMovementFilter(row.exercise, movementFilters)
       )
       .sort((a, b) => {
+        const catA = catalogRankForRegion(selectedRegion.id, a.exercise.name);
+        const catB = catalogRankForRegion(selectedRegion.id, b.exercise.name);
+        if (catA !== catB) return catA - catB;
         const da = difficultySortKey(a.exercise.difficulty);
         const db = difficultySortKey(b.exercise.difficulty);
         if (da !== db) return da - db;
-        const viewsA = a.exercise.youtube_view_count ?? 0;
-        const viewsB = b.exercise.youtube_view_count ?? 0;
-        if (viewsB !== viewsA) return viewsB - viewsA;
+        const popA = a.exercise.log_count ?? 0;
+        const popB = b.exercise.log_count ?? 0;
+        if (popB !== popA) return popB - popA;
         return a.exercise.name.localeCompare(b.exercise.name);
       })
       .map((row) => row.exercise);
@@ -641,8 +645,8 @@ export function MuscleMapPicker({
         <div>
           <p className="text-sm font-semibold text-stone-800">Pick by muscle group</p>
           <p className="text-xs text-stone-500">
-            Tap a muscle on the diagram. Sorted beginner → advanced, then YouTube interest (views on form videos we’ve
-            looked up — builds as members use Video instructions). Toggle filters anytime (none = show all).
+            Tap a muscle on the diagram. Sorted in the Pono exercise catalog order for that muscle, then difficulty and gym logs.
+            Toggle filters anytime (none = show all).
           </p>
         </div>
         <div className="inline-flex rounded-lg border border-stone-200 bg-stone-50 p-0.5">
@@ -747,17 +751,14 @@ export function MuscleMapPicker({
                           Isolation
                         </span>
                       )}
-                      {(exercise.youtube_view_count ?? 0) >= 500_000 && (
-                        <span
-                          className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-800"
-                          title="High view counts on YouTube form videos for this lift"
-                        >
-                          Hot on YouTube
-                        </span>
-                      )}
                     </span>
                     <span className="mt-0.5 block text-xs text-stone-500">
-                      {[exercise.primary_muscles, exercise.equipment].filter(Boolean).join(" · ") || "Lift"}
+                      {[
+                        exercise.log_count ? `${exercise.log_count} logs at Pono` : null,
+                        [exercise.primary_muscles, exercise.equipment].filter(Boolean).join(" · ") || null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || "Lift"}
                     </span>
                   </button>
                 </li>

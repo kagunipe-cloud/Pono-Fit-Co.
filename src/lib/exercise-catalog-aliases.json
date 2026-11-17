@@ -1,0 +1,193 @@
+{
+  "version": 1,
+  "generatedAt": "2026-11-17T20:25:05.327Z",
+  "source": "data/exercise-catalog-aliases.json",
+  "entries": [
+    {
+      "from": "Barbell Bench Press",
+      "to": "Flat Barbell Bench Press",
+      "section": "chest",
+      "rank": 0
+    },
+    {
+      "from": "Barbell Incline Bench Press",
+      "to": "Incline Barbell Bench Press",
+      "section": "chest",
+      "rank": 3
+    },
+    {
+      "from": "Barbell Decline Bench Press",
+      "to": "Decline Barbell Bench Press",
+      "section": "chest",
+      "rank": 17
+    },
+    {
+      "from": "Barbell Close Grip Bench Press",
+      "to": "Barbell Close-Grip Bench Press",
+      "section": "chest",
+      "rank": 29
+    },
+    {
+      "from": "Barbell Bicep Curl",
+      "to": "Standing Barbell Bicep Curl",
+      "section": "biceps",
+      "rank": 1
+    },
+    {
+      "from": "Dumbbell Bicep Curl",
+      "to": "Standing Dumbbell Bicep Curl (Supinating)",
+      "section": "biceps",
+      "rank": 0
+    },
+    {
+      "from": "Barbell Romanian Deadlift",
+      "to": "Barbell Romanian Deadlift (RDL)",
+      "section": "hamstring-dominant-legs",
+      "rank": 1
+    },
+    {
+      "from": "Romanian Deadlift",
+      "to": "Barbell Romanian Deadlift (RDL)",
+      "section": "hamstring-dominant-legs",
+      "rank": 1
+    },
+    {
+      "from": "Conventional Deadlift",
+      "to": "Conventional Barbell Deadlift",
+      "section": "hamstring-dominant-legs",
+      "rank": 0
+    },
+    {
+      "from": "Barbell Deadlift",
+      "to": "Conventional Barbell Deadlift",
+      "section": "hamstring-dominant-legs",
+      "rank": 0
+    },
+    {
+      "from": "Trap Bar Deadlift",
+      "to": "Trap Bar (Hex Bar) Deadlift (High Handles)",
+      "section": "hamstring-dominant-legs",
+      "rank": 5
+    },
+    {
+      "from": "Hex Bar Deadlift",
+      "to": "Trap Bar (Hex Bar) Deadlift (High Handles)",
+      "section": "hamstring-dominant-legs",
+      "rank": 5
+    },
+    {
+      "from": "Lat Pulldown",
+      "to": "Wide-Grip Lat Pulldown",
+      "section": "back",
+      "rank": 0
+    },
+    {
+      "from": "Cable Lat Pulldown",
+      "to": "Wide-Grip Lat Pulldown",
+      "section": "back",
+      "rank": 0
+    },
+    {
+      "from": "Triceps Dip",
+      "to": "Tricep Bench Dip",
+      "section": "triceps",
+      "rank": 5
+    },
+    {
+      "from": "Triceps Dip:  kneeling",
+      "to": "Assisted Chest Dip Machine",
+      "section": "chest",
+      "rank": 18
+    },
+    {
+      "from": "Assisted Triceps Dip",
+      "to": "Assisted Chest Dip Machine",
+      "section": "chest",
+      "rank": 18
+    },
+    {
+      "from": "Bodyweight Push-Up",
+      "to": "Standard Bodyweight Push-Up",
+      "section": "chest",
+      "rank": 6
+    },
+    {
+      "from": "Push-Up",
+      "to": "Standard Bodyweight Push-Up",
+      "section": "chest",
+      "rank": 6
+    },
+    {
+      "from": "Pull-Up",
+      "to": "Bodyweight Pull-Up (Wide/Shoulder-Width)",
+      "section": "back",
+      "rank": 4
+    },
+    {
+      "from": "Chin-Up",
+      "to": "Chin-Up (Supinated Grip)",
+      "section": "back",
+      "rank": 6
+    },
+    {
+      "from": "Leg Press",
+      "to": "45-Degree Leg Press (Standard Stance)",
+      "section": "quad-dominant-legs",
+      "rank": 2
+    },
+    {
+      "from": "Goblet Squat",
+      "to": "Dumbbell Goblet Squat",
+      "section": "quad-dominant-legs",
+      "rank": 3
+    },
+    {
+      "from": "Bulgarian Split Squat",
+      "to": "Dumbbell Bulgarian Split Squat",
+      "section": "quad-dominant-legs",
+      "rank": 4
+    },
+    {
+      "from": "Walking Lunge",
+      "to": "Dumbbell Walking Lunge",
+      "section": "quad-dominant-legs",
+      "rank": 5
+    },
+    {
+      "from": "Face Pull",
+      "to": "Cable Face Pull (Rope)",
+      "section": "shoulders",
+      "rank": 3
+    },
+    {
+      "from": "Cable Tricep Pushdown",
+      "to": "Cable Tricep Rope Pushdown",
+      "section": "triceps",
+      "rank": 0
+    },
+    {
+      "from": "Skull Crusher",
+      "to": "EZ-Bar Skull Crusher (Lying Tricep Extension)",
+      "section": "triceps",
+      "rank": 2
+    },
+    {
+      "from": "Lateral Raise",
+      "to": "Dumbbell Lateral Raise (Standing)",
+      "section": "shoulders",
+      "rank": 0
+    },
+    {
+      "from": "Front Squat",
+      "to": "Barbell Front Squat (Clean Grip)",
+      "section": "quad-dominant-legs",
+      "rank": 7
+    },
+    {
+      "from": "Back Squat",
+      "to": "Barbell High-Bar Back Squat",
+      "section": "quad-dominant-legs",
+      "rank": 0
+    }
+  ]
+}

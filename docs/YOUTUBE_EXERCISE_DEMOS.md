@@ -2,6 +2,26 @@
 
 Members see **suggested YouTube links** via **Video instructions** on workouts. Videos are discovered via search, ranked for **safety** and **credential signals**, validated with the **YouTube Data API**, and **cached** so the modal stays fast.
 
+## Sustainable ops (important)
+
+**Members do not trigger paid search by default.** Opening Video instructions only reads SQLite cache.
+
+| Env | Default | Meaning |
+|-----|---------|--------|
+| `EXERCISE_DEMO_AUTO_REFRESH` | *unset / false* | No background Serper/YouTube/Gemini when cache is missing or stale |
+| `EXERCISE_DEMO_FULL_DISCOVER` | *unset / false* | Batch warm uses **1 Serper + 1 YouTube search** per exercise (lean) |
+
+**Populate cache on your schedule:**
+
+```bash
+npm run warm-youtube-lifts -- --limit=50 --sleep=8000   # repeat daily until happy
+npm run diagnose-video-apis                              # check quota before big runs
+```
+
+Do **not** set `EXERCISE_DEMO_AUTO_REFRESH=true` in production unless you accept per-tap API cost.
+
+Muscle map sort uses the **Pono exercise catalog** (`data/pono-exercise-catalog.txt`), not YouTube views.
+
 ## What you need to add
 
 ### 1. YouTube Data API key (recommended)

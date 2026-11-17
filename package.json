@@ -10,6 +10,8 @@
     "lint": "eslint . --max-warnings 0",
     "import": "node scripts/import-csv.js",
     "enrich-exercises": "tsx scripts/enrich-exercises-batch.ts",
+    "build-exercise-catalog": "tsx scripts/build-exercise-catalog-order.ts",
+    "report-catalog-match": "tsx scripts/report-catalog-name-match.ts",
     "warm-youtube-lifts": "tsx scripts/warm-youtube-lifts.ts",
     "diagnose-video-apis": "tsx scripts/diagnose-video-apis.ts",
     "cap:sync": "cap sync",

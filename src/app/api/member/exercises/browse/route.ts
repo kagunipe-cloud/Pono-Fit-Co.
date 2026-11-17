@@ -3,13 +3,12 @@ import { getDb } from "@/lib/db";
 import { getMemberIdFromSession } from "@/lib/session";
 import { parseExerciseType } from "@/lib/exercise-types";
 import { getCanonicalPrimaryMuscles, getMuscleGroup } from "@/lib/muscle-groups";
-import { ensureExerciseDifficultyCacheTable } from "@/lib/exercise-difficulty";
-import { ensureExerciseDemoVideoCacheTable, loadYoutubeInterestMap } from "@/lib/exercise-demo-videos";
+import { ensureExerciseDifficultyCacheTable, loadGymPopularityMap } from "@/lib/exercise-difficulty";
 import { ensureWorkoutTables } from "@/lib/workouts-server";
 
 export const dynamic = "force-dynamic";
 
-/** Member browse: YouTube interest (from form-video cache) + cached web difficulty (for muscle map list). */
+/** Member browse: gym log popularity + cached web difficulty (for muscle map list). */
 export async function GET(request: NextRequest) {
   try {
     const memberId = await getMemberIdFromSession();
@@ -21,8 +20,7 @@ export async function GET(request: NextRequest) {
     const db = getDb();
     ensureWorkoutTables(db);
     ensureExerciseDifficultyCacheTable(db);
-    ensureExerciseDemoVideoCacheTable(db);
-    const youtubeInterest = loadYoutubeInterestMap(db);
+    const popularity = loadGymPopularityMap(db);
 
     const rows = db
       .prepare(
@@ -52,7 +50,7 @@ export async function GET(request: NextRequest) {
       const primary_muscles = canonicalMuscles ?? r.primary_muscles ?? "";
       const muscle_group =
         r.muscle_group?.trim() ? r.muscle_group : getMuscleGroup(primary_muscles, r.name);
-      const youtube_view_count = youtubeInterest.get(r.id) ?? 0;
+      const pop = popularity.get(r.id);
       return {
         id: r.id,
         name: r.name,
@@ -63,7 +61,7 @@ export async function GET(request: NextRequest) {
         muscle_group,
         movement_class: r.movement_class,
         difficulty: r.difficulty,
-        youtube_view_count,
+        log_count: pop?.log_count ?? 0,
       };
     });
 

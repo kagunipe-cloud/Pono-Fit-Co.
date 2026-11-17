@@ -1,5 +1,5 @@
 /**
- * Pre-fetch Video instructions cache for lifts (Shorts + full length + YouTube view counts for muscle map sort).
+ * Pre-fetch Video instructions cache for lifts (Shorts + full length).
  *
  * Usage:
  *   npm run warm-youtube-lifts
@@ -92,7 +92,7 @@ async function main() {
     console.warn("GEMINI_API_KEY missing — ranking falls back to heuristics (still works).");
   }
   if (!process.env.YOUTUBE_API_KEY?.trim()) {
-    console.warn("YOUTUBE_API_KEY missing — view counts / duration / validation will be weaker.");
+    console.warn("YOUTUBE_API_KEY missing — duration / validation will be weaker.");
   }
 
   const db = getDb();
@@ -132,8 +132,7 @@ async function main() {
     try {
       const videos = await refreshExerciseDemoVideos(db, key, row.id, row.name);
       if (videos.length > 0) {
-        const topViews = Math.max(...videos.map((v) => v.view_count ?? 0), 0);
-        console.log(`${videos.length} video(s), top views ${topViews > 0 ? topViews.toLocaleString() : "—"}`);
+        console.log(`${videos.length} video(s) cached`);
         ok++;
       } else {
         const alt = simplifyExerciseNameForVideoSearch(row.name);
