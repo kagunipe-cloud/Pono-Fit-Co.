@@ -22,11 +22,14 @@ export const VALIDATE_INTERVAL_DAYS = 7;
 export const EMPTY_CACHE_RETRY_DAYS = 2;
 
 /**
- * When false (default), members only see pre-warmed cache — no Serper/YouTube/Gemini on Video instructions.
- * Set EXERCISE_DEMO_AUTO_REFRESH=true to allow background refresh on cache miss (expensive).
+ * When true (default), Video instructions can refresh on cache miss (lean Serper/YouTube + rank).
+ * Set EXERCISE_DEMO_AUTO_REFRESH=false for cache-only (batch warm / admin runs).
+ * Muscle map sorting never uses this — catalog file only.
  */
 export function isExerciseDemoAutoRefreshEnabled(): boolean {
-  return process.env.EXERCISE_DEMO_AUTO_REFRESH?.trim() === "true";
+  const v = process.env.EXERCISE_DEMO_AUTO_REFRESH?.trim().toLowerCase();
+  if (v === "false" || v === "0" || v === "no") return false;
+  return true;
 }
 
 /** Lean discover = 1 Serper + at most 1 YouTube search per refresh (batch warm). Full requires EXERCISE_DEMO_FULL_DISCOVER=true. */

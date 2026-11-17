@@ -2,25 +2,30 @@
 
 Members see **suggested YouTube links** via **Video instructions** on workouts. Videos are discovered via search, ranked for **safety** and **credential signals**, validated with the **YouTube Data API**, and **cached** so the modal stays fast.
 
-## Sustainable ops (important)
+## Two features — don’t mix YouTube into both
 
-**Members do not trigger paid search by default.** Opening Video instructions only reads SQLite cache.
+| Feature | APIs? | Notes |
+|---------|--------|--------|
+| **Muscle map** exercise order | **No** | Pono catalog file + gym logs (`data/pono-exercise-catalog.txt`) |
+| **Video instructions** modal | **Yes** (on demand) | Serper/YouTube/Gemini on cache miss; **lean** queries by default |
+
+We removed YouTube **view/trend sorting** from the muscle map. Video lookup on tap is fine — that’s a separate path.
+
+## Sustainable ops
 
 | Env | Default | Meaning |
 |-----|---------|--------|
-| `EXERCISE_DEMO_AUTO_REFRESH` | *unset / false* | No background Serper/YouTube/Gemini when cache is missing or stale |
-| `EXERCISE_DEMO_FULL_DISCOVER` | *unset / false* | Batch warm uses **1 Serper + 1 YouTube search** per exercise (lean) |
+| `EXERCISE_DEMO_AUTO_REFRESH` | *on* | Member tap can search when cache is empty/stale. Set `false` for cache-only |
+| `EXERCISE_DEMO_FULL_DISCOVER` | *off* | Warm / refresh uses **1 Serper + 1 YouTube search** per exercise unless `true` |
 
-**Populate cache on your schedule:**
+Optional batch pre-fill (not required if members trigger lookups):
 
 ```bash
-npm run warm-youtube-lifts -- --limit=50 --sleep=8000   # repeat daily until happy
-npm run diagnose-video-apis                              # check quota before big runs
+npm run warm-youtube-lifts -- --limit=50 --sleep=8000
+npm run diagnose-video-apis
 ```
 
-Do **not** set `EXERCISE_DEMO_AUTO_REFRESH=true` in production unless you accept per-tap API cost.
-
-Muscle map sort uses the **Pono exercise catalog** (`data/pono-exercise-catalog.txt`), not YouTube views.
+Avoid running huge warm jobs **and** `EXERCISE_DEMO_FULL_DISCOVER=true` at the same time — pick lean on-demand + optional small warm, not every query mode at once.
 
 ## What you need to add
 

@@ -22,7 +22,7 @@ function discoveryConfigured(): boolean {
   );
 }
 
-/** GET — cached YouTube form demos (member). Refresh only when EXERCISE_DEMO_AUTO_REFRESH=true. */
+/** GET — YouTube form demos (member). Cached; refresh on miss when auto-refresh is enabled (default on). */
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
