@@ -51,7 +51,9 @@ export default function ExerciseDemoVideos({ exerciseId }: { exerciseId: number 
 
     async function load() {
       try {
-        const res = await fetch(`/api/exercises/${exerciseId}/demo-videos`);
+        const res = await fetch(`/api/exercises/${exerciseId}/demo-videos`, {
+          credentials: "include",
+        });
         const json = (await res.json().catch(() => null)) as Payload | null;
         if (cancelled || !json) return;
         setData(json);
@@ -79,7 +81,11 @@ export default function ExerciseDemoVideos({ exerciseId }: { exerciseId: number 
     return (
       <DemoVideosSection
         title="How-to videos"
-        body={<p className="text-sm text-stone-400">Loading suggested videos…</p>}
+        body={
+          <p className="text-sm text-stone-400">
+            Loading suggested videos… first lookup can take a few seconds while we search.
+          </p>
+        }
       />
     );
   }

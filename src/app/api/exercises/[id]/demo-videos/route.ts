@@ -15,6 +15,8 @@ import {
 } from "@/lib/exercise-demo-videos";
 
 export const dynamic = "force-dynamic";
+/** First-time lookup runs Serper/YouTube/Gemini in-request (~2–15s). */
+export const maxDuration = 60;
 
 function discoveryConfigured(): boolean {
   return Boolean(
@@ -59,24 +61,33 @@ export async function GET(
     }
 
     const cacheKey = cacheKeyForExercise(exercise.id, exercise.name, exercise.type);
-    const cached = getCachedDemoVideos(db, cacheKey);
+    let cached = getCachedDemoVideos(db, cacheKey);
     const locked = isRefreshLocked(db, cacheKey);
-    const { needsFullRefresh, needsValidation, needsStaleRediscover, showVideos } =
-      evaluateCacheForResponse(cached);
-
-    const hasVideos = showVideos.length > 0;
+    let evalResult = evaluateCacheForResponse(cached);
+    let showVideos = evalResult.showVideos;
+    let hasVideos = showVideos.length > 0;
     const noCache = cached == null;
+    const emptyCache = cached != null && !hasVideos;
 
     const autoRefresh = isExerciseDemoAutoRefreshEnabled();
-    const shouldBackgroundRefresh =
+    const shouldRefresh =
       autoRefresh &&
       !locked &&
       (noCache ||
-        needsFullRefresh ||
-        needsStaleRediscover ||
-        (needsValidation && hasVideos));
+        evalResult.needsFullRefresh ||
+        evalResult.needsStaleRediscover ||
+        emptyCache ||
+        (evalResult.needsValidation && hasVideos));
 
-    if (shouldBackgroundRefresh) {
+    let didSyncRefresh = false;
+    if (shouldRefresh && !hasVideos) {
+      await refreshExerciseDemoVideos(db, cacheKey, exercise.id, exercise.name);
+      didSyncRefresh = true;
+      cached = getCachedDemoVideos(db, cacheKey);
+      evalResult = evaluateCacheForResponse(cached);
+      showVideos = evalResult.showVideos;
+      hasVideos = showVideos.length > 0;
+    } else if (shouldRefresh && hasVideos) {
       const exerciseId = exercise.id;
       const exerciseName = exercise.name;
       const exerciseType = exercise.type;
@@ -85,9 +96,9 @@ export async function GET(
         try {
           ensureWorkoutTables(bg);
           const key = cacheKeyForExercise(exerciseId, exerciseName, exerciseType);
-          if (noCache || needsFullRefresh || needsStaleRediscover) {
+          if (evalResult.needsStaleRediscover || evalResult.needsFullRefresh) {
             await refreshExerciseDemoVideos(bg, key, exerciseId, exerciseName);
-          } else if (needsValidation) {
+          } else if (evalResult.needsValidation) {
             const validated = await validateCachedDemoVideos(bg, key);
             if (validated.length === 0) {
               await refreshExerciseDemoVideos(bg, key, exerciseId, exerciseName);
@@ -104,16 +115,20 @@ export async function GET(
     db.close();
 
     let status: "ready" | "pending" | "unavailable" = "ready";
-    if (!hasVideos && autoRefresh && (noCache || locked || shouldBackgroundRefresh)) {
+    if (!hasVideos && autoRefresh && locked && (noCache || emptyCache)) {
       status = "pending";
     }
 
     const split = splitDemoVideosByFormat(showVideos);
 
-    const message =
-      !hasVideos && !autoRefresh
-        ? "No cached videos for this exercise yet. Your gym can add them during a scheduled catalog warm-up."
-        : undefined;
+    let message: string | undefined;
+    if (!hasVideos && !autoRefresh) {
+      message =
+        "No cached videos for this exercise yet. Your gym can add them during a scheduled catalog warm-up.";
+    } else if (!hasVideos && autoRefresh && (didSyncRefresh || locked)) {
+      message =
+        "We could not find vetted form videos for this exercise right now. Try again later or ask a trainer.";
+    }
 
     return NextResponse.json({
       videos: split.ordered,
