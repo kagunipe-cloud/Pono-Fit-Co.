@@ -72,6 +72,9 @@ export default function ExercisesPage() {
   const [enrichDifficultyResult, setEnrichDifficultyResult] = useState<string | null>(null);
   const [enrichingMuscles, setEnrichingMuscles] = useState(false);
   const [enrichMusclesResult, setEnrichMusclesResult] = useState<string | null>(null);
+  const [spreadsheetCsv, setSpreadsheetCsv] = useState("");
+  const [spreadsheetImporting, setSpreadsheetImporting] = useState(false);
+  const [spreadsheetResult, setSpreadsheetResult] = useState<string | null>(null);
 
   function fetchList(sort: CatalogSort = catalogSort) {
     setLoading(true);
@@ -212,6 +215,38 @@ export default function ExercisesPage() {
     }
   }
 
+  async function handleSpreadsheetReimport() {
+    const text = spreadsheetCsv.trim();
+    if (!text) {
+      setSpreadsheetResult("Paste the edited CSV (keep the id column) or upload the file.");
+      return;
+    }
+    setSpreadsheetImporting(true);
+    setSpreadsheetResult(null);
+    try {
+      const res = await fetch("/api/admin/exercises/spreadsheet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csv: text }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const errN = Array.isArray(data.errors) ? data.errors.length : 0;
+        setSpreadsheetResult(
+          `Updated ${data.updated ?? 0} exercise(s); skipped ${data.skipped ?? 0}.${errN ? ` ${errN} row issue(s) — check id / muscle spelling.` : ""}`
+        );
+        setSpreadsheetCsv("");
+        fetchList();
+      } else {
+        setSpreadsheetResult(typeof data.error === "string" ? data.error : "Re-import failed");
+      }
+    } catch (e) {
+      setSpreadsheetResult(e instanceof Error ? e.message : "Re-import failed");
+    } finally {
+      setSpreadsheetImporting(false);
+    }
+  }
+
   async function handleBackfillMuscleGroups() {
     setBackfilling(true);
     setBackfillResult(null);
@@ -329,10 +364,73 @@ export default function ExercisesPage() {
         </button>
       </div>
 
-      <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50 space-y-3">
-        <h2 className="font-semibold text-stone-800">Export exercises</h2>
+      <div className="mb-8 p-4 rounded-xl border border-brand-200 bg-brand-50/40 space-y-3">
+        <h2 className="font-semibold text-stone-800">Edit muscles in Excel / Sheets</h2>
+        <p className="text-xs text-stone-600 leading-relaxed">
+          Export the catalog as CSV, fix <strong>primary</strong> vs <strong>secondary</strong> / <strong>antagonist</strong> and{" "}
+          <strong>compound</strong> vs <strong>isolation</strong> without clicking each exercise in-app. Keep the{" "}
+          <strong>id</strong> column — re-import updates existing rows only (no new exercises).
+        </p>
         <p className="text-xs text-stone-500">
-          Download all exercises as JSON. Share the file to analyze name matching or for backup.
+          Muscles: comma-separated (e.g. <code className="text-stone-700">gluteus maximus, quadriceps</code>).{" "}
+          <code className="text-stone-700">movement_class</code>: compound or isolation for lifts.{" "}
+          <code className="text-stone-700">muscle_group</code>: legs, back, chest, shoulders, arms, core.
+        </p>
+        <a
+          href="/api/admin/exercises/spreadsheet"
+          download="exercises-muscle-edit.csv"
+          className="inline-block px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700"
+        >
+          Download muscle-edit CSV
+        </a>
+        <div>
+          <label className="block text-sm font-medium text-stone-700 mb-1">Re-import edited CSV</label>
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            className="block text-sm text-stone-600 mb-2"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              void file.text().then((t) => {
+                setSpreadsheetCsv(t);
+                setSpreadsheetResult(`Loaded ${file.name} (${(t.length / 1024).toFixed(1)} KB). Review then apply.`);
+              });
+            }}
+          />
+          <textarea
+            value={spreadsheetCsv}
+            onChange={(e) => setSpreadsheetCsv(e.target.value)}
+            placeholder="Or paste CSV here after editing…"
+            rows={4}
+            className="w-full px-3 py-2 rounded-lg border border-stone-200 font-mono text-xs"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleSpreadsheetReimport()}
+          disabled={spreadsheetImporting || !spreadsheetCsv.trim()}
+          className="px-4 py-2 rounded-lg border border-stone-300 font-medium hover:bg-white disabled:opacity-50"
+        >
+          {spreadsheetImporting ? "Applying…" : "Apply muscle CSV updates"}
+        </button>
+        {spreadsheetResult && (
+          <p
+            className={`text-sm ${
+              spreadsheetResult.startsWith("Updated") || spreadsheetResult.startsWith("Loaded")
+                ? "text-stone-600"
+                : "text-amber-800"
+            }`}
+          >
+            {spreadsheetResult}
+          </p>
+        )}
+      </div>
+
+      <div className="mb-8 p-4 rounded-xl border border-stone-200 bg-stone-50 space-y-3">
+        <h2 className="font-semibold text-stone-800">Export exercises (JSON backup)</h2>
+        <p className="text-xs text-stone-500">
+          Full JSON backup including instructions. For muscle editing, use the CSV export above.
         </p>
         <a
           href="/api/exercises/export"

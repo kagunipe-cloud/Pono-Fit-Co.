@@ -2,6 +2,18 @@
 
 Fills **primary**, **secondary**, **antagonist** muscles, and **compound vs isolation** (`movement_class`) using Serper + Gemini, normalized to the app vocabulary (`src/lib/exercise-muscle-vocabulary.ts`).
 
+## Bulk edit in Excel / Sheets
+
+On **Admin → Exercise database** (`/exercises`):
+
+1. **Download muscle-edit CSV** — columns include `id`, `name`, `type`, `muscle_group`, `movement_class`, `primary_muscles`, `secondary_muscles`, `antagonist_muscles`, `equipment`.
+2. Edit in Excel or Google Sheets (keep **`id`** unchanged).
+3. **Apply muscle CSV updates** — paste or upload the file. Updates existing rows by `id` only; does not create new exercises. Clears web-enrich timestamps so you are not fighting stale auto-lookup.
+
+The muscle map picker matches regions using **primary muscles only** (see `MuscleMapPicker.tsx`). For compounds, put the main movers in `primary_muscles` and synergists in `secondary_muscles` so each lift shows under the right body region.
+
+API: `GET` / `POST` `/api/admin/exercises/spreadsheet` (admin session required).
+
 ## Admin
 
 On **`/exercises`**:

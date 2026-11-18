@@ -1,3 +1,4 @@
+import { parseCsvLine, splitCsvLines } from "@/lib/exercise-csv";
 import { tryParseFitnessDbCsv } from "@/lib/fitness-db-csv";
 import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
@@ -6,55 +7,6 @@ import { getCanonicalPrimaryMuscles, getMuscleGroup, getMuscleGroupFromCategory,
 import { ensureWorkoutTables } from "@/lib/workouts-server";
 
 export const dynamic = "force-dynamic";
-
-/** Parse one CSV line respecting quoted fields (commas inside "..." stay one cell). */
-function parseCsvLine(line: string): string[] {
-  const out: string[] = [];
-  let cell = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (c === '"') {
-      inQuotes = !inQuotes;
-    } else if (inQuotes) {
-      if (c === '"' && line[i + 1] === '"') {
-        cell += '"';
-        i++;
-      } else {
-        cell += c;
-      }
-    } else if (c === ",") {
-      out.push(cell.trim());
-      cell = "";
-    } else {
-      cell += c;
-    }
-  }
-  out.push(cell.trim());
-  return out;
-}
-
-/** Split CSV text into logical lines (newlines inside quoted fields do not split). */
-function splitCsvLines(text: string): string[] {
-  const lines: string[] = [];
-  let current = "";
-  let inQuotes = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (c === '"') {
-      inQuotes = !inQuotes;
-      current += c;
-    } else if (!inQuotes && (c === "\n" || c === "\r")) {
-      if (c === "\r" && text[i + 1] === "\n") i++;
-      if (current.trim()) lines.push(current);
-      current = "";
-    } else {
-      current += c;
-    }
-  }
-  if (current.trim()) lines.push(current);
-  return lines;
-}
 
 /**
  * POST — bulk import exercises.
