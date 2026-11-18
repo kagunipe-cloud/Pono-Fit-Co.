@@ -7,6 +7,7 @@ import { formatDateForDisplay, todayInAppTz } from "@/lib/app-timezone";
 import { useAppTimezone } from "@/lib/settings-context";
 import { getUnitType, MEASUREMENT_OPTIONS, getServingMeasurementOptions, formatPortionLabel, formatServingForDisplay, unitToGrams, entryEditUnits, formatEditQuantityInput, getEditStepForMeasurement } from "@/lib/food-units";
 import { validateMacros } from "@/lib/food-quality";
+import MacroMealMachine from "@/components/member/MacroMealMachine";
 
 const CameraBarcodeScanner = lazy(() => import("@/components/CameraBarcodeScanner"));
 
@@ -1466,6 +1467,19 @@ export default function MemberMacrosDayPage() {
               </div>
             );
           })()}
+
+          {goals.calories_goal != null && goals.calories_goal > 0 && (
+            <MacroMealMachine
+              date={date}
+              goals={{
+                calories_goal: goals.calories_goal,
+                protein_pct: goals.protein_pct,
+                fat_pct: goals.fat_pct,
+                carbs_pct: goals.carbs_pct,
+              }}
+              consumed={{ cal: dayTotal.cal, p: dayTotal.p, f: dayTotal.f, c: dayTotal.c }}
+            />
+          )}
 
           {/* Day totals table + pie charts */}
           {(() => {
