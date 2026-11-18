@@ -61,16 +61,24 @@ export default function MacroMealMachine({ date, goals, consumed }: Props) {
 
   if (!daily || !remaining) {
     return (
-      <div className="mb-6 rounded-xl border border-dashed border-stone-300 bg-stone-50 p-4">
-        <p className="text-sm font-semibold text-stone-800">Macro Meal Machine</p>
-        <p className="mt-1 text-sm text-stone-600">
+      <details className="group mb-6 rounded-xl border border-dashed border-stone-300 bg-stone-50 overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+        <summary className="cursor-pointer select-none list-none px-4 py-3 flex items-center justify-between gap-3 hover:bg-stone-100/80">
+          <div>
+            <p className="text-sm font-semibold text-stone-800">Macro Meal Machine</p>
+            <p className="text-xs text-stone-500 mt-0.5">Set goals to unlock meal ideas from ingredients</p>
+          </div>
+          <span className="text-stone-400 text-xs shrink-0 transition-transform group-open:rotate-180" aria-hidden>
+            ▼
+          </span>
+        </summary>
+        <p className="px-4 pb-4 text-sm text-stone-600 border-t border-stone-200 pt-3">
           Set daily calorie + macro % goals on{" "}
           <Link href="/member/macros" className="font-medium text-brand-700 hover:underline">
             My Macros
           </Link>{" "}
           to use this.
         </p>
-      </div>
+      </details>
     );
   }
 
@@ -111,11 +119,27 @@ export default function MacroMealMachine({ date, goals, consumed }: Props) {
     });
   }
 
-  return (
-    <div className="mb-6 rounded-xl border border-brand-200 bg-gradient-to-br from-white to-brand-50/80 p-4 shadow-sm">
-      <motionHeader />
+  const summaryHint =
+    ideas && ideas.length > 0
+      ? `${ideas.length} idea${ideas.length === 1 ? "" : "s"} ready`
+      : loading
+        ? "Cranking…"
+        : "Meal ideas from what you have on hand";
 
-      <p className="mt-2 text-xs text-stone-500 leading-relaxed">
+  return (
+    <details className="group mb-6 rounded-xl border border-brand-200 bg-gradient-to-br from-white to-brand-50/80 shadow-sm overflow-hidden [&_summary::-webkit-details-marker]:hidden">
+      <summary className="cursor-pointer select-none list-none px-4 py-3 flex items-center justify-between gap-3 hover:bg-brand-50/60 border-b border-transparent group-open:border-brand-200/60">
+        <div className="min-w-0">
+          <h2 className="text-base font-bold text-stone-900 tracking-tight">Macro Meal Machine</h2>
+          <p className="text-xs text-stone-500 truncate">{summaryHint}</p>
+        </div>
+        <span className="text-brand-600 text-xs shrink-0 transition-transform group-open:rotate-180" aria-hidden>
+          ▼
+        </span>
+      </summary>
+
+      <div className="px-4 pb-4 pt-3 border-t border-brand-200/60">
+      <p className="text-xs text-stone-500 leading-relaxed">
         One meal, one shot: tell us what you can use, size it against today&apos;s plan, tweak targets if you want a
         protein-heavy dinner, then get a few ideas. No pantry tracking — ask fresh every time.
       </p>
@@ -219,16 +243,8 @@ export default function MacroMealMachine({ date, goals, consumed }: Props) {
       <p className="mt-3 text-[11px] text-stone-500">
         Estimates only — not medical or dietitian advice. Log what you actually eat in this journal.
       </p>
-    </div>
-  );
-}
-
-function motionHeader() {
-  return (
-    <div>
-      <h2 className="text-lg font-bold text-stone-900 tracking-tight">Macro Meal Machine</h2>
-      <p className="text-xs font-medium text-brand-700">Pono · one meal at a time</p>
-    </div>
+      </div>
+    </details>
   );
 }
 
