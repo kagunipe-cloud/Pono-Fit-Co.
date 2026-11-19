@@ -65,10 +65,17 @@ function NavList({
   const servicesDropdownRef = useRef<HTMLDivElement>(null);
   const [servicesPosition, setServicesPosition] = useState({ top: 0, left: 0 });
 
+  const [programsOpen, setProgramsOpen] = useState(false);
+  const programsRef = useRef<HTMLLIElement>(null);
+  const programsButtonRef = useRef<HTMLButtonElement>(null);
+  const programsDropdownRef = useRef<HTMLDivElement>(null);
+  const [programsPosition, setProgramsPosition] = useState({ top: 0, left: 0 });
+
   useEffect(() => {
     setReportsOpen(false);
     setBookingsOpen(false);
     setServicesOpen(false);
+    setProgramsOpen(false);
   }, [pathname]);
 
   // Position dropdown to the right of the Reports button (for portal)
@@ -130,6 +137,30 @@ function NavList({
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, [servicesOpen]);
+
+  useEffect(() => {
+    if (!programsOpen || !programsButtonRef.current) return;
+    const rect = programsButtonRef.current.getBoundingClientRect();
+    setProgramsPosition({ top: rect.top, left: rect.right });
+  }, [programsOpen]);
+
+  useEffect(() => {
+    if (!programsOpen) return;
+    function handleClick(e: MouseEvent) {
+      const target = e.target as Node;
+      const inRow = programsRef.current?.contains(target);
+      const inDropdown = programsDropdownRef.current?.contains(target);
+      if (!inRow && !inDropdown) setProgramsOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [programsOpen]);
+
+  const isOnProgramsPage =
+    pathname != null &&
+    (pathname.startsWith("/member/programs") ||
+      ((isTrainer || isAdmin) && pathname.startsWith("/trainer/programs")));
+
   const link = (href: string, label: string | React.ReactNode, active?: boolean) => {
     const isActive = active ?? (pathname === href || (href !== "/" && pathname?.startsWith(href + "/")));
     return (
@@ -243,6 +274,67 @@ function NavList({
             )}
         </li>
         <li>{link("/member/workouts", "My Workouts", pathname?.startsWith("/member/workouts"))}</li>
+        <li ref={programsRef} className="relative">
+          <button
+            ref={programsButtonRef}
+            type="button"
+            onClick={() => setProgramsOpen((open) => !open)}
+            className={`w-full text-left block px-3 py-2 rounded-lg text-sm font-medium text-white hover:bg-brand-gray-100 hover:text-brand-500 ${
+              isOnProgramsPage ? "bg-brand-gray-100 text-brand-500" : ""
+            }`}
+          >
+            <span className="flex items-center justify-between gap-1">
+              My Programs
+              <svg
+                className={`w-4 h-4 shrink-0 transition-transform ${programsOpen ? "rotate-90" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                aria-hidden
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </span>
+          </button>
+          {programsOpen &&
+            typeof document !== "undefined" &&
+            createPortal(
+              <div
+                ref={programsDropdownRef}
+                className="fixed min-w-[11rem] py-1 rounded-lg border border-stone-200 bg-white shadow-lg z-[100]"
+                style={{ top: programsPosition.top, left: programsPosition.left, marginLeft: 4 }}
+                role="menu"
+              >
+                <Link
+                  href="/member/programs?view=mine"
+                  className="block px-3 py-2 text-sm font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                  role="menuitem"
+                  onClick={() => setProgramsOpen(false)}
+                >
+                  My Programs
+                </Link>
+                <Link
+                  href="/member/programs?view=shop"
+                  className="block px-3 py-2 text-sm font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900"
+                  role="menuitem"
+                  onClick={() => setProgramsOpen(false)}
+                >
+                  Programs for Purchase
+                </Link>
+                {(isTrainer || isAdmin) && (
+                  <Link
+                    href="/trainer/programs"
+                    className="block px-3 py-2 text-sm font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900 border-t border-stone-100"
+                    role="menuitem"
+                    onClick={() => setProgramsOpen(false)}
+                  >
+                    My Created Programs
+                  </Link>
+                )}
+              </div>,
+              document.body
+            )}
+        </li>
         <li>{link("/member/macros", "My Macros", pathname?.startsWith("/member/macros"))}</li>
         <li>{link("/member/weekly-goals", "Weekly Goals", pathname?.startsWith("/member/weekly-goals"))}</li>
         <li>{link("/rec-leagues", "Rec Leagues", pathname?.startsWith("/rec-leagues"))}</li>
@@ -292,6 +384,9 @@ function NavList({
       )}
       {isTrainer && (
         <li>{link("/trainer/my-clients", "My Clients", pathname === "/trainer/my-clients")}</li>
+      )}
+      {(isTrainer || isAdmin) && (
+        <li>{link("/trainer/programs", "My Created Programs", pathname?.startsWith("/trainer/programs"))}</li>
       )}
       {!isAdmin && <li>{link("/schedule", "Schedule", pathname === "/schedule" || pathname?.startsWith("/schedule/"))}</li>}
       {isAdmin && <li>{link("/master-schedule", "Master Schedule")}</li>}
@@ -530,6 +625,10 @@ function NavList({
           </li>
           <li>{link("/member", "Member Home", pathname === "/member")}</li>
           <li>{link("/member/workouts", "My Workouts", pathname?.startsWith("/member/workouts"))}</li>
+          <li>{link("/member/programs", "My Programs", pathname?.startsWith("/member/programs"))}</li>
+          {(isTrainer || isAdmin) && (
+            <li>{link("/trainer/programs", "My Created Programs", pathname?.startsWith("/trainer/programs"))}</li>
+          )}
           <li>{link("/member/macros", "My Macros", pathname?.startsWith("/member/macros"))}</li>
           <li>{link("/member/weekly-goals", "Weekly Goals", pathname?.startsWith("/member/weekly-goals"))}</li>
           <li className="pt-2 mt-2 border-t border-white/20">

@@ -3,6 +3,7 @@ import "server-only";
 import fs from "fs";
 import type { Database } from "better-sqlite3";
 import { DATABASE_FILE_PATH } from "./database-path";
+import { ensureTrainingProgramTables } from "./training-programs";
 
 type AppDb = Database;
 
@@ -688,4 +689,6 @@ export function ensureWorkoutTables(db: AppDb) {
     );
     CREATE INDEX IF NOT EXISTS idx_member_ex_fav_member ON member_exercise_favorites(member_id);
   `);
+
+  ensureTrainingProgramTables(db);
 }

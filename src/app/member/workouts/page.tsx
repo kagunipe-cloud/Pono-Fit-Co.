@@ -21,6 +21,7 @@ type Workout = {
   shared_by_first_name?: string | null;
   shared_by_last_name?: string | null;
   name?: string | null;
+  program_title?: string | null;
 };
 
 function isFromTrainer(w: Workout): boolean {
@@ -558,7 +559,11 @@ export default function MemberWorkoutsPage() {
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium text-stone-800">{w.name?.trim() || "Workout"}</span>
-                  {w.assigned_by_admin ? (
+                  {w.program_title?.trim() ? (
+                    <span className="px-2 py-0.5 rounded text-xs font-medium bg-violet-100 text-violet-900">
+                      {w.program_title.trim()}
+                    </span>
+                  ) : w.assigned_by_admin ? (
                     <span className="px-2 py-0.5 rounded text-xs font-medium bg-brand-100 text-brand-800">From trainer</span>
                   ) : (
                     <span className="px-2 py-0.5 rounded text-xs font-medium bg-stone-100 text-stone-600">My workout</span>

@@ -1,4 +1,5 @@
 import type { Database } from "better-sqlite3";
+import { applyProgramProgressionAfterFinish } from "@/lib/training-programs";
 import { estimate1RM } from "@/lib/workout-units";
 
 /**
@@ -35,4 +36,5 @@ export function applyMemberWorkoutFinishSideEffects(db: Database, workoutId: num
       ).run(memberId, workoutId, exercise_id, recordedAt, best1RM);
     }
   }
+  applyProgramProgressionAfterFinish(db, workoutId, memberId);
 }

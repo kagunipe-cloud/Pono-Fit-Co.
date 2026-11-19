@@ -16,8 +16,10 @@ export async function GET() {
     const hasName = cols.some((c) => c.name === "name");
     const hasTrainer = cols.some((c) => c.name === "assigned_by_trainer_member_id");
     const hasSharedBy = cols.some((c) => c.name === "shared_by_member_id");
+    const hasProgramTitle = cols.some((c) => c.name === "program_title");
     const nameCol = hasName ? "w.name," : "";
     const trainerCol = hasTrainer ? "w.assigned_by_trainer_member_id," : "";
+    const programCol = hasProgramTitle ? "w.program_title," : "";
     const sharedCols = hasSharedBy
       ? "w.shared_by_member_id, sharer.first_name AS shared_by_first_name, sharer.last_name AS shared_by_last_name,"
       : "";
@@ -26,7 +28,7 @@ export async function GET() {
       : "FROM workouts w";
     const rows = db
       .prepare(
-        `SELECT w.id, w.member_id, w.started_at, w.finished_at, w.assigned_by_admin, ${trainerCol} ${nameCol} ${sharedCols}
+        `SELECT w.id, w.member_id, w.started_at, w.finished_at, w.assigned_by_admin, ${trainerCol} ${nameCol} ${programCol} ${sharedCols}
                 (SELECT COALESCE(SUM(COALESCE(ws.reps, 0) * COALESCE(ws.weight_kg, 0)), 0)
                  FROM workout_exercises we
                  JOIN workout_sets ws ON ws.workout_exercise_id = we.id
