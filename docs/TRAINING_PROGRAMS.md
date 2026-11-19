@@ -8,7 +8,7 @@ Multi-day **programs** = ordered **workouts** on a calendar. Members run them fr
 - Workouts started from a program carry `program_assignment_id`, `program_workout_id`, `program_title` (shows on **Past Workouts**)
 - **Phases** on each program workout: `DELOAD`, `VOLUME`, `HYPERTROPHY`, `POWER`, `PEAK` — progression rules are **per lift, per phase**
 - On **finish workout**, if rep targets are met: load increases by the **trainer-set `step_percent`** on that lift + phase (each phase has its own rule). The app applies that % to the current load, then **rounds to the nearest 5 lb** so targets match real plates (no 142 lb bench forever). If rounding would leave the **same weight** (less than ~2.5 lb effective bump), the bar stays put and **+3 reps per set** are banked for the next time that lift appears (`extra_reps_per_set`, stacks if it happens again). When the bar does move up 5 lb, extra reps reset to 0. If `step_percent` is omitted, phase defaults apply until the trainer sets a value.
-- Trainer: drag workouts between days, duplicate day ranges (`duplicate-block` API), assign to client by member ID
+- Trainer: drag workouts between days, **Edit workout** (full exercise search + sets → `template_json`), duplicate day ranges (`duplicate-block` API), assign to client by member ID
 - Member shop: browse `is_for_sale` + `published` programs (Stripe checkout not wired yet)
 
 ## Sidebar
@@ -25,7 +25,8 @@ Multi-day **programs** = ordered **workouts** on a calendar. Members run them fr
 | `POST .../workouts` | Add workout slot |
 | `POST .../assign` | Send program to client |
 | `POST .../duplicate-block` | Copy day range |
-| `POST .../progression-rules` | Upsert lift + phase targets |
+| `GET/POST/DELETE .../workouts/[workoutId]/progression-rules` | List / upsert / remove lift + phase rules (trainer workout edit UI) |
+| `POST .../progression-rules` | Legacy upsert (same shape; prefers `program_workout_id` in body) |
 | `GET /api/member/programs` | Member assignments |
 | `GET /api/member/programs/shop` | For-sale catalog |
 | `POST .../assignments/[id]/start/[workoutId]` | Materialize live workout |
@@ -34,10 +35,13 @@ Multi-day **programs** = ordered **workouts** on a calendar. Members run them fr
 
 Assignments map **program day index** → calendar dates from `starts_on` (or assignment date). The program detail page is a **month view** with **today highlighted**, **Start today’s workout**, and tap-any-day to start.
 
+## Trainer: progression rules UI
+
+On **Edit program workout** (`/trainer/programs/[id]/workouts/[workoutId]/edit`), the **Auto progression** block lists rules for that day. Use **Default rules for all lifts** to seed 8–12 rep bands for every unique lift on the workout’s **training phase** (does not overwrite existing rules). Fine-tune per lift: phase, rep range, optional start weight and step % (blank = phase default). Members never see this block.
+
 ## Next builds (recommended)
 
-1. **Workout builder in program editor** (in progress) — reuse `trainer/my-clients/.../create-workout` UI, save `template_json` + progression rows
-2. **Stripe** — product per program, `member_program_assignments.source = purchase`
+1. **Stripe** — product per program, `member_program_assignments.source = purchase`
 3. **Duplicate single workout** + multi-week UI on calendar
 4. **Member-facing progression** — toast when auto-bump happens after finish
 5. **Assign from client profile** — same as single-workout send

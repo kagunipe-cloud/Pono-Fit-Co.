@@ -2,22 +2,13 @@
 
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
-import { milesToKm } from "@/lib/workouts";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-
-type SetRow = { reps: string; weight: string } | { time: string; distance: string };
-type ExerciseEntry = {
-  type: "lift" | "cardio";
-  exercise_name: string;
-  exercise_id?: number | null;
-  muscle_group?: string;
-  primary_muscles?: string;
-  equipment?: string;
-  instructions?: string;
-  use_for_my_1rm?: boolean;
-  sets: SetRow[];
-};
-type OfficialExercise = { id: number; name: string; type: string; primary_muscles?: string; muscle_group?: string; equipment?: string };
+import TrainerWorkoutExerciseBuilder from "@/components/trainer/TrainerWorkoutExerciseBuilder";
+import {
+  type ExerciseEntry,
+  exerciseEntriesToPayload,
+  parseExerciseEntriesFromApi,
+} from "@/lib/trainer-workout-builder";
 
 export default function TrainerCreateWorkoutPage() {
   return (
@@ -37,59 +28,11 @@ function TrainerCreateWorkoutInner() {
     editRaw != null && /^\d+$/.test(editRaw.trim()) ? parseInt(editRaw.trim(), 10) : null;
 
   const [exercises, setExercises] = useState<ExerciseEntry[]>([]);
-  const [mode, setMode] = useState<"lift" | "cardio" | null>(null);
-  const [exerciseName, setExerciseName] = useState("");
-  const [selectedOfficialId, setSelectedOfficialId] = useState<number | null>(null);
-  const [exerciseSuggestions, setExerciseSuggestions] = useState<OfficialExercise[]>([]);
-  const [sets, setSets] = useState<SetRow[]>([{ reps: "", weight: "" }]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [trainerNotes, setTrainerNotes] = useState("");
   const [loadingEdit, setLoadingEdit] = useState(editingWorkoutId != null);
-
-  const [showAddExercise, setShowAddExercise] = useState(false);
-  const [newExName, setNewExName] = useState("");
-  const [newExType, setNewExType] = useState<"lift" | "cardio">("lift");
-  const [newExPrimaryMuscles, setNewExPrimaryMuscles] = useState("");
-  const [newExMuscleGroup, setNewExMuscleGroup] = useState("");
-  const [newExEquipment, setNewExEquipment] = useState("");
-  const [newExInstructions, setNewExInstructions] = useState("");
-  const [savingNewEx, setSavingNewEx] = useState(false);
-  const [newExError, setNewExError] = useState<string | null>(null);
-  const [useForMy1rm, setUseForMy1rm] = useState(false);
-
-  useEffect(() => {
-    if (!mode) {
-      setExerciseSuggestions([]);
-      return;
-    }
-    if (!exerciseName.trim()) {
-      let cancelled = false;
-      fetch(
-        `/api/member/exercises/frequent?type=${mode}&limit=20&for_member_id=${encodeURIComponent(clientId)}`
-      )
-        .then((r) => (r.ok ? r.json() : { exercises: [] }))
-        .then((d: { exercises?: OfficialExercise[] }) => {
-          if (!cancelled) setExerciseSuggestions(Array.isArray(d.exercises) ? d.exercises : []);
-        })
-        .catch(() => {
-          if (!cancelled) setExerciseSuggestions([]);
-        });
-      return () => {
-        cancelled = true;
-      };
-    }
-    const t = setTimeout(() => {
-      fetch(
-        `/api/exercises?q=${encodeURIComponent(exerciseName.trim())}&type=${mode}&boost_member=1&boost_for_member_id=${encodeURIComponent(clientId)}`
-      )
-        .then((r) => (r.ok ? r.json() : []))
-        .then((list: OfficialExercise[]) => setExerciseSuggestions(list))
-        .catch(() => setExerciseSuggestions([]));
-    }, 200);
-    return () => clearTimeout(t);
-  }, [mode, exerciseName, clientId]);
 
   useEffect(() => {
     if (editingWorkoutId == null || !clientId) {
@@ -100,7 +43,12 @@ function TrainerCreateWorkoutInner() {
     setLoadingEdit(true);
     fetch(`/api/trainer/clients/${encodeURIComponent(clientId)}/workouts/${editingWorkoutId}`)
       .then(async (r) => {
-        const data = (await r.json().catch(() => ({}))) as { error?: string; trainer_notes?: string; exercises?: unknown[]; finished_at?: string | null };
+        const data = (await r.json().catch(() => ({}))) as {
+          error?: string;
+          trainer_notes?: string;
+          exercises?: unknown[];
+          finished_at?: string | null;
+        };
         if (!r.ok) throw new Error(typeof data.error === "string" ? data.error : "Failed to load workout");
         return data;
       })
@@ -112,40 +60,7 @@ function TrainerCreateWorkoutInner() {
           return;
         }
         setTrainerNotes(data.trainer_notes ?? "");
-        const loaded = Array.isArray(data.exercises)
-          ? data.exercises.map((raw) => {
-              const x = raw as Record<string, unknown>;
-              const type = x.type === "cardio" ? "cardio" : "lift";
-              const setsRaw = Array.isArray(x.sets) ? x.sets : [];
-              const sets: SetRow[] =
-                type === "cardio"
-                  ? setsRaw.map((s) => {
-                      const sr = s as Record<string, unknown>;
-                      return { time: String(sr.time ?? ""), distance: String(sr.distance ?? "") };
-                    })
-                  : setsRaw.map((s) => {
-                      const sr = s as Record<string, unknown>;
-                      return { reps: String(sr.reps ?? ""), weight: String(sr.weight ?? "") };
-                    });
-              return {
-                type,
-                exercise_name: String(x.exercise_name ?? ""),
-                exercise_id: typeof x.exercise_id === "number" ? x.exercise_id : undefined,
-                muscle_group: typeof x.muscle_group === "string" ? x.muscle_group : undefined,
-                primary_muscles: typeof x.primary_muscles === "string" ? x.primary_muscles : undefined,
-                equipment: typeof x.equipment === "string" ? x.equipment : undefined,
-                instructions: typeof x.instructions === "string" ? x.instructions : undefined,
-                use_for_my_1rm: !!x.use_for_my_1rm,
-                sets:
-                  sets.length > 0
-                    ? sets
-                    : type === "lift"
-                      ? [{ reps: "", weight: "" }]
-                      : [{ time: "", distance: "" }],
-              } as ExerciseEntry;
-            })
-          : [];
-        setExercises(loaded);
+        setExercises(Array.isArray(data.exercises) ? parseExerciseEntriesFromApi(data.exercises) : []);
         setLoadingEdit(false);
       })
       .catch((e: unknown) => {
@@ -159,119 +74,6 @@ function TrainerCreateWorkoutInner() {
     };
   }, [editingWorkoutId, clientId]);
 
-  function startAddLift() {
-    setMode("lift");
-    setExerciseName("");
-    setSelectedOfficialId(null);
-    setExerciseSuggestions([]);
-    setSets([{ reps: "", weight: "" }]);
-  }
-
-  function startAddCardio() {
-    setMode("cardio");
-    setExerciseName("");
-    setSelectedOfficialId(null);
-    setExerciseSuggestions([]);
-    setSets([{ time: "", distance: "" }]);
-  }
-
-  function pickOfficialExercise(ex: OfficialExercise) {
-    setExerciseName(ex.name);
-    setSelectedOfficialId(ex.id);
-    setExerciseSuggestions([]);
-  }
-
-  function onExerciseInputBlur() {
-    const match = exerciseSuggestions.find((e) => e.name.toLowerCase() === exerciseName.trim().toLowerCase());
-    if (match) setSelectedOfficialId(match.id);
-  }
-
-  function addSet() {
-    if (mode === "lift") setSets((s) => [...s, { reps: "", weight: "" }]);
-    else setSets((s) => [...s, { time: "", distance: "" }]);
-  }
-
-  function saveExercise() {
-    if (!exerciseName.trim()) return;
-    const picked = exerciseSuggestions.find((e) => e.id === selectedOfficialId);
-    setExercises((e) => [
-      ...e,
-      {
-        type: mode!,
-        exercise_name: exerciseName.trim(),
-        exercise_id: selectedOfficialId ?? undefined,
-        muscle_group: picked?.muscle_group ?? undefined,
-        primary_muscles: picked?.primary_muscles ?? undefined,
-        equipment: picked?.equipment ?? undefined,
-        use_for_my_1rm: mode === "lift" && useForMy1rm && selectedOfficialId != null,
-        sets: [...sets],
-      },
-    ]);
-    setMode(null);
-    setExerciseName("");
-    setSelectedOfficialId(null);
-    setExerciseSuggestions([]);
-    setUseForMy1rm(false);
-    setSets([{ reps: "", weight: "" }]);
-  }
-
-  function removeExercise(index: number) {
-    setExercises((e) => e.filter((_, i) => i !== index));
-  }
-
-  function moveExerciseInList(from: number, direction: -1 | 1) {
-    setExercises((list) => {
-      const to = from + direction;
-      if (to < 0 || to >= list.length) return list;
-      const next = [...list];
-      const a = next[from]!;
-      const b = next[to]!;
-      next[from] = b;
-      next[to] = a;
-      return next;
-    });
-  }
-
-  async function handleAddExerciseToDb(e: React.FormEvent) {
-    e.preventDefault();
-    setNewExError(null);
-    if (!newExName.trim()) {
-      setNewExError("Name required");
-      return;
-    }
-    setSavingNewEx(true);
-    try {
-      const res = await fetch("/api/exercises", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newExName.trim(),
-          type: newExType,
-          primary_muscles: newExPrimaryMuscles.trim() || undefined,
-          muscle_group: newExMuscleGroup.trim() || undefined,
-          equipment: newExEquipment.trim() || undefined,
-          instructions: newExInstructions.trim()
-            ? newExInstructions.trim().split("\n").map((s) => s.trim()).filter(Boolean)
-            : undefined,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setNewExError((data as { error?: string }).error ?? "Failed to add exercise");
-        return;
-      }
-      setShowAddExercise(false);
-      setNewExName("");
-      setNewExType("lift");
-      setNewExPrimaryMuscles("");
-      setNewExMuscleGroup("");
-      setNewExEquipment("");
-      setNewExInstructions("");
-    } finally {
-      setSavingNewEx(false);
-    }
-  }
-
   async function handleSubmitWorkout(intent: "send" | "finish" | "patch") {
     setError(null);
     setSuccess(null);
@@ -284,37 +86,7 @@ function TrainerCreateWorkoutInner() {
       return;
     }
 
-    const exercisesPayload = exercises.map((ex) =>
-      ex.type === "lift"
-        ? {
-            type: "lift" as const,
-            exercise_id: ex.exercise_id ?? undefined,
-            exercise_name: ex.exercise_name,
-            use_for_my_1rm: ex.use_for_my_1rm,
-            muscle_group: ex.muscle_group,
-            primary_muscles: ex.primary_muscles,
-            equipment: ex.equipment,
-            instructions: ex.instructions ? ex.instructions.split("\n").map((s) => s.trim()).filter(Boolean) : undefined,
-            sets: (ex.sets as { reps: string; weight: string }[]).map((s) => ({
-              reps: parseInt(s.reps, 10) || null,
-              weight_kg: parseFloat(s.weight) || null,
-            })),
-          }
-        : {
-            type: "cardio" as const,
-            exercise_id: ex.exercise_id ?? undefined,
-            exercise_name: ex.exercise_name,
-            use_for_my_1rm: false,
-            muscle_group: ex.muscle_group,
-            primary_muscles: ex.primary_muscles,
-            equipment: ex.equipment,
-            instructions: ex.instructions ? ex.instructions.split("\n").map((s) => s.trim()).filter(Boolean) : undefined,
-            sets: (ex.sets as { time: string; distance: string }[]).map((s) => ({
-              time_seconds: parseInt(s.time, 10) ? parseInt(s.time, 10) * 60 : null,
-              distance_km: parseFloat(s.distance) ? milesToKm(parseFloat(s.distance)) : null,
-            })),
-          }
-    );
+    const exercisesPayload = exerciseEntriesToPayload(exercises);
 
     setSubmitting(true);
     try {
@@ -369,12 +141,14 @@ function TrainerCreateWorkoutInner() {
   return (
     <div className="max-w-2xl mx-auto p-6">
       <div className="mb-6">
-        <Link href={`/trainer/my-clients/${clientId}`} className="text-stone-500 hover:text-stone-700 text-sm mb-2 inline-block">← Client dashboard</Link>
+        <Link href={`/trainer/my-clients/${clientId}`} className="text-stone-500 hover:text-stone-700 text-sm mb-2 inline-block">
+          ← Client dashboard
+        </Link>
         <h1 className="text-2xl font-bold text-stone-800">{editingWorkoutId != null ? "Edit workout" : "Create Workout for Member"}</h1>
         <p className="text-stone-500 text-sm mt-1">
           {editingWorkoutId != null
             ? "Update exercises or notes before your client finishes this workout. Saving replaces all prescribed sets — if they’ve already changed reps or weights on their phone, those edits will be overwritten when they refresh."
-            : 'Add exercises and optional suggested sets. Send it for them to complete in the app, or save it as finished after an in-person session so it appears on their workout history right away.'}
+            : "Add exercises and optional suggested sets. Send it for them to complete in the app, or save it as finished after an in-person session so it appears on their workout history right away."}
         </p>
       </div>
 
@@ -388,125 +162,7 @@ function TrainerCreateWorkoutInner() {
         }}
         className="space-y-8"
       >
-        <div>
-          <h2 className="text-sm font-medium text-stone-600 mb-3">Exercises</h2>
-          {!mode ? (
-            <div className="flex flex-wrap gap-3 mb-4">
-              <button type="button" onClick={startAddLift} className="px-4 py-2.5 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700">Add Lift</button>
-              <button type="button" onClick={startAddCardio} className="px-4 py-2.5 rounded-lg border border-stone-200 bg-white font-medium hover:bg-stone-50">Add Cardio</button>
-              <button type="button" onClick={() => setShowAddExercise(true)} className="px-4 py-2.5 rounded-lg border border-stone-200 bg-white font-medium hover:bg-stone-50 text-stone-700">Add exercise</button>
-            </div>
-          ) : (
-            <>
-              <div className="mb-4 p-4 rounded-xl border border-stone-200 bg-stone-50">
-                <h3 className="font-semibold text-stone-800 mb-3">{mode === "lift" ? "Add Lift" : "Add Cardio"}</h3>
-                <label className="block text-sm font-medium text-stone-600 mb-1">Choose exercise</label>
-                <input
-                  type="text"
-                  value={exerciseName}
-                  onChange={(e) => { setExerciseName(e.target.value); setSelectedOfficialId(null); }}
-                  onBlur={onExerciseInputBlur}
-                  className="w-full px-3 py-2 rounded-lg border border-stone-200"
-                  placeholder="e.g. Bench Press, Treadmill"
-                  autoComplete="off"
-                />
-                {exerciseSuggestions.length > 0 && !exerciseName.trim() && (
-                  <p className="mt-2 text-xs font-semibold text-stone-600">Pinned &amp; often used by this client</p>
-                )}
-                {exerciseSuggestions.length > 0 && (
-                  <ul className="mt-1 border border-stone-200 rounded-lg bg-white shadow-sm max-h-40 overflow-auto">
-                    {exerciseSuggestions.map((ex) => (
-                      <li key={ex.id}>
-                        <button type="button" onClick={() => pickOfficialExercise(ex)} className="w-full text-left px-3 py-2 text-sm text-stone-800 hover:bg-stone-100">{ex.name}</button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {mode === "lift" && selectedOfficialId != null && exerciseName.trim() && (
-                  <label className="mt-3 flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" checked={useForMy1rm} onChange={(e) => setUseForMy1rm(e.target.checked)} className="rounded border-stone-300 text-brand-600" />
-                    <span className="text-sm text-stone-700">Use for My 1RM Calculation</span>
-                  </label>
-                )}
-              </div>
-
-              {exerciseName.trim() && (
-                <div className="mb-6 p-4 rounded-xl border-2 border-stone-300 bg-white shadow-sm space-y-4">
-                  <p className="font-semibold text-stone-800">
-                    {exerciseName.trim()}
-                    <span className="ml-2 text-xs font-normal text-stone-500 capitalize">({mode})</span>
-                  </p>
-                  {mode === "lift" ? (
-                    (sets as { reps: string; weight: string }[]).map((row, i) => (
-                      <div key={i} className="flex gap-2 flex-wrap items-center">
-                        <span className="text-sm text-stone-500 w-10">Set {i + 1}</span>
-                        <input type="text" placeholder="Reps" value={row.reps} onChange={(e) => { const next = [...sets]; (next[i] as { reps: string; weight: string }).reps = e.target.value; setSets(next); }} className="w-20 px-2 py-1.5 rounded border border-stone-200" />
-                        <input type="text" placeholder="Weight (lbs)" value={row.weight} onChange={(e) => { const next = [...sets]; (next[i] as { reps: string; weight: string }).weight = e.target.value; setSets(next); }} className="w-24 px-2 py-1.5 rounded border border-stone-200" />
-                      </div>
-                    ))
-                  ) : (
-                    (sets as { time: string; distance: string }[]).map((row, i) => (
-                      <div key={i} className="flex gap-2 flex-wrap items-center">
-                        <span className="text-sm text-stone-500 w-10">Set {i + 1}</span>
-                        <input type="text" placeholder="Time (min)" value={row.time} onChange={(e) => { const next = [...sets]; (next[i] as { time: string; distance: string }).time = e.target.value; setSets(next); }} className="w-24 px-2 py-1.5 rounded border border-stone-200" />
-                        <input type="text" placeholder="Distance (mi)" value={row.distance} onChange={(e) => { const next = [...sets]; (next[i] as { time: string; distance: string }).distance = e.target.value; setSets(next); }} className="w-24 px-2 py-1.5 rounded border border-stone-200" />
-                      </div>
-                    ))
-                  )}
-                  {mode === "cardio" && <p className="text-xs text-stone-500">Time in minutes; distance in miles.</p>}
-                  <div className="flex gap-2 flex-wrap">
-                    <button type="button" onClick={saveExercise} disabled={!exerciseName.trim()} className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50">Add to workout</button>
-                    <button type="button" onClick={addSet} className="px-4 py-2 rounded-lg border border-stone-200 bg-white font-medium hover:bg-stone-50">Add set</button>
-                    <button type="button" onClick={() => setMode(null)} className="px-4 py-2 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50">Cancel</button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {exercises.length > 0 && (
-            <ul className="space-y-2">
-              {exercises.map((ex, i) => (
-                <li key={i} className="flex items-center justify-between gap-2 p-3 rounded-lg border border-stone-200 bg-white">
-                  <span className="font-medium text-stone-800 min-w-0">
-                    {ex.exercise_name}
-                    <span className="ml-2 text-xs text-stone-500 capitalize">({ex.type})</span>
-                    <span className="ml-2 text-xs text-stone-400">— {ex.sets.length} set(s)</span>
-                  </span>
-                  <span className="flex items-center gap-2 shrink-0">
-                    {exercises.length > 1 && (
-                      <span className="inline-flex items-center gap-0.5">
-                        <button
-                          type="button"
-                          onClick={() => moveExerciseInList(i, -1)}
-                          disabled={i === 0}
-                          className="px-2 py-0.5 rounded border border-stone-200 text-stone-600 text-sm hover:bg-stone-50 disabled:opacity-40"
-                          title="Move up"
-                          aria-label="Move exercise up"
-                        >
-                          ↑
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveExerciseInList(i, 1)}
-                          disabled={i >= exercises.length - 1}
-                          className="px-2 py-0.5 rounded border border-stone-200 text-stone-600 text-sm hover:bg-stone-50 disabled:opacity-40"
-                          title="Move down"
-                          aria-label="Move exercise down"
-                        >
-                          ↓
-                        </button>
-                      </span>
-                    )}
-                    <button type="button" onClick={() => removeExercise(i)} className="text-sm text-red-600 hover:underline">
-                      Remove
-                    </button>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        <TrainerWorkoutExerciseBuilder exerciseSearchMemberId={clientId} exercises={exercises} onExercisesChange={setExercises} />
 
         <div className="pt-4 border-t border-stone-200">
           <label className="block text-sm font-medium text-stone-700 mb-1">Notes to client (optional)</label>
@@ -517,7 +173,10 @@ function TrainerCreateWorkoutInner() {
             placeholder="e.g. Focus on form today. Go heavy on set 2."
             rows={3}
           />
-          <p className="text-xs text-stone-500 mt-1">The client will see this when they open the workout.{editingWorkoutId != null ? " Updating replaces your previous note." : ""}</p>
+          <p className="text-xs text-stone-500 mt-1">
+            The client will see this when they open the workout.
+            {editingWorkoutId != null ? " Updating replaces your previous note." : ""}
+          </p>
         </div>
 
         <div className="flex flex-wrap gap-3 items-center">
@@ -559,33 +218,6 @@ function TrainerCreateWorkoutInner() {
           </p>
         )}
       </form>
-
-      {showAddExercise && (
-        <>
-          <div className="fixed inset-0 bg-stone-900/50 z-40" aria-hidden onClick={() => setShowAddExercise(false)} />
-          <div className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-md rounded-xl border border-stone-200 bg-white p-6 shadow-xl">
-            <h3 className="text-lg font-semibold text-stone-800 mb-4">Add exercise to database</h3>
-            {newExError && <div className="mb-3 p-2 rounded-lg bg-red-50 text-red-700 text-sm">{newExError}</div>}
-            <form onSubmit={handleAddExerciseToDb} className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-stone-600 mb-1">Name *</label>
-                <input type="text" value={newExName} onChange={(e) => setNewExName(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-stone-200" placeholder="e.g. Bench Press" required />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-stone-600 mb-1">Type</label>
-                <select value={newExType} onChange={(e) => setNewExType(e.target.value === "cardio" ? "cardio" : "lift")} className="w-full px-3 py-2 rounded-lg border border-stone-200">
-                  <option value="lift">Lift</option>
-                  <option value="cardio">Cardio</option>
-                </select>
-              </div>
-              <div className="flex gap-2 pt-2">
-                <button type="submit" disabled={savingNewEx || !newExName.trim()} className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 disabled:opacity-50">{savingNewEx ? "Saving…" : "Add exercise"}</button>
-                <button type="button" onClick={() => { setShowAddExercise(false); setNewExError(null); }} className="px-4 py-2 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50">Cancel</button>
-              </div>
-            </form>
-          </div>
-        </>
-      )}
     </div>
   );
 }

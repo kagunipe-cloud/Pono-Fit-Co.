@@ -98,7 +98,7 @@ export default function TrainerProgramEditPage() {
     <div className="max-w-5xl mx-auto p-6">
       <h1 className="text-2xl font-bold text-stone-800">{title}</h1>
       <p className="text-sm text-stone-500 mt-1">
-        Plan workouts on the calendar. Build exercise content from a client workout (send-to-client flow) — copy into program workouts next, or we&apos;ll wire the full builder here.
+        Plan workouts on the calendar. Tap <strong>Edit workout</strong> on any slot to search the catalog and build sets (same as sending a client a workout).
       </p>
 
       <div className="flex flex-wrap gap-2 mt-4">
